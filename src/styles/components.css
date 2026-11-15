@@ -84,3 +84,11 @@ select.field option { background: var(--surface); }
   animation: shimmer 1.4s infinite;
   border-radius: 1rem;
 }
+
+/* Mobile bottom bar (components/BottomNav.tsx). The bar sets data-bottom-nav="on"
+   on <html> while it is visible; fixed elements use --bottom-nav-offset to sit above it. */
+:root { --bottom-nav-offset: 0px; }
+@media (width < 64rem) {
+  html[data-bottom-nav="on"] { --bottom-nav-offset: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom)); }
+}
+body { padding-bottom: var(--bottom-nav-offset); }

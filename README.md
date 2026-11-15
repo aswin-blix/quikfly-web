@@ -30,6 +30,14 @@ Demo login OTP: **1234**. Demo coupons are listed on `/offers`.
 - **Framer Motion**: page transitions (`app/template.tsx`), shared-layout tab and segment indicators (`layoutId`), step changes in the ride and checkout flows, the expandable seat map, modals and sheets, magnetic buttons and toasts.
 - `prefers-reduced-motion` is respected: GSAP effects are skipped and Framer uses `reducedMotion="user"`.
 
+## Navigation
+
+- **Desktop (`xl` and up):** service links in the header.
+- **Laptop / tablet (`lg` to `xl`):** a grid button in the header opens the "All services" sheet.
+- **Phones and small tablets (below `lg`):** a bottom tab bar (`components/BottomNav.tsx`) with Home, Services (opens the services sheet), Offers, My Trips (with an upcoming-trip badge) and Login / Account (opens the account sheet with wallet, links and sign out). The header shrinks to the logo and theme toggle.
+- The bar is hidden on `/checkout` (`HIDDEN_ON` in `BottomNav.tsx`) and while a ride is in progress. Any screen can hide it with `useHideBottomNav(condition)`.
+- Fixed elements that sit at the bottom of the screen must use `var(--bottom-nav-offset)` for their `bottom` so they clear the bar (see the toasts and the travel-rentals compare bar). Its height is `--bottom-nav-height` in `tokens.css`.
+
 ## Theming (light and dark mode)
 
 The header has a sun/moon toggle. The first visit follows the device setting; once a visitor picks a theme it is saved in `localStorage` (`quikfly.theme`) and applied before first paint by a small inline script, so there is no flash.
@@ -67,7 +75,7 @@ npm run build:demo   # single self-contained quikfly-demo.html for sharing (in-m
 src/
   app/            routes (thin: metadata + screen)
   screens/        page-level UI per service
-  components/     shell (header, footer, login, toasts), ThemeProvider, ThemeToggle, RidePanel, CityMap, BookingWidget, motion, ui
+  components/     shell (header, footer, login, toasts), BottomNav, ServicesSheet, AccountSheet, ThemeProvider, ThemeToggle, RidePanel, CityMap, BookingWidget, motion, ui
   styles/         tokens.css (design tokens per theme), components.css, animations.css
   lib/
     types.ts      domain types shared with the backend

@@ -2,6 +2,7 @@
 // Bike Taxi & Car Ride: pickup/drop → fare options → driver search → live trip.
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useHideBottomNav } from "./BottomNav";
 import { ArrowUpDown, Clock, MapPin, Navigation, Phone, ShieldCheck, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { PLACES } from "@/lib/api/data";
@@ -25,6 +26,8 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
   const [selected, setSelected] = useState<string>("");
   const [payment, setPayment] = useState<PaymentMethod>("upi");
   const [phase, setPhase] = useState<Phase>("plan");
+  // Keep the screen focused on the ride once it is booked.
+  useHideBottomNav(phase !== "plan");
   const [ride, setRide] = useState<Ride | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [t, setT] = useState(0);

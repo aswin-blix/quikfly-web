@@ -1,9 +1,11 @@
 "use client";
 // Site chrome: header, footer, login modal, toasts, page transition.
 import { AnimatePresence, motion, MotionConfig, useMotionValueEvent, useScroll } from "framer-motion";
-import { useEffect, useState } from "react";
-import { CircleCheck, HelpCircle, LogOut, Menu, Ticket, TriangleAlert, User as UserIcon, Wallet, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { CircleCheck, HelpCircle, LayoutGrid, LogOut, Ticket, TriangleAlert, User as UserIcon, Wallet } from "lucide-react";
 import { AppProvider, useApp } from "./AppProvider";
+import { BottomNav, BottomNavProvider } from "./BottomNav";
+import { ServicesSheet } from "./ServicesSheet";
 import { ThemeProvider } from "./ThemeProvider";
 import { ThemeToggle } from "./ThemeToggle";
 import { GoldButton, Modal } from "./ui";
@@ -14,15 +16,24 @@ import { SERVICES } from "@/lib/services";
 import { AUTHOR } from "@/lib/site";
 
 export function Shell({ children }: { children: React.ReactNode }) {
+  const path = usePath();
+  const [servicesOpen, setServicesOpen] = useState(false);
+  const openServices = useCallback(() => setServicesOpen(true), []);
+  useEffect(() => setServicesOpen(false), [path]);
+
   return (
     <MotionConfig reducedMotion="user">
       <ThemeProvider>
       <AppProvider>
-        <Header />
+      <BottomNavProvider>
+        <Header onOpenServices={openServices} />
         <main className="min-h-[70vh]">{children}</main>
         <Footer />
+        <BottomNav servicesOpen={servicesOpen} onOpenServices={openServices} />
+        <ServicesSheet open={servicesOpen} onClose={() => setServicesOpen(false)} />
         <LoginModal />
         <Toasts />
+      </BottomNavProvider>
       </AppProvider>
       </ThemeProvider>
     </MotionConfig>
@@ -38,10 +49,9 @@ export function PageTransition({ children, k }: { children: React.ReactNode; k?:
   );
 }
 
-function Header() {
+function Header({ onOpenServices }: { onOpenServices: () => void }) {
   const path = usePath();
   const { user, requireAuth, setUser, bookings, toast } = useApp();
-  const [menu, setMenu] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { scrollY } = useScroll();
@@ -50,9 +60,8 @@ function Header() {
   useMotionValueEvent(scrollY, "change", (y) => {
     const prev = scrollY.getPrevious() ?? 0;
     setScrolled(y > 12);
-    setHidden(y > 240 && y > prev && !menu);
+    setHidden(y > 240 && y > prev);
   });
-  useEffect(() => setMenu(false), [path]);
 
   const activeKey = SERVICES.find((s) => path.startsWith(s.href))?.key;
 
@@ -81,9 +90,10 @@ function Header() {
         </nav>
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <ThemeToggle />
-          <Link href="/help" className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5"><HelpCircle size={17} />Help</Link>
-          <Link href="/bookings" className="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5">
-            <Ticket size={18} /><span className="hidden sm:inline">My Trips</span>
+          {/* Below lg these live in the bottom bar (BottomNav). */}
+          <Link href="/help" className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5"><HelpCircle size={17} />Help</Link>
+          <Link href="/bookings" className="relative hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5">
+            <Ticket size={18} /><span>My Trips</span>
             <AnimatePresence>
               {live > 0 && (
                 <motion.span key={live} initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
@@ -92,7 +102,7 @@ function Header() {
             </AnimatePresence>
           </Link>
           {user ? (
-            <div className="flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-2">
               <span className="hidden lg:flex items-center gap-1.5 text-xs text-gold-pale bg-gold/10 px-2.5 py-1.5 rounded-lg"><Wallet size={14} />{inr(user.walletBalance)}</span>
               <button onClick={() => { setUser(null); toast("Signed out"); }} title="Sign out"
                 className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border border-line hover:border-gold/50 text-sm">
@@ -101,33 +111,17 @@ function Header() {
               </button>
             </div>
           ) : (
-            <GoldButton className="!py-2 !px-4 text-sm" onClick={() => requireAuth(() => toast("Welcome to QuikFly!"))}>
-              <UserIcon size={16} /> Login
-            </GoldButton>
+            <div className="hidden lg:block">
+              <GoldButton className="!py-2 !px-4 text-sm" onClick={() => requireAuth(() => toast("Welcome to QuikFly!"))}>
+                <UserIcon size={16} /> Login
+              </GoldButton>
+            </div>
           )}
-          <button className="xl:hidden p-2" onClick={() => setMenu(!menu)} aria-label="Menu" aria-expanded={menu}>{menu ? <X /> : <Menu />}</button>
+          {/* lg–xl: no room for the service links, so open the services sheet instead. */}
+          <button type="button" className="hidden lg:grid xl:hidden place-items-center w-10 h-10 rounded-lg text-soft hover:bg-fg/5 hover:text-gold"
+            onClick={onOpenServices} aria-label="All services" aria-haspopup="dialog"><LayoutGrid size={20} /></button>
         </div>
       </div>
-      <AnimatePresence>
-        {menu && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="xl:hidden overflow-hidden border-t border-fg/5 bg-ink/95 backdrop-blur-xl">
-            <motion.div className="px-4 py-4 grid grid-cols-3 sm:grid-cols-6 gap-2" initial="hidden" animate="show"
-              variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}>
-              {SERVICES.map((s) => (
-                <motion.div key={s.key} variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}>
-                  <Link href={s.href} className={cx("flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs border", activeKey === s.key ? "bg-gold/10 text-gold border-gold/30" : "text-soft border-line")}>
-                    <img src={s.image} alt="" className="w-10 h-10 rounded-full object-cover" />{s.nav}
-                  </Link>
-                </motion.div>
-              ))}
-            </motion.div>
-            <div className="px-4 pb-4 flex gap-2 text-sm">
-              <Link href="/offers" className="chip">Offers</Link><Link href="/help" className="chip">Help</Link><Link href="/partner" className="chip">Become a partner</Link>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.header>
   );
 }
@@ -251,7 +245,7 @@ function OtpInput({ value, onChange }: { value: string; onChange: (v: string) =>
 function Toasts() {
   const { toasts } = useApp();
   return (
-    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 items-center pointer-events-none" aria-live="polite">
+    <div className="fixed bottom-[calc(var(--bottom-nav-offset)+1.25rem)] left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 items-center pointer-events-none" aria-live="polite">
       <AnimatePresence>
         {toasts.map((t) => (
           <motion.div key={t.id} layout initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
