@@ -59,7 +59,7 @@ export function RentScreen() {
           <div><label className="label" htmlFor="rs">Pickup</label><input id="rs" type="datetime-local" className="field mt-1.5" value={start} onChange={(e) => setStart(e.target.value)} /></div>
           <div><label className="label" htmlFor="re">Return</label><input id="re" type="datetime-local" className="field mt-1.5" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
           <Segmented id="rent-mode" value={mode} onChange={setMode} options={[["self", "Self-drive"], ["driver", "With driver"]]} />
-          {!valid && <p className="md:col-span-4 text-sm text-red-400">Return time must be after pickup.</p>}
+          {!valid && <p className="md:col-span-4 text-sm text-danger">Return time must be after pickup.</p>}
         </div>
       </PageHeader>
 
@@ -68,8 +68,8 @@ export function RentScreen() {
           <div><p className="label mb-2">Car type</p><div className="flex flex-wrap gap-2">{["Hatchback", "Sedan", "SUV", "MUV", "Luxury"].map((c) => <button key={c} data-on={cats.includes(c)} onClick={() => toggle(cats, c, setCats)} className="chip !text-xs">{c}</button>)}</div></div>
           <div><p className="label mb-2">Transmission</p><div className="flex flex-wrap gap-2">{(["any", "Manual", "Automatic"] as const).map((t) => <button key={t} data-on={trans === t} onClick={() => setTrans(t)} className="chip !text-xs capitalize">{t}</button>)}</div></div>
           <div><p className="label mb-2">Fuel</p><div className="flex flex-wrap gap-2">{["Petrol", "Diesel", "EV"].map((f) => <button key={f} data-on={fuel.includes(f)} onClick={() => toggle(fuel, f, setFuel)} className="chip !text-xs">{f}</button>)}</div></div>
-          <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="accent-[#f2c14e]" checked={seats7} onChange={(e) => setSeats7(e.target.checked)} />7 seats or more</label>
-          <div className="text-xs text-zinc-500 border-t border-line pt-4 space-y-1"><p>{hours} hrs · {days} day{days > 1 ? "s" : ""}</p><p>{mode === "self" ? "Fuel not included" : "Fuel & driver included"}</p></div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="accent-brand" checked={seats7} onChange={(e) => setSeats7(e.target.checked)} />7 seats or more</label>
+          <div className="text-xs text-subtle border-t border-line pt-4 space-y-1"><p>{hours} hrs · {days} day{days > 1 ? "s" : ""}</p><p>{mode === "self" ? "Fuel not included" : "Fuel & driver included"}</p></div>
         </aside>
 
         <div>
@@ -80,19 +80,19 @@ export function RentScreen() {
               {shown.map((c) => (
                 <motion.div key={c.id} layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} whileHover={{ y: -6 }}
                   className="panel overflow-hidden flex flex-col group">
-                  <div className="relative h-40 overflow-hidden">
+                  <div className="on-media relative h-40 overflow-hidden">
                     <img src={carImg(c)} alt={c.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                     <span className="absolute top-3 left-3 text-[10px] bg-black/60 backdrop-blur px-2 py-1 rounded">{c.category} · {c.year}</span>
                     <span className="absolute top-3 right-3 text-xs flex items-center gap-1 bg-black/60 backdrop-blur px-2 py-1 rounded"><Star size={11} className="fill-gold text-gold" />{c.rating}</span>
                   </div>
                   <div className="p-4 flex-1 flex flex-col gap-2">
                     <p className="font-semibold text-lg">{c.name}</p>
-                    <div className="flex gap-3 text-xs text-zinc-400">
+                    <div className="flex gap-3 text-xs text-muted">
                       <span className="flex items-center gap-1"><Users size={12} />{c.seats}</span><span className="flex items-center gap-1"><Settings2 size={12} />{c.transmission}</span><span className="flex items-center gap-1"><Fuel size={12} />{c.fuel}</span>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">{c.features.map((f) => <span key={f} className="text-[10px] text-zinc-400 border border-line rounded-full px-2 py-0.5">{f}</span>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{c.features.map((f) => <span key={f} className="text-[10px] text-muted border border-line rounded-full px-2 py-0.5">{f}</span>)}</div>
                     <div className="mt-auto pt-3 border-t border-line flex items-end justify-between">
-                      <div><p className="text-[11px] text-zinc-500">{inr(c.pricePerHour)}/hr</p><p className="text-xl font-bold text-gold">{inr(price(c))}</p></div>
+                      <div><p className="text-[11px] text-subtle">{inr(c.pricePerHour)}/hr</p><p className="text-xl font-bold text-gold">{inr(price(c))}</p></div>
                       <Link href={valid ? `/rent-a-car/${c.id}${qs({ city, start, end, mode })}` : "#"} aria-disabled={!valid}
                         className={cx("btn-gold rounded-xl px-4 py-2 text-sm", !valid && "pointer-events-none opacity-50")}>Select</Link>
                     </div>
@@ -158,12 +158,12 @@ export function RentDetailScreen({ id }: { id: string }) {
       <Breadcrumbs items={[["Home", "/"], ["Rent a Car", `/rent-a-car${qs(trip)}`], [car.name]]} />
       <div className="grid lg:grid-cols-[1fr_380px] gap-8 mt-5">
         <div className="space-y-8 min-w-0">
-          <div className="relative rounded-3xl overflow-hidden border border-line h-[300px] sm:h-[400px]">
+          <div className="on-media relative rounded-3xl overflow-hidden border border-line h-[300px] sm:h-[400px]">
             <Parallax amount={80} className="absolute -inset-y-10 inset-x-0"><img src={carImg(car)} alt={car.name} className="w-full h-full object-cover" /></Parallax>
             <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent" />
             <div className="absolute bottom-5 left-5">
               <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="font-display text-3xl sm:text-4xl">{car.name}</motion.h1>
-              <p className="text-sm text-zinc-300 mt-1 flex items-center gap-2"><Star size={14} className="fill-gold text-gold" />{car.rating} · {car.trips} trips · {car.year} model</p>
+              <p className="text-sm text-soft mt-1 flex items-center gap-2"><Star size={14} className="fill-gold text-gold" />{car.rating} · {car.trips} trips · {car.year} model</p>
             </div>
           </div>
 
@@ -187,13 +187,13 @@ export function RentDetailScreen({ id }: { id: string }) {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="panel p-5"><p className="font-semibold flex items-center gap-2"><BadgeCheck size={18} className="text-gold" />Features</p>
-              <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">{[...car.features, "Sanitised before every trip", "24×7 roadside assistance"].map((f) => <li key={f}>• {f}</li>)}</ul></div>
+              <ul className="mt-3 space-y-1.5 text-sm text-soft">{[...car.features, "Sanitised before every trip", "24×7 roadside assistance"].map((f) => <li key={f}>• {f}</li>)}</ul></div>
             {self ? (
               <div className="panel p-5"><p className="font-semibold flex items-center gap-2"><FileCheck2 size={18} className="text-gold" />Documents needed</p>
-                <ul className="mt-3 space-y-1.5 text-sm text-zinc-300"><li>• Driving licence (1+ year old)</li><li>• Aadhaar or passport</li><li>• Driver must be 21+</li></ul></div>
+                <ul className="mt-3 space-y-1.5 text-sm text-soft"><li>• Driving licence (1+ year old)</li><li>• Aadhaar or passport</li><li>• Driver must be 21+</li></ul></div>
             ) : (
               <div className="panel p-5"><p className="font-semibold flex items-center gap-2"><ShieldCheck size={18} className="text-gold" />Your chauffeur</p>
-                <ul className="mt-3 space-y-1.5 text-sm text-zinc-300"><li>• Verified, uniformed driver</li><li>• Fuel & tolls on actuals</li><li>• Night charge ₹250 after 10 PM</li></ul></div>
+                <ul className="mt-3 space-y-1.5 text-sm text-soft"><li>• Verified, uniformed driver</li><li>• Fuel & tolls on actuals</li><li>• Night charge ₹250 after 10 PM</li></ul></div>
             )}
           </div>
         </div>
@@ -209,16 +209,16 @@ export function RentDetailScreen({ id }: { id: string }) {
               <AnimatePresence initial={false}>
                 {lines.map((l) => (
                   <motion.div key={l.label} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="flex justify-between gap-3">
-                    <span className="text-zinc-400">{l.label}</span><span>{inr(l.amount)}</span>
+                    <span className="text-muted">{l.label}</span><span>{inr(l.amount)}</span>
                   </motion.div>
                 ))}
               </AnimatePresence>
             </div>
             <div className="border-t border-line pt-3 flex justify-between items-end">
-              <span className="text-sm text-zinc-400">Total</span><TweenNumber value={total} format={inr} className="text-2xl font-bold text-gold" />
+              <span className="text-sm text-muted">Total</span><TweenNumber value={total} format={inr} className="text-2xl font-bold text-gold" />
             </div>
             <GoldButton className="w-full" onClick={book}>Continue to book</GoldButton>
-            <p className="text-[11px] text-zinc-500 text-center">Free cancellation up to 24 hrs before pickup</p>
+            <p className="text-[11px] text-subtle text-center">Free cancellation up to 24 hrs before pickup</p>
           </motion.div>
         </aside>
       </div>
@@ -232,10 +232,10 @@ function OptionGroup<T extends string>({ title, id, value, onChange, options }: 
       <p className="label mb-3">{title}</p>
       <div className="grid sm:grid-cols-2 gap-3">
         {options.map(([v, l, sub, badge]) => (
-          <button key={v} onClick={() => onChange(v)} className="relative text-left rounded-2xl border border-line p-4 hover:border-zinc-500 transition-colors" aria-pressed={value === v}>
+          <button key={v} onClick={() => onChange(v)} className="relative text-left rounded-2xl border border-line p-4 hover:border-line-strong transition-colors" aria-pressed={value === v}>
             {value === v && <motion.span layoutId={`opt-${id}`} className="absolute inset-0 rounded-2xl border-2 border-gold bg-gold/[0.06]" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
             <span className="relative flex justify-between gap-2"><span className="font-semibold">{l}</span><span className="text-xs text-gold">{badge}</span></span>
-            <span className="relative block text-xs text-zinc-400 mt-1">{sub}</span>
+            <span className="relative block text-xs text-muted mt-1">{sub}</span>
           </button>
         ))}
       </div>

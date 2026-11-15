@@ -30,9 +30,9 @@ export function BusScreen() {
           {POPULAR_ROUTES.map(([a, b], i) => (
             <motion.div key={a + b} variants={fadeUp}>
               <Link href={`/bus/search${qs({ from: a, to: b, date: todayISO(1) })}`} className="group panel p-5 flex flex-col gap-3 hover:border-gold/50 transition-colors">
-                <div className="flex items-center justify-between"><span className="text-xs text-zinc-500">{6 + (i % 4) * 2}h journey</span><BusFront size={16} className="text-gold" /></div>
+                <div className="flex items-center justify-between"><span className="text-xs text-subtle">{6 + (i % 4) * 2}h journey</span><BusFront size={16} className="text-gold" /></div>
                 <p className="font-semibold">{a}</p>
-                <div className="flex items-center gap-2 text-zinc-500"><span className="flex-1 border-t border-dashed border-line" /><ArrowRight size={14} className="group-hover:text-gold group-hover:translate-x-1 transition-all" /></div>
+                <div className="flex items-center gap-2 text-subtle"><span className="flex-1 border-t border-dashed border-line" /><ArrowRight size={14} className="group-hover:text-gold group-hover:translate-x-1 transition-all" /></div>
                 <p className="font-semibold">{b}</p>
                 <p className="text-xs text-gold">from {inr(499 + i * 60)}</p>
               </Link>
@@ -46,7 +46,7 @@ export function BusScreen() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[[Ticket, "Choose your seat", "Live seat layout with lower/upper berth prices."], [Navigation, "Exact boarding points", "Landmarks and timings for every pickup point."], [Users, "Women-only seats", "Seats reserved for women travellers, clearly marked."], [RotateCcw, "Instant refunds", "Cancel online, refund to wallet instantly."]].map(([I, t, d], i) => {
             const Icon = I as typeof Ticket;
-            return <Reveal key={t as string} delay={i * 0.08}><div className="panel p-6 h-full"><Icon className="text-gold" /><p className="font-semibold mt-4">{t as string}</p><p className="text-sm text-zinc-400 mt-1">{d as string}</p></div></Reveal>;
+            return <Reveal key={t as string} delay={i * 0.08}><div className="panel p-6 h-full"><Icon className="text-gold" /><p className="font-semibold mt-4">{t as string}</p><p className="text-sm text-muted mt-1">{d as string}</p></div></Reveal>;
           })}
         </div>
       </section>
@@ -54,7 +54,7 @@ export function BusScreen() {
       <section className="pt-20">
         <div className="max-w-7xl mx-auto px-4"><p className="label mb-4">Top operators</p></div>
         <Marquee speed={35}>
-          {BUS_OPERATORS.map((o) => <span key={o} className="px-6 py-3 rounded-xl border border-line text-zinc-300 whitespace-nowrap">{o}</span>)}
+          {BUS_OPERATORS.map((o) => <span key={o} className="px-6 py-3 rounded-xl border border-line text-soft whitespace-nowrap">{o}</span>)}
         </Marquee>
       </section>
 
@@ -154,13 +154,13 @@ export function BusResultsScreen() {
       </div>
       <div>
         <p className="label mb-2 flex justify-between">Max price <span className="text-gold normal-case tracking-normal">{inr(maxPrice)}</span></p>
-        <input type="range" min={400} max={3000} step={50} value={maxPrice} onChange={(e) => setMaxPrice(+e.target.value)} className="w-full accent-[#f2c14e]" />
+        <input type="range" min={400} max={3000} step={50} value={maxPrice} onChange={(e) => setMaxPrice(+e.target.value)} className="w-full accent-brand" />
       </div>
-      <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={rated} onChange={(e) => setRated(e.target.checked)} className="accent-[#f2c14e]" />Highly rated (4.3+)</label>
+      <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={rated} onChange={(e) => setRated(e.target.checked)} className="accent-brand" />Highly rated (4.3+)</label>
       <div>
         <p className="label mb-2">Operators</p>
         <div className="space-y-2">{operators.map((o) => (
-          <label key={o} className="flex items-center gap-2 text-sm cursor-pointer text-zinc-300"><input type="checkbox" checked={ops.includes(o)} onChange={() => toggle(ops, o, setOps)} className="accent-[#f2c14e]" />{o}</label>
+          <label key={o} className="flex items-center gap-2 text-sm cursor-pointer text-soft"><input type="checkbox" checked={ops.includes(o)} onChange={() => toggle(ops, o, setOps)} className="accent-brand" />{o}</label>
         ))}</div>
       </div>
     </div>
@@ -174,7 +174,7 @@ export function BusResultsScreen() {
         <button onClick={() => go(days[Math.max(0, days.indexOf(date) - 1)])} className="p-2 rounded-lg border border-line hover:border-gold" aria-label="Previous day"><ChevronLeft size={16} /></button>
         <div className="flex-1 grid grid-cols-7 gap-1 overflow-x-auto">
           {days.map((d) => (
-            <button key={d} onClick={() => go(d)} className={cx("relative py-2 rounded-lg text-xs sm:text-sm transition-colors", d === date ? "text-black font-semibold" : "text-zinc-400 hover:text-white")}>
+            <button key={d} onClick={() => go(d)} className={cx("relative py-2 rounded-lg text-xs sm:text-sm transition-colors", d === date ? "text-on-brand font-semibold" : "text-muted hover:text-strong")}>
               {d === date && <motion.span layoutId="date-pill" className="absolute inset-0 btn-gold rounded-lg" />}
               <span className="relative">{prettyDate(d)}</span>
             </button>
@@ -187,7 +187,7 @@ export function BusResultsScreen() {
         <aside className="hidden lg:block panel p-5 h-fit sticky top-24">{filters}</aside>
         <div>
           <div className="flex flex-wrap items-center gap-3 mb-4">
-            <p className="text-sm text-zinc-400 mr-auto"><b className="text-white">{buses ? shown.length : "…"} buses</b> · {from} → {to} · {prettyDate(date)}</p>
+            <p className="text-sm text-muted mr-auto"><b className="text-strong">{buses ? shown.length : "…"} buses</b> · {from} → {to} · {prettyDate(date)}</p>
             <button className="lg:hidden chip flex items-center gap-1" onClick={() => setShowFilters(!showFilters)}><SlidersHorizontal size={14} />Filters{activeCount ? ` (${activeCount})` : ""}</button>
             <Segmented id="bus-sort" value={sort} onChange={setSort} options={[["depart", "Departure"], ["price", "Cheapest"], ["rating", "Top rated"]]} />
           </div>
@@ -207,21 +207,21 @@ export function BusResultsScreen() {
                     <div className="p-5 grid sm:grid-cols-[1.3fr_1.6fr_auto] gap-4 items-center">
                       <div>
                         <p className="font-semibold flex items-center gap-2 flex-wrap">{b.operator}
-                          {b.operator === "QuikFly Travels" && <span className="text-[10px] bg-gold text-black px-1.5 py-0.5 rounded font-bold">OWN FLEET</span>}</p>
-                        <p className="text-xs text-zinc-400">{b.type}</p>
+                          {b.operator === "QuikFly Travels" && <span className="text-[10px] bg-brand text-on-brand px-1.5 py-0.5 rounded font-bold">OWN FLEET</span>}</p>
+                        <p className="text-xs text-muted">{b.type}</p>
                         <div className="mt-2 flex items-center gap-2 text-xs">
-                          <span className="inline-flex items-center gap-1 bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded"><Star size={11} className="fill-current" />{b.rating}</span>
-                          {b.amenities.includes("Live tracking") && <span className="text-zinc-500 flex items-center gap-1"><Wifi size={11} />Live tracking</span>}
+                          <span className="inline-flex items-center gap-1 bg-success/15 text-success px-2 py-0.5 rounded"><Star size={11} className="fill-current" />{b.rating}</span>
+                          {b.amenities.includes("Live tracking") && <span className="text-subtle flex items-center gap-1"><Wifi size={11} />Live tracking</span>}
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div><p className="text-xl font-bold">{b.depart}</p><p className="text-xs text-zinc-500">{from}</p></div>
-                        <div className="flex-1 text-center text-xs text-zinc-500"><div className="relative h-px bg-line my-1"><span className="absolute left-0 -top-1 w-2 h-2 rounded-full bg-emerald-400" /><span className="absolute right-0 -top-1 w-2 h-2 rounded-full bg-gold" /></div>{b.duration}</div>
-                        <div className="text-right"><p className="text-xl font-bold">{b.arrive}</p><p className="text-xs text-zinc-500">{to}</p></div>
+                        <div><p className="text-xl font-bold">{b.depart}</p><p className="text-xs text-subtle">{from}</p></div>
+                        <div className="flex-1 text-center text-xs text-subtle"><div className="relative h-px bg-line my-1"><span className="absolute left-0 -top-1 w-2 h-2 rounded-full bg-success" /><span className="absolute right-0 -top-1 w-2 h-2 rounded-full bg-brand" /></div>{b.duration}</div>
+                        <div className="text-right"><p className="text-xl font-bold">{b.arrive}</p><p className="text-xs text-subtle">{to}</p></div>
                       </div>
                       <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2">
-                        <div className="sm:text-right"><p className="text-[11px] text-zinc-500">Starts from</p><p className="text-2xl font-bold text-gold">{inr(b.fare)}</p>
-                          <p className={cx("text-xs", b.seatsLeft < 10 ? "text-orange-300" : "text-zinc-400")}>{b.seatsLeft} seats left</p></div>
+                        <div className="sm:text-right"><p className="text-[11px] text-subtle">Starts from</p><p className="text-2xl font-bold text-gold">{inr(b.fare)}</p>
+                          <p className={cx("text-xs", b.seatsLeft < 10 ? "text-warning" : "text-muted")}>{b.seatsLeft} seats left</p></div>
                         <GoldButton className="!py-2 text-sm" onClick={() => setOpen(open === b.id ? null : b.id)}>{open === b.id ? "Hide seats" : "View seats"}</GoldButton>
                       </div>
                     </div>
@@ -284,7 +284,7 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
         <div className="grid sm:grid-cols-2 gap-4">
           {(["lower", "upper"] as const).map((deck) => (
             <div key={deck} className={cx("rounded-2xl border border-line p-4 transition-opacity", priceFilter !== "all" && priceFilter !== deck && "opacity-30")}>
-              <div className="flex justify-between items-center mb-3"><p className="label">{deck} deck · {inr(bus.fare + (deck === "lower" ? 50 : 0))}</p>{deck === "lower" && <span className="text-[10px] text-zinc-500 border border-line rounded px-1.5">Driver</span>}</div>
+              <div className="flex justify-between items-center mb-3"><p className="label">{deck} deck · {inr(bus.fare + (deck === "lower" ? 50 : 0))}</p>{deck === "lower" && <span className="text-[10px] text-subtle border border-line rounded px-1.5">Driver</span>}</div>
               <div className="grid grid-cols-[1fr_1fr_14px_1fr] gap-2">
                 {seats.filter((s) => s.deck === deck).map((s) => {
                   const on = picked.includes(s.id);
@@ -293,10 +293,10 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
                       onClick={() => setPicked((p) => (on ? p.filter((x) => x !== s.id) : p.length >= 6 ? p : [...p, s.id]))}
                       style={{ gridColumn: s.col === 2 ? 4 : s.col + 1 }} aria-label={`Seat ${s.label}${s.booked ? " sold" : ""}`} aria-pressed={on}
                       className={cx("h-14 rounded-lg border text-[10px] flex flex-col items-center justify-end pb-1 transition-colors",
-                        s.booked ? "bg-zinc-800/60 border-zinc-800 text-zinc-600 cursor-not-allowed"
-                          : on ? "bg-gold border-gold text-black font-bold"
-                          : s.ladies ? "border-pink-400/60 text-pink-300 hover:bg-pink-400/10"
-                          : "border-zinc-600 hover:border-gold text-zinc-300")}>
+                        s.booked ? "bg-line/60 border-line text-faint cursor-not-allowed"
+                          : on ? "bg-brand border-gold text-on-brand font-bold"
+                          : s.ladies ? "border-highlight/60 text-highlight hover:bg-highlight/10"
+                          : "border-line-strong hover:border-gold text-soft")}>
                       <span className={cx("w-6 h-1 rounded mb-auto mt-1.5", on ? "bg-black/40" : "bg-current opacity-40")} />
                       {s.booked ? "Sold" : s.label}
                     </motion.button>
@@ -306,8 +306,8 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
             </div>
           ))}
         </div>
-        <div className="flex flex-wrap gap-4 text-xs text-zinc-400 mt-3">
-          {[["border-zinc-600", "Available"], ["bg-gold border-gold", "Selected"], ["bg-zinc-800 border-zinc-800", "Sold"], ["border-pink-400/60", "Ladies only"]].map(([c, t]) => (
+        <div className="flex flex-wrap gap-4 text-xs text-muted mt-3">
+          {[["border-line-strong", "Available"], ["bg-brand border-gold", "Selected"], ["bg-line border-line", "Sold"], ["border-highlight/60", "Ladies only"]].map(([c, t]) => (
             <span key={t} className="flex items-center gap-1.5"><span className={cx("w-4 h-4 rounded border", c)} />{t}</span>
           ))}
         </div>
@@ -316,10 +316,10 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
         <PointList title="Boarding point" items={bus.boardingPoints.map((p, i) => [p, bTimes[i]])} value={boarding} onChange={setBoarding} />
         <PointList title="Dropping point" items={drops.map((p, i) => [p, addMin(bus.arrive, i * 15)])} value={dropping} onChange={setDropping} />
         <div className="rounded-2xl bg-coal border border-line p-4 text-sm space-y-2">
-          <div className="flex justify-between"><span className="text-zinc-400">Seats</span><span>{chosen.map((s) => s.label).join(", ") || "—"}</span></div>
+          <div className="flex justify-between"><span className="text-muted">Seats</span><span>{chosen.map((s) => s.label).join(", ") || "—"}</span></div>
           <div className="flex justify-between font-bold text-lg"><span>Amount</span><span className="text-gold">{inr(total)}</span></div>
           <GoldButton className="w-full" disabled={!chosen.length} onClick={proceed}>Proceed to book <ArrowRight size={16} /></GoldButton>
-          {!chosen.length && <p className="text-[11px] text-zinc-500 text-center">Select up to 6 seats</p>}
+          {!chosen.length && <p className="text-[11px] text-subtle text-center">Select up to 6 seats</p>}
         </div>
       </div>
     </div>
@@ -333,8 +333,8 @@ function PointList({ title, items, value, onChange }: { title: string; items: [s
       <div className="space-y-1.5">
         {items.map(([p, t], i) => (
           <label key={p} className={cx("flex items-center gap-3 px-3 py-2 rounded-xl border cursor-pointer text-sm transition-colors", value === i ? "border-gold/60 bg-gold/5" : "border-line")}>
-            <input type="radio" checked={value === i} onChange={() => onChange(i)} className="accent-[#f2c14e]" />
-            <span className="flex-1">{p}</span><span className="text-xs text-zinc-400">{t}</span>
+            <input type="radio" checked={value === i} onChange={() => onChange(i)} className="accent-brand" />
+            <span className="flex-1">{p}</span><span className="text-xs text-muted">{t}</span>
           </label>
         ))}
       </div>

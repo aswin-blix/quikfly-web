@@ -1,8 +1,8 @@
 "use client";
 import { motion } from "framer-motion";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight, BadgePercent, Headphones, IndianRupee, MapPin, PhoneCall, Quote, Route, ShieldCheck, Share2, Smartphone, Sparkles, Star, Timer, UserCheck, Wallet,
+  ArrowRight, BadgePercent, ChevronLeft, ChevronRight, Headphones, IndianRupee, MapPin, PhoneCall, Quote, Route, ShieldCheck, Share2, Smartphone, Sparkles, Star, Timer, UserCheck, Wallet,
 } from "lucide-react";
 import { BookingWidget } from "@/components/BookingWidget";
 import { SceneArt } from "@/components/SceneArt";
@@ -59,8 +59,8 @@ function Hero() {
         <div className="hero-orb absolute bottom-0 -left-20 w-[380px] h-[380px] rounded-full bg-gold-deep/15 blur-[100px]" />
         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1440 800" preserveAspectRatio="none">
           <path className="hero-route" d="M-40 640 C 240 520, 420 700, 700 560 S 1120 260, 1480 180" fill="none" stroke="url(#rg)" strokeWidth="2" strokeDasharray="1600" strokeDashoffset="0" />
-          <defs><linearGradient id="rg" x1="0" x2="1"><stop offset="0" stopColor="#f2c14e" stopOpacity="0" /><stop offset=".5" stopColor="#f2c14e" stopOpacity=".55" /><stop offset="1" stopColor="#f2c14e" stopOpacity="0" /></linearGradient></defs>
-          <g className="hero-plane"><path d="M0 -6 L20 0 L0 6 L4 0Z" fill="#ffe7a3" /></g>
+          <defs><linearGradient id="rg" x1="0" x2="1"><stop offset="0" stopColor="var(--accent)" stopOpacity="0" /><stop offset=".5" stopColor="var(--accent)" stopOpacity=".55" /><stop offset="1" stopColor="var(--accent)" stopOpacity="0" /></linearGradient></defs>
+          <g className="hero-plane"><path d="M0 -6 L20 0 L0 6 L4 0Z" fill="var(--accent-pale)" /></g>
         </svg>
       </div>
 
@@ -72,7 +72,7 @@ function Hero() {
           <SplitHeadline className="font-display text-[2.6rem] leading-[1.02] sm:text-6xl xl:text-7xl mt-6 tracking-tight" delay={0.15}>
             Every journey. <span className="gold-text">One super app.</span>
           </SplitHeadline>
-          <p className="hero-sub text-zinc-400 text-lg mt-6 max-w-lg">
+          <p className="hero-sub text-muted text-lg mt-6 max-w-lg">
             Bike taxis in minutes, cabs across town, sleeper buses between cities, holidays abroad and rentals for the whole gang. One login, one wallet.
           </p>
           <div className="hero-cta flex flex-wrap gap-3 mt-8">
@@ -81,9 +81,9 @@ function Hero() {
           </div>
           <div className="hero-cta flex items-center gap-4 mt-10">
             <div className="flex -space-x-2">
-              {["A", "P", "R", "S"].map((c, i) => <span key={c} className="w-9 h-9 rounded-full border-2 border-ink grid place-items-center text-xs font-bold text-black" style={{ background: `hsl(${40 + i * 8} 80% ${60 - i * 5}%)` }}>{c}</span>)}
+              {["A", "P", "R", "S"].map((c, i) => <span key={c} className="w-9 h-9 rounded-full border-2 border-ink grid place-items-center text-xs font-bold text-on-brand" style={{ background: `hsl(${40 + i * 8} 80% ${60 - i * 5}%)` }}>{c}</span>)}
             </div>
-            <div className="text-sm"><p className="flex items-center gap-1 text-gold"><Star size={14} className="fill-gold" />4.8 <span className="text-zinc-400">from 1.2L+ reviews</span></p><p className="text-zinc-500">Trusted by riders in 120+ cities</p></div>
+            <div className="text-sm"><p className="flex items-center gap-1 text-gold"><Star size={14} className="fill-gold" />4.8 <span className="text-muted">from 1.2L+ reviews</span></p><p className="text-subtle">Trusted by riders in 120+ cities</p></div>
           </div>
         </div>
         <div className="hero-widget"><BookingWidget /></div>
@@ -118,49 +118,74 @@ function ServicesGrid() {
   );
 }
 
-/* ── Pinned horizontal showcase (GSAP ScrollTrigger, desktop only) ── */
+/* ── Service showcase: native swipe carousel with arrows + progress bar ── */
 function ServiceShowcase() {
-  const ref = useRef<HTMLElement>(null);
   const track = useRef<HTMLDivElement>(null);
-  useGSAP(() => {
-    const mm = gsap.matchMedia();
-    mm.add("(min-width: 1024px) and (prefers-reduced-motion: no-preference)", () => {
-      const el = track.current!;
-      const dist = () => el.scrollWidth - window.innerWidth + 64;
-      const tween = gsap.to(el, {
-        x: () => -dist(), ease: "none",
-        scrollTrigger: { trigger: ref.current, start: "top top", end: () => `+=${dist()}`, scrub: 0.6, pin: true, invalidateOnRefresh: true },
-      });
-      gsap.utils.toArray<HTMLElement>(".show-img").forEach((img) => {
-        gsap.fromTo(img, { scale: 1.25 }, { scale: 1, ease: "none", scrollTrigger: { trigger: img, containerAnimation: tween, start: "left right", end: "right left", scrub: true } });
-      });
-    });
-    return () => mm.revert();
-  }, { scope: ref });
+  const [pos, setPos] = useState({ start: 0, size: 1 });
+
+  useEffect(() => {
+    const el = track.current;
+    if (!el) return;
+    const update = () => setPos({ start: el.scrollLeft / el.scrollWidth, size: Math.min(1, el.clientWidth / el.scrollWidth) });
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", update); ro.disconnect(); };
+  }, []);
+
+  const step = (dir: 1 | -1) => {
+    const el = track.current;
+    const card = el?.firstElementChild as HTMLElement | null;
+    if (!el || !card) return;
+    const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
+    el.scrollBy({ left: dir * (card.offsetWidth + gap), behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  };
+
+  const atStart = pos.start < 0.01;
+  const atEnd = pos.start + pos.size > 0.99;
+  const arrow = "w-11 h-11 rounded-full border border-line grid place-items-center transition-colors hover:border-gold hover:text-gold disabled:opacity-30 disabled:hover:border-line disabled:hover:text-inherit disabled:cursor-not-allowed";
 
   return (
-    <section ref={ref} className="relative py-16 lg:py-0 lg:h-screen lg:flex lg:flex-col lg:justify-center overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 w-full">
-        <SectionTitle eyebrow="One app" title="Six ways to move. Zero app switching." sub="Scroll through everything QuikFly can do for you." />
+    <section className="max-w-7xl mx-auto px-4 py-12 sm:py-16">
+      <div className="flex items-end justify-between gap-6">
+        <SectionTitle eyebrow="One app" title="Six ways to move. Zero app switching." sub="Pick a service to see how it works. Swipe or use the arrows to see all six." />
+        <div className="hidden sm:flex gap-2 mb-10 shrink-0">
+          <button type="button" onClick={() => step(-1)} disabled={atStart} aria-label="Previous services" className={arrow}><ChevronLeft size={20} /></button>
+          <button type="button" onClick={() => step(1)} disabled={atEnd} aria-label="Next services" className={arrow}><ChevronRight size={20} /></button>
+        </div>
       </div>
-      <div ref={track} className="flex flex-col lg:flex-row gap-5 px-4 lg:pl-[max(1rem,calc((100vw-80rem)/2+1rem))] lg:w-max">
+
+      <div ref={track} role="region" aria-label="QuikFly services"
+        className="flex gap-4 sm:gap-5 overflow-x-auto snap-x snap-mandatory scroll-smooth -mx-4 px-4 scroll-px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {SERVICES.map((s, i) => (
-          <article key={s.key} className="panel overflow-hidden lg:w-[560px] shrink-0 grid sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-[1.1fr_1fr]">
-            <div className="relative h-56 sm:h-full lg:h-56 xl:h-full overflow-hidden min-h-[220px]">
-              <img src={s.image} alt="" className="show-img absolute inset-0 w-full h-full object-cover" />
-              <span className="absolute top-3 left-3 font-display text-5xl text-white/20">0{i + 1}</span>
+          <Link key={s.key} href={s.href}
+            className="group panel overflow-hidden snap-start shrink-0 flex flex-col basis-[84%] sm:basis-[calc((100%-1.25rem)/2)] lg:basis-[calc((100%-2.5rem)/3)] transition-colors hover:border-gold/50 focus-visible:border-gold">
+            <div className="on-media relative aspect-[16/10] overflow-hidden">
+              <img src={s.image} alt={s.action} loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
+              <span className="absolute top-3 left-4 text-xs font-semibold tracking-widest text-white/80">0{i + 1} / 0{SERVICES.length}</span>
+              <span className="absolute bottom-3 left-4 text-xs text-gold-pale border border-gold/40 bg-black/50 backdrop-blur rounded-full px-2.5 py-1">{s.tagline}</span>
             </div>
-            <div className="p-6 flex flex-col">
-              <s.icon className="text-gold" size={28} />
-              <h3 className="font-display text-2xl mt-3">{s.action}</h3>
-              <p className="text-zinc-400 mt-2 text-sm flex-1">{s.blurb}</p>
-              <Link href={s.href} className="mt-5 inline-flex items-center gap-2 text-gold text-sm font-semibold group">
+            <div className="p-5 sm:p-6 flex flex-col flex-1">
+              <div className="flex items-center gap-3">
+                <span className="w-10 h-10 rounded-xl bg-gold/10 border border-gold/25 grid place-items-center shrink-0"><s.icon className="text-gold" size={20} /></span>
+                <h3 className="font-display text-xl sm:text-2xl leading-tight">{s.action}</h3>
+              </div>
+              <p className="text-muted mt-3 text-sm leading-relaxed flex-1">{s.blurb}</p>
+              <span className="mt-5 inline-flex items-center gap-2 text-gold text-sm font-semibold">
                 Explore {s.nav} <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-              </Link>
+              </span>
             </div>
-          </article>
+          </Link>
         ))}
       </div>
+
+      {pos.size < 1 && (
+        <div className="mt-6 h-1 rounded-full bg-line relative overflow-hidden" aria-hidden>
+          <span className="absolute inset-y-0 rounded-full bg-brand" style={{ left: `${pos.start * 100}%`, width: `${pos.size * 100}%` }} />
+        </div>
+      )}
     </section>
   );
 }
@@ -173,7 +198,7 @@ function Stats() {
         {items.map(([n, d, suf, l]) => (
           <div key={l} className="p-6 sm:p-8 text-center">
             <CountUp to={n} decimals={d} suffix={suf} className="font-display text-3xl sm:text-5xl gold-text" />
-            <p className="text-zinc-400 text-sm mt-2">{l}</p>
+            <p className="text-muted text-sm mt-2">{l}</p>
           </div>
         ))}
       </div>
@@ -197,21 +222,21 @@ function Offers() {
             const s = SERVICES.find((x) => x.key === o.service);
             return (
               <motion.div key={o.id} whileHover={{ y: -6 }} className="w-[300px] sm:w-[340px] rounded-2xl p-6 relative overflow-hidden border border-line select-none"
-                style={{ background: `radial-gradient(120% 90% at 100% 0%, hsl(${o.hue} 70% 40% / .35), transparent 60%), #111116` }}>
+                style={{ background: `radial-gradient(120% 90% at 100% 0%, hsl(${o.hue} 70% 40% / .35), transparent 60%), var(--surface)` }}>
                 <BadgePercent className="text-gold" />
                 <p className="font-display text-xl mt-4 leading-tight">{o.title}</p>
-                <p className="text-sm text-zinc-400 mt-2">{o.description}</p>
+                <p className="text-sm text-muted mt-2">{o.description}</p>
                 <div className="flex items-center justify-between mt-6">
                   <button onClick={() => { try { navigator.clipboard.writeText(o.code); } catch { /* ignore */ } toast(`Code ${o.code} copied`); }}
                     className="font-mono text-sm border border-dashed border-gold/60 text-gold px-3 py-1.5 rounded-lg hover:bg-gold/10">{o.code}</button>
-                  {s && <Link href={s.href} className="text-xs text-zinc-300 hover:text-gold">Use on {s.nav} →</Link>}
+                  {s && <Link href={s.href} className="text-xs text-soft hover:text-gold">Use on {s.nav} →</Link>}
                 </div>
               </motion.div>
             );
           })}
         </motion.div>
       </div>
-      <p className="text-xs text-zinc-600 mt-3">Drag to see more →</p>
+      <p className="text-xs text-faint mt-3">Drag to see more →</p>
     </section>
   );
 }
@@ -227,7 +252,7 @@ function Popular() {
             {POPULAR_ROUTES.map(([a, b]) => (
               <Link key={a + b} href={`/bus/search${qs({ from: a, to: b, date: todayISO(1) })}`}
                 className="group flex items-center justify-between px-4 py-3 rounded-xl border border-line hover:border-gold/50 hover:bg-gold/[0.04] transition-colors text-sm">
-                <span>{a} <span className="text-zinc-500">→</span> {b}</span><ArrowRight size={14} className="text-zinc-600 group-hover:text-gold group-hover:translate-x-1 transition-all" />
+                <span>{a} <span className="text-subtle">→</span> {b}</span><ArrowRight size={14} className="text-faint group-hover:text-gold group-hover:translate-x-1 transition-all" />
               </Link>
             ))}
           </div>
@@ -239,7 +264,7 @@ function Popular() {
           <h3 className="font-display text-2xl mb-5">Where everyone is heading</h3>
           <div className="grid grid-cols-2 gap-3">
             {TOURS.slice(0, 4).map((t) => (
-              <Link key={t.id} href={`/holidays/${t.slug}`} className="group relative rounded-xl overflow-hidden aspect-[4/3]">
+              <Link key={t.id} href={`/holidays/${t.slug}`} className="on-media group relative rounded-xl overflow-hidden aspect-[4/3]">
                 <SceneArt tour={t} className="absolute inset-0 w-full h-full transition-transform duration-700 group-hover:scale-110" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
                 <div className="absolute bottom-0 p-3"><p className="text-sm font-semibold leading-tight">{t.title}</p><p className="text-xs text-gold">from {inr(t.price)}</p></div>
@@ -278,7 +303,7 @@ function Safety() {
             {items.map(([I, t, d]) => (
               <div key={t} className="safety-item relative">
                 <span className="absolute -left-8 top-0 w-6 h-6 rounded-full bg-ink border border-gold grid place-items-center"><I size={12} className="text-gold" /></span>
-                <p className="font-semibold">{t}</p><p className="text-sm text-zinc-400 mt-0.5">{d}</p>
+                <p className="font-semibold">{t}</p><p className="text-sm text-muted mt-0.5">{d}</p>
               </div>
             ))}
           </div>
@@ -289,8 +314,8 @@ function Safety() {
           <img src="/assets/s0.jpg" alt="" className="w-full aspect-[4/3] object-cover" />
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.3 }}
             className="absolute bottom-4 left-4 right-4 sm:right-auto panel p-4 flex items-center gap-3">
-            <span className="w-10 h-10 rounded-full bg-emerald-500/15 text-emerald-300 grid place-items-center"><ShieldCheck size={20} /></span>
-            <div><p className="text-sm font-semibold">Trip shared with Amma</p><p className="text-xs text-zinc-400">Live location · ETA 12 min</p></div>
+            <span className="w-10 h-10 rounded-full bg-success/15 text-success grid place-items-center"><ShieldCheck size={20} /></span>
+            <div><p className="text-sm font-semibold">Trip shared with Amma</p><p className="text-xs text-muted">Live location · ETA 12 min</p></div>
           </motion.div>
         </div>
       </Parallax>
@@ -314,9 +339,9 @@ function Testimonials() {
         {reviews.map(([who, text, svc]) => (
           <figure key={who} className="panel p-6 w-[340px] shrink-0">
             <Quote className="text-gold/60" size={22} />
-            <blockquote className="text-sm text-zinc-300 mt-3 leading-relaxed">{text}</blockquote>
+            <blockquote className="text-sm text-soft mt-3 leading-relaxed">{text}</blockquote>
             <figcaption className="mt-4 flex items-center justify-between text-xs">
-              <span className="text-zinc-400">{who}</span><span className="text-gold border border-gold/30 rounded-full px-2 py-0.5">{svc}</span>
+              <span className="text-muted">{who}</span><span className="text-gold border border-gold/30 rounded-full px-2 py-0.5">{svc}</span>
             </figcaption>
           </figure>
         ))}
@@ -332,8 +357,8 @@ function AppDownload() {
         <div className="p-8 sm:p-12">
           <Smartphone className="text-gold" size={30} />
           <h2 className="font-display text-3xl sm:text-4xl mt-4">Your next trip is one tap away</h2>
-          <p className="text-zinc-400 mt-3">Live tracking, instant OTP, wallet cashback and app-only offers. Android & iOS apps launching soon.</p>
-          <ul className="mt-6 space-y-2 text-sm text-zinc-300">
+          <p className="text-muted mt-3">Live tracking, instant OTP, wallet cashback and app-only offers. Android & iOS apps launching soon.</p>
+          <ul className="mt-6 space-y-2 text-sm text-soft">
             {[[Timer, "Rides in under 5 minutes"], [Wallet, "QuikFly wallet with instant refunds"], [Headphones, "In-app 24×7 support"]].map(([I, t]) => {
               const Icon = I as typeof Timer;
               return <li key={t as string} className="flex items-center gap-2"><Icon size={16} className="text-gold" />{t as string}</li>;
@@ -341,7 +366,7 @@ function AppDownload() {
           </ul>
           <div className="flex gap-3 mt-8">
             {["Google Play", "App Store"].map((s) => (
-              <motion.span key={s} whileHover={{ y: -3 }} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-black text-sm font-semibold"><Smartphone size={16} />{s}</motion.span>
+              <motion.span key={s} whileHover={{ y: -3 }} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-fg text-ink text-sm font-semibold"><Smartphone size={16} />{s}</motion.span>
             ))}
           </div>
         </div>
@@ -357,15 +382,15 @@ function AppDownload() {
 
 function PhoneMock() {
   return (
-    <div className="w-[230px] h-[460px] rounded-[2.4rem] border-[6px] border-zinc-800 bg-ink shadow-2xl overflow-hidden mx-auto translate-y-16">
-      <div className="h-6 flex justify-center"><span className="w-20 h-4 bg-zinc-800 rounded-b-xl" /></div>
+    <div className="on-media w-[230px] h-[460px] rounded-[2.4rem] border-[6px] border-line bg-ink shadow-2xl overflow-hidden mx-auto translate-y-16">
+      <div className="h-6 flex justify-center"><span className="w-20 h-4 bg-line rounded-b-xl" /></div>
       <div className="p-3 space-y-2">
-        <img src="/assets/logo.jpg" alt="" className="rounded-lg" />
+        <img src="/assets/logo.png" alt="" className="rounded-lg" />
         <div className="grid grid-cols-3 gap-1.5">
           {SERVICES.map((s) => <div key={s.key} className="rounded-lg overflow-hidden border border-gold/20"><img src={s.image} alt="" className="aspect-square object-cover" /><p className="text-[8px] text-center py-0.5">{s.nav}</p></div>)}
         </div>
         <div className="rounded-lg bg-smoke p-2 text-[9px] space-y-1">
-          <p className="flex items-center gap-1"><MapPin size={9} className="text-emerald-400" />T. Nagar</p>
+          <p className="flex items-center gap-1"><MapPin size={9} className="text-success" />T. Nagar</p>
           <p className="flex items-center gap-1"><Route size={9} className="text-gold" />Chennai Airport</p>
         </div>
         <div className="btn-gold rounded-lg text-[10px] text-center py-1.5 flex items-center justify-center gap-1"><IndianRupee size={9} />Book Mini · ₹313</div>

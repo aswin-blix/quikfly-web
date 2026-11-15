@@ -1,0 +1,12 @@
+/* Keyframes and the helper classes that use them. */
+
+@keyframes pulse-ring { 0% { transform: scale(.6); opacity: .9 } 100% { transform: scale(2.4); opacity: 0 } }
+.pulse-ring { animation: pulse-ring 1.6s ease-out infinite; transform-origin: center; transform-box: fill-box; }
+
+@keyframes dash { to { stroke-dashoffset: -40 } }
+.route-dash { animation: dash 1.2s linear infinite; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+.rise { animation: rise .35s ease both; }
+
+@keyframes shimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }

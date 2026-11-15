@@ -36,9 +36,9 @@ export function RideScreen({ service }: { service: "bike" | "car" }) {
           {options.map((o) => (
             <motion.div key={o.id} variants={fadeUp} whileHover={{ y: -6 }} className="panel p-5">
               <img src={service === "bike" ? "/assets/s0.jpg" : o.id === "prime" || o.id === "suv" ? "/assets/s4.jpg" : "/assets/s1.jpg"} alt="" className="w-full h-28 object-cover rounded-xl" />
-              <p className="font-semibold text-lg mt-4 flex items-center justify-between">{o.name}<span className="text-xs text-zinc-400 flex items-center gap-1"><Users size={12} />{o.seats}</span></p>
-              <p className="text-sm text-zinc-400 mt-1">{o.description}</p>
-              <p className="text-xs text-zinc-500 mt-3 border-t border-line pt-3">Base {inr(o.baseFare)} · {inr(o.perKm)}/km · {inr(o.perMin)}/min</p>
+              <p className="font-semibold text-lg mt-4 flex items-center justify-between">{o.name}<span className="text-xs text-muted flex items-center gap-1"><Users size={12} />{o.seats}</span></p>
+              <p className="text-sm text-muted mt-1">{o.description}</p>
+              <p className="text-xs text-subtle mt-3 border-t border-line pt-3">Base {inr(o.baseFare)} · {inr(o.perKm)}/km · {inr(o.perMin)}/min</p>
             </motion.div>
           ))}
         </StaggerGroup>
@@ -54,7 +54,7 @@ export function RideScreen({ service }: { service: "bike" | "car" }) {
                 <Reveal key={t as string} delay={i * 0.1}>
                   <li className="flex gap-4">
                     <span className="w-11 h-11 shrink-0 rounded-xl bg-gold/10 text-gold grid place-items-center"><Icon size={20} /></span>
-                    <div><p className="font-semibold">{i + 1}. {t as string}</p><p className="text-sm text-zinc-400">{d as string}</p></div>
+                    <div><p className="font-semibold">{i + 1}. {t as string}</p><p className="text-sm text-muted">{d as string}</p></div>
                   </li>
                 </Reveal>
               );
@@ -66,7 +66,7 @@ export function RideScreen({ service }: { service: "bike" | "car" }) {
           <div className="grid sm:grid-cols-2 gap-3">
             {[[ShieldCheck, "Verified captains"], [Share2, "Share live location"], [service === "bike" ? HardHat : Clock, service === "bike" ? "Pillion helmet provided" : "Punctual pickups"], [BadgeCheck, "Insured every trip"]].map(([I, t]) => {
               const Icon = I as typeof ShieldCheck;
-              return <Reveal key={t as string}><div className="panel p-4 flex items-center gap-3"><Icon className="text-emerald-400" size={20} /><span className="text-sm">{t as string}</span></div></Reveal>;
+              return <Reveal key={t as string}><div className="panel p-4 flex items-center gap-3"><Icon className="text-success" size={20} /><span className="text-sm">{t as string}</span></div></Reveal>;
             })}
           </div>
         </div>

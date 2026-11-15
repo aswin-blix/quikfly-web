@@ -37,7 +37,7 @@ export function HolidaysScreen() {
         sub="Handpicked itineraries with hotels, transfers and sightseeing sorted. Just pack your bags.">
         <div className="mt-6 flex flex-wrap gap-2">
           {THEMES.map(([k, l]) => (
-            <button key={k} onClick={() => setTheme(k)} className={cx("relative px-4 py-2 rounded-full text-sm border transition-colors", theme === k ? "text-black border-transparent font-semibold" : "border-line text-zinc-300 hover:border-zinc-500")}>
+            <button key={k} onClick={() => setTheme(k)} className={cx("relative px-4 py-2 rounded-full text-sm border transition-colors", theme === k ? "text-on-brand border-transparent font-semibold" : "border-line text-soft hover:border-line-strong")}>
               {theme === k && <motion.span layoutId="theme-pill" className="absolute inset-0 rounded-full btn-gold" transition={{ type: "spring", stiffness: 380, damping: 30 }} />}
               <span className="relative">{l}</span>
             </button>
@@ -49,8 +49,8 @@ export function HolidaysScreen() {
         <div className="panel p-4 flex flex-wrap items-center gap-4 mb-6">
           <Segmented id="dur" value={dur} onChange={setDur} options={[["any", "Any length"], ["short", "1–3 days"], ["mid", "4–5 days"], ["long", "6+ days"]]} />
           <div className="flex items-center gap-3 text-sm">
-            <span className="text-zinc-400 whitespace-nowrap">Budget up to</span>
-            <input type="range" min={5000} max={70000} step={1000} value={budget} onChange={(e) => setBudget(+e.target.value)} className="accent-[#f2c14e] w-36" aria-label="Budget" />
+            <span className="text-muted whitespace-nowrap">Budget up to</span>
+            <input type="range" min={5000} max={70000} step={1000} value={budget} onChange={(e) => setBudget(+e.target.value)} className="accent-brand w-36" aria-label="Budget" />
             <span className="text-gold font-semibold w-20">{inr(budget)}</span>
           </div>
           <select className="field !w-auto !py-2 text-sm ml-auto" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Sort">
@@ -58,7 +58,7 @@ export function HolidaysScreen() {
           </select>
         </div>
 
-        <p className="text-sm text-zinc-400 mb-4">{shown.length} package{shown.length !== 1 && "s"}</p>
+        <p className="text-sm text-muted mb-4">{shown.length} package{shown.length !== 1 && "s"}</p>
         {shown.length === 0 && <div className="panel"><Empty icon={<Palmtree size={40} />} text="No packages match. Try a bigger budget or another theme." /></div>}
         <motion.div layout className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           <AnimatePresence mode="popLayout">
@@ -78,10 +78,10 @@ function TourCard({ t }: { t: TourPackage }) {
   return (
     <Tilt max={5}>
       <Link href={`/holidays/${t.slug}`} className="group panel overflow-hidden block hover:border-gold/50 transition-colors h-full">
-        <div className="relative h-48 overflow-hidden">
+        <div className="on-media relative h-48 overflow-hidden">
           <SceneArt tour={t} className="absolute inset-0 w-full h-full transition-transform duration-700 group-hover:scale-110" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent" />
-          {t.tag && <span className="absolute top-3 left-3 text-[10px] font-bold uppercase tracking-wide bg-gold text-black px-2 py-1 rounded">{t.tag}</span>}
+          {t.tag && <span className="absolute top-3 left-3 text-[10px] font-bold uppercase tracking-wide bg-brand text-on-brand px-2 py-1 rounded">{t.tag}</span>}
           <span className="absolute top-3 right-3 text-xs flex items-center gap-1 bg-black/60 backdrop-blur px-2 py-1 rounded"><Star size={11} className="fill-gold text-gold" />{t.rating}</span>
           <div className="absolute bottom-3 left-4 right-4">
             <p className="text-xs text-white/70">{t.location}</p>
@@ -89,14 +89,14 @@ function TourCard({ t }: { t: TourPackage }) {
           </div>
         </div>
         <div className="p-4 space-y-3">
-          <div className="flex items-center gap-4 text-xs text-zinc-400">
+          <div className="flex items-center gap-4 text-xs text-muted">
             <span className="flex items-center gap-1"><CalendarDays size={13} />{t.days}D / {t.nights}N</span>
             <span className="flex items-center gap-1"><Hotel size={13} />{t.hotelStars}★ hotels</span>
             <span className="flex items-center gap-1"><Utensils size={13} />{t.meals}</span>
           </div>
-          <ul className="text-sm text-zinc-300 space-y-1">{t.highlights.map((h) => <li key={h} className="flex gap-2"><Check size={14} className="text-gold mt-0.5 shrink-0" />{h}</li>)}</ul>
+          <ul className="text-sm text-soft space-y-1">{t.highlights.map((h) => <li key={h} className="flex gap-2"><Check size={14} className="text-gold mt-0.5 shrink-0" />{h}</li>)}</ul>
           <div className="flex items-end justify-between pt-3 border-t border-line">
-            <div><p className="text-[11px] text-zinc-500">per person</p><p className="text-xl font-bold text-gold">{inr(t.price)}</p></div>
+            <div><p className="text-[11px] text-subtle">per person</p><p className="text-xl font-bold text-gold">{inr(t.price)}</p></div>
             <span className="text-sm text-gold group-hover:translate-x-1 transition-transform">View details →</span>
           </div>
         </div>
@@ -148,11 +148,11 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
     <div ref={ref}>
       <section className="detail-hero relative h-[380px] sm:h-[460px] overflow-hidden -mt-16">
         <div className="detail-art absolute inset-0"><SceneArt tour={tour} className="w-full h-full" /></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-ink/70" />
         <div className="relative h-full max-w-7xl mx-auto px-4 flex flex-col justify-end pb-10">
           <Breadcrumbs items={[["Home", "/"], ["Holidays", "/holidays"], [tour.title]]} />
           <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="font-display text-3xl sm:text-5xl mt-3">{tour.title}</motion.h1>
-          <p className="text-zinc-300 mt-2 flex items-center gap-3">{tour.location}<span className="flex items-center gap-1 text-gold"><Star size={14} className="fill-gold" />{tour.rating}</span></p>
+          <p className="text-soft mt-2 flex items-center gap-3">{tour.location}<span className="flex items-center gap-1 text-gold"><Star size={14} className="fill-gold" />{tour.rating}</span></p>
         </div>
       </section>
 
@@ -160,7 +160,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
         <div className="min-w-0">
           <motion.div initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }} className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {facts.map(([I, l]) => (
-              <motion.div key={l} variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }} className="panel p-3 flex flex-col items-center gap-2 text-center text-xs text-zinc-300">
+              <motion.div key={l} variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }} className="panel p-3 flex flex-col items-center gap-2 text-center text-xs text-soft">
                 <I size={20} className="text-gold" />{l}
               </motion.div>
             ))}
@@ -186,15 +186,15 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
               )}
               {tab === "inclusions" && (
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="panel p-5"><p className="font-semibold mb-3">Included</p><ul className="space-y-2 text-sm">{[...tour.includes, ...tour.highlights].map((x) => <li key={x} className="flex gap-2"><Check size={16} className="text-emerald-400 shrink-0" />{x}</li>)}</ul></div>
-                  <div className="panel p-5"><p className="font-semibold mb-3">Not included</p><ul className="space-y-2 text-sm text-zinc-400">{["Personal expenses", "Entry tickets unless mentioned", "Lunch", "Travel insurance (add at checkout)"].map((x) => <li key={x}>• {x}</li>)}</ul></div>
+                  <div className="panel p-5"><p className="font-semibold mb-3">Included</p><ul className="space-y-2 text-sm">{[...tour.includes, ...tour.highlights].map((x) => <li key={x} className="flex gap-2"><Check size={16} className="text-success shrink-0" />{x}</li>)}</ul></div>
+                  <div className="panel p-5"><p className="font-semibold mb-3">Not included</p><ul className="space-y-2 text-sm text-muted">{["Personal expenses", "Entry tickets unless mentioned", "Lunch", "Travel insurance (add at checkout)"].map((x) => <li key={x}>• {x}</li>)}</ul></div>
                 </div>
               )}
               {tab === "policies" && (
                 <div className="panel p-5 space-y-4 text-sm">
-                  <div><p className="font-semibold flex items-center gap-2"><ShieldCheck size={16} className="text-emerald-400" />Cancellation</p><p className="text-zinc-400 mt-1">{tour.cancellation}</p></div>
-                  <div><p className="font-semibold">Payment</p><p className="text-zinc-400 mt-1">Pay in full now, or 25% to block and the balance 15 days before travel.</p></div>
-                  <div><p className="font-semibold">Customisation</p><p className="text-zinc-400 mt-1">A travel expert calls within 2 hours of booking to tailor hotels and activities.</p></div>
+                  <div><p className="font-semibold flex items-center gap-2"><ShieldCheck size={16} className="text-success" />Cancellation</p><p className="text-muted mt-1">{tour.cancellation}</p></div>
+                  <div><p className="font-semibold">Payment</p><p className="text-muted mt-1">Pay in full now, or 25% to block and the balance 15 days before travel.</p></div>
+                  <div><p className="font-semibold">Customisation</p><p className="text-muted mt-1">A travel expert calls within 2 hours of booking to tailor hotels and activities.</p></div>
                 </div>
               )}
             </motion.div>
@@ -203,16 +203,16 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
 
         <aside className="lg:sticky lg:top-24 h-fit">
           <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="panel gold-border p-5 space-y-4">
-            <div><p className="text-xs text-zinc-500">Starting from</p><p className="text-3xl font-bold text-gold">{inr(tour.price)}<span className="text-sm text-zinc-400 font-normal"> /person</span></p></div>
+            <div><p className="text-xs text-subtle">Starting from</p><p className="text-3xl font-bold text-gold">{inr(tour.price)}<span className="text-sm text-muted font-normal"> /person</span></p></div>
             <div><label className="label" htmlFor="sd">Start date</label><input id="sd" type="date" className="field mt-1.5" min={todayISO(3)} value={date} onChange={(e) => setDate(e.target.value)} /></div>
             <Counter label="Adults" value={adults} min={1} onChange={setAdults} />
             <Counter label="Children (5–11)" value={kids} min={0} onChange={setKids} />
             <div className="border-t border-line pt-3 flex justify-between items-end">
-              <span className="text-sm text-zinc-400">Total incl. GST</span>
+              <span className="text-sm text-muted">Total incl. GST</span>
               <TweenNumber value={subtotal + taxes} format={inr} className="text-2xl font-bold" />
             </div>
             <GoldButton className="w-full" onClick={book}>Book now</GoldButton>
-            <p className="text-[11px] text-zinc-500 text-center">No payment today in demo · Free expert call</p>
+            <p className="text-[11px] text-subtle text-center">No payment today in demo · Free expert call</p>
           </motion.div>
         </aside>
       </div>
