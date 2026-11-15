@@ -11,6 +11,7 @@ import { api, DEMO_MODE } from "@/lib/api";
 import { cx, inr } from "@/lib/format";
 import { Link, usePath } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
+import { AUTHOR } from "@/lib/site";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -148,7 +149,7 @@ function Footer() {
       </div>
       <div className="border-t border-line">
         <p className="max-w-7xl mx-auto px-4 py-5 text-xs text-subtle flex flex-wrap justify-between gap-2">
-          <span>© {new Date().getFullYear()} QuikFly. All rights reserved.</span><span>Made in Chennai</span>
+          <span>© {new Date().getFullYear()} QuikFly. All rights reserved.</span><span>Made in Chennai · Designed &amp; built by <a href={AUTHOR.url} target="_blank" rel="noopener author" className="text-muted hover:text-gold transition-colors underline-offset-4 hover:underline">{AUTHOR.name}</a></span>
         </p>
       </div>
     </footer>
