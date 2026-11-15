@@ -23,7 +23,7 @@ export function Modal({
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-label={title}>
-          <motion.div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose}
+          <motion.div className="absolute inset-0 bg-overlay backdrop-blur-sm" onClick={onClose}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
           <motion.div
             initial={{ opacity: 0, y: 40, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 30, scale: 0.98 }}
@@ -31,7 +31,7 @@ export function Modal({
             className={cx("relative panel w-full max-h-[92vh] overflow-y-auto scrollbar-thin rounded-b-none sm:rounded-b-[1.25rem]", wide ? "sm:max-w-3xl" : "sm:max-w-md")}>
             <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-line bg-coal/95 backdrop-blur">
               <h3 className="font-semibold text-lg">{title}</h3>
-              <button onClick={onClose} className="p-1.5 rounded-full hover:bg-white/10" aria-label="Close"><X size={18} /></button>
+              <button onClick={onClose} className="p-1.5 rounded-full hover:bg-fg/10" aria-label="Close"><X size={18} /></button>
             </div>
             <div className="p-5">{children}</div>
           </motion.div>
@@ -62,7 +62,7 @@ export function GhostLink({ href, children, className }: { href: string; childre
 
 export function Empty({ icon, text, action }: { icon: React.ReactNode; text: string; action?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center py-14 text-zinc-500 gap-3">
+    <div className="flex flex-col items-center justify-center text-center py-14 text-subtle gap-3">
       <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-gold/60">{icon}</motion.div>
       <p className="text-sm max-w-xs">{text}</p>
       {action}
@@ -75,17 +75,17 @@ export function SectionTitle({ eyebrow, title, sub, center }: { eyebrow: string;
     <motion.div className={cx("mb-10", center && "text-center mx-auto")} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6 }}>
       <p className="label !text-gold mb-2">{eyebrow}</p>
       <h2 className="font-display text-3xl sm:text-4xl tracking-tight">{title}</h2>
-      {sub && <p className={cx("text-zinc-400 mt-3 max-w-2xl", center && "mx-auto")}>{sub}</p>}
+      {sub && <p className={cx("text-muted mt-3 max-w-2xl", center && "mx-auto")}>{sub}</p>}
     </motion.div>
   );
 }
 
 export function Breadcrumbs({ items }: { items: [string, string?][] }) {
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-zinc-500 flex-wrap">
+    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-subtle flex-wrap">
       {items.map(([label, href], i) => (
         <span key={label} className="flex items-center gap-1">
-          {href ? <Link href={href} className="hover:text-gold">{label}</Link> : <span className="text-zinc-300">{label}</span>}
+          {href ? <Link href={href} className="hover:text-gold">{label}</Link> : <span className="text-soft">{label}</span>}
           {i < items.length - 1 && <ChevronRight size={12} />}
         </span>
       ))}
@@ -101,7 +101,7 @@ export function Segmented<T extends string>({ options, value, onChange, id, clas
     <div className={cx("inline-flex max-w-full overflow-x-auto scrollbar-thin rounded-xl border border-line p-1 bg-ink/60", className)} role="tablist">
       {options.map(([v, label]) => (
         <button key={v} role="tab" aria-selected={value === v} onClick={() => onChange(v)}
-          className={cx("relative px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors", value === v ? "text-black font-semibold" : "text-zinc-400 hover:text-white")}>
+          className={cx("relative px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors", value === v ? "text-on-brand font-semibold" : "text-muted hover:text-strong")}>
           {value === v && <motion.span layoutId={`seg-${id}`} className="absolute inset-0 rounded-lg btn-gold" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
           <span className="relative flex items-center gap-1.5">{label}</span>
         </button>
@@ -123,7 +123,7 @@ export function Accordion({ items, defaultOpen = -1 }: { items: { q: React.React
           <AnimatePresence initial={false}>
             {open === i && (
               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                <div className="px-5 pb-4 text-sm text-zinc-400">{it.a}</div>
+                <div className="px-5 pb-4 text-sm text-muted">{it.a}</div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -159,7 +159,7 @@ export function PageHeader({ crumbs, title, sub, icon, children }: { crumbs: [st
           className="font-display text-3xl sm:text-5xl tracking-tight mt-4 flex items-center gap-3">
           {icon}{title}
         </motion.h1>
-        {sub && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }} className="text-zinc-400 mt-3 max-w-2xl text-lg">{sub}</motion.p>}
+        {sub && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }} className="text-muted mt-3 max-w-2xl text-lg">{sub}</motion.p>}
         {children}
       </div>
     </section>

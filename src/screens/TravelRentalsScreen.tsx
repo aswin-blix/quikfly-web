@@ -57,7 +57,7 @@ export function TravelRentalsScreen() {
           {type === "outstation" ? (
             <div><label className="label" htmlFor="dst">Chennai to</label>
               <select id="dst" className="field mt-1.5" value={dest} onChange={(e) => setDest(e.target.value)}>{Object.keys(DESTINATIONS).map((d) => <option key={d}>{d}</option>)}</select></div>
-          ) : <div><p className="label">Package</p><div className="field mt-1.5 text-zinc-400">8 hrs / 80 km per day</div></div>}
+          ) : <div><p className="label">Package</p><div className="field mt-1.5 text-muted">8 hrs / 80 km per day</div></div>}
           <div><label className="label" htmlFor="tdate">Start date</label><input id="tdate" type="date" className="field mt-1.5" min={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></div>
           <div className="min-w-[140px]"><p className="label mb-2">Days</p><Counter label="" value={days} min={1} max={15} onChange={setDays} /></div>
           <div className="min-w-[140px]"><p className="label mb-2">Passengers</p><Counter label="" value={pax} min={1} max={45} onChange={setPax} /></div>
@@ -65,24 +65,24 @@ export function TravelRentalsScreen() {
       </PageHeader>
 
       <section className="max-w-7xl mx-auto px-4">
-        <p className="text-sm text-zinc-400 mb-4">{fits.length} vehicles seat {pax}+ {type === "outstation" && <>· ~{roundKm} km round trip</>} · tolls & permits extra · tick up to 3 to compare</p>
+        <p className="text-sm text-muted mb-4">{fits.length} vehicles seat {pax}+ {type === "outstation" && <>· ~{roundKm} km round trip</>} · tolls & permits extra · tick up to 3 to compare</p>
         <motion.div layout className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
           <AnimatePresence mode="popLayout">
             {fits.map((v) => (
               <motion.div key={v.id} layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} whileHover={{ y: -6 }}
                 className={cx("panel overflow-hidden flex flex-col group", compare.includes(v.id) && "!border-gold/60")}>
-                <div className="relative h-40 overflow-hidden">
+                <div className="on-media relative h-40 overflow-hidden">
                   <img src={vehicleImg(v)} alt={v.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                   <label className="absolute top-3 right-3 flex items-center gap-1.5 text-xs bg-black/60 backdrop-blur px-2 py-1 rounded cursor-pointer">
-                    <input type="checkbox" checked={compare.includes(v.id)} onChange={() => toggleCompare(v.id)} className="accent-[#f2c14e]" />Compare
+                    <input type="checkbox" checked={compare.includes(v.id)} onChange={() => toggleCompare(v.id)} className="accent-brand" />Compare
                   </label>
                 </div>
                 <div className="p-5 flex-1 flex flex-col gap-3">
-                  <div className="flex items-center justify-between"><p className="font-semibold text-lg">{v.name}</p><span className="text-xs flex items-center gap-1 text-zinc-400"><Users size={12} />{v.seats}</span></div>
-                  <div className="flex flex-wrap gap-1.5">{v.features.map((f) => <span key={f} className="text-[11px] text-zinc-400 border border-line rounded-full px-2 py-0.5">{f}</span>)}</div>
-                  <p className="text-xs text-zinc-500">{type === "local" ? `${inr(v.localPackage)} per day` : `${inr(v.perKm)}/km · min ${v.minKmPerDay} km/day · bata ${inr(v.driverBataPerDay)}/day`}</p>
+                  <div className="flex items-center justify-between"><p className="font-semibold text-lg">{v.name}</p><span className="text-xs flex items-center gap-1 text-muted"><Users size={12} />{v.seats}</span></div>
+                  <div className="flex flex-wrap gap-1.5">{v.features.map((f) => <span key={f} className="text-[11px] text-muted border border-line rounded-full px-2 py-0.5">{f}</span>)}</div>
+                  <p className="text-xs text-subtle">{type === "local" ? `${inr(v.localPackage)} per day` : `${inr(v.perKm)}/km · min ${v.minKmPerDay} km/day · bata ${inr(v.driverBataPerDay)}/day`}</p>
                   <div className="mt-auto pt-3 border-t border-line flex items-end justify-between">
-                    <div><p className="text-[11px] text-zinc-500">Estimated fare</p><TweenNumber value={estimate(v)} format={inr} className="text-xl font-bold text-gold" /></div>
+                    <div><p className="text-[11px] text-subtle">Estimated fare</p><TweenNumber value={estimate(v)} format={inr} className="text-xl font-bold text-gold" /></div>
                     <GoldButton className="!py-2 !px-4 text-sm" onClick={() => book(v)}>Book</GoldButton>
                   </div>
                 </div>
@@ -98,10 +98,10 @@ export function TravelRentalsScreen() {
             className="fixed bottom-0 inset-x-0 z-30 bg-coal/95 backdrop-blur-xl border-t border-gold/30">
             <div className="max-w-7xl mx-auto px-4 py-4 overflow-x-auto">
               <table className="w-full text-sm min-w-[560px]">
-                <thead><tr className="text-left text-zinc-500"><th className="font-normal pb-2">Compare</th>{comparing.map((v) => <th key={v.id} className="pb-2 font-semibold text-white">{v.name}</th>)}<th className="w-8"><button onClick={() => setCompare([])} aria-label="Close compare"><X size={16} /></button></th></tr></thead>
-                <tbody className="text-zinc-300">
+                <thead><tr className="text-left text-subtle"><th className="font-normal pb-2">Compare</th>{comparing.map((v) => <th key={v.id} className="pb-2 font-semibold text-strong">{v.name}</th>)}<th className="w-8"><button onClick={() => setCompare([])} aria-label="Close compare"><X size={16} /></button></th></tr></thead>
+                <tbody className="text-soft">
                   {[["Seats", (v: TravelVehicle) => v.seats], ["Per km", (v: TravelVehicle) => inr(v.perKm)], ["Driver bata/day", (v: TravelVehicle) => inr(v.driverBataPerDay)], ["Your estimate", (v: TravelVehicle) => <b className="text-gold">{inr(estimate(v))}</b>]].map(([l, f]) => (
-                    <tr key={l as string} className="border-t border-line"><td className="py-1.5 text-zinc-500">{l as string}</td>{comparing.map((v) => <td key={v.id}>{(f as (v: TravelVehicle) => React.ReactNode)(v)}</td>)}<td /></tr>
+                    <tr key={l as string} className="border-t border-line"><td className="py-1.5 text-subtle">{l as string}</td>{comparing.map((v) => <td key={v.id}>{(f as (v: TravelVehicle) => React.ReactNode)(v)}</td>)}<td /></tr>
                   ))}
                 </tbody>
               </table>
@@ -115,7 +115,7 @@ export function TravelRentalsScreen() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[[ShieldCheck, "Experienced drivers", "10+ years on highways, verified & courteous."], [Route, "Transparent billing", "Per-km pricing with minimums shown upfront."], [Fuel, "Fuel included", "Fuel included in per-km rate; no surprise top-ups."], [Check, "Clean & checked", "Every vehicle inspected and cleaned before pickup."]].map(([I, t, d], i) => {
             const Icon = I as typeof Route;
-            return <Reveal key={t as string} delay={i * 0.08}><div className="panel p-6 h-full"><Icon className="text-gold" /><p className="font-semibold mt-4">{t as string}</p><p className="text-sm text-zinc-400 mt-1">{d as string}</p></div></Reveal>;
+            return <Reveal key={t as string} delay={i * 0.08}><div className="panel p-6 h-full"><Icon className="text-gold" /><p className="font-semibold mt-4">{t as string}</p><p className="text-sm text-muted mt-1">{d as string}</p></div></Reveal>;
           })}
         </div>
       </section>

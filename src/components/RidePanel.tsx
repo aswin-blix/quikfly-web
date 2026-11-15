@@ -104,8 +104,8 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
         {phase === "plan" && (
           <>
             <div className="relative space-y-2">
-              <PlacePicker icon={<span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />} placeholder="Pickup location" value={pickup} onChange={setPickup} exclude={drop?.id} />
-              <PlacePicker icon={<span className="w-2.5 h-2.5 bg-gold" />} placeholder="Where to?" value={drop} onChange={setDrop} exclude={pickup?.id} />
+              <PlacePicker icon={<span className="w-2.5 h-2.5 rounded-full bg-success" />} placeholder="Pickup location" value={pickup} onChange={setPickup} exclude={drop?.id} />
+              <PlacePicker icon={<span className="w-2.5 h-2.5 bg-brand" />} placeholder="Where to?" value={drop} onChange={setDrop} exclude={pickup?.id} />
               <button onClick={() => { setPickup(drop); setDrop(pickup); }} className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-smoke border border-line grid place-items-center hover:border-gold" title="Swap">
                 <ArrowUpDown size={14} />
               </button>
@@ -130,13 +130,13 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
                 {quotes.map((q, i) => (
                   <motion.button initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} whileTap={{ scale: 0.98 }} key={q.option.id} onClick={() => setSelected(q.option.id)}
                     className={cx("w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all",
-                      selected === q.option.id ? "border-gold bg-gold/[0.07]" : "border-line hover:border-zinc-600")}>
+                      selected === q.option.id ? "border-gold bg-gold/[0.07]" : "border-line hover:border-line-strong")}>
                     <img src={service === "bike" ? "/assets/s0.jpg" : q.option.id === "prime" || q.option.id === "suv" ? "/assets/s4.jpg" : "/assets/s1.jpg"} alt="" className="w-16 h-11 object-cover rounded-lg" />
                     <div className="flex-1">
                       <p className="font-semibold flex items-center gap-2">{q.option.name}
-                        <span className="text-xs text-zinc-400 font-normal flex items-center gap-0.5"><Users size={12} />{q.option.seats}</span>
+                        <span className="text-xs text-muted font-normal flex items-center gap-0.5"><Users size={12} />{q.option.seats}</span>
                       </p>
-                      <p className="text-xs text-zinc-400">{q.etaMin} min away · {q.option.description}</p>
+                      <p className="text-xs text-muted">{q.etaMin} min away · {q.option.description}</p>
                     </div>
                     <p className="font-bold text-lg">{inr(q.fare)}</p>
                   </motion.button>
@@ -162,8 +162,8 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
               <span className="w-14 h-14 rounded-full btn-gold grid place-items-center"><Spinner size={22} /></span>
             </div>
             <p className="font-semibold text-lg">Finding your {quote?.option.name}…</p>
-            <p className="text-sm text-zinc-400">Matching you with the nearest top-rated driver</p>
-            <button className="text-sm text-zinc-400 underline" onClick={reset}>Cancel</button>
+            <p className="text-sm text-muted">Matching you with the nearest top-rated driver</p>
+            <button className="text-sm text-muted underline" onClick={reset}>Cancel</button>
           </div>
         )}
 
@@ -171,7 +171,7 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="label !text-emerald-300">{phase === "arriving" ? "Driver on the way" : "On trip"}</p>
+                <p className="label !text-success">{phase === "arriving" ? "Driver on the way" : "On trip"}</p>
                 <p className="text-2xl font-bold">{phase === "arriving" ? `Arriving in ${etaLeft} min` : `${tripLeft} min to drop`}</p>
               </div>
               {phase === "arriving" && (
@@ -186,39 +186,39 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
               <div className="w-12 h-12 rounded-full btn-gold grid place-items-center text-lg">{ride.driver.name[0]}</div>
               <div className="flex-1">
                 <p className="font-semibold">{ride.driver.name}</p>
-                <p className="text-xs text-zinc-400 flex items-center gap-1"><Star size={12} className="fill-gold text-gold" />{ride.driver.rating} · {ride.driver.trips.toLocaleString("en-IN")} trips</p>
+                <p className="text-xs text-muted flex items-center gap-1"><Star size={12} className="fill-gold text-gold" />{ride.driver.rating} · {ride.driver.trips.toLocaleString("en-IN")} trips</p>
               </div>
               <a href={`tel:${ride.driver.phone.replace(/\s/g, "")}`} className="w-10 h-10 rounded-full border border-line grid place-items-center hover:border-gold" title={ride.driver.phone}><Phone size={16} /></a>
             </div>
             <div className="flex items-center justify-between p-3 rounded-2xl bg-gold/[0.06] border border-gold/30">
-              <div><p className="text-sm text-zinc-300">{ride.driver.vehicle}</p><p className="text-xs text-zinc-500">{ride.quote.option.name}</p></div>
-              <p className="font-mono font-bold bg-white text-black px-2 py-1 rounded text-sm">{ride.driver.plate}</p>
+              <div><p className="text-sm text-soft">{ride.driver.vehicle}</p><p className="text-xs text-subtle">{ride.quote.option.name}</p></div>
+              <p className="font-mono font-bold bg-white text-on-brand border border-line px-2 py-1 rounded text-sm">{ride.driver.plate}</p>
             </div>
             <div className="text-sm space-y-1.5">
-              <p className="flex gap-2"><MapPin size={16} className="text-emerald-400 shrink-0" />{ride.pickup.name}</p>
+              <p className="flex gap-2"><MapPin size={16} className="text-success shrink-0" />{ride.pickup.name}</p>
               <p className="flex gap-2"><Navigation size={16} className="text-gold shrink-0" />{ride.drop.name}</p>
             </div>
             <div className="flex items-center justify-between text-sm border-t border-line pt-3">
-              <span className="text-zinc-400">Fare ({ride.payment.toUpperCase()})</span><span className="font-bold text-lg">{inr(ride.quote.fare)}</span>
+              <span className="text-muted">Fare ({ride.payment.toUpperCase()})</span><span className="font-bold text-lg">{inr(ride.quote.fare)}</span>
             </div>
             <div className="flex gap-2">
-              <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-line text-sm hover:border-zinc-500"><ShieldCheck size={16} className="text-emerald-400" />Share trip</button>
-              {phase === "arriving" && <button onClick={cancelRide} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-red-500/30 text-red-300 text-sm hover:bg-red-500/10"><X size={16} />Cancel ride</button>}
+              <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-line text-sm hover:border-line-strong"><ShieldCheck size={16} className="text-success" />Share trip</button>
+              {phase === "arriving" && <button onClick={cancelRide} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-danger/30 text-danger text-sm hover:bg-danger/10"><X size={16} />Cancel ride</button>}
             </div>
           </div>
         )}
 
         {ride && phase === "done" && (
           <div className="text-center space-y-4 py-4">
-            <p className="label !text-emerald-300">You have arrived</p>
+            <p className="label !text-success">You have arrived</p>
             <p className="text-3xl font-bold">{inr(ride.quote.fare)}</p>
-            <p className="text-sm text-zinc-400">{ride.quote.distanceKm} km · {ride.quote.durationMin} min · paid via {ride.payment.toUpperCase()}</p>
+            <p className="text-sm text-muted">{ride.quote.distanceKm} km · {ride.quote.durationMin} min · paid via {ride.payment.toUpperCase()}</p>
             <p className="text-sm">Rate your ride with {ride.driver.name}</p>
             <div className="flex justify-center gap-1">
               {[1, 2, 3, 4, 5].map((n) => (
                 <motion.button key={n} whileHover={{ scale: 1.2 }} whileTap={{ scale: 0.9 }} animate={n <= rating ? { scale: [1, 1.35, 1] } : {}}
                   onClick={() => { setRating(n); toast("Thanks for your feedback!"); }} aria-label={`${n} stars`}>
-                  <Star size={30} className={n <= rating ? "fill-gold text-gold" : "text-zinc-600"} />
+                  <Star size={30} className={n <= rating ? "fill-gold text-gold" : "text-faint"} />
                 </motion.button>
               ))}
             </div>
@@ -266,9 +266,9 @@ function PlacePicker({
         <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto scrollbar-thin rounded-xl border border-line bg-coal shadow-2xl">
           {results.map((p) => (
             <button key={p.id} onMouseDown={() => { onChange(p); setOpen(false); }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-left">
-              <Clock size={14} className="text-zinc-500" />
-              <span><span className="block text-sm">{p.name}</span><span className="block text-xs text-zinc-500">{p.area}, Chennai</span></span>
+              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-fg/5 text-left">
+              <Clock size={14} className="text-subtle" />
+              <span><span className="block text-sm">{p.name}</span><span className="block text-xs text-subtle">{p.area}, Chennai</span></span>
             </button>
           ))}
         </div>

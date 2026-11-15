@@ -1,0 +1,86 @@
+/* Reusable component classes. Colours come from tokens.css only. */
+
+.gold-text {
+  background: var(--accent-text-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.btn-gold {
+  background: linear-gradient(180deg, var(--brand-light) 0%, var(--brand) 40%, var(--brand-dark) 100%);
+  color: var(--on-brand);
+  font-weight: 700;
+  box-shadow: 0 8px 24px -10px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, .5);
+  transition: transform .15s ease, filter .15s ease;
+}
+.btn-gold:hover { filter: brightness(1.06); }
+.btn-gold:active { transform: translateY(1px); }
+.btn-gold:disabled { filter: grayscale(.6) brightness(.7); cursor: not-allowed; }
+
+.panel {
+  background: linear-gradient(180deg, var(--panel-from), var(--panel-to));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--panel-shadow);
+}
+
+.gold-border {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    var(--accent-border-gradient) border-box;
+}
+
+.field {
+  width: 100%;
+  background: var(--surface-field);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-field);
+  padding: .7rem .9rem;
+  color: var(--fg-strong);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.field:focus { border-color: var(--accent-deep); box-shadow: 0 0 0 3px var(--accent-ring); }
+.field::placeholder { color: var(--fg-subtle); }
+.field::-webkit-calendar-picker-indicator { filter: var(--picker-icon-filter); }
+select.field option { background: var(--surface); }
+
+.label {
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: .35rem .85rem;
+  font-size: .85rem;
+  color: var(--fg-soft);
+  transition: all .15s;
+}
+.chip[data-on="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.hero-glow {
+  background:
+    radial-gradient(60% 50% at 70% 20%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 70%),
+    radial-gradient(40% 40% at 10% 80%, color-mix(in srgb, var(--brand-dark) 12%, transparent), transparent 70%);
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 9px; }
+
+.skeleton {
+  background: linear-gradient(90deg, var(--skeleton-base) 25%, var(--skeleton-shine) 50%, var(--skeleton-base) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 1rem;
+}

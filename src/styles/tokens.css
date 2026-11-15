@@ -1,0 +1,154 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Design tokens — the single place to customise how QuikFly looks.
+
+   • Brand / layout tokens are theme-independent.
+   • Colour tokens are defined once per theme (dark is the default).
+   • Components never use raw colour values; they read these variables
+     (directly, or through the Tailwind utilities mapped in globals.css).
+
+   To re-skin the site, change values here. To add a theme, add another
+   [data-theme="…"] block that redefines the colour tokens.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Brand (same in every theme) */
+  --brand: #f2c14e;
+  --brand-light: #ffd978;
+  --brand-dark: #c8961e;
+  --on-brand: #120d00;
+
+  /* Typography */
+  --font-body: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Archivo Black", "Outfit", sans-serif;
+
+  /* Shape */
+  --radius-panel: 1.25rem;
+  --radius-field: .8rem;
+
+  /* Motion */
+  --theme-transition: .25s ease;
+}
+
+/* ── Dark theme (default). `.on-media` pins a subtree to the dark palette —
+      use it for content that sits on photos or always-dark artwork. ── */
+:root,
+[data-theme="dark"],
+.on-media {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg: #07070a;
+  --surface: #111116;
+  --surface-raised: #1a1a21;
+  --surface-field: #0d0d12;
+  --panel-from: rgba(28, 28, 36, .92);
+  --panel-to: rgba(16, 16, 21, .96);
+  --panel-shadow: none;
+
+  /* Borders */
+  --border: #2a2a33;
+  --border-strong: #71717a;
+
+  /* Text */
+  --fg: #ececf1;
+  --fg-strong: #ffffff;
+  --fg-soft: #d4d4d8;
+  --fg-muted: #a1a1aa;
+  --fg-subtle: #71717a;
+  --fg-faint: #52525b;
+
+  /* Accent (gold used for text, icons, borders and tints) */
+  --accent: #f2c14e;
+  --accent-deep: #c8961e;
+  --accent-pale: #ffe7a3;
+  --accent-text-gradient: linear-gradient(180deg, #fff3c4 0%, #f2c14e 45%, #b9861a 100%);
+  --accent-glow: rgba(242, 193, 78, .35);
+  --accent-ring: rgba(242, 193, 78, .15);
+  --accent-border-gradient: linear-gradient(160deg, #ffe7a3, #8a6411 40%, #2a2a33 70%, #f2c14e);
+
+  /* Status */
+  --success: #34d399;
+  --danger: #f87171;
+  --warning: #fdba74;
+  --highlight: #f9a8d4;
+
+  /* Misc */
+  --overlay: rgba(0, 0, 0, .75);
+  --scrollbar-thumb: #33333d;
+  --skeleton-base: #17171d;
+  --skeleton-shine: #24242c;
+  --picker-icon-filter: invert(.8) sepia(1) saturate(4) hue-rotate(5deg);
+
+  /* Demo map */
+  --map-bg: #0b0c10;
+  --map-grid: #16171d;
+  --map-water-from: #0c1a24;
+  --map-water-to: #0a1620;
+  --map-river: #12303d;
+  --map-park: #0f1a12;
+  --map-road: #22232b;
+  --map-road-line: #3a3220;
+  --map-landmark: #4a4a55;
+  --map-landmark-text: #5d5d6a;
+  --map-label-bg: #0b0b0f;
+  --map-label-text: #ffffff;
+  --map-pin-outline: #07070a;
+}
+
+/* ── Light theme ── */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #faf8f3;
+  --surface: #ffffff;
+  --surface-raised: #f3efe6;
+  --surface-field: #ffffff;
+  --panel-from: #ffffff;
+  --panel-to: #fdfcf9;
+  --panel-shadow: 0 1px 2px rgba(40, 30, 0, .04), 0 12px 32px -18px rgba(40, 30, 0, .18);
+
+  --border: #e5dfd1;
+  --border-strong: #a8a294;
+
+  --fg: #1b1920;
+  --fg-strong: #000000;
+  --fg-soft: #3a3741;
+  --fg-muted: #5b5864;
+  --fg-subtle: #767380;
+  --fg-faint: #a4a1ab;
+
+  --accent: #8f5f00;
+  --accent-deep: #b07d10;
+  --accent-pale: #6b4800;
+  --accent-text-gradient: linear-gradient(180deg, #c8961e 0%, #9a6a05 50%, #6b4800 100%);
+  --accent-glow: rgba(200, 150, 30, .28);
+  --accent-ring: rgba(200, 150, 30, .22);
+  --accent-border-gradient: linear-gradient(160deg, #e9c46a, #c8961e 40%, #e5dfd1 70%, #d9a93a);
+
+  --success: #0b7a52;
+  --danger: #c62828;
+  --warning: #b45309;
+  --highlight: #be185d;
+
+  --overlay: rgba(20, 16, 6, .55);
+  --scrollbar-thumb: #cfc9ba;
+  --skeleton-base: #efebe1;
+  --skeleton-shine: #f8f5ee;
+  --picker-icon-filter: none;
+
+  --map-bg: #f1eee6;
+  --map-grid: #e6e2d7;
+  --map-water-from: #cfe3ee;
+  --map-water-to: #bdd7e6;
+  --map-river: #bdd7e6;
+  --map-park: #d5e6cf;
+  --map-road: #ffffff;
+  --map-road-line: #e2c97f;
+  --map-landmark: #9a968b;
+  --map-landmark-text: #7b776d;
+  --map-label-bg: #ffffff;
+  --map-label-text: #1b1920;
+  --map-pin-outline: #ffffff;
+}
+
+.on-media { color: var(--fg); }

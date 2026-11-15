@@ -17,13 +17,13 @@ const TABS: [Tab, ServiceKey, string][] = [["ride", "car", "Rides"], ["bus", "bu
 export function BookingWidget() {
   const [tab, setTab] = useState<Tab>("ride");
   return (
-    <div className="panel gold-border p-2 shadow-[0_40px_120px_-40px_rgba(242,193,78,.35)]">
+    <div className="panel gold-border p-2 shadow-[0_40px_120px_-40px_var(--accent-glow)]">
       <div className="flex overflow-x-auto scrollbar-thin gap-1 p-1" role="tablist">
         {TABS.map(([k, sk, label]) => {
           const s = SERVICES.find((x) => x.key === sk)!;
           return (
             <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-              className={cx("relative flex-1 min-w-[62px] sm:min-w-[84px] flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-medium transition-colors", tab === k ? "text-gold" : "text-zinc-400 hover:text-white")}>
+              className={cx("relative flex-1 min-w-[62px] sm:min-w-[84px] flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-medium transition-colors", tab === k ? "text-gold" : "text-muted hover:text-strong")}>
               {tab === k && <motion.span layoutId="widget-tab" className="absolute inset-0 rounded-xl bg-gold/10 border border-gold/30" transition={{ type: "spring", stiffness: 380, damping: 30 }} />}
               <s.icon size={20} className="relative" /><span className="relative">{label}</span>
             </button>
@@ -54,7 +54,7 @@ function RideForm() {
     <div className="space-y-3">
       <Segmented id="ride-kind" value={kind} onChange={setKind} options={[["bike", "Bike / Auto"], ["cab", "Cab"]]} />
       <div className="grid sm:grid-cols-2 gap-3">
-        <Select label="Pickup" icon={<MapPin size={16} className="text-emerald-400" />} value={from} onChange={setFrom} options={PLACES.map((p) => [p.id, p.name])} />
+        <Select label="Pickup" icon={<MapPin size={16} className="text-success" />} value={from} onChange={setFrom} options={PLACES.map((p) => [p.id, p.name])} />
         <Select label="Drop" icon={<Navigation size={16} className="text-gold" />} value={to} onChange={setTo} options={PLACES.filter((p) => p.id !== from).map((p) => [p.id, p.name])} />
       </div>
       <GoldButton className="w-full sm:w-auto" onClick={() => nav.push(`/${kind === "bike" ? "bike-taxi" : "cab"}${qs({ from, to })}`)}>See fares <ArrowRight size={18} /></GoldButton>
@@ -90,7 +90,7 @@ function ToursForm() {
   const [theme, setTheme] = useState<TourTheme | "all">("all");
   return (
     <div className="space-y-4">
-      <p className="text-sm text-zinc-400">What kind of holiday are you dreaming of?</p>
+      <p className="text-sm text-muted">What kind of holiday are you dreaming of?</p>
       <div className="flex flex-wrap gap-2">
         {THEMES.map(([k, l]) => <button key={k} data-on={theme === k} onClick={() => setTheme(k)} className="chip">{l}</button>)}
       </div>
@@ -126,7 +126,7 @@ function RentalsForm() {
         <div><label className="label">Travel date</label><input type="date" className="field mt-1.5" min={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <div>
           <label className="label">Passengers · {pax}</label>
-          <input type="range" min={2} max={45} value={pax} onChange={(e) => setPax(+e.target.value)} className="w-full mt-4 accent-[#f2c14e]" />
+          <input type="range" min={2} max={45} value={pax} onChange={(e) => setPax(+e.target.value)} className="w-full mt-4 accent-brand" />
         </div>
       </div>
       <GoldButton onClick={() => nav.push(`/travel-rentals${qs({ pax, date })}`)}>See vehicles <ArrowRight size={18} /></GoldButton>
