@@ -95,7 +95,7 @@ export function TravelRentalsScreen() {
       <AnimatePresence>
         {comparing.length >= 2 && (
           <motion.div initial={{ y: 120 }} animate={{ y: 0 }} exit={{ y: 120 }} transition={{ type: "spring", stiffness: 260, damping: 28 }}
-            className="fixed bottom-0 inset-x-0 z-30 bg-coal/95 backdrop-blur-xl border-t border-gold/30">
+            className="fixed bottom-[var(--bottom-nav-offset)] inset-x-0 z-30 bg-coal/95 backdrop-blur-xl border-t border-gold/30">
             <div className="max-w-7xl mx-auto px-4 py-4 overflow-x-auto">
               <table className="w-full text-sm min-w-[560px]">
                 <thead><tr className="text-left text-subtle"><th className="font-normal pb-2">Compare</th>{comparing.map((v) => <th key={v.id} className="pb-2 font-semibold text-strong">{v.name}</th>)}<th className="w-8"><button onClick={() => setCompare([])} aria-label="Close compare"><X size={16} /></button></th></tr></thead>
