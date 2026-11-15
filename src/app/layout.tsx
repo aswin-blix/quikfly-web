@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Shell } from "@/components/shell";
+import { AUTHOR } from "@/lib/site";
 import { SPA } from "@/lib/spa-flag";
 import { DEFAULT_THEME, THEME_COLORS, THEME_INIT_SCRIPT } from "@/lib/theme";
 import { SpaFrame } from "@/spa/SpaApp";
@@ -8,6 +9,8 @@ import { SpaFrame } from "@/spa/SpaApp";
 export const metadata: Metadata = {
   title: { default: "QuikFly — All in One Super App", template: "%s" },
   description: "Bike taxi, car rides, bus tickets, tour packages, car rentals and travel rentals — all in one app.",
+  authors: [{ name: AUTHOR.name, url: AUTHOR.url }],
+  creator: AUTHOR.name,
 };
 
 export const viewport: Viewport = { themeColor: THEME_COLORS[DEFAULT_THEME], width: "device-width", initialScale: 1 };

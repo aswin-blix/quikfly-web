@@ -74,6 +74,7 @@ src/
     nav.tsx       routing helpers (Next routes or in-memory)
     gsap.ts       GSAP + plugins registration
     theme.ts      light/dark theme logic (storage, system preference, no-flash script)
+    site.ts       site-wide facts (author credit)
     api/
       contract.ts QuikflyApi interface: the only thing screens depend on
       mock.ts     demo implementation (seeded data, simulated latency, localStorage)
@@ -110,3 +111,7 @@ Responses may be bare JSON or wrapped in `{ "data": ... }` (Laravel API Resource
 - **Payments:** Razorpay or Cashfree at checkout.
 - **SEO / SSR:** drop `output: "export"` if you need server rendering, middleware or route handlers.
 - Driver/partner app and admin panel (fleet, pricing, bookings, payouts).
+
+## Author
+
+Designed and built by [Aswin Blix](https://aswinblix.dev/). The name and link shown in the footer and page metadata come from `src/lib/site.ts`.
