@@ -15,6 +15,7 @@ import { BookingsScreen, CheckoutScreen, ConfirmedScreen } from "@/screens/Check
 import { HelpScreen, NotFoundScreen, OffersScreen, PartnerScreen } from "@/screens/InfoScreens";
 import { AccountScreen } from "@/screens/AccountScreen";
 import { TrackScreen } from "@/screens/TrackScreen";
+import { InvoiceScreen } from "@/screens/InvoiceScreen";
 
 const ROUTES: [RegExp, (m: RegExpMatchArray) => React.ReactNode][] = [
   [/^\/$/, () => <HomeScreen />],
@@ -35,6 +36,7 @@ const ROUTES: [RegExp, (m: RegExpMatchArray) => React.ReactNode][] = [
   [/^\/help$/, () => <HelpScreen />],
   [/^\/account$/, () => <AccountScreen />],
   [/^\/track$/, () => <TrackScreen />],
+  [/^\/invoice$/, () => <InvoiceScreen />],
 ];
 
 function Router() {

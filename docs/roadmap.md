@@ -26,14 +26,14 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 | A2 | `/account` profile: edit name, email, gender, DOB | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A3 | Change mobile number (OTP to the new number) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A4 | Saved places (Home, Work, other) + one-tap picks in the ride panel | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| A5 | Saved travellers + one-tap fill at checkout (account page done; checkout next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
+| A5 | Saved travellers + one-tap fill at checkout | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A6 | Emergency contacts (max 3) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A7 | Wallet page: balance + labelled transaction history + refund timings | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A8 | Delete account: OTP, 30-day grace, restored on sign-in, wallet-loss warning | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A9 | Sign out of all devices | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | B1 | Safety centre: SOS sheet in a live ride (Call 112, safety line, alert contacts, share), public trip-tracking link `/track`, "auto-share night rides" switch | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| B2 | Driving-licence check before self-drive (pending → verified, simulated) (account page done; checkout next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
-| B3 | Printable tax invoice from My Trips (`/invoice`), with GST details saved in the account and applied at checkout (GST section done; checkout + invoice next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
+| B2 | Driving-licence check before self-drive (pending → verified, simulated) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| B3 | Printable tax invoice from My Trips (`/invoice`), with GST details saved in the account and applied at checkout | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | B4 | Referral code: each user has one; applying a friend's code gives both ₹100 wallet credit (once) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 
 ### Work log (by layer)
@@ -56,7 +56,7 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 - [x] Smoke tests for every new endpoint (incl. deletion grace restore, referral twice, limits)
 - [x] `apps/api/README.md` endpoint table
 
-**Web (`apps/web`)**: 🔄 next
+**Web (`apps/web`)**: ✅ code complete (browser pass under Verification)
 - [x] Contract + `http.ts` + `mock.ts` for all new endpoints (mock split into `mock-store.ts`, `mock-account.ts`, `mock.ts`)
 - [x] Login modal (`components/LoginModal.tsx`): phone → OTP → "complete your profile" (name, optional email, optional referral code) for new users; "account restored" message
 - [x] `lib/account.ts`: section list, labels, safety numbers, refund timings; `WELCOME_CREDIT` moved to shared rules
@@ -65,10 +65,10 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 - [x] Ride panel: "Your places" chips and saved places at the top of the place picker; SOS button → `components/SafetySheet.tsx` (Call 112, safety line, share, alert contacts; alerts simulated and labelled); Share trip (Web Share or copy); night rides auto-shared when the switch is on
 - [x] `/track?t=` public page (`screens/TrackScreen.tsx`): map, driver, plate, route, progress computed from the start time with the shared `RIDE_SIMULATION`; re-checks every 15 s; `noindex`. In the SPA router
 - [x] `SharedRide.service` added (API, mock, smoke) so the map shows a bike or car; vehicle-position helpers moved into `CityMap.tsx`
-- [ ] Checkout: saved-traveller chips, GST invoice option, licence card for self-drive (replaces the checkbox)
-- [ ] My Trips: "Invoice" link; `/invoice?id=` printable page with print styles (hide header, footer, nav)
+- [x] Checkout: saved-traveller chips (tap to fill or remove), "GST invoice" option when GST details are saved (adds a `GSTIN` booking line), licence card for self-drive (form inline if missing; pending can book; replaces the checkbox); email pre-filled from the profile
+- [x] My Trips and the confirmation page link to `/invoice?id=` (`screens/InvoiceScreen.tsx`): GST-inclusive maths and per-service rates in `lib/invoice.ts`, seller details in `lib/site.ts` (`COMPANY`, placeholders), paper tokens in `tokens.css`, print styles hide the site chrome. `noindex`, in the SPA router
 
-**Verification and release**: ⬜
+**Verification and release**: 🔄
 - [ ] `npm run typecheck`, smoke ×2 locally
 - [ ] Browser pass at 390 px, light and dark, for every new screen
 - [ ] PR → merge → `db:migrate:remote` → deploy → production smoke test

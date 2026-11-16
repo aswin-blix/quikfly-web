@@ -30,6 +30,13 @@
 
   /* Motion */
   --theme-transition: .25s ease;
+
+  /* Printed documents (invoices): always ink on white paper, in every theme */
+  --paper-bg: #ffffff;
+  --paper-fg: #17171c;
+  --paper-muted: #5f5f6b;
+  --paper-line: #e3dfd4;
+  --paper-accent: #9a7414;
 }
 
 /* ── Dark theme (default). `.on-media` pins a subtree to the dark palette —
