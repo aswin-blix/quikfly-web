@@ -6,7 +6,7 @@ Read this file first. Then read:
 - [docs/roadmap.md](docs/roadmap.md): status and the in-progress checklist. **Start here when continuing work.**
 - [docs/decisions.md](docs/decisions.md): why things are built this way. Don't reverse a decision without asking the owner.
 - [docs/operations.md](docs/operations.md): environments, deploying, testing, troubleshooting.
-- [apps/api/README.md](apps/api/README.md): endpoint list. [apps/web/README.md](apps/web/README.md): pages, theming, navigation.
+- [apps/api/README.md](apps/api/README.md): endpoint list. [apps/web/README.md](apps/web/README.md): pages, theming, navigation. [apps/admin/README.md](apps/admin/README.md): admin panel structure and rules.
 
 ## Map
 
@@ -37,8 +37,9 @@ packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation
 npm install                 # links all workspaces
 npm run db:migrate:local    # local D1 schema (re-run after adding a migration)
 npm run dev                 # API :8787 + website :3000 (website uses the mock API unless apps/web/.env.local sets NEXT_PUBLIC_API_URL)
-npm run typecheck           # shared + api + web; must pass before committing
-npm run build               # API dry-run bundle + website export
+npm run dev:admin           # admin panel :3100 against the local API (create a login with apps/api/scripts/create-admin.mjs)
+npm run typecheck           # shared + api + web + admin; must pass before committing
+npm run build               # API dry-run bundle + website export + admin export
 npm run smoke               # API end-to-end tests against the local API (node apps/api/scripts/smoke.mjs <baseUrl> for others)
 npm run smoke:admin         # admin endpoints against the local API; creates its own test admins
 npm run deploy              # production; read docs/operations.md first

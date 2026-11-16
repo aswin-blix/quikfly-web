@@ -26,7 +26,7 @@ Decisions (details in [decisions.md](decisions.md)): separate app `apps/admin` o
 
 | ID | Slice | Shared | API | Admin UI | Website | Smoke | Browser |
 |---|---|---|---|---|---|---|---|
-| L1 | Foundation: `apps/admin` scaffold, admin login + sessions + lockout, roles/permissions, audit log, `create-admin` script, dashboard (bookings, revenue, cancellations, new customers; by service; by day; queues; latest bookings) | ✅ | ✅ | ⬜ | n/a | ✅ | ⬜ |
+| L1 | Foundation: `apps/admin` scaffold, admin login + sessions + lockout, roles/permissions, audit log, `create-admin` script, dashboard (bookings, revenue, cancellations, new customers; by service; by day; queues; latest bookings) | ✅ | ✅ | ✅ | n/a | ✅ | ✅ |
 | L2 | Data from the API: catalog (places, ride options, drivers, tours, rental cars, group vehicles, cities, bus operators, popular routes, FAQs) and settings (fares, surge, bus fares, welcome credit, referral bonus, GST rates, licence auto-approve, invoice company details, helpline) in D1; public `GET /config`; server-side quotes for every service; website reads everything from the API (loading states, detail pages for new items via the 404 page); admin catalog + settings editors; reset catalog to seed; settings cache in the Worker | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | L3 | Operations-lite: bookings (search, filter, detail, cancel + wallet refund, complete); licence queue (approve / reject with reason, customer sees it, resubmit); coupons in D1 checked by the API at quote/booking (expiry, min amount, max discount, uses per customer) with an offers editor | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
@@ -36,7 +36,9 @@ Each slice: typecheck → smoke (`smoke.mjs` + `smoke-admin.mjs`) → browser pa
 
 - 2026-11-16 Plan agreed (lean). `packages/shared/src/admin.ts` (roles, `PERMISSIONS`, admin shapes), `settings.ts` (`Settings` + defaults); `LicenceStatus` gains `rejected` and a `note`.
 - 2026-11-16 **L1 API** (commit "Admin L1: API"): migration `0004_admin.sql` (admin_users, admin_sessions, audit_log, settings, stored licence status); `lib/password.ts` (PBKDF2 via Web Crypto); `services/admin/{auth,audit,stats}.ts`, `services/settings.ts` (30 s cache); `middleware/admin.ts` `requireAdmin(permission)`; `routes/admin/index.ts` (login/logout/me, stats, settings, audit); licence submit now stores `pending` (or `verified` when `licenceAutoApprove` is on), the old 20 s simulation is gone; `scripts/create-admin.mjs`; `scripts/smoke-admin.mjs` (31 checks: login, same message for unknown email, lockout, role 403s, stats, settings validation, audit, setting reaches the customer licence flow). Customer smoke still 94/94.
-- Next: `apps/admin` UI (login, dashboard, settings, audit), then website copy for the licence "under review / rejected" states.
+- 2026-11-16 **L1 admin UI** (commit "Admin L1: admin app"): `apps/admin` (Next 16 static export, own Worker `quikfly-admin`): login (with `?next=` limited to same-site paths), session + `<RequireAdmin permission>`, sidebar / phone menu filtered by role, light + dark (device default, toggle), dashboard (date presets, 4 stat tiles, revenue/bookings by day column chart with tooltip + table view, revenue by service, queues, wallet liability, latest bookings), settings (generic form from `settings-fields.ts`, sticky save bar), audit log (filter, expandable before/after, pager). Root scripts `dev:admin`, admin in `build`/`typecheck`/`deploy`.
+  - Browser pass (local API, port 8795): wrong password message, sign-in, dashboard at 1280 px and 390 px in dark and light, all four date ranges, settings toggle → save → audit row with before/after. Fixed during the pass: 30/90-day charts pushed the page sideways on phones (grid needed `grid-cols-1`, bars/labels `min-w-0`); phone axis shows every other label; switch knob is white in both themes.
+- Next: L2 (catalog + settings in D1, quotes, website on API data, admin editors).
 
 ## Released: Part A (accounts) + B1–B4 ✅
 

@@ -1,0 +1,93 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* Tokens as Tailwind utilities: bg-surface, text-muted, border-line, text-accent, bg-brand... */
+@theme inline {
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-code);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-field: var(--surface-field);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+
+  --color-fg: var(--fg);
+  --color-strong: var(--fg-strong);
+  --color-muted: var(--fg-muted);
+  --color-subtle: var(--fg-subtle);
+
+  --color-accent: var(--accent);
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-on-brand: var(--on-brand);
+  --color-nav-active: var(--nav-active-bg);
+
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+
+  --color-overlay: var(--overlay);
+  --color-knob: var(--toggle-knob);
+  --color-chart-bar: var(--chart-bar);
+  --color-chart-bar-hover: var(--chart-bar-hover);
+  --color-chart-grid: var(--chart-grid);
+
+  --radius-card: var(--card-radius);
+  --radius-field: var(--field-radius);
+}
+
+html, body { overflow-x: clip; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow);
+}
+
+.field {
+  width: 100%;
+  background: var(--surface-field);
+  border: 1px solid var(--border);
+  border-radius: var(--field-radius);
+  padding: .55rem .75rem;
+  color: var(--fg-strong);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.field:focus { border-color: var(--brand-dark); box-shadow: 0 0 0 3px var(--accent-ring); }
+.field::placeholder { color: var(--fg-subtle); }
+select.field option { background: var(--surface); }
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--brand-light) 0%, var(--brand) 45%, var(--brand-dark) 100%);
+  color: var(--on-brand);
+  font-weight: 600;
+}
+.btn-primary:hover { filter: brightness(1.05); }
+.btn-primary:disabled { filter: grayscale(.6); opacity: .7; cursor: not-allowed; }
+
+.label { font-size: .75rem; font-weight: 600; color: var(--fg-muted); }
+
+.skeleton {
+  background: linear-gradient(90deg, var(--skeleton-base) 25%, var(--skeleton-shine) 50%, var(--skeleton-base) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: .5rem;
+}
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* Focus rings that work in both themes. */
+:focus-visible { outline: 2px solid var(--brand-dark); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
