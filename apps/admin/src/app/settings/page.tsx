@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
-import type { Settings } from "@quikfly/shared";
+import { SETTING_RULES, checkSetting, type Settings } from "@quikfly/shared";
 import { Button, ErrorBox, PageHeader, Toggle } from "@/components/ui";
 import { adminApi } from "@/lib/api";
 import { cx } from "@/lib/format";
@@ -11,12 +11,14 @@ import { useLoad } from "@/lib/useLoad";
 
 function FieldInput({ f, value, onChange, disabled }: { f: SettingField; value: unknown; onChange: (v: unknown) => void; disabled: boolean }) {
   if (f.type === "toggle") return <Toggle label={f.label} checked={!!value} onChange={onChange} disabled={disabled} />;
+  const rule = SETTING_RULES[f.key];
+  const limits = rule.type === "number" ? { min: rule.min, max: rule.max, step: f.step ?? (rule.integer ? 1 : "any") } : rule.type === "text" ? { maxLength: rule.max } : {};
   return (
     <div className="flex items-center gap-2 w-full sm:w-48">
       {f.unit === "₹" && <span className="text-muted">₹</span>}
       <input
         id={`set-${f.key}`} className="field" disabled={disabled}
-        type={f.type === "number" ? "number" : "text"} min={f.min} max={f.max} step={f.step}
+        type={f.type === "number" ? "number" : "text"} {...limits}
         value={String(value ?? "")}
         onChange={(e) => onChange(f.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)}
       />
@@ -40,6 +42,14 @@ function SettingsForm() {
 
   const save = async () => {
     if (!draft || !changed.length) return;
+    // Same rules as the API, so mistakes show before saving.
+    for (const k of changed) {
+      const problem = checkSetting(k, draft[k]);
+      if (problem) {
+        const label = SETTING_GROUPS.flatMap((g) => g.fields).find((f) => f.key === k)?.label ?? k;
+        return setSaveError(problem.includes(`"${k}"`) ? problem.replace(`"${k}"`, label) : problem);
+      }
+    }
     setSaving(true); setSaveError(""); setSaved(false);
     try {
       const patch = Object.fromEntries(changed.map((k) => [k, draft[k]])) as Partial<Settings>;

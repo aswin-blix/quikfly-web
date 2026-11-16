@@ -75,7 +75,7 @@ export interface CatalogKindDef {
 
 const SERVICES = ["bike", "car", "bus", "tours", "rent", "rentals"] as const;
 const name = (label = "Name"): CatalogField => ({ key: "name", label, type: "text", maxLength: 80 });
-const rupees = (key: string, label: string, max = 100_000): CatalogField => ({ key, label, type: "int", min: 0, max, hint: "₹" });
+const rupees = (key: string, label: string, max = 100_000): CatalogField => ({ key, label, type: "int", min: 0, max, hint: "In rupees" });
 const rating: CatalogField = { key: "rating", label: "Rating", type: "number", min: 1, max: 5, hint: "1 to 5" };
 const inr = (n: unknown) => `₹${Number(n).toLocaleString("en-IN")}`;
 
@@ -98,8 +98,8 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
       { key: "description", label: "Description", type: "text", maxLength: 120 },
       { key: "seats", label: "Seats", type: "int", min: 1, max: 12 },
       rupees("baseFare", "Base fare", 2000),
-      { key: "perKm", label: "Per km", type: "number", min: 0, max: 500, hint: "₹" },
-      { key: "perMin", label: "Per minute", type: "number", min: 0, max: 100, hint: "₹" },
+      { key: "perKm", label: "Per km", type: "number", min: 0, max: 500, hint: "In rupees" },
+      { key: "perMin", label: "Per minute", type: "number", min: 0, max: 100, hint: "In rupees" },
       { key: "models", label: "Vehicle models", type: "list", maxLength: 60, hint: "One per line; a driver arrives in one of these" },
     ],
     title: (d) => String(d.name), detail: (d) => `${d.service === "car" ? "Cab" : "Bike/auto"} · ${inr(d.baseFare)} + ${inr(d.perKm)}/km + ${inr(d.perMin)}/min`,
@@ -174,7 +174,7 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
     description: "Tempo travellers, minibuses and coaches for group travel.",
     fields: [
       name(), { key: "seats", label: "Seats", type: "int", min: 2, max: 80 },
-      { key: "perKm", label: "Per km", type: "number", min: 0, max: 1000, hint: "₹" },
+      { key: "perKm", label: "Per km", type: "number", min: 0, max: 1000, hint: "In rupees" },
       { key: "minKmPerDay", label: "Minimum km per day", type: "int", min: 0, max: 2000 },
       rupees("driverBataPerDay", "Driver allowance per day", 10_000),
       rupees("localPackage", "Local package per day", 100_000),
@@ -190,7 +190,7 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
   },
   offer: {
     label: "Offers and coupons", singular: "offer", group: "Marketing", idPrefix: "of", permission: "offers.edit",
-    description: "Coupon codes. The API checks them when a booking is made; hidden or expired codes stop working at once.", unique: "code",
+    description: "Coupon codes. The API checks them when a booking is made; hidden or expired codes stop working within 30 seconds.", unique: "code",
     fields: [
       { key: "code", label: "Code", type: "text", maxLength: 20, upper: true, pattern: /^[A-Z0-9]{3,20}$/, hint: "3–20 letters or digits, e.g. BUS150" },
       { key: "title", label: "Title", type: "text", maxLength: 80 },

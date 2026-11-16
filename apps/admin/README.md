@@ -15,8 +15,9 @@ node apps/api/scripts/create-admin.mjs --local you@example.com "Your Name" owner
 ## Structure
 
 ```
-src/app/            one folder per page: / (dashboard), login, settings, audit (later: catalog, bookings, licences, offers)
-src/components/     AdminShell (sidebar / phone menu), ui.tsx (buttons, badges, fields, pager...), charts.tsx
+src/app/            one folder per page: / (dashboard), login, settings, audit, catalog (overview), catalog/list?kind=, catalog/edit?kind=&id=
+                    (Offers in the sidebar is catalog/list?kind=offer). Later: bookings, licences
+src/components/     AdminShell (sidebar / phone menu), ui.tsx (buttons, badges, fields, pager...), charts.tsx, ConfirmDialog.tsx
 src/lib/api.ts      the only place that calls fetch(); token in localStorage ("quikfly.admin.token")
 src/lib/session.tsx SessionProvider, useSession(), <RequireAdmin permission="...">
 src/lib/nav.ts      sidebar entries + permissions; LIVE_ROUTES lists pages that exist so far
@@ -28,7 +29,9 @@ src/styles/tokens.css       colours, fonts, radii (light + dark). Never use raw 
 
 - **Permissions:** wrap every page in `<RequireAdmin permission="...">` and hide buttons with `useSession().can(...)`. The API enforces the same `PERMISSIONS` map from `@quikfly/shared`; the UI only hides what would fail anyway.
 - **New page:** add `src/app/<name>/page.tsx`, a `NAV` entry, and the route to `LIVE_ROUTES`.
-- **New setting:** add it to `Settings` in `packages/shared/src/settings.ts` (with a default), then a row in `settings-fields.ts`. The API validates the type automatically.
+- **New setting:** add it to `Settings` in `packages/shared/src/settings.ts` with a default and a rule in `SETTING_RULES`, then a row in `settings-fields.ts`. The API and the page both validate with `checkSetting`.
+- **Catalog:** the list and edit pages are generic. Each kind's fields, labels, hints and limits come from `CATALOG_DEFS` (`packages/shared/src/catalog-kinds.ts`); the form validates with `validateCatalogData` before saving and the API validates again. Add a field there, not here.
+- **CSS layers:** component classes (`.card`, `.field`, `.btn-primary`...) are in `@layer components` in `globals.css` so utilities like `w-56` or `pl-9` override them. Keep new component classes inside that layer.
 - **Routing:** this app uses `next/link` and `next/navigation` directly (unlike the website, it has no single-file SPA build). Pages that read the query string wrap their content in `<Suspense>`.
 - **Charts** follow the dataviz rules: one hue (`--chart-bar`), bars ≤ 24px, hairline grid, tooltip on hover and focus, "Show as table" view.
 - **Phones:** check at 390 px. Grids need `grid-cols-1` on phones (not an implicit column), or a wide child can push the page sideways.
