@@ -103,9 +103,10 @@ body { padding-bottom: var(--bottom-nav-offset); }
 .paper .paper-line { border-color: var(--paper-line); }
 .paper .paper-accent { color: var(--paper-accent); }
 
-/* Printing: only the document, no site chrome (header, footer, bottom bar, toasts). */
+/* Printing: only the document. Site chrome (header, footer, bottom bar, toasts) and
+   on-screen controls carry .no-print. Don't target bare header/footer: documents use them too. */
 @media print {
-  header, footer, nav[aria-label="Main"], [aria-live], .no-print { display: none !important; }
+  .no-print { display: none !important; }
   html, body { background: var(--paper-bg) !important; padding: 0 !important; }
   .paper { border: 0; border-radius: 0; }
 }

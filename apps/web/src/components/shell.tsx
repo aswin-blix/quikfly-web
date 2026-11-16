@@ -69,7 +69,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
   return (
     <motion.header
       animate={{ y: hidden ? "-100%" : "0%" }} transition={{ duration: 0.3, ease: "easeOut" }}
-      className={cx("sticky top-0 z-40 transition-colors duration-300", scrolled ? "bg-ink/85 backdrop-blur-xl border-b border-fg/5" : "bg-transparent")}>
+      className={cx("no-print sticky top-0 z-40 transition-colors duration-300", scrolled ? "bg-ink/85 backdrop-blur-xl border-b border-fg/5" : "bg-transparent")}>
       {DEMO_OTP && (
         <div className="text-center text-[11px] tracking-wide py-1 bg-gold/10 text-gold-pale border-b border-gold/10">
           {DEMO_MODE ? "DEMO MODE · sample data" : "PREVIEW"} · login OTP is <b>{DEMO_OTP}</b>
@@ -113,7 +113,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
             </div>
           ) : (
             <div className="hidden lg:block">
-              <GoldButton className="!py-2 !px-4 text-sm" onClick={() => requireAuth(() => toast("Welcome to QuikFly!"))}>
+              <GoldButton className="!py-2 !px-4 text-sm" onClick={() => requireAuth(() => undefined)}>
                 <UserIcon size={16} /> Login
               </GoldButton>
             </div>
@@ -129,7 +129,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
 
 function Footer() {
   return (
-    <footer className="mt-24 border-t border-line bg-coal/40">
+    <footer className="no-print mt-24 border-t border-line bg-coal/40">
       <div className="max-w-7xl mx-auto px-4 py-14 grid sm:grid-cols-2 lg:grid-cols-5 gap-10 text-sm">
         <div className="lg:col-span-2">
           <img src="/assets/logo.png" alt="QuikFly" className="h-14 rounded-lg" />
@@ -163,7 +163,7 @@ function FooterCol({ title, links }: { title: string; links: string[][] }) {
 function Toasts() {
   const { toasts } = useApp();
   return (
-    <div className="fixed bottom-[calc(var(--bottom-nav-offset)+1.25rem)] left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 items-center pointer-events-none" aria-live="polite">
+    <div className="no-print fixed bottom-[calc(var(--bottom-nav-offset)+1.25rem)] left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 items-center pointer-events-none" aria-live="polite">
       <AnimatePresence>
         {toasts.map((t) => (
           <motion.div key={t.id} layout initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}

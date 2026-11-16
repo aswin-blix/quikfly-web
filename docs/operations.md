@@ -44,4 +44,6 @@ The smoke test reuses one test user (+91 90000 00001) and leaves cancelled or co
 | `wrangler dev` picks another port, or the API answers with old code | A previous `wrangler dev` child process still holds 8787 | Use `--port 8791` and pass that URL to the smoke script |
 | "Another next dev server is already running" | Only one `next dev` per app folder | Reuse the running one, or test a production build served with `npx wrangler dev --port 3300` in `apps/web` |
 | Local API stops answering after many hot reloads | `wrangler dev` hang | Restart it on a fresh port |
+| Website served by `wrangler dev` (in `apps/web`) loads but nothing is clickable; console shows `ChunkLoadError` | The site was rebuilt after `wrangler dev` started, and it still serves the old file list | Restart `wrangler dev` after every `next build` |
+| Browser automation: clicks land under the bottom bar, or date inputs stay empty | Smooth scrolling and native date pickers | Scroll the target to the centre (`behavior: "instant"`) before clicking; set date inputs through the native value setter plus an `input` event |
 | Website shows "Request failed (401)" and signs out | Session expired or revoked | Expected; sign in again |

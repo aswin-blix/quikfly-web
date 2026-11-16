@@ -22,19 +22,19 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 
 | ID | Feature | Shared | API | Web | Mock | Smoke tests | Browser-checked |
 |---|---|---|---|---|---|---|---|
-| A1 | Sign-up step: after OTP, new users complete their profile (name, optional email, optional referral code) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| A2 | `/account` profile: edit name, email, gender, DOB | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| A3 | Change mobile number (OTP to the new number) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| A4 | Saved places (Home, Work, other) + one-tap picks in the ride panel | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| A5 | Saved travellers + one-tap fill at checkout | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| A6 | Emergency contacts (max 3) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| A7 | Wallet page: balance + labelled transaction history + refund timings | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| A8 | Delete account: OTP, 30-day grace, restored on sign-in, wallet-loss warning | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| A9 | Sign out of all devices | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| B1 | Safety centre: SOS sheet in a live ride (Call 112, safety line, alert contacts, share), public trip-tracking link `/track`, "auto-share night rides" switch | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| B2 | Driving-licence check before self-drive (pending → verified, simulated) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| B3 | Printable tax invoice from My Trips (`/invoice`), with GST details saved in the account and applied at checkout | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| B4 | Referral code: each user has one; applying a friend's code gives both ₹100 wallet credit (once) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| A1 | Sign-up step: after OTP, new users complete their profile (name, optional email, optional referral code) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| A2 | `/account` profile: edit name, email, gender, DOB | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| A3 | Change mobile number (OTP to the new number) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| A4 | Saved places (Home, Work, other) + one-tap picks in the ride panel | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| A5 | Saved travellers + one-tap fill at checkout | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| A6 | Emergency contacts (max 3) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| A7 | Wallet page: balance + labelled transaction history + refund timings | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| A8 | Delete account: OTP, 30-day grace, restored on sign-in, wallet-loss warning | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| A9 | Sign out of all devices | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| B1 | Safety centre: SOS sheet in a live ride (Call 112, safety line, alert contacts, share), public trip-tracking link `/track`, "auto-share night rides" switch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| B2 | Driving-licence check before self-drive (pending → verified, simulated) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| B3 | Printable tax invoice from My Trips (`/invoice`), with GST details saved in the account and applied at checkout | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| B4 | Referral code: each user has one; applying a friend's code gives both ₹100 wallet credit (once) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ### Work log (by layer)
 
@@ -69,8 +69,9 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 - [x] My Trips and the confirmation page link to `/invoice?id=` (`screens/InvoiceScreen.tsx`): GST-inclusive maths and per-service rates in `lib/invoice.ts`, seller details in `lib/site.ts` (`COMPANY`, placeholders), paper tokens in `tokens.css`, print styles hide the site chrome. `noindex`, in the SPA router
 
 **Verification and release**: 🔄
-- [ ] `npm run typecheck`, smoke ×2 locally
-- [ ] Browser pass at 390 px, light and dark, for every new screen
+- [x] `npm run typecheck`, smoke ×2 locally (94 checks)
+- [x] Browser pass at 390 px (and desktop, light mode) against the local API: sign-up with referral, every account section, licence pending → verified, saved-place chips, SOS sheet, share + `/track`, night auto-share, self-drive checkout with GST invoice, printed invoice, bus traveller chips, change number, delete + restore. Demo (mock) mode: sign-up, wallet history, saved place
+- [x] Fixes from the pass: print rule hid the invoice header/footer (now only `.no-print` is hidden); duplicate "Welcome" toast from the Login buttons
 - [ ] PR → merge → `db:migrate:remote` → deploy → production smoke test
 
 ## Backlog (agreed ideas, not scheduled)
