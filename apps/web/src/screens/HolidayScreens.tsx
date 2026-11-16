@@ -47,7 +47,7 @@ export function HolidaysScreen() {
 
       <section className="max-w-7xl mx-auto px-4">
         <div className="panel p-4 flex flex-wrap items-center gap-4 mb-6">
-          <Segmented id="dur" value={dur} onChange={setDur} options={[["any", "Any length"], ["short", "1–3 days"], ["mid", "4–5 days"], ["long", "6+ days"]]} />
+          <Segmented id="dur" value={dur} onChange={setDur} options={[["any", "Any"], ["short", "1–3 days"], ["mid", "4–5 days"], ["long", "6+ days"]]} />
           <div className="flex items-center gap-3 text-sm">
             <span className="text-muted whitespace-nowrap">Budget up to</span>
             <input type="range" min={5000} max={70000} step={1000} value={budget} onChange={(e) => setBudget(+e.target.value)} className="accent-brand w-36" aria-label="Budget" />

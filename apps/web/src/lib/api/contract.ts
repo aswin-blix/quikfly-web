@@ -18,6 +18,8 @@ export interface QuikflyApi {
     verifyOtp(phone: string, otp: string, name?: string): Promise<{ token: string; user: User }>;
     /** POST /auth/logout — ends the session; always clears the stored token. */
     signOut(): Promise<void>;
+    /** GET /auth/me — the signed-in user, with the current wallet balance. */
+    me(): Promise<User>;
   };
   places: {
     /** GET /places?q= */
@@ -50,9 +52,11 @@ export interface QuikflyApi {
   bookings: {
     /** GET /bookings */
     list(): Promise<Booking[]>;
-    /** POST /bookings */
+    /** POST /bookings — a wallet payment is deducted here and fails if the balance is too low. */
     create(input: Omit<Booking, "id" | "createdAt" | "status"> & { service: ServiceKey }): Promise<Booking>;
-    /** POST /bookings/:id/cancel */
+    /** POST /bookings/:id/cancel — refunds a wallet payment. */
     cancel(id: string): Promise<Booking>;
+    /** POST /bookings/:id/complete — marks a finished trip (stand-in for the driver app). */
+    complete(id: string): Promise<Booking>;
   };
 }

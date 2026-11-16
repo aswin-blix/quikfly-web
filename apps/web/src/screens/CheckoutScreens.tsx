@@ -11,7 +11,7 @@ import { cx, inr, prettyDateTime } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
-import type { Booking, BookingStatus } from "@quikfly/shared";
+import type { Booking, BookingStatus, PaymentMethod } from "@quikfly/shared";
 
 /* ───────────── /checkout ───────────── */
 
@@ -23,7 +23,7 @@ export function CheckoutScreen() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [licence, setLicence] = useState(false);
-  const [method, setMethod] = useState<"upi" | "card" | "netbanking" | "wallet">("upi");
+  const [method, setMethod] = useState<Exclude<PaymentMethod, "cash">>("upi");
   const [code, setCode] = useState("");
   const [coupon, setCoupon] = useState<{ code: string; off: number } | null>(null);
   const [couponErr, setCouponErr] = useState("");
@@ -62,19 +62,27 @@ export function CheckoutScreen() {
     requireAuth(() => { setStep(2); window.scrollTo({ top: 0, behavior: "smooth" }); });
   }
 
+  const walletShort = !!user && user.walletBalance < total;
+
   async function pay() {
     setPaying(true);
-    await new Promise((r) => setTimeout(r, 1400));
-    const b = await api.bookings.create({
-      service: draft!.service, title: draft!.title, subtitle: draft!.subtitle, amount: total,
-      lines: [...draft!.summary, ["Travellers", names.join(", ")], ["Paid via", method.toUpperCase()], ...(coupon ? [["Coupon", `${coupon.code} (−${inr(coupon.off)})`] as [string, string]] : [])],
-    });
-    await refreshBookings();
-    setDraft(null);
-    nav.replace(`/booking-confirmed${qs({ id: b.id })}`);
+    try {
+      await new Promise((r) => setTimeout(r, 1400));
+      const b = await api.bookings.create({
+        service: draft!.service, title: draft!.title, subtitle: draft!.subtitle, amount: total, payment: method,
+        lines: [...draft!.summary, ["Travellers", names.join(", ")], ["Paid via", method.toUpperCase()], ...(coupon ? [["Coupon", `${coupon.code} (−${inr(coupon.off)})`] as [string, string]] : [])],
+      });
+      await refreshBookings();
+      setDraft(null);
+      nav.replace(`/booking-confirmed${qs({ id: b.id })}`);
+    } catch (e) {
+      toast((e as Error).message, "err");
+      setPaying(false);
+    }
   }
 
-  const methods = [["upi", "UPI", Smartphone, "GPay, PhonePe, Paytm"], ["card", "Card", CreditCard, "Credit / debit"], ["netbanking", "Net banking", Building2, "All major banks"], ["wallet", "QuikFly wallet", Wallet, user ? `Balance ${inr(user.walletBalance)}` : "Instant refunds"]] as const;
+  const methods = [["upi", "UPI", Smartphone, "GPay, PhonePe, Paytm"], ["card", "Card", CreditCard, "Credit / debit"], ["netbanking", "Net banking", Building2, "All major banks"],
+    ["wallet", "QuikFly wallet", Wallet, user ? `Balance ${inr(user.walletBalance)}${walletShort ? " · not enough" : ""}` : "Instant refunds"]] as const;
 
   return (
     <div className="max-w-6xl mx-auto px-4 pt-8">
@@ -130,7 +138,8 @@ export function CheckoutScreen() {
                   <LayoutGroup>
                     <div className="grid sm:grid-cols-2 gap-3">
                       {methods.map(([k, l, I, sub]) => (
-                        <button key={k} onClick={() => setMethod(k)} className="relative text-left rounded-2xl border border-line p-4 flex items-center gap-3 hover:border-line-strong" aria-pressed={method === k}>
+                        <button key={k} onClick={() => setMethod(k)} disabled={k === "wallet" && walletShort}
+                          className="relative text-left rounded-2xl border border-line p-4 flex items-center gap-3 hover:border-line-strong disabled:opacity-50 disabled:cursor-not-allowed" aria-pressed={method === k}>
                           {method === k && <motion.span layoutId="pay-method" className="absolute inset-0 rounded-2xl border-2 border-gold bg-gold/[0.06]" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
                           <I className="relative text-gold" size={22} />
                           <span className="relative"><span className="block font-semibold text-sm">{l}</span><span className="block text-xs text-muted">{sub}</span></span>
@@ -261,6 +270,13 @@ export function ConfirmedScreen() {
 
 /* ───────────── /bookings ───────────── */
 
+const STATUS_STYLE: Record<BookingStatus, string> = {
+  confirmed: "bg-success/10 text-success",
+  ongoing: "bg-success/10 text-success",
+  completed: "bg-fg/5 text-muted",
+  cancelled: "bg-danger/10 text-danger",
+};
+
 export function BookingsScreen() {
   const { bookings, refreshBookings, toast, user, requireAuth } = useApp();
   const [tab, setTab] = useState<"upcoming" | "past" | "cancelled">("upcoming");
@@ -273,9 +289,14 @@ export function BookingsScreen() {
 
   async function cancel(b: Booking) {
     setBusy(true);
-    await api.bookings.cancel(b.id);
+    try {
+      await api.bookings.cancel(b.id);
+      toast(b.payment === "wallet" ? `Booking cancelled. ${inr(b.amount)} refunded to your wallet.` : "Booking cancelled. Refund initiated.");
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
     await refreshBookings();
-    setBusy(false); setConfirming(null); toast("Booking cancelled. Refund initiated.");
+    setBusy(false); setConfirming(null);
   }
 
   return (
@@ -315,7 +336,7 @@ export function BookingsScreen() {
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-gold">{inr(b.amount)}</p>
-                      <span className={cx("text-[11px] px-2 py-0.5 rounded-full", b.status === "cancelled" ? "bg-danger/10 text-danger" : "bg-success/10 text-success")}>{b.status === "cancelled" ? "Cancelled" : "Confirmed"}</span>
+                      <span className={cx("text-[11px] px-2 py-0.5 rounded-full capitalize", STATUS_STYLE[b.status])}>{b.status}</span>
                     </div>
                     <motion.span animate={{ rotate: isOpen ? 180 : 0 }}><ChevronDown size={18} className="text-subtle" /></motion.span>
                   </button>

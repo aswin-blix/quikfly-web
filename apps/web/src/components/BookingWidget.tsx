@@ -5,7 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { ArrowLeftRight, ArrowRight, MapPin, Navigation } from "lucide-react";
 import { CITIES, PLACES } from "@quikfly/shared";
-import { cx, nowLocal, todayISO } from "@/lib/format";
+import { cx, todayISO } from "@/lib/format";
+import { defaultRentalWindow } from "@/lib/rentals";
 import { qs, useNav } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
 import type { ServiceKey, TourTheme } from "@quikfly/shared";
@@ -102,8 +103,8 @@ function ToursForm() {
 function RentForm() {
   const nav = useNav();
   const [city, setCity] = useState("Chennai");
-  const [start, setStart] = useState(nowLocal(3));
-  const [end, setEnd] = useState(nowLocal(27));
+  const [start, setStart] = useState(() => defaultRentalWindow().start);
+  const [end, setEnd] = useState(() => defaultRentalWindow().end);
   return (
     <div className="space-y-3">
       <div className="grid sm:grid-cols-3 gap-3">

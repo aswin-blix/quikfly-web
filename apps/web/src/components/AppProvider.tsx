@@ -39,6 +39,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [draft, setDraftState] = useState<CheckoutDraft | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const pending = useRef<(() => void) | null>(null);
+  const userRef = useRef<User | null>(null);
+  useEffect(() => { userRef.current = user; }, [user]);
 
   useEffect(() => {
     try {
@@ -78,11 +80,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [setUser]);
 
   // Bookings belong to a signed-in user, so only load them when there is one.
+  // The user is reloaded too: booking or cancelling can change the wallet balance.
   const signedIn = !!user;
   const refreshBookings = useCallback(async () => {
     if (!signedIn) return setBookings([]);
-    try { setBookings(await api.bookings.list()); } catch { /* keep the last list */ }
-  }, [signedIn]);
+    const [list, me] = await Promise.allSettled([api.bookings.list(), api.auth.me()]);
+    if (list.status === "fulfilled") setBookings(list.value);
+    // Skip if they signed out while the request was in flight.
+    if (me.status === "fulfilled" && userRef.current) setUser(me.value);
+  }, [signedIn, setUser]);
   useEffect(() => { refreshBookings(); }, [refreshBookings]);
 
   const requireAuth = useCallback((fn: () => void) => {

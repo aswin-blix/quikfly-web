@@ -51,6 +51,7 @@ export const httpApi: QuikflyApi = {
       try { if (token()) await req("POST", "/auth/logout"); } catch { /* signed out locally either way */ }
       clearToken();
     },
+    me: () => req("GET", "/auth/me"),
   },
   places: { search: (q) => req("GET", `/places${qs({ q })}`) },
   rides: {
@@ -71,5 +72,6 @@ export const httpApi: QuikflyApi = {
     list: () => req("GET", "/bookings"),
     create: (input) => req("POST", "/bookings", input),
     cancel: (id) => req("POST", `/bookings/${id}/cancel`),
+    complete: (id) => req("POST", `/bookings/${id}/complete`),
   },
 };

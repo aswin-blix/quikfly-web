@@ -8,12 +8,16 @@ export const todayISO = (offsetDays = 0) => {
   return new Date(d.getTime() - tz).toISOString().slice(0, 10);
 };
 
-export const nowLocal = (offsetHours = 0) => {
-  const d = new Date(Date.now() + offsetHours * 3600000);
-  d.setMinutes(0, 0, 0);
-  const tz = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - tz).toISOString().slice(0, 16);
+/** Moves a YYYY-MM-DD date by whole days. */
+export const shiftISO = (iso: string, days: number) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 };
+
+/** A Date as the value of an `<input type="datetime-local">` (local time, no seconds). */
+export const toLocalInput = (d: Date) =>
+  new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
 export const prettyDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });

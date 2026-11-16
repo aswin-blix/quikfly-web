@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { PAYMENT_METHODS } from "../config";
+import { PAYMENT_METHODS } from "@quikfly/shared";
 import type { AppEnv } from "../env";
 import { jsonBody, oneOf, str } from "../lib/validate";
 import { requireUser } from "../middleware/auth";

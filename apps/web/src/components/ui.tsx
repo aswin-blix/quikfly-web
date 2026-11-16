@@ -98,10 +98,10 @@ export function Segmented<T extends string>({ options, value, onChange, id, clas
   options: [T, React.ReactNode][]; value: T; onChange: (v: T) => void; id: string; className?: string;
 }) {
   return (
-    <div className={cx("inline-flex max-w-full overflow-x-auto scrollbar-thin rounded-xl border border-line p-1 bg-ink/60", className)} role="tablist">
+    <div className={cx("inline-flex max-w-full overflow-x-auto scrollbar-none rounded-xl border border-line p-1 bg-ink/60", className)} role="tablist">
       {options.map(([v, label]) => (
         <button key={v} role="tab" aria-selected={value === v} onClick={() => onChange(v)}
-          className={cx("relative px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors", value === v ? "text-on-brand font-semibold" : "text-muted hover:text-strong")}>
+          className={cx("relative px-3 sm:px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors", value === v ? "text-on-brand font-semibold" : "text-muted hover:text-strong")}>
           {value === v && <motion.span layoutId={`seg-${id}`} className="absolute inset-0 rounded-lg btn-gold" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
           <span className="relative flex items-center gap-1.5">{label}</span>
         </button>

@@ -65,13 +65,38 @@ await expect("POST /rides/:id/cancel unknown ride", call("POST", "/rides/RDNOPE/
 
 // Bookings
 await expect("GET /bookings needs sign-in", call("GET", "/bookings", null, false), 401);
-const booking = await expect("POST /bookings", call("POST", "/bookings", {
-  service: "bus", title: "Chennai → Bengaluru", subtitle: "Smoke test", amount: 950, lines: [["Seats", "L1"]],
-}), 201, (j) => j.id && j.status === "confirmed" && j.lines[0][1] === "L1");
-await expect("POST /bookings rejects a bad service", call("POST", "/bookings", { service: "x", title: "t", subtitle: "s", amount: 1 }), 400);
+const newBooking = (extra) => ({ service: "bus", title: "Chennai → Bengaluru", subtitle: "Smoke test", amount: 950, payment: "upi", lines: [["Seats", "L1"]], ...extra });
+const booking = await expect("POST /bookings", call("POST", "/bookings", newBooking()), 201,
+  (j) => j.id && j.status === "confirmed" && j.payment === "upi" && j.lines[0][1] === "L1");
+await expect("POST /bookings rejects a bad service", call("POST", "/bookings", newBooking({ service: "x" })), 400);
+await expect("POST /bookings needs a payment method", call("POST", "/bookings", newBooking({ payment: undefined })), 400);
 await expect("GET /bookings lists it first", call("GET", "/bookings"), 200, (j) => j[0].id === booking.id);
 await expect("POST /bookings/:id/cancel", call("POST", `/bookings/${booking.id}/cancel`), 200, (j) => j.status === "cancelled");
+await expect("POST /bookings/:id/cancel twice is refused", call("POST", `/bookings/${booking.id}/cancel`), 409, (j) => !!j.message);
 await expect("POST /bookings/:id/cancel unknown booking", call("POST", "/bookings/QFNOPE/cancel"), 404);
+
+// Wallet: debit on booking, refuse an overdraft, refund on cancel. Relative to the
+// current balance, because this test user is reused across runs.
+const me = await expect("GET /auth/me", call("GET", "/auth/me"), 200, (j) => j.phone === `+91 ${PHONE}` && typeof j.walletBalance === "number");
+const balance = () => call("GET", "/auth/me").then((r) => r.json.walletBalance);
+const start = me.walletBalance;
+await expect("GET /auth/me needs sign-in", call("GET", "/auth/me", null, false), 401);
+await expect("wallet booking over the balance is refused", call("POST", "/bookings", newBooking({ payment: "wallet", amount: start + 1 })), 400);
+check("refused wallet booking leaves the balance alone", (await balance()) === start);
+if (start >= 100) {
+  const paid = await expect("wallet booking", call("POST", "/bookings", newBooking({ payment: "wallet", amount: 100 })), 201, (j) => j.payment === "wallet");
+  check("wallet booking deducts the amount", (await balance()) === start - 100);
+  await expect("cancel wallet booking", call("POST", `/bookings/${paid.id}/cancel`), 200, (j) => j.status === "cancelled");
+  check("cancelling refunds the wallet", (await balance()) === start);
+} else {
+  check("smoke user has at least ₹100 in the wallet", false, `balance is ${start}`);
+}
+
+// Completing a trip
+const trip = await expect("POST /bookings (trip)", call("POST", "/bookings", newBooking({ service: "car", payment: "cash" })), 201);
+await expect("POST /bookings/:id/complete", call("POST", `/bookings/${trip.id}/complete`), 200, (j) => j.status === "completed");
+await expect("completed booking can't be cancelled", call("POST", `/bookings/${trip.id}/cancel`), 409);
+await expect("POST /bookings/:id/complete unknown booking", call("POST", "/bookings/QFNOPE/complete"), 404);
 
 await expect("unknown route", call("GET", "/nope"), 404, (j) => !!j.message);
 

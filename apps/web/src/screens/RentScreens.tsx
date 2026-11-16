@@ -8,7 +8,8 @@ import { Parallax, Reveal, TweenNumber } from "@/components/motion";
 import { Breadcrumbs, Empty, GoldButton, PageHeader, Segmented } from "@/components/ui";
 import { api } from "@/lib/api";
 import { CITIES, RENTAL_CARS } from "@quikfly/shared";
-import { cx, inr, nowLocal, prettyDateTime } from "@/lib/format";
+import { cx, inr, prettyDateTime } from "@/lib/format";
+import { defaultRentalWindow } from "@/lib/rentals";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import type { RentalCar } from "@quikfly/shared";
 
@@ -16,11 +17,12 @@ const carImg = (c: RentalCar) => (["SUV", "Luxury", "MUV"].includes(c.category) 
 const hoursBetween = (a: string, b: string) => Math.max(4, Math.ceil((new Date(b).getTime() - new Date(a).getTime()) / 3600000) || 0);
 
 function useTrip() {
+  const defaults = useMemo(() => defaultRentalWindow(), []);
   const q = useQuery();
   return {
     city: q.get("city") || "Chennai",
-    start: q.get("start") || nowLocal(3),
-    end: q.get("end") || nowLocal(27),
+    start: q.get("start") || defaults.start,
+    end: q.get("end") || defaults.end,
     mode: (q.get("mode") as "self" | "driver") || "self",
   };
 }
