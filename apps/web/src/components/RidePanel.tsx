@@ -14,11 +14,14 @@ import { GoldButton, Spinner } from "./ui";
 
 type Phase = "plan" | "searching" | "arriving" | "ontrip" | "done";
 
+/** Payment options offered for rides (net banking is checkout-only). */
+const RIDE_PAYMENTS: PaymentMethod[] = ["upi", "cash", "wallet", "card"];
+
 const ARRIVE_MS = 9000;
 const TRIP_MS = 12000;
 
 export function RidePanel({ service, initialFrom, initialTo }: { service: "bike" | "car"; initialFrom?: string | null; initialTo?: string | null }) {
-  const { requireAuth, refreshBookings, toast } = useApp();
+  const { user, requireAuth, refreshBookings, toast } = useApp();
   const [pickup, setPickup] = useState<Place | null>(PLACES.find((p) => p.id === initialFrom) ?? PLACES[2]);
   const [drop, setDrop] = useState<Place | null>(PLACES.find((p) => p.id === initialTo && p.id !== initialFrom) ?? null);
   const [quotes, setQuotes] = useState<FareQuote[] | null>(null);
@@ -62,6 +65,12 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
     return () => cancelAnimationFrame(raf.current);
   }, [phase]);
 
+  // Trip over: move the booking from Upcoming to Past.
+  useEffect(() => {
+    if (phase !== "done" || !bookingId) return;
+    api.bookings.complete(bookingId).then(() => refreshBookings(), () => { /* stays upcoming; nothing to show the rider */ });
+  }, [phase, bookingId, refreshBookings]);
+
   const quote = quotes?.find((q) => q.option.id === selected);
   const driverStart: Pt | null = useMemo(() => pickup ? { x: Math.max(4, pickup.x - 14), y: Math.min(96, pickup.y + 12) } : null, [pickup]);
   const vehicle: Pt | null =
@@ -74,25 +83,38 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
     setPhase("plan"); setRide(null); setBookingId(null); setT(0); setRating(0);
   }
 
+  const walletShort = !!user && !!quote && user.walletBalance < quote.fare;
+
   function book() {
     if (!pickup || !drop || !quote) return;
     requireAuth(async () => {
       setPhase("searching");
-      const r = await api.rides.book({ optionId: quote.option.id, pickupId: pickup.id, dropId: drop.id, payment });
-      const b = await api.bookings.create({
-        service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, amount: r.quote.fare,
-        lines: [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
-      });
-      setRide(r); setBookingId(b.id); setT(0); setPhase("arriving");
-      refreshBookings();
+      let r: Ride | null = null;
+      try {
+        r = await api.rides.book({ optionId: quote.option.id, pickupId: pickup.id, dropId: drop.id, payment });
+        const b = await api.bookings.create({
+          service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, amount: r.quote.fare, payment,
+          lines: [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
+        });
+        setRide(r); setBookingId(b.id); setT(0); setPhase("arriving");
+        refreshBookings();
+      } catch (e) {
+        // e.g. the wallet ran short between quote and booking: release the driver.
+        if (r) api.rides.cancel(r.id).catch(() => undefined);
+        toast((e as Error).message, "err");
+        setPhase("plan");
+      }
     });
   }
 
   async function cancelRide() {
     cancelAnimationFrame(raf.current);
-    if (ride) await api.rides.cancel(ride.id);
-    if (bookingId) await api.bookings.cancel(bookingId);
-    refreshBookings(); toast("Ride cancelled. No charges applied."); reset();
+    try {
+      if (ride) await api.rides.cancel(ride.id);
+      if (bookingId) await api.bookings.cancel(bookingId);
+      toast("Ride cancelled. No charges applied.");
+    } catch (e) { toast((e as Error).message, "err"); }
+    refreshBookings(); reset();
   }
 
   const etaLeft = ride ? Math.max(1, Math.ceil(ride.quote.etaMin * (1 - t))) : 0;
@@ -145,11 +167,17 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
                   </motion.button>
                 ))}
                 <div className="flex gap-2 pt-1">
-                  {(["upi", "cash", "wallet", "card"] as PaymentMethod[]).map((p) => (
-                    <button key={p} data-on={payment === p} onClick={() => setPayment(p)} className="chip uppercase !text-xs">{p}</button>
-                  ))}
+                  {RIDE_PAYMENTS.map((p) => {
+                    const short = p === "wallet" && walletShort;
+                    return (
+                      <button key={p} data-on={payment === p} onClick={() => setPayment(p)} disabled={short}
+                        title={short ? `Wallet balance ${inr(user!.walletBalance)} is not enough` : undefined}
+                        className="chip uppercase !text-xs disabled:opacity-40 disabled:cursor-not-allowed">{p}</button>
+                    );
+                  })}
                 </div>
-                <GoldButton className="w-full mt-2 text-base" onClick={book}>Book {quote?.option.name} · {quote && inr(quote.fare)}</GoldButton>
+                {payment === "wallet" && walletShort && <p className="text-xs text-danger">Wallet balance {inr(user!.walletBalance)} is not enough for this ride. Pick another payment method.</p>}
+                <GoldButton className="w-full mt-2 text-base" onClick={book} disabled={payment === "wallet" && walletShort}>Book {quote?.option.name} · {quote && inr(quote.fare)}</GoldButton>
               </div>
             )}
           </>

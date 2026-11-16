@@ -2,7 +2,9 @@
 // mobile app consume them, so change them here only.
 
 export type ServiceKey = "bike" | "car" | "bus" | "tours" | "rent" | "rentals";
-export type PaymentMethod = "cash" | "upi" | "wallet" | "card";
+/** How a booking is paid. Only "wallet" moves money inside QuikFly; the rest go to a gateway later. */
+export const PAYMENT_METHODS = ["upi", "card", "netbanking", "wallet", "cash"] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export type BookingStatus = "confirmed" | "ongoing" | "completed" | "cancelled";
 
 export interface User {
@@ -143,6 +145,8 @@ export interface Booking {
   amount: number;
   status: BookingStatus;
   createdAt: string;
+  /** Wallet payments are deducted when booked and refunded when cancelled. */
+  payment: PaymentMethod;
   lines: [string, string][];
 }
 

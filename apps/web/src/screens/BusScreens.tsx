@@ -11,7 +11,7 @@ import { Accordion, Empty, GoldButton, PageHeader, SectionTitle, Segmented, Spin
 import { api } from "@/lib/api";
 import { BUS_OPERATORS, CITIES } from "@quikfly/shared";
 import { FAQS, POPULAR_ROUTES } from "@/lib/api/data";
-import { cx, inr, prettyDate, todayISO } from "@/lib/format";
+import { cx, inr, prettyDate, shiftISO, todayISO } from "@/lib/format";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import type { Bus, Seat } from "@quikfly/shared";
 
@@ -88,6 +88,10 @@ function BusSearchBar({ initial }: { initial?: { from: string; to: string; date:
 
 /* ───────────── /bus/search — results ───────────── */
 
+/** Date strip on the results page: how many days it shows, and how many before the searched date. */
+const DATE_STRIP_DAYS = 7;
+const DATE_STRIP_BEFORE = 3;
+
 type Slot = "early" | "morning" | "afternoon" | "night";
 const SLOTS: [Slot, string, typeof Sun, (h: number) => boolean][] = [
   ["early", "Before 6 AM", Sunrise, (h) => h < 6],
@@ -131,7 +135,10 @@ export function BusResultsScreen() {
   const toggle = <T,>(arr: T[], v: T, set: (x: T[]) => void) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   const operators = Array.from(new Set((buses ?? []).map((b) => b.operator)));
   const activeCount = slots.length + types.length + ops.length + (rated ? 1 : 0);
-  const days = Array.from({ length: 7 }, (_, i) => todayISO(i));
+  // A week around the searched date, never starting before today.
+  const today = todayISO();
+  const stripStart = [shiftISO(date, -DATE_STRIP_BEFORE), today].sort()[1];
+  const days = Array.from({ length: DATE_STRIP_DAYS }, (_, i) => shiftISO(stripStart, i));
   const go = (d: string) => nav.replace(`/bus/search${qs({ from, to, date: d })}`);
 
   const clear = () => { setSlots([]); setTypes([]); setOps([]); setRated(false); if (buses) setMaxPrice(Math.max(...buses.map((x) => x.fare)) + 100); };
@@ -172,7 +179,7 @@ export function BusResultsScreen() {
       <BusSearchBar initial={{ from, to, date }} />
 
       <div className="flex items-center gap-2 mt-4">
-        <button onClick={() => go(days[Math.max(0, days.indexOf(date) - 1)])} className="p-2 rounded-lg border border-line hover:border-gold" aria-label="Previous day"><ChevronLeft size={16} /></button>
+        <button onClick={() => go(shiftISO(date, -1))} disabled={date <= today} className="p-2 rounded-lg border border-line hover:border-gold disabled:opacity-40 disabled:hover:border-line" aria-label="Previous day"><ChevronLeft size={16} /></button>
         <div className="flex-1 grid grid-cols-7 gap-1 overflow-x-auto">
           {days.map((d) => (
             <button key={d} onClick={() => go(d)} className={cx("relative py-2 rounded-lg text-xs sm:text-sm transition-colors", d === date ? "text-on-brand font-semibold" : "text-muted hover:text-strong")}>
@@ -181,7 +188,7 @@ export function BusResultsScreen() {
             </button>
           ))}
         </div>
-        <button onClick={() => go(days[Math.min(6, days.indexOf(date) + 1)])} className="p-2 rounded-lg border border-line hover:border-gold" aria-label="Next day"><ChevronRight size={16} /></button>
+        <button onClick={() => go(shiftISO(date, 1))} className="p-2 rounded-lg border border-line hover:border-gold" aria-label="Next day"><ChevronRight size={16} /></button>
       </div>
 
       <div className="grid lg:grid-cols-[260px_1fr] gap-6 mt-6">
@@ -259,12 +266,13 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
   const total = chosen.reduce((a, s) => a + price(s), 0);
   const drops = [`${to} – Main Bus Stand`, `${to} – Ring Road`, `${to} – City Center`];
   const bTimes = [bus.depart, addMin(bus.depart, 20), addMin(bus.depart, 45)];
+  const dTimes = drops.map((_, i) => addMin(bus.arrive, i * 15));
 
   function proceed() {
     const gst = Math.round(total * 0.05);
     setDraft({
       service: "bus", title: `${from} → ${to}`, subtitle: `${bus.operator} · ${bus.type}`, image: "/assets/s2.jpg",
-      summary: [["Date", prettyDate(date)], ["Departure", `${bus.depart} from ${bus.boardingPoints[boarding]}`], ["Arrival", `${bus.arrive} at ${drops[dropping]}`], ["Seats", chosen.map((s) => s.label).join(", ")]],
+      summary: [["Date", prettyDate(date)], ["Departure", `${bTimes[boarding]} from ${bus.boardingPoints[boarding]}`], ["Arrival", `${dTimes[dropping]} at ${drops[dropping]}`], ["Seats", chosen.map((s) => s.label).join(", ")]],
       fare: [{ label: `Base fare (${chosen.length} seat${chosen.length > 1 ? "s" : ""})`, amount: total }, { label: "GST (5%)", amount: gst }],
       travellers: chosen.map((s) => `Seat ${s.label}`),
       policy: "Free cancellation up to 12 hours before departure. 50% refund until 4 hours before departure.",
@@ -315,7 +323,7 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
       </div>
       <div className="space-y-4">
         <PointList title="Boarding point" items={bus.boardingPoints.map((p, i) => [p, bTimes[i]])} value={boarding} onChange={setBoarding} />
-        <PointList title="Dropping point" items={drops.map((p, i) => [p, addMin(bus.arrive, i * 15)])} value={dropping} onChange={setDropping} />
+        <PointList title="Dropping point" items={drops.map((p, i) => [p, dTimes[i]])} value={dropping} onChange={setDropping} />
         <div className="rounded-2xl bg-coal border border-line p-4 text-sm space-y-2">
           <div className="flex justify-between"><span className="text-muted">Seats</span><span>{chosen.map((s) => s.label).join(", ") || "—"}</span></div>
           <div className="flex justify-between font-bold text-lg"><span>Amount</span><span className="text-gold">{inr(total)}</span></div>

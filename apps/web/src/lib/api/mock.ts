@@ -1,7 +1,7 @@
 // Demo-mode implementation of the API contract. Simulates latency and
 // keeps bookings in the browser so the client can click through every flow.
 import type { QuikflyApi } from "./contract";
-import type { Booking, Bus, FareQuote, Seat } from "@quikfly/shared";
+import type { Booking, Bus, FareQuote, Seat, User } from "@quikfly/shared";
 import { BUS_OPERATORS, DRIVERS, PLACES, RENTAL_CARS, RIDE_OPTIONS, TOURS, TRAVEL_VEHICLES, VEHICLES } from "@quikfly/shared";
 
 /** Login code accepted by the mock API. */
@@ -35,6 +35,32 @@ function saveBookings() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(memory ?? [])); } catch { /* storage unavailable */ }
 }
 
+// The mock "server-side" user, so the wallet balance behaves like the real API.
+const USER_KEY = "quikfly.mockUser";
+const NEW_USER_WALLET = 500;
+function loadUser(): User | null {
+  try { return JSON.parse(localStorage.getItem(USER_KEY) || "null"); } catch { return null; }
+}
+function saveUser(u: User) {
+  try { localStorage.setItem(USER_KEY, JSON.stringify(u)); } catch { /* storage unavailable */ }
+}
+function currentUser(): User {
+  const u = loadUser();
+  if (!u) throw new Error("Please sign in to continue.");
+  return u;
+}
+function adjustWallet(delta: number) {
+  const u = currentUser();
+  saveUser({ ...u, walletBalance: u.walletBalance + delta });
+}
+const isActive = (b: Booking) => b.status === "confirmed" || b.status === "ongoing";
+function activeBooking(id: string) {
+  const b = bookingsStore().find((x) => x.id === id);
+  if (!b) throw new Error("Booking not found.");
+  if (!isActive(b)) throw new Error(`This booking is already ${b.status}.`);
+  return b;
+}
+
 function placeById(id: string) {
   const p = PLACES.find((x) => x.id === id);
   if (!p) throw new Error("Unknown place");
@@ -47,9 +73,15 @@ export const mockApi: QuikflyApi = {
     async verifyOtp(phone, otp, name) {
       await wait(600);
       if (otp !== MOCK_OTP) throw new Error(`Invalid OTP. Use ${MOCK_OTP} in demo mode.`);
-      return { token: "demo-token", user: { id: "u1", name: name || "Guest", phone, walletBalance: 500 } };
+      const known = loadUser();
+      const user: User = known?.phone === phone
+        ? { ...known, name: name || known.name }
+        : { id: "u1", name: name || "Guest", phone, walletBalance: NEW_USER_WALLET };
+      saveUser(user);
+      return { token: "demo-token", user };
     },
     async signOut() { /* nothing to end in demo mode */ },
+    async me() { await wait(150); return currentUser(); },
   },
 
   places: {
@@ -167,6 +199,10 @@ export const mockApi: QuikflyApi = {
     async list() { await wait(200); return [...bookingsStore()]; },
     async create(input) {
       await wait(900);
+      if (input.payment === "wallet") {
+        if (currentUser().walletBalance < input.amount) throw new Error("Not enough wallet balance. Choose another payment method.");
+        adjustWallet(-input.amount);
+      }
       const b: Booking = { ...input, id: uid("QF"), status: "confirmed", createdAt: new Date().toISOString() };
       bookingsStore().unshift(b);
       saveBookings();
@@ -174,9 +210,16 @@ export const mockApi: QuikflyApi = {
     },
     async cancel(id) {
       await wait(500);
-      const b = bookingsStore().find((x) => x.id === id);
-      if (!b) throw new Error("Booking not found");
+      const b = activeBooking(id);
       b.status = "cancelled";
+      if (b.payment === "wallet") adjustWallet(b.amount);
+      saveBookings();
+      return { ...b };
+    },
+    async complete(id) {
+      await wait(200);
+      const b = activeBooking(id);
+      b.status = "completed";
       saveBookings();
       return { ...b };
     },

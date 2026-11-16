@@ -1,10 +1,11 @@
 import { Hono } from "hono";
+import { PAYMENT_METHODS } from "@quikfly/shared";
 import { MAX_BOOKING_LINES, SERVICE_KEYS } from "../config";
 import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
 import { jsonBody, oneOf, str } from "../lib/validate";
 import { requireUser } from "../middleware/auth";
-import { cancelBooking, createBooking, listBookings } from "../services/bookings";
+import { cancelBooking, completeBooking, createBooking, listBookings } from "../services/bookings";
 
 function parseLines(value: unknown): [string, string][] {
   const ok = Array.isArray(value) && value.length <= MAX_BOOKING_LINES
@@ -25,8 +26,10 @@ export const bookings = new Hono<AppEnv>()
       title: str(body, "title"),
       subtitle: str(body, "subtitle", 300),
       amount: Math.round(amount),
+      payment: oneOf(body, "payment", PAYMENT_METHODS),
       lines: parseLines(body.lines ?? []),
     });
     return c.json(booking, 201);
   })
-  .post("/:id/cancel", async (c) => c.json(await cancelBooking(c.env.DB, c.var.user.id, c.req.param("id"))));
+  .post("/:id/cancel", async (c) => c.json(await cancelBooking(c.env.DB, c.var.user.id, c.req.param("id"))))
+  .post("/:id/complete", async (c) => c.json(await completeBooking(c.env.DB, c.var.user.id, c.req.param("id"))));

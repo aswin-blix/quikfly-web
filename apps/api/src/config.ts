@@ -43,5 +43,4 @@ export const BUS = {
 };
 
 export const SERVICE_KEYS = ["bike", "car", "bus", "tours", "rent", "rentals"] as const;
-export const PAYMENT_METHODS = ["cash", "upi", "wallet", "card"] as const;
 export const MAX_BOOKING_LINES = 30;

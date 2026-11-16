@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { jsonBody, optStr, str } from "../lib/validate";
-import { bearerToken } from "../middleware/auth";
+import { bearerToken, requireUser } from "../middleware/auth";
 import { endSession, normalisePhone, verifyOtp } from "../services/auth";
 
 export const auth = new Hono<AppEnv>()
@@ -14,6 +14,8 @@ export const auth = new Hono<AppEnv>()
     const body = await jsonBody(c);
     return c.json(await verifyOtp(c.env.DB, c.env.DEMO_OTP, str(body, "phone", 20), str(body, "otp", 10), optStr(body, "name", 60)));
   })
+  // The signed-in user, e.g. to refresh the wallet balance after a booking.
+  .get("/me", requireUser, (c) => c.json(c.var.user))
   // Idempotent: signing out twice, or with an expired token, still succeeds.
   .post("/logout", async (c) => {
     const token = bearerToken(c);
