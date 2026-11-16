@@ -33,9 +33,16 @@ NEXT_PUBLIC_DEMO_OTP=1234
 
 Without it, the website runs on its built-in mock API.
 
-## Hosting
+## Hosting (Cloudflare free tier)
 
-Static site hosts (Cloudflare Pages, Vercel) must use **`apps/web`** as the project root directory. The API deploys separately with Wrangler from `apps/api`.
+| | URL | Deployed by |
+|---|---|---|
+| Website | https://quikfly-web.quikfly-api.workers.dev | `npm run deploy -w @quikfly/web` (static export served by a Worker, `apps/web/wrangler.jsonc`) |
+| API | https://quikfly-api.quikfly-api.workers.dev/v1 | `npm run deploy -w @quikfly/api` (Worker + D1 `quikfly-db`) |
+
+`npm run deploy` does both, API first. Run `npm run db:migrate:remote` before deploying an API change that adds a migration. Deploys need `npx wrangler login` once per machine.
+
+The production website build reads `apps/web/.env.production` (API URL and demo OTP). If a static host such as Vercel is ever connected to this repo, its root directory must be **`apps/web`**.
 
 ## Author
 

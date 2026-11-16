@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "build:demo": "NEXT_PUBLIC_SPA=1 next build --webpack && python3 scripts/inline-demo.py out quikfly-demo.html",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "deploy": "next build && wrangler deploy"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -28,6 +29,7 @@
     "@types/react-dom": "^19.3.0",
     "postcss": "^8.5.33",
     "tailwindcss": "^4.3.5",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "^4.163.0"
   }
 }

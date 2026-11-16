@@ -2,7 +2,10 @@
   "name": "quikfly",
   "private": true,
   "author": "Aswin Blix (https://aswinblix.dev/)",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "concurrently -k -n api,web -c yellow,cyan \"npm run dev -w @quikfly/api\" \"npm run dev -w @quikfly/web\"",
     "dev:api": "npm run dev -w @quikfly/api",
@@ -10,7 +13,9 @@
     "build": "npm run build -w @quikfly/api && npm run build -w @quikfly/web",
     "typecheck": "npm run typecheck -w @quikfly/shared && npm run typecheck -w @quikfly/api && npm run typecheck -w @quikfly/web",
     "db:migrate:local": "npm run db:migrate:local -w @quikfly/api",
-    "smoke": "npm run smoke -w @quikfly/api"
+    "smoke": "npm run smoke -w @quikfly/api",
+    "deploy": "npm run deploy -w @quikfly/api && npm run deploy -w @quikfly/web",
+    "db:migrate:remote": "npm run db:migrate:remote -w @quikfly/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

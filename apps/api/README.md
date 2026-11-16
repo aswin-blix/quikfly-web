@@ -65,12 +65,16 @@ Sessions are random bearer tokens; only their SHA-256 hash is stored, and they e
 
 ## Deploy (free tier)
 
+Live at **https://quikfly-api.quikfly-api.workers.dev/v1**. The D1 database `quikfly-db` already exists and its id is in `wrangler.jsonc`.
+
 ```bash
-npx wrangler login
-npx wrangler d1 create quikfly-db        # paste the printed database_id into wrangler.jsonc
-npm run db:migrate:remote
-npm run deploy                            # → https://quikfly-api.<account>.workers.dev
+npx wrangler login          # once per machine
+npm run db:migrate:remote   # only when migrations/ has a new file
+npm run deploy
+node scripts/smoke.mjs https://quikfly-api.quikfly-api.workers.dev/v1   # leaves one test user (+91 9000000001)
 ```
+
+`ALLOWED_ORIGINS` is `*` for now. To lock it down, set it to the website origin plus `http://localhost:3000`. The Flutter app is not affected, because CORS only applies to browsers.
 
 ## Not yet built
 
