@@ -10,13 +10,13 @@ Legend: ✅ done · 🔄 in progress · ✅ |not started
 |---|---|---|
 | 1. API (Workers + Hono + D1) | ✅ | Live. PR #4 |
 | 2. Website on Cloudflare | ✅ | Live. Demo fixes in PR #5 (ride completion, real wallet, bus times, date strip, rental defaults, cancel errors, holiday tabs) |
-| 2b. Complete the web version: accounts + competitor features | 🔄 | **Current task.** See the tracker below. Branch `feat/accounts` |
+| 2b. Complete the web version: accounts + competitor features | ✅ | Live. PR #6, deployed 2026-11-16 (migration 0003) |
 | 3. Flutter Android app (`apps/mobile`) | ⬜ | Signed APK shared by link; same API |
 | 4. Demo hardening | ⬜ | Reset-demo-data endpoint; rehearse booking on the phone and seeing it on the web |
 
-## Current task: Part A (accounts) + B1–B4
+## Last task: Part A (accounts) + B1–B4 ✅ released
 
-Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, redBus, MakeMyTrip and Zoomcar. Branch: `feat/accounts` (not merged, not deployed).
+Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, redBus, MakeMyTrip and Zoomcar. PR #6, merged and deployed 2026-11-16.
 
 ### Feature tracker
 
@@ -68,11 +68,11 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 - [x] Checkout: saved-traveller chips (tap to fill or remove), "GST invoice" option when GST details are saved (adds a `GSTIN` booking line), licence card for self-drive (form inline if missing; pending can book; replaces the checkbox); email pre-filled from the profile
 - [x] My Trips and the confirmation page link to `/invoice?id=` (`screens/InvoiceScreen.tsx`): GST-inclusive maths and per-service rates in `lib/invoice.ts`, seller details in `lib/site.ts` (`COMPANY`, placeholders), paper tokens in `tokens.css`, print styles hide the site chrome. `noindex`, in the SPA router
 
-**Verification and release**: 🔄
+**Verification and release**: ✅
 - [x] `npm run typecheck`, smoke ×2 locally (94 checks)
 - [x] Browser pass at 390 px (and desktop, light mode) against the local API: sign-up with referral, every account section, licence pending → verified, saved-place chips, SOS sheet, share + `/track`, night auto-share, self-drive checkout with GST invoice, printed invoice, bus traveller chips, change number, delete + restore. Demo (mock) mode: sign-up, wallet history, saved place
 - [x] Fixes from the pass: print rule hid the invoice header/footer (now only `.no-print` is hidden); duplicate "Welcome" toast from the Login buttons
-- [ ] PR → merge → `db:migrate:remote` → deploy → production smoke test
+- [x] PR #6 merged → `db:migrate:remote` (0003) → API deployed → production smoke 94/94 (×2) → website deployed
 
 ## Backlog (agreed ideas, not scheduled)
 
