@@ -1,6 +1,4 @@
-import {
-  DELETION_GRACE_DAYS, LICENCE_REVIEW_SECONDS, type AuthResult, type Gender, type LicenceStatus, type User,
-} from "@quikfly/shared";
+import { DELETION_GRACE_DAYS, type AuthResult, type Gender, type LicenceStatus, type User } from "@quikfly/shared";
 import {
   DEFAULT_USER_NAME, NEW_USER_WALLET_BALANCE, PHONE_COUNTRY_CODE, PHONE_DIGITS, SESSION_TTL_DAYS,
 } from "../config";
@@ -13,13 +11,8 @@ export interface UserRow {
   email: string | null; gender: Gender | null; dob: string | null; profile_completed_at: string | null;
   referral_code: string; referred_by: string | null;
   licence_number: string | null; licence_expiry: string | null; licence_submitted_at: string | null;
+  licence_status: LicenceStatus; licence_note: string | null; licence_reviewed_at: string | null;
   gstin: string | null; gst_name: string | null; auto_share_night: number; deleted_at: string | null;
-}
-
-function licenceStatus(r: UserRow): LicenceStatus {
-  if (!r.licence_number || !r.licence_submitted_at) return "none";
-  const reviewed = Date.now() - Date.parse(r.licence_submitted_at) >= LICENCE_REVIEW_SECONDS * 1000;
-  return reviewed ? "verified" : "pending";
 }
 
 export const toUser = (r: UserRow): User => ({
@@ -33,7 +26,7 @@ export const toUser = (r: UserRow): User => ({
   profileComplete: !!r.profile_completed_at,
   referralCode: r.referral_code,
   referred: !!r.referred_by,
-  licence: { status: licenceStatus(r), number: r.licence_number, expiry: r.licence_expiry },
+  licence: { status: r.licence_status, number: r.licence_number, expiry: r.licence_expiry, note: r.licence_note },
   gst: r.gstin && r.gst_name ? { gstin: r.gstin, name: r.gst_name } : null,
   autoShareNightRides: !!r.auto_share_night,
 });

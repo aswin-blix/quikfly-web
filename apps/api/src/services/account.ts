@@ -81,9 +81,15 @@ export async function applyReferral(db: D1Database, userId: string, code: string
   return reload(db, userId);
 }
 
-/** Saves the licence and starts the (simulated) review. */
-export async function submitLicence(db: D1Database, userId: string, number: string, expiry: string): Promise<User> {
-  await db.prepare("UPDATE users SET licence_number = ?, licence_expiry = ?, licence_submitted_at = ? WHERE id = ?")
-    .bind(number, expiry, new Date().toISOString(), userId).run();
+/**
+ * Saves the licence for review. An admin approves or rejects it (routes/admin/licences.ts);
+ * with the `licenceAutoApprove` setting on it is verified at once, for unattended demos.
+ */
+export async function submitLicence(db: D1Database, userId: string, number: string, expiry: string, autoApprove: boolean): Promise<User> {
+  const now = new Date().toISOString();
+  await db.prepare(
+    `UPDATE users SET licence_number = ?, licence_expiry = ?, licence_submitted_at = ?, licence_status = ?, licence_note = NULL,
+       licence_reviewed_at = ? WHERE id = ?`,
+  ).bind(number, expiry, now, autoApprove ? "verified" : "pending", autoApprove ? now : null, userId).run();
   return reload(db, userId);
 }

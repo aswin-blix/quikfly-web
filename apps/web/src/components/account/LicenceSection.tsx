@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BadgeCheck, Clock, IdCard } from "lucide-react";
-import { LICENCE_REVIEW_SECONDS, PATTERNS, compactCode, formatLicence, type User } from "@quikfly/shared";
-import { api } from "@/lib/api";
+import { BadgeCheck, Clock, IdCard, ShieldAlert } from "lucide-react";
+import { PATTERNS, compactCode, formatLicence, type User } from "@quikfly/shared";
+import { DEMO_MODE, api } from "@/lib/api";
+import { MOCK_LICENCE_REVIEW_SECONDS } from "@/lib/api/mock-store";
 import { cx, todayISO } from "@/lib/format";
 import { useApp } from "../AppProvider";
 import { GoldButton } from "../ui";
@@ -12,14 +13,31 @@ const STATUS = {
   none: { label: "Not added", icon: IdCard, cls: "bg-fg/5 text-muted" },
   pending: { label: "Under review", icon: Clock, cls: "bg-warning/10 text-warning" },
   verified: { label: "Verified", icon: BadgeCheck, cls: "bg-success/10 text-success" },
+  rejected: { label: "Not approved", icon: ShieldAlert, cls: "bg-danger/10 text-danger" },
 } as const;
+
+/** One line explaining the current licence state, for the account page and checkout. */
+export function licenceMessage(user: User) {
+  switch (user.licence.status) {
+    case "pending":
+      return DEMO_MODE
+        ? `Under review. You can book now; it must be verified before pickup. (Demo: verified after about ${MOCK_LICENCE_REVIEW_SECONDS} seconds.)`
+        : "Under review by our team, usually within a few hours. You can book now; it must be verified before pickup.";
+    case "verified":
+      return "Verified. Bring the original licence and Aadhaar or passport to pickup.";
+    case "rejected":
+      return `Not approved${user.licence.note ? `: ${user.licence.note}` : "."} Check the details and submit again.`;
+    default:
+      return "Add your licence to book a self-drive car.";
+  }
+}
 
 export function LicenceBadge({ user }: { user: User }) {
   const s = STATUS[user.licence.status];
   return <span className={cx("inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full", s.cls)}><s.icon size={14} />{s.label}</span>;
 }
 
-/** While a licence is under review, re-checks the account until it's verified. */
+/** While a licence is under review, re-checks the account until a decision arrives. */
 export function useLicencePolling() {
   const { user, refreshBookings } = useApp();
   const pending = user?.licence.status === "pending";
@@ -53,7 +71,7 @@ export function LicenceForm({ onSaved, compact }: { onSaved?: () => void; compac
         <input id="dl-exp" type="date" className="field" min={todayISO(1)} value={expiry} onChange={(e) => setExpiry(e.target.value)} />
       </Field>
       <div className={cx("flex flex-wrap items-center gap-3", !compact && "sm:col-span-2")}>
-        <GoldButton loading={busy}>{user?.licence.status === "none" ? "Submit licence" : "Update licence"}</GoldButton>
+        <GoldButton loading={busy}>{user?.licence.status === "none" ? "Submit licence" : user?.licence.status === "rejected" ? "Submit again" : "Update licence"}</GoldButton>
         <ErrorText>{error}</ErrorText>
       </div>
     </form>
@@ -73,8 +91,8 @@ export function LicenceSection() {
         {number && <span className="text-sm text-soft font-mono">{formatLicence(number)}</span>}
         {expiry && <span className="text-xs text-subtle">valid till {expiry}</span>}
       </div>
-      {status === "pending" && (
-        <p className="text-sm text-muted mb-5">We&apos;re checking your licence. You can already book; it must be verified before pickup. (Demo: verified after about {LICENCE_REVIEW_SECONDS} seconds.)</p>
+      {status !== "none" && (
+        <p className={cx("text-sm mb-5", status === "rejected" ? "text-danger" : "text-muted")}>{licenceMessage(user)}</p>
       )}
       <LicenceForm />
     </Section>

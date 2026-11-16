@@ -10,8 +10,8 @@ export type BookingStatus = "confirmed" | "ongoing" | "completed" | "cancelled";
 export const GENDERS = ["female", "male", "other"] as const;
 export type Gender = (typeof GENDERS)[number];
 
-/** Driving-licence check for self-drive rentals. "pending" turns "verified" after a short review. */
-export type LicenceStatus = "none" | "pending" | "verified";
+/** Driving-licence check for self-drive rentals. An admin approves or rejects "pending" (see the licence queue). */
+export type LicenceStatus = "none" | "pending" | "verified" | "rejected";
 
 export interface User {
   id: string;
@@ -28,7 +28,7 @@ export interface User {
   referralCode: string;
   /** True once a friend's code has been applied (only allowed once). */
   referred: boolean;
-  licence: { status: LicenceStatus; number: string | null; expiry: string | null };
+  licence: { status: LicenceStatus; number: string | null; expiry: string | null; /** Why it was rejected. */ note: string | null };
   /** Business details printed on GST invoices. */
   gst: { gstin: string; name: string } | null;
   /** Share rides between NIGHT_HOURS with emergency contacts automatically. */

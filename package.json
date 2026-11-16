@@ -14,6 +14,7 @@
     "typecheck": "npm run typecheck -w @quikfly/shared && npm run typecheck -w @quikfly/api && npm run typecheck -w @quikfly/web",
     "db:migrate:local": "npm run db:migrate:local -w @quikfly/api",
     "smoke": "npm run smoke -w @quikfly/api",
+    "smoke:admin": "npm run smoke:admin -w @quikfly/api",
     "deploy": "npm run deploy -w @quikfly/api && npm run deploy -w @quikfly/web",
     "db:migrate:remote": "npm run db:migrate:remote -w @quikfly/api"
   },
