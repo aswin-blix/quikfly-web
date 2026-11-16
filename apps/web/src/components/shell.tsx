@@ -2,7 +2,7 @@
 // Site chrome: header, footer, login modal, toasts, page transition.
 import { AnimatePresence, motion, MotionConfig, useMotionValueEvent, useScroll } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
-import { CircleCheck, HelpCircle, LayoutGrid, LogOut, Ticket, TriangleAlert, User as UserIcon, Wallet } from "lucide-react";
+import { ChevronDown, CircleCheck, HelpCircle, LayoutGrid, Ticket, TriangleAlert, User as UserIcon, Wallet } from "lucide-react";
 import { AppProvider, useApp } from "./AppProvider";
 import { LoginModal } from "./LoginModal";
 import { BottomNav, BottomNavProvider } from "./BottomNav";
@@ -104,12 +104,12 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
           </Link>
           {user ? (
             <div className="hidden lg:flex items-center gap-2">
-              <span className="hidden lg:flex items-center gap-1.5 text-xs text-gold-pale bg-gold/10 px-2.5 py-1.5 rounded-lg"><Wallet size={14} />{inr(user.walletBalance)}</span>
-              <button onClick={() => { signOut(); toast("Signed out"); }} title="Sign out"
+              <Link href="/account?tab=wallet" title="Wallet" className="hidden lg:flex items-center gap-1.5 text-xs text-gold-pale bg-gold/10 px-2.5 py-1.5 rounded-lg hover:bg-gold/20"><Wallet size={14} />{inr(user.walletBalance)}</Link>
+              <Link href="/account" title="My account"
                 className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border border-line hover:border-gold/50 text-sm">
                 <span className="w-7 h-7 rounded-full btn-gold grid place-items-center text-xs">{user.name[0]?.toUpperCase()}</span>
-                <span className="hidden sm:inline max-w-24 truncate">{user.name}</span><LogOut size={14} className="text-subtle" />
-              </button>
+                <span className="hidden sm:inline max-w-24 truncate">{user.name}</span><ChevronDown size={14} className="text-subtle" />
+              </Link>
             </div>
           ) : (
             <div className="hidden lg:block">

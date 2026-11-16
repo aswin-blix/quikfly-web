@@ -1,8 +1,8 @@
-# Roadmap and progress
+ 🔄 | 🔄 | 🔄 | 🔄 | 🔄 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |# Roadmap and progress
 
 Goal: a live client demo of the website and an Android app on one API, at ₹0 (see [decisions.md](decisions.md)).
 
-Legend: ✅ done · 🔄 in progress · ⬜ not started
+Legend: ✅ done · 🔄 in progress · ✅ |not started
 
 ## Phases
 
@@ -23,18 +23,18 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 | ID | Feature | Shared | API | Web | Mock | Smoke tests | Browser-checked |
 |---|---|---|---|---|---|---|---|
 | A1 | Sign-up step: after OTP, new users complete their profile (name, optional email, optional referral code) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| A2 | `/account` profile: edit name, email, gender, DOB | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
-| A3 | Change mobile number (OTP to the new number) | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
-| A4 | Saved places (Home, Work, other) + one-tap picks in the ride panel | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
-| A5 | Saved travellers + one-tap fill at checkout | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
-| A6 | Emergency contacts (max 3) | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
-| A7 | Wallet page: balance + labelled transaction history + refund timings | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
-| A8 | Delete account: OTP, 30-day grace, restored on sign-in, wallet-loss warning | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
-| A9 | Sign out of all devices | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
-| B1 | Safety centre: SOS sheet in a live ride (Call 112, safety line, alert contacts, share), public trip-tracking link `/track`, "auto-share night rides" switch | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
-| B2 | Driving-licence check before self-drive (pending → verified, simulated) | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
-| B3 | Printable tax invoice from My Trips (`/invoice`), with GST details saved in the account and applied at checkout | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
-| B4 | Referral code: each user has one; applying a friend's code gives both ₹100 wallet credit (once) | ✅ | ✅ | ⬜ | ✅ | ✅ | ⬜ |
+| A2 | `/account` profile: edit name, email, gender, DOB | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| A3 | Change mobile number (OTP to the new number) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| A4 | Saved places (Home, Work, other) + one-tap picks in the ride panel (account page done; ride panel next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
+| A5 | Saved travellers + one-tap fill at checkout (account page done; checkout next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
+| A6 | Emergency contacts (max 3) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| A7 | Wallet page: balance + labelled transaction history + refund timings | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| A8 | Delete account: OTP, 30-day grace, restored on sign-in, wallet-loss warning | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| A9 | Sign out of all devices | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| B1 | Safety centre: SOS sheet in a live ride (Call 112, safety line, alert contacts, share), public trip-tracking link `/track`, "auto-share night rides" switch (switch done; ride sheet + /track next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
+| B2 | Driving-licence check before self-drive (pending → verified, simulated) (account page done; checkout next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
+| B3 | Printable tax invoice from My Trips (`/invoice`), with GST details saved in the account and applied at checkout (GST section done; checkout + invoice next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
+| B4 | Referral code: each user has one; applying a friend's code gives both ₹100 wallet credit (once) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 
 ### Work log (by layer)
 
@@ -60,8 +60,8 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 - [x] Contract + `http.ts` + `mock.ts` for all new endpoints (mock split into `mock-store.ts`, `mock-account.ts`, `mock.ts`)
 - [x] Login modal (`components/LoginModal.tsx`): phone → OTP → "complete your profile" (name, optional email, optional referral code) for new users; "account restored" message
 - [x] `lib/account.ts`: section list, labels, safety numbers, refund timings; `WELCOME_CREDIT` moved to shared rules
-- [ ] `/account` page: overview + sections (Profile, Saved places, Travellers, Safety, Wallet, Refer & earn, Driving licence, Business / GST, Security). Mobile shows a list, desktop a sidebar. Add to the SPA router
-- [ ] Header and account sheet link to `/account` (the header button currently signs out on click)
+- [x] `/account` page (`screens/AccountScreen.tsx`, sections in `components/account/`): Profile, Wallet, Refer & earn, Saved places, Travellers, Safety (contacts + auto-share switch), Driving licence (form reused by checkout), Business / GST, Login & security (change number, sign out everywhere, delete). Phones: list then section (`?tab=`); desktop: sidebar. In the SPA router
+- [x] Header avatar and wallet link to `/account`; mobile account sheet links to profile, wallet, refer, safety and all settings
 - [ ] Ride panel: saved-place chips; SOS / safety sheet; Share trip (link + Web Share); auto-share at night
 - [ ] `/track?t=` public page (map + driver + progress)
 - [ ] Checkout: saved-traveller chips, GST invoice option, licence card for self-drive (replaces the checkbox)
