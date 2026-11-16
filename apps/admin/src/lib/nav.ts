@@ -20,7 +20,7 @@ export const NAV: NavItem[] = [
 ];
 
 /** Routes that exist so far; entries for later slices stay hidden until their page ships. */
-export const LIVE_ROUTES = new Set(["/", "/settings", "/audit", "/catalog", "/catalog/list?kind=offer"]);
+export const LIVE_ROUTES = new Set(["/", "/bookings", "/licences", "/catalog", "/catalog/list?kind=offer", "/settings", "/audit"]);
 
 /** `full` is the path plus query string, so /catalog/list?kind=offer can be told apart from other catalog lists. */
 export function isActive(href: string, path: string, full = path) {

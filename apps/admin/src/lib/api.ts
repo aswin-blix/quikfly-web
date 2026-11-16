@@ -1,6 +1,9 @@
 // The admin panel's only door to the backend. Screens call `adminApi`, never fetch().
 // Endpoints are listed in apps/api/README.md (Admin section).
-import type { AdminLoginResult, AdminStats, AdminUser, AuditEntry, CatalogItem, CatalogKind, Page, Settings } from "@quikfly/shared";
+import type {
+  AdminBooking, AdminBookingDetail, AdminLoginResult, AdminStats, AdminUser, AuditEntry, BookingFilters, CatalogItem, CatalogKind, LicenceQueueStatus,
+  LicenceReview, Page, Settings,
+} from "@quikfly/shared";
 
 export interface CatalogKindSummary { kind: CatalogKind; total: number; visible: number; canEdit: boolean }
 export interface CatalogItemInput { data?: Record<string, unknown>; active?: boolean; sort?: number }
@@ -70,6 +73,17 @@ export const adminApi = {
     update: (patch: Partial<Settings>) => req<Settings>("PATCH", "/admin/settings", patch),
   },
   audit: (page: number, entity?: string) => req<Page<AuditEntry>>("GET", `/admin/audit${qs({ page, entity })}`),
+  bookings: {
+    search: (f: BookingFilters) => req<Page<AdminBooking>>("GET", `/admin/bookings${qs({ ...f })}`),
+    get: (id: string) => req<AdminBookingDetail>("GET", `/admin/bookings/${encodeURIComponent(id)}`),
+    cancel: (id: string, reason: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/cancel`, { reason }),
+    complete: (id: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/complete`),
+  },
+  licences: {
+    list: (status: LicenceQueueStatus) => req<LicenceReview[]>("GET", `/admin/licences${qs({ status })}`),
+    approve: (userId: string) => req<{ status: string }>("POST", `/admin/licences/${encodeURIComponent(userId)}/approve`),
+    reject: (userId: string, reason: string) => req<{ status: string }>("POST", `/admin/licences/${encodeURIComponent(userId)}/reject`, { reason }),
+  },
   catalog: {
     kinds: () => req<CatalogKindSummary[]>("GET", "/admin/catalog"),
     list: (kind: CatalogKind) => req<CatalogItem[]>("GET", `/admin/catalog/${kind}`),

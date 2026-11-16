@@ -16,8 +16,8 @@ node apps/api/scripts/create-admin.mjs --local you@example.com "Your Name" owner
 
 ```
 src/app/            one folder per page: / (dashboard), login, settings, audit, catalog (overview), catalog/list?kind=, catalog/edit?kind=&id=
-                    (Offers in the sidebar is catalog/list?kind=offer). Later: bookings, licences
-src/components/     AdminShell (sidebar / phone menu), ui.tsx (buttons, badges, fields, pager...), charts.tsx, ConfirmDialog.tsx
+                    (Offers in the sidebar is catalog/list?kind=offer), bookings (filters in the URL), bookings/view?id=, licences
+src/components/     AdminShell (sidebar / phone menu), ui.tsx (buttons, badges, fields, pager...), charts.tsx, ConfirmDialog.tsx, ReasonDialog.tsx
 src/lib/api.ts      the only place that calls fetch(); token in localStorage ("quikfly.admin.token")
 src/lib/session.tsx SessionProvider, useSession(), <RequireAdmin permission="...">
 src/lib/nav.ts      sidebar entries + permissions; LIVE_ROUTES lists pages that exist so far

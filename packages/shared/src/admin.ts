@@ -36,6 +36,7 @@ export const ADMIN_RULES = {
   sessionHours: 12,
   pageSize: 25,
   reasonMax: 300,
+  reasonMin: 5,
   /** Longest range the dashboard can show. */
   statsMaxDays: 90,
 } as const;
@@ -87,13 +88,36 @@ export interface AdminBookingDetail {
   booking: AdminBooking;
   /** Wallet entries linked to this booking (payment, refund). */
   wallet: WalletTransaction[];
+  coupon: { code: string; discount: number } | null;
+  /** Audit entries for this booking (staff cancellations, completions). */
+  history: AuditEntry[];
 }
+
+export const BOOKING_STATUSES = ["confirmed", "ongoing", "completed", "cancelled"] as const;
+
+export interface BookingFilters {
+  /** Booking id, customer name or phone, or title. */
+  q?: string;
+  status?: (typeof BOOKING_STATUSES)[number];
+  service?: ServiceKey;
+  /** India-time dates, YYYY-MM-DD, inclusive. */
+  from?: string;
+  to?: string;
+  page?: number;
+}
+
+export const LICENCE_QUEUE_STATUSES = ["pending", "rejected", "verified"] as const;
+export type LicenceQueueStatus = (typeof LICENCE_QUEUE_STATUSES)[number];
 
 export interface LicenceReview {
   customer: CustomerRef;
+  status: LicenceQueueStatus;
   number: string;
   expiry: string;
   submittedAt: string;
+  reviewedAt: string | null;
+  /** Rejection reason shown to the customer. */
+  note: string | null;
 }
 
 export interface AdminStats {

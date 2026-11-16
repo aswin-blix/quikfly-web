@@ -26,7 +26,7 @@ export function licenceMessage(user: User) {
     case "verified":
       return "Verified. Bring the original licence and Aadhaar or passport to pickup.";
     case "rejected":
-      return `Not approved${user.licence.note ? `: ${user.licence.note}` : "."} Check the details and submit again.`;
+      return user.licence.note ? `Not approved: ${user.licence.note}` : "Not approved. Check the details and submit again.";
     default:
       return "Add your licence to book a self-drive car.";
   }

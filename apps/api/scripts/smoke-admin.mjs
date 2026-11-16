@@ -144,6 +144,49 @@ const bus = (await call("GET", "/buses?from=Chennai&to=Madurai&date=2026-12-05")
 await eventually("seat prices follow the setting", () => call("GET", `/buses/${encodeURIComponent(bus.id)}/seats?from=Chennai&to=Madurai&date=2026-12-05`),
   (r) => r.status === 200 && r.json.find((x) => x.deck === "lower").price === bus.fare + s0.busLowerDeckExtra + 111);
 await expect("restore the lower-deck extra", call("PATCH", "/admin/settings", { busLowerDeckExtra: s0.busLowerDeckExtra }, T), 200);
+
+// ── Bookings ──
+const places = (await call("GET", "/places")).json;
+const cMe = (await call("GET", "/auth/me", null, C)).json;
+const rideA = (await call("POST", "/rides", { optionId: "mini", pickupId: places[0].id, dropId: places[1].id, payment: "wallet" }, C)).json;
+const bookA = (await call("POST", "/bookings", { service: "car", title: "Smoke admin ride", subtitle: "A → B", payment: "wallet", lines: [], rideId: rideA.id }, C)).json;
+check("customer booked a wallet ride", !!bookA?.id, JSON.stringify(bookA)?.slice(0, 200));
+const afterPay = (await call("GET", "/auth/me", null, C)).json.walletBalance;
+await expect("GET /admin/bookings", call("GET", "/admin/bookings", null, T), 200, (j) => j.items.length > 0 && j.total >= j.items.length && j.items[0].customer?.phone);
+await expect("search bookings by phone", call("GET", `/admin/bookings?q=${CUSTOMER_PHONE.slice(-6)}`, null, T), 200,
+  (j) => j.items.some((b) => b.id === bookA.id) && j.items.every((b) => b.customer.phone.replace(/\s/g, "").includes(CUSTOMER_PHONE.slice(-6))));
+await expect("search bookings by id", call("GET", `/admin/bookings?q=${bookA.id}`, null, T), 200, (j) => j.items.length === 1 && j.items[0].id === bookA.id);
+await expect("filter by status and service", call("GET", "/admin/bookings?status=confirmed&service=car", null, T), 200, (j) => j.items.every((b) => b.status === "confirmed" && b.service === "car"));
+const today = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+await expect("filter by date", call("GET", `/admin/bookings?from=${today}&to=${today}&q=${bookA.id}`, null, T), 200, (j) => j.items.length === 1);
+await expect("bad filter is refused", call("GET", "/admin/bookings?status=nope", null, T), 400);
+await expect("GET /admin/bookings/:id", call("GET", `/admin/bookings/${bookA.id}`, null, T), 200,
+  (j) => j.booking.id === bookA.id && j.booking.customer.id === cMe.id && j.wallet.some((w) => w.kind === "payment" && w.amount === -bookA.amount) && Array.isArray(j.history));
+await expect("cancel needs a reason", call("POST", `/admin/bookings/${bookA.id}/cancel`, {}, T), 400);
+await expect("staff cancel refunds the wallet", call("POST", `/admin/bookings/${bookA.id}/cancel`, { reason: "Driver unavailable (smoke)" }, T), 200,
+  (j) => j.booking.status === "cancelled" && j.wallet.some((w) => w.kind === "refund" && w.amount === bookA.amount) && j.history[0]?.action === "booking.cancel" && j.history[0].detail.reason.includes("smoke"));
+check("refund reached the customer's wallet", (await call("GET", "/auth/me", null, C)).json.walletBalance === afterPay + bookA.amount);
+await expect("cancelling again is refused", call("POST", `/admin/bookings/${bookA.id}/cancel`, { reason: "Again please" }, T), 409);
+await expect("customer sees the cancellation", call("GET", `/bookings/${bookA.id}`, null, C), 200, (j) => j.status === "cancelled");
+const rideB = (await call("POST", "/rides", { optionId: "mini", pickupId: places[0].id, dropId: places[1].id, payment: "cash" }, C)).json;
+const bookB = (await call("POST", "/bookings", { service: "car", title: "Smoke admin ride 2", subtitle: "A → B", payment: "cash", lines: [], rideId: rideB.id }, C)).json;
+await expect("staff mark complete", call("POST", `/admin/bookings/${bookB.id}/complete`, null, T), 200, (j) => j.booking.status === "completed" && j.history[0]?.action === "booking.complete");
+await expect("completing again is refused", call("POST", `/admin/bookings/${bookB.id}/complete`, null, T), 409);
+await expect("unknown booking is 404", call("GET", "/admin/bookings/QFNOPE", null, T), 404);
+
+// ── Licence reviews ── (the customer's licence is pending from the settings test above)
+await expect("GET /admin/licences lists pending first", call("GET", "/admin/licences", null, T), 200, (j) => j.some((l) => l.customer.id === cMe.id && l.status === "pending" && l.number));
+await expect("reject needs a reason", call("POST", `/admin/licences/${cMe.id}/reject`, { reason: "no" }, T), 400);
+await expect("reject a licence", call("POST", `/admin/licences/${cMe.id}/reject`, { reason: "Photo is blurry, please resubmit" }, T), 200, (j) => j.status === "rejected");
+await expect("customer sees the rejection and reason", call("GET", "/auth/me", null, C), 200, (j) => j.licence.status === "rejected" && j.licence.note === "Photo is blurry, please resubmit");
+await expect("rejected list shows it", call("GET", "/admin/licences?status=rejected", null, T), 200, (j) => j.some((l) => l.customer.id === cMe.id && l.note));
+await expect("a reviewed licence can't be reviewed again", call("POST", `/admin/licences/${cMe.id}/approve`, null, T), 409);
+await expect("customer resubmits", call("PUT", "/me/licence", licence, C), 200, (j) => j.licence.status === "pending" && j.licence.note === null);
+await expect("approve a licence", call("POST", `/admin/licences/${cMe.id}/approve`, null, T), 200, (j) => j.status === "verified");
+await expect("customer sees it verified", call("GET", "/auth/me", null, C), 200, (j) => j.licence.status === "verified");
+await expect("audit records licence decisions", call("GET", `/admin/audit?entity=licence&entityId=${cMe.id}`, null, T), 200,
+  (j) => j.items.some((e) => e.action === "licence.approve") && j.items.some((e) => e.action === "licence.reject" && e.detail.reason));
+await expect("unknown customer licence is 404", call("POST", "/admin/licences/UNOPE/approve", null, T), 404);
 await call("POST", "/me/delete", { otp: OTP }, C);
 
 if (LOCAL) {
@@ -155,6 +198,8 @@ if (LOCAL) {
   await expect("content can't read the audit log", call("GET", "/admin/audit", null, content.token), 403);
   await expect("content can edit the catalog", call("GET", "/admin/catalog/faq", null, content.token), 200);
   await expect("content can't reset the catalog", call("POST", "/admin/catalog/reset", null, content.token), 403);
+  await expect("content can't see bookings", call("GET", "/admin/bookings", null, content.token), 403);
+  await expect("content can't review licences", call("GET", "/admin/licences", null, content.token), 403);
 
   // Reset brings back the seed (local only: it would wipe real edits in production)
   const extra = (await call("POST", "/admin/catalog/city", { data: { name: "Smoke City" } }, T)).json;
