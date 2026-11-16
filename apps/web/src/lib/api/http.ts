@@ -1,7 +1,7 @@
 // Real backend implementation of the API contract.
 // Activated by setting NEXT_PUBLIC_API_URL. Endpoints mirror the comments in contract.ts,
 // so the same REST API serves both this website and the mobile app.
-import type { User } from "@quikfly/shared";
+import type { AuthResult } from "@quikfly/shared";
 import type { QuikflyApi } from "./contract";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
@@ -42,8 +42,8 @@ const qs = (o: Record<string, string>) => "?" + new URLSearchParams(o).toString(
 export const httpApi: QuikflyApi = {
   auth: {
     sendOtp: (phone) => req("POST", "/auth/otp", { phone }),
-    async verifyOtp(phone, otp, name) {
-      const r = await req<{ token: string; user: User }>("POST", "/auth/verify", { phone, otp, name });
+    async verifyOtp(phone, otp) {
+      const r = await req<AuthResult>("POST", "/auth/verify", { phone, otp });
       try { localStorage.setItem(TOKEN_KEY, r.token); } catch { /* ignore */ }
       return r;
     },
@@ -53,11 +53,38 @@ export const httpApi: QuikflyApi = {
     },
     me: () => req("GET", "/auth/me"),
   },
+  account: {
+    update: (patch) => req("PATCH", "/me", patch),
+    requestPhoneChange: (phone) => req("POST", "/me/phone/otp", { phone }),
+    changePhone: (phone, otp) => req("POST", "/me/phone", { phone, otp }),
+    async signOutEverywhere() { await req("POST", "/me/logout-all"); clearToken(); },
+    async deleteAccount(otp) { await req("POST", "/me/delete", { otp }); clearToken(); },
+    applyReferral: (code) => req("POST", "/me/referral", { code }),
+    submitLicence: (number, expiry) => req("PUT", "/me/licence", { number, expiry }),
+    walletHistory: () => req("GET", "/me/wallet"),
+  },
+  savedPlaces: {
+    list: () => req("GET", "/me/places"),
+    save: (kind, placeId, label) => req("POST", "/me/places", { kind, placeId, label }),
+    remove: (id) => req("DELETE", `/me/places/${id}`),
+  },
+  travellers: {
+    list: () => req("GET", "/me/travellers"),
+    add: (t) => req("POST", "/me/travellers", t),
+    remove: (id) => req("DELETE", `/me/travellers/${id}`),
+  },
+  contacts: {
+    list: () => req("GET", "/me/contacts"),
+    add: (c) => req("POST", "/me/contacts", c),
+    remove: (id) => req("DELETE", `/me/contacts/${id}`),
+  },
   places: { search: (q) => req("GET", `/places${qs({ q })}`) },
   rides: {
     quote: (service, pickupId, dropId) => req("POST", "/rides/quote", { service, pickupId, dropId }),
     book: (input) => req("POST", "/rides", input),
     cancel: (id) => req("POST", `/rides/${id}/cancel`),
+    share: (id) => req("POST", `/rides/${id}/share`),
+    shared: (t) => req("GET", `/share/${encodeURIComponent(t)}`),
   },
   buses: {
     search: (from, to, date) => req("GET", `/buses${qs({ from, to, date })}`),
@@ -70,6 +97,7 @@ export const httpApi: QuikflyApi = {
   },
   bookings: {
     list: () => req("GET", "/bookings"),
+    get: (id) => req("GET", `/bookings/${encodeURIComponent(id)}`),
     create: (input) => req("POST", "/bookings", input),
     cancel: (id) => req("POST", `/bookings/${id}/cancel`),
     complete: (id) => req("POST", `/bookings/${id}/complete`),

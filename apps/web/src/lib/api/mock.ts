@@ -1,15 +1,15 @@
-// Demo-mode implementation of the API contract. Simulates latency and
-// keeps bookings in the browser so the client can click through every flow.
+// Demo-mode implementation of the API contract. Simulates latency and keeps
+// data in the browser so the client can click through every flow offline.
+// Storage helpers: ./mock-store.ts. Account endpoints: ./mock-account.ts.
 import type { QuikflyApi } from "./contract";
-import type { Booking, Bus, FareQuote, Seat, User } from "@quikfly/shared";
+import type { Booking, Bus, FareQuote, Seat } from "@quikfly/shared";
 import { BUS_OPERATORS, DRIVERS, PLACES, RENTAL_CARS, RIDE_OPTIONS, TOURS, TRAVEL_VEHICLES, VEHICLES } from "@quikfly/shared";
+import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
+import { KEYS, currentUser, fail, load, save, uid, wait, walletEntry, type MockRide } from "./mock-store";
 
-/** Login code accepted by the mock API. */
-export const MOCK_OTP = "1234";
+export { MOCK_OTP } from "./mock-store";
 
-const wait = (ms = 450) => new Promise((r) => setTimeout(r, ms));
 const pick = <T,>(arr: T[], seed: number) => arr[Math.abs(seed) % arr.length];
-const uid = (p: string) => `${p}${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 90 + 10)}`;
 
 // Deterministic pseudo-random so the same search shows the same results.
 function seeded(str: string) {
@@ -22,71 +22,30 @@ function seeded(str: string) {
   };
 }
 
-const STORE_KEY = "quikfly.bookings";
-function loadBookings(): Booking[] {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); } catch { return []; }
-}
-let memory: Booking[] | null = null;
-function bookingsStore() {
-  if (!memory) memory = loadBookings();
-  return memory;
-}
-function saveBookings() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(memory ?? [])); } catch { /* storage unavailable */ }
-}
+const bookingsStore = () => load<Booking[]>(KEYS.bookings, []);
+const saveBookings = (list: Booking[]) => save(KEYS.bookings, list);
+const ridesStore = () => load<Record<string, MockRide>>(KEYS.rides, {});
 
-// The mock "server-side" user, so the wallet balance behaves like the real API.
-const USER_KEY = "quikfly.mockUser";
-const NEW_USER_WALLET = 500;
-function loadUser(): User | null {
-  try { return JSON.parse(localStorage.getItem(USER_KEY) || "null"); } catch { return null; }
-}
-function saveUser(u: User) {
-  try { localStorage.setItem(USER_KEY, JSON.stringify(u)); } catch { /* storage unavailable */ }
-}
-function currentUser(): User {
-  const u = loadUser();
-  if (!u) throw new Error("Please sign in to continue.");
-  return u;
-}
-function adjustWallet(delta: number) {
-  const u = currentUser();
-  saveUser({ ...u, walletBalance: u.walletBalance + delta });
-}
-const isActive = (b: Booking) => b.status === "confirmed" || b.status === "ongoing";
-function activeBooking(id: string) {
-  const b = bookingsStore().find((x) => x.id === id);
-  if (!b) throw new Error("Booking not found.");
-  if (!isActive(b)) throw new Error(`This booking is already ${b.status}.`);
+/** Updates an active booking; refuses ones already cancelled or completed (409 on the API). */
+function finishBooking(id: string, status: "cancelled" | "completed") {
+  const list = bookingsStore();
+  const b = list.find((x) => x.id === id) ?? fail("Booking not found.");
+  if (b.status !== "confirmed" && b.status !== "ongoing") fail(`This booking is already ${b.status}.`);
+  b.status = status;
+  saveBookings(list);
   return b;
 }
 
 function placeById(id: string) {
-  const p = PLACES.find((x) => x.id === id);
-  if (!p) throw new Error("Unknown place");
-  return p;
+  return PLACES.find((x) => x.id === id) ?? fail("Unknown place");
 }
 
 export const mockApi: QuikflyApi = {
-  auth: {
-    async sendOtp() { await wait(600); return { sent: true }; },
-    async verifyOtp(phone, otp, name) {
-      await wait(600);
-      if (otp !== MOCK_OTP) throw new Error(`Invalid OTP. Use ${MOCK_OTP} in demo mode.`);
-      const known = loadUser();
-      const user: User = known?.phone === phone
-        ? { ...known, name: name || known.name }
-        : {
-          id: "u1", name: name || "Guest", phone, walletBalance: NEW_USER_WALLET, email: null, gender: null, dob: null,
-          profileComplete: !!name, referralCode: "QFDEMO01", referred: false,
-          licence: { status: "none", number: null, expiry: null }, gst: null, autoShareNightRides: false,
-        };
-      saveUser(user);
-      return { token: "demo-token", user };
-    },
-    async signOut() { /* nothing to end in demo mode */ },
-    async me() { await wait(150); return currentUser(); },
-  },
+  auth: mockAuth,
+  account: mockAccount,
+  savedPlaces: mockSavedPlaces,
+  travellers: mockTravellers,
+  contacts: mockContacts,
 
   places: {
     async search(q) {
@@ -118,7 +77,7 @@ export const mockApi: QuikflyApi = {
       const d = pick(DRIVERS, seed);
       const state = pick(["TN 09", "TN 07", "TN 22", "TN 10"], seed >> 3);
       const letters = pick(["AB", "CK", "BZ", "DM", "EQ"], seed >> 5);
-      return {
+      const ride = {
         id: uid("RD"),
         quote,
         pickup: placeById(pickupId),
@@ -127,8 +86,33 @@ export const mockApi: QuikflyApi = {
         otp: String(1000 + (seed % 9000)),
         driver: { ...d, vehicle: pick(VEHICLES[optionId], seed >> 2), plate: `${state} ${letters} ${1000 + (seed % 8999)}` },
       };
+      save(KEYS.rides, { ...ridesStore(), [ride.id]: { ride, startedAt: new Date().toISOString(), cancelled: false } });
+      return ride;
     },
-    async cancel() { await wait(400); },
+    async cancel(id) {
+      await wait(400);
+      const rides = ridesStore();
+      if (rides[id]) { rides[id].cancelled = true; save(KEYS.rides, rides); }
+    },
+    // Demo links only open in this browser, since the data lives in localStorage.
+    async share(id) {
+      await wait(300);
+      if (!ridesStore()[id]) fail("Ride not found.");
+      return { token: `demo-${id}`, expiresAt: new Date(Date.now() + 86_400_000).toISOString() };
+    },
+    async shared(token) {
+      await wait(300);
+      const r = ridesStore()[token.replace(/^demo-/, "")] ?? fail("This trip link has expired or doesn't exist.");
+      const { ride } = r;
+      return {
+        riderName: load<{ name: string } | null>(KEYS.user, null)?.name.split(" ")[0] ?? "Rider",
+        status: r.cancelled ? "cancelled" : "active",
+        startedAt: r.startedAt,
+        pickup: ride.pickup, drop: ride.drop,
+        distanceKm: ride.quote.distanceKm, durationMin: ride.quote.durationMin, etaMin: ride.quote.etaMin,
+        driver: { name: ride.driver.name, rating: ride.driver.rating, vehicle: ride.driver.vehicle, plate: ride.driver.plate },
+      };
+    },
   },
 
   buses: {
@@ -200,32 +184,24 @@ export const mockApi: QuikflyApi = {
   },
 
   bookings: {
-    async list() { await wait(200); return [...bookingsStore()]; },
+    async list() { await wait(200); return bookingsStore(); },
+    async get(id) { await wait(200); return bookingsStore().find((b) => b.id === id) ?? fail("Booking not found."); },
     async create(input) {
       await wait(900);
-      if (input.payment === "wallet") {
-        if (currentUser().walletBalance < input.amount) throw new Error("Not enough wallet balance. Choose another payment method.");
-        adjustWallet(-input.amount);
-      }
       const b: Booking = { ...input, id: uid("QF"), status: "confirmed", createdAt: new Date().toISOString() };
-      bookingsStore().unshift(b);
-      saveBookings();
+      if (input.payment === "wallet") {
+        if (currentUser().walletBalance < input.amount) fail("Not enough wallet balance. Choose another payment method.");
+        walletEntry("payment", -input.amount, `Paid · ${input.title}`, b.id);
+      }
+      saveBookings([b, ...bookingsStore()]);
       return b;
     },
     async cancel(id) {
       await wait(500);
-      const b = activeBooking(id);
-      b.status = "cancelled";
-      if (b.payment === "wallet") adjustWallet(b.amount);
-      saveBookings();
-      return { ...b };
+      const b = finishBooking(id, "cancelled");
+      if (b.payment === "wallet") walletEntry("refund", b.amount, `Refund · ${b.title}`, b.id);
+      return b;
     },
-    async complete(id) {
-      await wait(200);
-      const b = activeBooking(id);
-      b.status = "completed";
-      saveBookings();
-      return { ...b };
-    },
+    async complete(id) { await wait(200); return finishBooking(id, "completed"); },
   },
 };
