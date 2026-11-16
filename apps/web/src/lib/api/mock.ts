@@ -76,7 +76,11 @@ export const mockApi: QuikflyApi = {
       const known = loadUser();
       const user: User = known?.phone === phone
         ? { ...known, name: name || known.name }
-        : { id: "u1", name: name || "Guest", phone, walletBalance: NEW_USER_WALLET };
+        : {
+          id: "u1", name: name || "Guest", phone, walletBalance: NEW_USER_WALLET, email: null, gender: null, dob: null,
+          profileComplete: !!name, referralCode: "QFDEMO01", referred: false,
+          licence: { status: "none", number: null, expiry: null }, gst: null, autoShareNightRides: false,
+        };
       saveUser(user);
       return { token: "demo-token", user };
     },

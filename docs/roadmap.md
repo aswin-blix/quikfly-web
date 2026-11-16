@@ -22,19 +22,19 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 
 | ID | Feature | Shared | API | Web | Mock | Smoke tests | Browser-checked |
 |---|---|---|---|---|---|---|---|
-| A1 | Sign-up step: after OTP, new users complete their profile (name, optional email, optional referral code) | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| A2 | `/account` profile: edit name, email, gender, DOB | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| A3 | Change mobile number (OTP to the new number) | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| A4 | Saved places (Home, Work, other) + one-tap picks in the ride panel | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| A5 | Saved travellers + one-tap fill at checkout | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| A6 | Emergency contacts (max 3) | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| A7 | Wallet page: balance + labelled transaction history + refund timings | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| A8 | Delete account: OTP, 30-day grace, restored on sign-in, wallet-loss warning | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| A9 | Sign out of all devices | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| B1 | Safety centre: SOS sheet in a live ride (Call 112, safety line, alert contacts, share), public trip-tracking link `/track`, "auto-share night rides" switch | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| B2 | Driving-licence check before self-drive (pending → verified, simulated) | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| B3 | Printable tax invoice from My Trips (`/invoice`), with GST details saved in the account and applied at checkout | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
-| B4 | Referral code: each user has one; applying a friend's code gives both ₹100 wallet credit (once) | ✅ | 🔄 | ⬜ | ⬜ | ⬜ | ⬜ |
+| A1 | Sign-up step: after OTP, new users complete their profile (name, optional email, optional referral code) | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| A2 | `/account` profile: edit name, email, gender, DOB | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| A3 | Change mobile number (OTP to the new number) | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| A4 | Saved places (Home, Work, other) + one-tap picks in the ride panel | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| A5 | Saved travellers + one-tap fill at checkout | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| A6 | Emergency contacts (max 3) | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| A7 | Wallet page: balance + labelled transaction history + refund timings | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| A8 | Delete account: OTP, 30-day grace, restored on sign-in, wallet-loss warning | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| A9 | Sign out of all devices | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| B1 | Safety centre: SOS sheet in a live ride (Call 112, safety line, alert contacts, share), public trip-tracking link `/track`, "auto-share night rides" switch | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| B2 | Driving-licence check before self-drive (pending → verified, simulated) | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| B3 | Printable tax invoice from My Trips (`/invoice`), with GST details saved in the account and applied at checkout | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| B4 | Referral code: each user has one; applying a friend's code gives both ₹100 wallet credit (once) | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
 
 ### Work log (by layer)
 
@@ -42,21 +42,21 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 - [x] `types.ts`: extended `User` (email, gender, dob, profileComplete, referralCode, referred, licence, gst, autoShareNightRides); `ProfileUpdate`, `AuthResult` (isNew, restored), `SavedPlace`, `Traveller`, `EmergencyContact`, `WalletTransaction`, `SharedRide`
 - [x] `rules.ts`: `LIMITS`, `REFERRAL_BONUS`, `DELETION_GRACE_DAYS`, `LICENCE_REVIEW_SECONDS`, `SHARE_LINK_HOURS`, `NIGHT_HOURS`, `RIDE_SIMULATION`, `PATTERNS` (phone, email, GSTIN, licence, referral code), helpers
 
-**API (`apps/api`)**: 🔄
+**API (`apps/api`)**: ✅ (94 smoke checks pass, 3 runs in a row, local)
 - [x] Migration `0003_accounts.sql`: user columns, `saved_places`, `travellers`, `emergency_contacts`, `wallet_transactions` (+ opening-balance backfill), `ride_shares`
 - [x] `services/wallet.ts`: ledger statement helper, transaction list
 - [x] `services/auth.ts`: full `toUser`, referral code on sign-up, welcome-credit entry, `isNew` / `restored`, 30-day restore-or-erase, deleted users rejected
 - [x] `services/account.ts`: profile update (a name completes sign-up), phone change, sign out everywhere, delete, referral, licence
 - [x] `services/saved.ts`: places, travellers, contacts with limits
-- [ ] `services/bookings.ts`: write ledger rows on wallet debit and refund; `getBooking`
-- [ ] `services/share.ts`: create share token for a ride; public read
-- [ ] `routes/me.ts`: `PATCH /me`, `POST /me/phone/otp`, `POST /me/phone`, `POST /me/logout-all`, `POST /me/delete`, `POST /me/referral`, `PUT /me/licence`, `GET|POST /me/places`, `DELETE /me/places/:id`, the same for `/me/travellers` and `/me/contacts`, `GET /me/wallet`
-- [ ] `routes/auth.ts`: verify returns `AuthResult`
-- [ ] `GET /bookings/:id`, `POST /rides/:id/share`, `GET /share/:token`
-- [ ] Smoke tests for every new endpoint (incl. deletion grace restore, referral twice, limits)
-- [ ] `apps/api/README.md` endpoint table
+- [x] `services/bookings.ts`: write ledger rows on wallet debit and refund; `getBooking`
+- [x] `services/share.ts`: create share token for a ride; public read
+- [x] `routes/me.ts`: `PATCH /me`, `POST /me/phone/otp`, `POST /me/phone`, `POST /me/logout-all`, `POST /me/delete`, `POST /me/referral`, `PUT /me/licence`, `GET|POST /me/places`, `DELETE /me/places/:id`, the same for `/me/travellers` and `/me/contacts`, `GET /me/wallet`
+- [x] `routes/auth.ts`: verify returns `AuthResult`
+- [x] `GET /bookings/:id`, `POST /rides/:id/share`, `GET /share/:token`
+- [x] Smoke tests for every new endpoint (incl. deletion grace restore, referral twice, limits)
+- [x] `apps/api/README.md` endpoint table
 
-**Web (`apps/web`)**: ⬜
+**Web (`apps/web`)**: 🔄 next
 - [ ] Contract + `http.ts` + `mock.ts` for all new endpoints
 - [ ] Login modal: phone → OTP → "complete your profile" for new users; "account restored" message
 - [ ] `/account` page: overview + sections (Profile, Saved places, Travellers, Safety, Wallet, Refer & earn, Driving licence, Business / GST, Security). Mobile shows a list, desktop a sidebar. Add to the SPA router

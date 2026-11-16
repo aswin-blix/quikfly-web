@@ -22,6 +22,12 @@ export async function listBookings(db: D1Database, userId: string) {
   return results.map(toBooking);
 }
 
+export async function getBooking(db: D1Database, userId: string, id: string): Promise<Booking> {
+  const row = await db.prepare("SELECT * FROM bookings WHERE id = ? AND user_id = ?").bind(id, userId).first<BookingRow>();
+  if (!row) throw notFound("Booking not found.");
+  return toBooking(row);
+}
+
 /**
  * Saves a booking. A wallet payment is taken in the same transaction:
  * if the balance is too low, neither the booking nor the debit happens.
@@ -37,6 +43,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
     return booking;
   }
 
+  // All three steps depend on the balance check in the first, so they succeed or skip together.
   const [inserted] = await db.batch([
     db.prepare(
       `INSERT INTO bookings (${columns}) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
@@ -44,6 +51,10 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
     ).bind(...values, userId, booking.amount),
     db.prepare("UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ? AND wallet_balance >= ?")
       .bind(booking.amount, userId, booking.amount),
+    db.prepare(
+      `INSERT INTO wallet_transactions (id, user_id, kind, amount, note, booking_id, created_at)
+       SELECT ?, ?, 'payment', ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?)`,
+    ).bind(uid("WT"), userId, -booking.amount, `Paid · ${booking.title}`, booking.id, booking.createdAt, booking.id),
   ]);
   if (!inserted.meta.changes) throw badRequest("Not enough wallet balance. Choose another payment method.");
   return booking;
@@ -59,12 +70,17 @@ async function notActive(db: D1Database, userId: string, id: string): Promise<ne
 
 /** Cancels a booking and, in the same transaction, refunds a wallet payment. */
 export async function cancelBooking(db: D1Database, userId: string, id: string): Promise<Booking> {
-  const [, cancelled] = await db.batch([
+  const [, , cancelled] = await db.batch([
     db.prepare(
       `UPDATE users SET wallet_balance = wallet_balance + COALESCE((
          SELECT amount FROM bookings WHERE id = ?1 AND user_id = ?2 AND status IN ${ACTIVE} AND payment = 'wallet'
        ), 0) WHERE id = ?2`,
     ).bind(id, userId),
+    db.prepare(
+      `INSERT INTO wallet_transactions (id, user_id, kind, amount, note, booking_id, created_at)
+       SELECT ?3, user_id, 'refund', amount, 'Refund · ' || title, id, ?4
+       FROM bookings WHERE id = ?1 AND user_id = ?2 AND status IN ${ACTIVE} AND payment = 'wallet'`,
+    ).bind(id, userId, uid("WT"), new Date().toISOString()),
     db.prepare(`UPDATE bookings SET status = 'cancelled' WHERE id = ? AND user_id = ? AND status IN ${ACTIVE} RETURNING *`)
       .bind(id, userId),
   ]);

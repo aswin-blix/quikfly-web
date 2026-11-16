@@ -27,6 +27,32 @@ export function oneOf<T extends string>(src: Json, key: string, allowed: readonl
   return v as T;
 }
 
+/** True when the key is present in the body (null counts: it means "clear"). */
+export const has = (src: Json, key: string) => key in src && src[key] !== undefined;
+
+export function bool(src: Json, key: string): boolean {
+  if (typeof src[key] !== "boolean") throw badRequest(`"${key}" must be true or false.`);
+  return src[key] as boolean;
+}
+
+export function int(src: Json, key: string, min: number, max: number): number {
+  const v = src[key];
+  if (typeof v !== "number" || !Number.isInteger(v) || v < min || v > max) throw badRequest(`"${key}" must be a whole number from ${min} to ${max}.`);
+  return v;
+}
+
+/** A string of min..max characters. */
+export function text(src: Json, key: string, min: number, max: number): string {
+  const v = str(src, key, max);
+  if (v.length < min) throw badRequest(`"${key}" must be at least ${min} characters.`);
+  return v;
+}
+
+export function matches(value: string, pattern: RegExp, message: string): string {
+  if (!pattern.test(value)) throw badRequest(message);
+  return value;
+}
+
 export function query(c: Context, key: string): string {
   const v = c.req.query(key)?.trim();
   if (!v) throw badRequest(`Query parameter "${key}" is required.`);
