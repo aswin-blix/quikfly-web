@@ -1,31 +1,18 @@
 {
-  "name": "quikfly-web",
-  "version": "0.1.0",
+  "name": "quikfly",
   "private": true,
   "author": "Aswin Blix (https://aswinblix.dev/)",
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "build:demo": "NEXT_PUBLIC_SPA=1 next build --webpack && python3 scripts/inline-demo.py out quikfly-demo.html"
-  },
-  "dependencies": {
-    "@gsap/react": "^2.1.2",
-    "framer-motion": "^14.14.0",
-    "gsap": "^3.15.1",
-    "lucide-react": "^1.73.0",
-    "next": "^16.4.6",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "dev": "concurrently -k -n api,web -c yellow,cyan \"npm run dev -w @quikfly/api\" \"npm run dev -w @quikfly/web\"",
+    "dev:api": "npm run dev -w @quikfly/api",
+    "dev:web": "npm run dev -w @quikfly/web",
+    "build": "npm run build -w @quikfly/api && npm run build -w @quikfly/web",
+    "typecheck": "npm run typecheck -w @quikfly/shared && npm run typecheck -w @quikfly/api && npm run typecheck -w @quikfly/web",
+    "db:migrate:local": "npm run db:migrate:local -w @quikfly/api",
+    "smoke": "npm run smoke -w @quikfly/api"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.5",
-    "@types/node": "^26.6.6",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "postcss": "^8.5.33",
-    "tailwindcss": "^4.3.5",
-    "typescript": "^5.9.3"
+    "concurrently": "^9.2.1"
   }
 }

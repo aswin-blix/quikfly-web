@@ -6,3 +6,8 @@ next-env.d.ts
 .env*.local
 quikfly-demo.html
 out-spa
+
+# API (Cloudflare Workers)
+.wrangler
+.dev.vars
+dist
