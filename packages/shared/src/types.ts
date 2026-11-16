@@ -95,6 +95,7 @@ export interface WalletTransaction {
 /** What a shared ride link shows. Personal details are trimmed. */
 export interface SharedRide {
   riderName: string;
+  service: "bike" | "car";
   status: "active" | "cancelled";
   /** When the driver started heading to the pickup (ISO). */
   startedAt: string;

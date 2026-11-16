@@ -106,6 +106,7 @@ export const mockApi: QuikflyApi = {
       const { ride } = r;
       return {
         riderName: load<{ name: string } | null>(KEYS.user, null)?.name.split(" ")[0] ?? "Rider",
+        service: ride.quote.option.service,
         status: r.cancelled ? "cancelled" : "active",
         startedAt: r.startedAt,
         pickup: ride.pickup, drop: ride.drop,

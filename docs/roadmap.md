@@ -25,13 +25,13 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 | A1 | Sign-up step: after OTP, new users complete their profile (name, optional email, optional referral code) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A2 | `/account` profile: edit name, email, gender, DOB | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A3 | Change mobile number (OTP to the new number) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| A4 | Saved places (Home, Work, other) + one-tap picks in the ride panel (account page done; ride panel next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
+| A4 | Saved places (Home, Work, other) + one-tap picks in the ride panel | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A5 | Saved travellers + one-tap fill at checkout (account page done; checkout next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
 | A6 | Emergency contacts (max 3) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A7 | Wallet page: balance + labelled transaction history + refund timings | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A8 | Delete account: OTP, 30-day grace, restored on sign-in, wallet-loss warning | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | A9 | Sign out of all devices | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| B1 | Safety centre: SOS sheet in a live ride (Call 112, safety line, alert contacts, share), public trip-tracking link `/track`, "auto-share night rides" switch (switch done; ride sheet + /track next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
+| B1 | Safety centre: SOS sheet in a live ride (Call 112, safety line, alert contacts, share), public trip-tracking link `/track`, "auto-share night rides" switch | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | B2 | Driving-licence check before self-drive (pending → verified, simulated) (account page done; checkout next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
 | B3 | Printable tax invoice from My Trips (`/invoice`), with GST details saved in the account and applied at checkout (GST section done; checkout + invoice next) | ✅ | ✅ | 🔄 | ✅ | ✅ | ⬜ |
 | B4 | Referral code: each user has one; applying a friend's code gives both ₹100 wallet credit (once) | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ |
@@ -62,8 +62,9 @@ Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, 
 - [x] `lib/account.ts`: section list, labels, safety numbers, refund timings; `WELCOME_CREDIT` moved to shared rules
 - [x] `/account` page (`screens/AccountScreen.tsx`, sections in `components/account/`): Profile, Wallet, Refer & earn, Saved places, Travellers, Safety (contacts + auto-share switch), Driving licence (form reused by checkout), Business / GST, Login & security (change number, sign out everywhere, delete). Phones: list then section (`?tab=`); desktop: sidebar. In the SPA router
 - [x] Header avatar and wallet link to `/account`; mobile account sheet links to profile, wallet, refer, safety and all settings
-- [ ] Ride panel: saved-place chips; SOS / safety sheet; Share trip (link + Web Share); auto-share at night
-- [ ] `/track?t=` public page (map + driver + progress)
+- [x] Ride panel: "Your places" chips and saved places at the top of the place picker; SOS button → `components/SafetySheet.tsx` (Call 112, safety line, share, alert contacts; alerts simulated and labelled); Share trip (Web Share or copy); night rides auto-shared when the switch is on
+- [x] `/track?t=` public page (`screens/TrackScreen.tsx`): map, driver, plate, route, progress computed from the start time with the shared `RIDE_SIMULATION`; re-checks every 15 s; `noindex`. In the SPA router
+- [x] `SharedRide.service` added (API, mock, smoke) so the map shows a bike or car; vehicle-position helpers moved into `CityMap.tsx`
 - [ ] Checkout: saved-traveller chips, GST invoice option, licence card for self-drive (replaces the checkbox)
 - [ ] My Trips: "Invoice" link; `/invoice?id=` printable page with print styles (hide header, footer, nav)
 

@@ -30,6 +30,7 @@ export async function readShare(db: D1Database, token: string): Promise<SharedRi
   const ride = JSON.parse(row.data) as Ride;
   return {
     riderName: row.rider.split(" ")[0],
+    service: ride.quote.option.service,
     status: row.status === "cancelled" ? "cancelled" : "active",
     startedAt: row.created_at,
     pickup: ride.pickup,

@@ -3,13 +3,16 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useHideBottomNav } from "./BottomNav";
-import { ArrowUpDown, Clock, MapPin, Navigation, Phone, ShieldCheck, Star, Users, X } from "lucide-react";
+import { ArrowUpDown, Clock, MapPin, Navigation, Phone, Share2, Siren, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { PLACES } from "@quikfly/shared";
-import type { FareQuote, PaymentMethod, Place, Ride } from "@quikfly/shared";
+import { PLACES, RIDE_SIMULATION, isNightHour } from "@quikfly/shared";
+import type { FareQuote, PaymentMethod, Place, Ride, SavedPlace } from "@quikfly/shared";
+import { trackUrl } from "@/lib/account";
 import { cx, inr } from "@/lib/format";
+import { PLACE_ICON } from "./account/PlacesSection";
 import { useApp } from "./AppProvider";
-import { CityMap, routePoint, type Pt } from "./CityMap";
+import { CityMap, driverStartFor, vehiclePosition, type Pt } from "./CityMap";
+import { SafetySheet } from "./SafetySheet";
 import { GoldButton, Spinner } from "./ui";
 
 type Phase = "plan" | "searching" | "arriving" | "ontrip" | "done";
@@ -17,8 +20,7 @@ type Phase = "plan" | "searching" | "arriving" | "ontrip" | "done";
 /** Payment options offered for rides (net banking is checkout-only). */
 const RIDE_PAYMENTS: PaymentMethod[] = ["upi", "cash", "wallet", "card"];
 
-const ARRIVE_MS = 9000;
-const TRIP_MS = 12000;
+const { arriveMs: ARRIVE_MS, tripMs: TRIP_MS } = RIDE_SIMULATION;
 
 export function RidePanel({ service, initialFrom, initialTo }: { service: "bike" | "car"; initialFrom?: string | null; initialTo?: string | null }) {
   const { user, requireAuth, refreshBookings, toast } = useApp();
@@ -35,7 +37,38 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [t, setT] = useState(0);
   const [rating, setRating] = useState(0);
+  const [saved, setSaved] = useState<SavedPlace[]>([]);
+  const [sosOpen, setSosOpen] = useState(false);
   const raf = useRef<number>(0);
+
+  // Saved places (Home, Work...) as one-tap picks for signed-in riders.
+  const signedIn = !!user;
+  useEffect(() => {
+    if (!signedIn) return setSaved([]);
+    api.savedPlaces.list().then(setSaved, () => setSaved([]));
+  }, [signedIn]);
+
+  /** Creates (or reuses) a public link for this ride and hands it to the share sheet or clipboard. */
+  async function shareTrip(r: Ride | null = ride) {
+    if (!r) return;
+    try {
+      const { token } = await api.rides.share(r.id);
+      const url = trackUrl(token);
+      const text = `Follow my QuikFly ride: ${r.driver.vehicle} (${r.driver.plate}) from ${r.pickup.name} to ${r.drop.name}.`;
+      if (navigator.share) { try { await navigator.share({ title: "My QuikFly ride", text, url }); return; } catch { /* dismissed: fall back to copy */ } }
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      toast("Trip link copied. Paste it to anyone.");
+    } catch (e) { toast((e as Error).message, "err"); }
+  }
+
+  /** Night rides: share with emergency contacts automatically if the rider turned that on. */
+  async function autoShareIfNight(r: Ride) {
+    if (!user?.autoShareNightRides || !isNightHour(new Date().getHours())) return;
+    const contacts = await api.contacts.list().catch(() => []);
+    if (!contacts.length) return;
+    await api.rides.share(r.id).catch(() => undefined);
+    toast(`Night ride shared with ${contacts.map((c) => c.name.split(" ")[0]).join(", ")} (demo: no SMS sent)`);
+  }
 
 
   useEffect(() => {
@@ -72,11 +105,9 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
   }, [phase, bookingId, refreshBookings]);
 
   const quote = quotes?.find((q) => q.option.id === selected);
-  const driverStart: Pt | null = useMemo(() => pickup ? { x: Math.max(4, pickup.x - 14), y: Math.min(96, pickup.y + 12) } : null, [pickup]);
-  const vehicle: Pt | null =
-    phase === "arriving" && pickup && driverStart ? { x: driverStart.x + (pickup.x - driverStart.x) * t, y: driverStart.y + (pickup.y - driverStart.y) * t }
-    : phase === "ontrip" && pickup && drop ? routePoint(pickup, drop, t)
-    : phase === "done" && drop ? drop : null;
+  const driverStart: Pt | null = useMemo(() => pickup ? driverStartFor(pickup) : null, [pickup]);
+  const vehicle: Pt | null = pickup && drop && (phase === "arriving" || phase === "ontrip" || phase === "done")
+    ? vehiclePosition(phase, pickup, drop, t) : null;
 
   function reset() {
     cancelAnimationFrame(raf.current);
@@ -98,6 +129,7 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
         });
         setRide(r); setBookingId(b.id); setT(0); setPhase("arriving");
         refreshBookings();
+        autoShareIfNight(r);
       } catch (e) {
         // e.g. the wallet ran short between quote and booking: release the driver.
         if (r) api.rides.cancel(r.id).catch(() => undefined);
@@ -129,12 +161,24 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
         {phase === "plan" && (
           <>
             <div className="relative space-y-2">
-              <PlacePicker icon={<span className="w-2.5 h-2.5 rounded-full bg-success" />} placeholder="Pickup location" value={pickup} onChange={setPickup} exclude={drop?.id} />
-              <PlacePicker icon={<span className="w-2.5 h-2.5 bg-brand" />} placeholder="Where to?" value={drop} onChange={setDrop} exclude={pickup?.id} />
+              <PlacePicker icon={<span className="w-2.5 h-2.5 rounded-full bg-success" />} placeholder="Pickup location" value={pickup} onChange={setPickup} exclude={drop?.id} saved={saved} />
+              <PlacePicker icon={<span className="w-2.5 h-2.5 bg-brand" />} placeholder="Where to?" value={drop} onChange={setDrop} exclude={pickup?.id} saved={saved} />
               <button onClick={() => { setPickup(drop); setDrop(pickup); }} className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-smoke border border-line grid place-items-center hover:border-gold" title="Swap">
                 <ArrowUpDown size={14} />
               </button>
             </div>
+
+            {!drop && saved.some((s) => s.place.id !== pickup?.id) && (
+              <div>
+                <p className="label mb-2">Your places</p>
+                <div className="flex flex-wrap gap-2">
+                  {saved.filter((s) => s.place.id !== pickup?.id).map((s) => {
+                    const Icon = PLACE_ICON[s.kind];
+                    return <button key={s.id} className="chip flex items-center gap-1.5" onClick={() => setDrop(s.place)} title={s.place.name}><Icon size={14} className="text-gold" />{s.label}</button>;
+                  })}
+                </div>
+              </div>
+            )}
 
             {!drop && (
               <div>
@@ -200,8 +244,8 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
 
         {ride && (phase === "arriving" || phase === "ontrip") && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
                 <p className="label !text-success">{phase === "arriving" ? "Driver on the way" : "On trip"}</p>
                 <p className="text-2xl font-bold">{phase === "arriving" ? `Arriving in ${etaLeft} min` : `${tripLeft} min to drop`}</p>
               </div>
@@ -233,9 +277,12 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
               <span className="text-muted">Fare ({ride.payment.toUpperCase()})</span><span className="font-bold text-lg">{inr(ride.quote.fare)}</span>
             </div>
             <div className="flex gap-2">
-              <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-line text-sm hover:border-line-strong"><ShieldCheck size={16} className="text-success" />Share trip</button>
-              {phase === "arriving" && <button onClick={cancelRide} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-danger/30 text-danger text-sm hover:bg-danger/10"><X size={16} />Cancel ride</button>}
+              <button type="button" onClick={() => setSosOpen(true)} aria-label="SOS: safety options"
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-danger text-on-brand text-sm font-bold hover:opacity-90"><Siren size={16} />SOS</button>
+              <button type="button" onClick={() => shareTrip()} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-line text-sm hover:border-line-strong"><Share2 size={16} className="text-success" />Share trip</button>
+              {phase === "arriving" && <button onClick={cancelRide} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-danger/30 text-danger text-sm hover:bg-danger/10"><X size={16} />Cancel</button>}
             </div>
+            <SafetySheet open={sosOpen} onClose={() => setSosOpen(false)} onShare={() => shareTrip()} />
           </div>
         )}
 
@@ -274,16 +321,19 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
 }
 
 function PlacePicker({
-  icon, placeholder, value, onChange, exclude, autoFocus,
-}: { icon: React.ReactNode; placeholder: string; value: Place | null; onChange: (p: Place | null) => void; exclude?: string; autoFocus?: boolean }) {
+  icon, placeholder, value, onChange, exclude, autoFocus, saved = [],
+}: { icon: React.ReactNode; placeholder: string; value: Place | null; onChange: (p: Place | null) => void; exclude?: string; autoFocus?: boolean; saved?: SavedPlace[] }) {
   const [q, setQ] = useState(value?.name ?? "");
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<Place[]>([]);
   useEffect(() => setQ(value?.name ?? ""), [value]);
+  const browsing = q === "" || q === value?.name;
   useEffect(() => {
     if (!open) return;
-    api.places.search(q === value?.name ? "" : q).then((r) => setResults(r.filter((p) => p.id !== exclude)));
-  }, [q, open, exclude, value]);
+    api.places.search(browsing ? "" : q).then((r) => setResults(r.filter((p) => p.id !== exclude)));
+  }, [q, open, exclude, browsing]);
+  // Before the rider types, saved places come first.
+  const savedHere = browsing ? saved.filter((s) => s.place.id !== exclude) : [];
 
   return (
     <div className="relative">
@@ -293,8 +343,18 @@ function PlacePicker({
           onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
           onChange={(e) => { setQ(e.target.value); if (!e.target.value) onChange(null); }} />
       </div>
-      {open && results.length > 0 && (
+      {open && (results.length > 0 || savedHere.length > 0) && (
         <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto scrollbar-thin rounded-xl border border-line bg-coal shadow-2xl">
+          {savedHere.map((s) => {
+            const Icon = PLACE_ICON[s.kind];
+            return (
+              <button key={s.id} onMouseDown={() => { onChange(s.place); setOpen(false); }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-fg/5 text-left border-b border-line">
+                <Icon size={14} className="text-gold" />
+                <span><span className="block text-sm font-medium">{s.label}</span><span className="block text-xs text-subtle">{s.place.name}</span></span>
+              </button>
+            );
+          })}
           {results.map((p) => (
             <button key={p.id} onMouseDown={() => { onChange(p); setOpen(false); }}
               className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-fg/5 text-left">

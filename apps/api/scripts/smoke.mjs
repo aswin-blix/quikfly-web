@@ -191,7 +191,7 @@ await expect("contacts: list", call("GET", "/me/contacts"), 200, (j) => j.length
 const shared = await expect("POST /rides/:id/share", call("POST", `/rides/${ride.id}/share`), 201, (j) => j.token && j.expiresAt);
 await expect("sharing again returns the same link", call("POST", `/rides/${ride.id}/share`), 201, (j) => j.token === shared.token);
 await expect("GET /share/:token is public", call("GET", `/share/${shared.token}`, null, false), 200,
-  (j) => j.riderName === "Smoke" && j.status === "cancelled" && j.driver.plate && !("phone" in j.driver));
+  (j) => j.riderName === "Smoke" && j.service === "car" && j.status === "cancelled" && j.driver.plate && !("phone" in j.driver));
 await expect("GET /share/:token unknown is 404", call("GET", "/share/nope", null, false), 404);
 await expect("sharing someone else's ride is 404", call("POST", `/rides/${ride.id}/share`, null, tokenB), 404);
 

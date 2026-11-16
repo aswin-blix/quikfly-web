@@ -11,6 +11,9 @@ export const SAFETY = {
   safetyLine: "1800 123 4567",
 };
 
+/** Public page where someone can follow a shared ride. */
+export const trackUrl = (token: string) => `${location.origin}/track?${new URLSearchParams({ t: token })}`;
+
 /** Shown on the wallet page so refunds have clear expectations (Zoomcar-style). */
 export const REFUND_TIMINGS: [string, string][] = [
   ["QuikFly wallet", "Instant"],
