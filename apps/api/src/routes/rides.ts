@@ -4,6 +4,7 @@ import type { AppEnv } from "../env";
 import { jsonBody, oneOf, str } from "../lib/validate";
 import { requireUser } from "../middleware/auth";
 import { bookRide, cancelRide, quoteRides } from "../services/rides";
+import { shareRide } from "../services/share";
 
 export const rides = new Hono<AppEnv>()
   .post("/quote", async (c) => {
@@ -23,4 +24,6 @@ export const rides = new Hono<AppEnv>()
   .post("/:id/cancel", requireUser, async (c) => {
     await cancelRide(c.env.DB, c.var.user.id, c.req.param("id"));
     return c.json({ cancelled: true });
-  });
+  })
+  // A link anyone can open to follow the ride (safety: share trip).
+  .post("/:id/share", requireUser, async (c) => c.json(await shareRide(c.env.DB, c.var.user.id, c.req.param("id")), 201));

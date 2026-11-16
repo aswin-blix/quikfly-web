@@ -1,12 +1,42 @@
 import {
+  DELETION_GRACE_DAYS, LICENCE_REVIEW_SECONDS, type AuthResult, type Gender, type LicenceStatus, type User,
+} from "@quikfly/shared";
+import {
   DEFAULT_USER_NAME, NEW_USER_WALLET_BALANCE, PHONE_COUNTRY_CODE, PHONE_DIGITS, SESSION_TTL_DAYS,
 } from "../config";
 import { badRequest } from "../lib/errors";
 import { randomToken, sha256, uid } from "../lib/random";
-import type { User } from "@quikfly/shared";
+import { txnStatement } from "./wallet";
 
-interface UserRow { id: string; name: string; phone: string; wallet_balance: number }
-const toUser = (r: UserRow): User => ({ id: r.id, name: r.name, phone: r.phone, walletBalance: r.wallet_balance });
+export interface UserRow {
+  id: string; name: string; phone: string; wallet_balance: number; created_at: string;
+  email: string | null; gender: Gender | null; dob: string | null; profile_completed_at: string | null;
+  referral_code: string; referred_by: string | null;
+  licence_number: string | null; licence_expiry: string | null; licence_submitted_at: string | null;
+  gstin: string | null; gst_name: string | null; auto_share_night: number; deleted_at: string | null;
+}
+
+function licenceStatus(r: UserRow): LicenceStatus {
+  if (!r.licence_number || !r.licence_submitted_at) return "none";
+  const reviewed = Date.now() - Date.parse(r.licence_submitted_at) >= LICENCE_REVIEW_SECONDS * 1000;
+  return reviewed ? "verified" : "pending";
+}
+
+export const toUser = (r: UserRow): User => ({
+  id: r.id,
+  name: r.name,
+  phone: r.phone,
+  walletBalance: r.wallet_balance,
+  email: r.email,
+  gender: r.gender,
+  dob: r.dob,
+  profileComplete: !!r.profile_completed_at,
+  referralCode: r.referral_code,
+  referred: !!r.referred_by,
+  licence: { status: licenceStatus(r), number: r.licence_number, expiry: r.licence_expiry },
+  gst: r.gstin && r.gst_name ? { gstin: r.gstin, name: r.gst_name } : null,
+  autoShareNightRides: !!r.auto_share_night,
+});
 
 /** Accepts "9876543210", "+91 98765 43210" and similar; returns "+91 9876543210". */
 export function normalisePhone(input: string) {
@@ -15,26 +45,58 @@ export function normalisePhone(input: string) {
   return `${PHONE_COUNTRY_CODE} ${digits}`;
 }
 
-/** Checks the code, creates the user on first login, and opens a session. */
-export async function verifyOtp(db: D1Database, demoOtp: string, phoneInput: string, otp: string, name?: string) {
-  const phone = normalisePhone(phoneInput);
+export function checkOtp(demoOtp: string, otp: string) {
   if (!demoOtp || otp !== demoOtp) throw badRequest("Invalid OTP. Please try again.");
+}
+
+export const getUserRow = (db: D1Database, id: string) =>
+  db.prepare("SELECT * FROM users WHERE id = ?").bind(id).first<UserRow>();
+
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const referralCode = () => "QF" + [...crypto.getRandomValues(new Uint8Array(6))].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
+
+async function createUser(db: D1Database, phone: string) {
+  const id = uid("U");
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await db.batch([
+        db.prepare("INSERT INTO users (id, phone, name, wallet_balance, created_at, referral_code) VALUES (?, ?, ?, ?, ?, ?)")
+          .bind(id, phone, DEFAULT_USER_NAME, NEW_USER_WALLET_BALANCE, new Date().toISOString(), referralCode()),
+        txnStatement(db, { userId: id, kind: "welcome", amount: NEW_USER_WALLET_BALANCE, note: "Welcome credit" }),
+      ]);
+      return (await getUserRow(db, id))!;
+    } catch (e) {
+      // Retry only a referral-code collision; anything else is a real error.
+      if (attempt >= 2 || !String(e).includes("referral_code")) throw e;
+    }
+  }
+}
+
+/** Checks the code, creates or restores the account, and opens a session. */
+export async function verifyOtp(db: D1Database, demoOtp: string, phoneInput: string, otp: string): Promise<AuthResult> {
+  const phone = normalisePhone(phoneInput);
+  checkOtp(demoOtp, otp);
 
   let row = await db.prepare("SELECT * FROM users WHERE phone = ?").bind(phone).first<UserRow>();
-  if (!row) {
-    row = { id: uid("U"), phone, name: name || DEFAULT_USER_NAME, wallet_balance: NEW_USER_WALLET_BALANCE };
-    await db.prepare("INSERT INTO users (id, phone, name, wallet_balance, created_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(row.id, row.phone, row.name, row.wallet_balance, new Date().toISOString()).run();
-  } else if (name && name !== row.name) {
-    row.name = name;
-    await db.prepare("UPDATE users SET name = ? WHERE id = ?").bind(name, row.id).run();
+  let restored = false;
+  if (row?.deleted_at) {
+    const graceEnds = Date.parse(row.deleted_at) + DELETION_GRACE_DAYS * 86_400_000;
+    if (Date.now() < graceEnds) {
+      await db.prepare("UPDATE users SET deleted_at = NULL WHERE id = ?").bind(row.id).run();
+      row.deleted_at = null;
+      restored = true;
+    } else {
+      // Grace period over: erase the old account (rows cascade) and start fresh.
+      await db.prepare("DELETE FROM users WHERE id = ?").bind(row.id).run();
+      row = null;
+    }
   }
+  row ??= await createUser(db, phone);
 
   const token = randomToken();
-  const expiresAt = Date.now() + SESSION_TTL_DAYS * 86_400_000;
   await db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
-    .bind(await sha256(token), row.id, expiresAt).run();
-  return { token, user: toUser(row) };
+    .bind(await sha256(token), row.id, Date.now() + SESSION_TTL_DAYS * 86_400_000).run();
+  return { token, user: toUser(row), isNew: !row.profile_completed_at, restored };
 }
 
 /** Deletes the session for this token. Unknown or expired tokens are ignored. */
@@ -44,7 +106,7 @@ export async function endSession(db: D1Database, token: string) {
 
 export async function userForToken(db: D1Database, token: string): Promise<User | null> {
   const row = await db.prepare(
-    "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?",
+    "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.deleted_at IS NULL",
   ).bind(await sha256(token), Date.now()).first<UserRow>();
   return row ? toUser(row) : null;
 }

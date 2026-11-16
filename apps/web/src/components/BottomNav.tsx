@@ -65,7 +65,7 @@ export function BottomNav({ servicesOpen, onOpenServices }: { servicesOpen: bool
     { key: "trips", label: "My Trips", icon: Ticket, href: "/bookings", badge: live },
     user
       ? { key: "account", label: "Account", icon: CircleUser, onSelect: () => setAccountOpen(true), avatar: user.name[0]?.toUpperCase() }
-      : { key: "account", label: "Login", icon: CircleUser, onSelect: () => requireAuth(() => toast("Welcome to QuikFly!")) },
+      : { key: "account", label: "Login", icon: CircleUser, onSelect: () => requireAuth(() => undefined) },
   ];
 
   const active: TabKey | null =
@@ -83,7 +83,7 @@ export function BottomNav({ servicesOpen, onOpenServices }: { servicesOpen: bool
         {visible && (
           <motion.nav key="bottom-nav" aria-label="Main"
             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ duration: 0.25, ease: "easeOut" }}
-            className="lg:hidden fixed inset-x-0 bottom-0 z-40 border-t border-line bg-ink/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
+            className="no-print lg:hidden fixed inset-x-0 bottom-0 z-40 border-t border-line bg-ink/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
             <ul className="grid grid-cols-5 max-w-xl mx-auto h-[var(--bottom-nav-height)]">
               {tabs.map((tab) => {
                 const isActive = active === tab.key;

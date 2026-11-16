@@ -4,6 +4,8 @@ import { API_PREFIX } from "./config";
 import type { AppEnv } from "./env";
 import { HttpError } from "./lib/errors";
 import { auth } from "./routes/auth";
+import { me } from "./routes/me";
+import { share } from "./routes/share";
 import { bookings } from "./routes/bookings";
 import { buses } from "./routes/buses";
 import { rentals, tours } from "./routes/catalog";
@@ -18,13 +20,15 @@ app.use(cors({
     return allowed.includes("*") ? "*" : allowed.includes(origin) ? origin : null;
   },
   allowHeaders: ["Content-Type", "Authorization"],
-  allowMethods: ["GET", "POST", "OPTIONS"],
+  allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   maxAge: 86400,
 }));
 
 const v1 = new Hono<AppEnv>()
   .get("/health", (c) => c.json({ ok: true }))
   .route("/auth", auth)
+  .route("/me", me)
+  .route("/share", share)
   .route("/places", places)
   .route("/rides", rides)
   .route("/buses", buses)

@@ -5,7 +5,7 @@ import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
 import { jsonBody, oneOf, str } from "../lib/validate";
 import { requireUser } from "../middleware/auth";
-import { cancelBooking, completeBooking, createBooking, listBookings } from "../services/bookings";
+import { cancelBooking, completeBooking, createBooking, getBooking, listBookings } from "../services/bookings";
 
 function parseLines(value: unknown): [string, string][] {
   const ok = Array.isArray(value) && value.length <= MAX_BOOKING_LINES
@@ -31,5 +31,6 @@ export const bookings = new Hono<AppEnv>()
     });
     return c.json(booking, 201);
   })
+  .get("/:id", async (c) => c.json(await getBooking(c.env.DB, c.var.user.id, c.req.param("id"))))
   .post("/:id/cancel", async (c) => c.json(await cancelBooking(c.env.DB, c.var.user.id, c.req.param("id"))))
   .post("/:id/complete", async (c) => c.json(await completeBooking(c.env.DB, c.var.user.id, c.req.param("id"))));

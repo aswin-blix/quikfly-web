@@ -96,3 +96,17 @@ select.field option { background: var(--surface); }
   html[data-bottom-nav="on"] { --bottom-nav-offset: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom)); }
 }
 body { padding-bottom: var(--bottom-nav-offset); }
+
+/* Printable documents (invoices). Same paper look in light and dark mode. */
+.paper { background: var(--paper-bg); color: var(--paper-fg); border: 1px solid var(--paper-line); border-radius: var(--radius-panel); }
+.paper .paper-muted { color: var(--paper-muted); }
+.paper .paper-line { border-color: var(--paper-line); }
+.paper .paper-accent { color: var(--paper-accent); }
+
+/* Printing: only the document. Site chrome (header, footer, bottom bar, toasts) and
+   on-screen controls carry .no-print. Don't target bare header/footer: documents use them too. */
+@media print {
+  .no-print { display: none !important; }
+  html, body { background: var(--paper-bg) !important; padding: 0 !important; }
+  .paper { border: 0; border-radius: 0; }
+}

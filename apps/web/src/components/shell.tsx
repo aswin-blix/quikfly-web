@@ -2,8 +2,9 @@
 // Site chrome: header, footer, login modal, toasts, page transition.
 import { AnimatePresence, motion, MotionConfig, useMotionValueEvent, useScroll } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
-import { CircleCheck, HelpCircle, LayoutGrid, LogOut, Ticket, TriangleAlert, User as UserIcon, Wallet } from "lucide-react";
+import { ChevronDown, CircleCheck, HelpCircle, LayoutGrid, Ticket, TriangleAlert, User as UserIcon, Wallet } from "lucide-react";
 import { AppProvider, useApp } from "./AppProvider";
+import { LoginModal } from "./LoginModal";
 import { BottomNav, BottomNavProvider } from "./BottomNav";
 import { ServicesSheet } from "./ServicesSheet";
 import { ThemeProvider } from "./ThemeProvider";
@@ -68,7 +69,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
   return (
     <motion.header
       animate={{ y: hidden ? "-100%" : "0%" }} transition={{ duration: 0.3, ease: "easeOut" }}
-      className={cx("sticky top-0 z-40 transition-colors duration-300", scrolled ? "bg-ink/85 backdrop-blur-xl border-b border-fg/5" : "bg-transparent")}>
+      className={cx("no-print sticky top-0 z-40 transition-colors duration-300", scrolled ? "bg-ink/85 backdrop-blur-xl border-b border-fg/5" : "bg-transparent")}>
       {DEMO_OTP && (
         <div className="text-center text-[11px] tracking-wide py-1 bg-gold/10 text-gold-pale border-b border-gold/10">
           {DEMO_MODE ? "DEMO MODE · sample data" : "PREVIEW"} · login OTP is <b>{DEMO_OTP}</b>
@@ -103,16 +104,16 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
           </Link>
           {user ? (
             <div className="hidden lg:flex items-center gap-2">
-              <span className="hidden lg:flex items-center gap-1.5 text-xs text-gold-pale bg-gold/10 px-2.5 py-1.5 rounded-lg"><Wallet size={14} />{inr(user.walletBalance)}</span>
-              <button onClick={() => { signOut(); toast("Signed out"); }} title="Sign out"
+              <Link href="/account?tab=wallet" title="Wallet" className="hidden lg:flex items-center gap-1.5 text-xs text-gold-pale bg-gold/10 px-2.5 py-1.5 rounded-lg hover:bg-gold/20"><Wallet size={14} />{inr(user.walletBalance)}</Link>
+              <Link href="/account" title="My account"
                 className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border border-line hover:border-gold/50 text-sm">
                 <span className="w-7 h-7 rounded-full btn-gold grid place-items-center text-xs">{user.name[0]?.toUpperCase()}</span>
-                <span className="hidden sm:inline max-w-24 truncate">{user.name}</span><LogOut size={14} className="text-subtle" />
-              </button>
+                <span className="hidden sm:inline max-w-24 truncate">{user.name}</span><ChevronDown size={14} className="text-subtle" />
+              </Link>
             </div>
           ) : (
             <div className="hidden lg:block">
-              <GoldButton className="!py-2 !px-4 text-sm" onClick={() => requireAuth(() => toast("Welcome to QuikFly!"))}>
+              <GoldButton className="!py-2 !px-4 text-sm" onClick={() => requireAuth(() => undefined)}>
                 <UserIcon size={16} /> Login
               </GoldButton>
             </div>
@@ -128,7 +129,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
 
 function Footer() {
   return (
-    <footer className="mt-24 border-t border-line bg-coal/40">
+    <footer className="no-print mt-24 border-t border-line bg-coal/40">
       <div className="max-w-7xl mx-auto px-4 py-14 grid sm:grid-cols-2 lg:grid-cols-5 gap-10 text-sm">
         <div className="lg:col-span-2">
           <img src="/assets/logo.png" alt="QuikFly" className="h-14 rounded-lg" />
@@ -159,96 +160,10 @@ function FooterCol({ title, links }: { title: string; links: string[][] }) {
   );
 }
 
-function LoginModal() {
-  const { loginOpen, closeLogin, setUser, toast } = useApp();
-  const [step, setStep] = useState<"phone" | "otp">("phone");
-  const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
-  const [otp, setOtp] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const close = (ok: boolean) => { closeLogin(ok); setStep("phone"); setOtp(""); setErr(""); };
-
-  async function send(e: React.FormEvent) {
-    e.preventDefault();
-    if (!/^\d{10}$/.test(phone)) return setErr("Enter a valid 10-digit mobile number");
-    setErr(""); setBusy(true);
-    try {
-      await api.auth.sendOtp(phone);
-      setStep("otp");
-    } catch (e) { setErr((e as Error).message); }
-    setBusy(false);
-  }
-  async function verify(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true); setErr("");
-    try {
-      const { user } = await api.auth.verifyOtp(`+91 ${phone}`, otp, name.trim() || undefined);
-      setUser(user); toast(`Welcome, ${user.name}!`); close(true);
-    } catch (e) { setErr((e as Error).message); }
-    setBusy(false);
-  }
-
-  return (
-    <Modal open={loginOpen} onClose={() => close(false)} title={step === "phone" ? "Login or sign up" : "Verify OTP"}>
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div key={step} initial={{ opacity: 0, x: step === "otp" ? 30 : -30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: step === "otp" ? -30 : 30 }} transition={{ duration: 0.25 }}>
-          {step === "phone" ? (
-            <form onSubmit={send} className="space-y-4">
-              <p className="text-sm text-muted">One account for rides, buses, holidays and rentals.</p>
-              <div>
-                <label className="label" htmlFor="ln">Your name</label>
-                <input id="ln" className="field mt-1.5" placeholder="e.g. Priya" value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div>
-                <label className="label" htmlFor="lp">Mobile number</label>
-                <div className="flex mt-1.5 gap-2">
-                  <span className="field !w-auto text-muted">+91</span>
-                  <input id="lp" className="field" inputMode="numeric" maxLength={10} placeholder="98765 43210" autoFocus
-                    value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))} />
-                </div>
-              </div>
-              {err && <p className="text-danger text-sm">{err}</p>}
-              <GoldButton className="w-full" loading={busy}>Send OTP</GoldButton>
-              <p className="text-[11px] text-subtle text-center">By continuing you agree to QuikFly&apos;s Terms & Privacy Policy.</p>
-            </form>
-          ) : (
-            <form onSubmit={verify} className="space-y-4">
-              <p className="text-sm text-muted">Enter the 4-digit code sent to +91 {phone}. <button type="button" className="text-gold" onClick={() => setStep("phone")}>Change</button></p>
-              <OtpInput value={otp} onChange={setOtp} />
-              {DEMO_OTP && <p className="text-xs text-gold-pale/80">Demo: use OTP <b>{DEMO_OTP}</b></p>}
-              {err && <motion.p initial={{ x: -8 }} animate={{ x: [8, -6, 4, 0] }} className="text-danger text-sm">{err}</motion.p>}
-              <GoldButton className="w-full" loading={busy} disabled={otp.length !== 4}>Verify & continue</GoldButton>
-            </form>
-          )}
-        </motion.div>
-      </AnimatePresence>
-    </Modal>
-  );
-}
-
-function OtpInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="relative">
-      <input aria-label="OTP" className="absolute inset-0 opacity-0" inputMode="numeric" maxLength={4} autoFocus
-        value={value} onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 4))} />
-      <div className="grid grid-cols-4 gap-3 pointer-events-none">
-        {[0, 1, 2, 3].map((i) => (
-          <motion.div key={i} animate={{ scale: value.length === i ? 1.05 : 1 }}
-            className={cx("h-14 rounded-xl border bg-ink grid place-items-center text-2xl font-bold transition-colors", value.length === i ? "border-gold" : "border-line")}>
-            {value[i] ?? ""}
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function Toasts() {
   const { toasts } = useApp();
   return (
-    <div className="fixed bottom-[calc(var(--bottom-nav-offset)+1.25rem)] left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 items-center pointer-events-none" aria-live="polite">
+    <div className="no-print fixed bottom-[calc(var(--bottom-nav-offset)+1.25rem)] left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 items-center pointer-events-none" aria-live="polite">
       <AnimatePresence>
         {toasts.map((t) => (
           <motion.div key={t.id} layout initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}

@@ -11,6 +11,8 @@ packages/
   shared/     @quikfly/shared: domain types and catalog seed data used by web and api
 ```
 
+**Docs:** [AGENTS.md](AGENTS.md) (how to work in this repo) · [docs/roadmap.md](docs/roadmap.md) (status and current task) · [docs/decisions.md](docs/decisions.md) (why) · [docs/operations.md](docs/operations.md) (deploying, testing, troubleshooting).
+
 The website and the app call the same API. Types live once in `packages/shared/src/types.ts`; change them there.
 
 ## Commands (run at the repo root)

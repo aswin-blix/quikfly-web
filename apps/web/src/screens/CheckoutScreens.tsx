@@ -1,7 +1,7 @@
 "use client";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BadgePercent, Building2, ChevronDown, CreditCard, Info, Lock, ShieldCheck, Smartphone, Ticket, Wallet } from "lucide-react";
+import { ArrowLeft, BadgePercent, Building2, ChevronDown, CreditCard, FileText, Info, Lock, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { TweenNumber } from "@/components/motion";
 import { Empty, GhostLink, GoldButton, Spinner } from "@/components/ui";
@@ -11,7 +11,9 @@ import { cx, inr, prettyDateTime } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
-import type { Booking, BookingStatus, PaymentMethod } from "@quikfly/shared";
+import { formatLicence, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
+import { LicenceBadge, LicenceForm, useLicencePolling } from "@/components/account/LicenceSection";
+import { GSTIN_LINE } from "@/lib/invoice";
 
 /* ───────────── /checkout ───────────── */
 
@@ -22,7 +24,8 @@ export function CheckoutScreen() {
   const [names, setNames] = useState<string[]>([]);
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [licence, setLicence] = useState(false);
+  const [gstInvoice, setGstInvoice] = useState(false);
+  const [savedTravellers, setSavedTravellers] = useState<Traveller[]>([]);
   const [method, setMethod] = useState<Exclude<PaymentMethod, "cash">>("upi");
   const [code, setCode] = useState("");
   const [coupon, setCoupon] = useState<{ code: string; off: number } | null>(null);
@@ -32,6 +35,13 @@ export function CheckoutScreen() {
 
   useEffect(() => { if (draft) setNames((n) => draft.travellers.map((_, i) => n[i] ?? (i === 0 ? user?.name ?? "" : ""))); }, [draft, user]);
   useEffect(() => { if (user && !phone) setPhone(user.phone.replace("+91 ", "")); }, [user, phone]);
+  useEffect(() => { if (user?.email && !email) setEmail(user.email); }, [user, email]);
+  const signedIn = !!user;
+  useEffect(() => {
+    if (!signedIn) return setSavedTravellers([]);
+    api.travellers.list().then(setSavedTravellers, () => setSavedTravellers([]));
+  }, [signedIn]);
+  useLicencePolling();
 
   if (!draft) {
     return <div className="max-w-3xl mx-auto px-4 py-24"><div className="panel"><Empty icon={<Ticket size={40} />} text="Nothing to check out yet. Pick a ride, bus, holiday or rental first." action={<GhostLink href="/">Explore services</GhostLink>} /></div></div>;
@@ -56,10 +66,22 @@ export function CheckoutScreen() {
     names.forEach((n, i) => { if (!n.trim()) e[`n${i}`] = "Required"; });
     if (!/^\d{10}$/.test(phone)) e.phone = "Enter a 10-digit mobile number";
     if (email && !/^\S+@\S+\.\S+$/.test(email)) e.email = "Enter a valid email";
-    if (draft!.needsLicence && !licence) e.licence = "Please confirm you have a valid licence";
+    if (draft!.needsLicence && user?.licence.status === "none") e.licence = "Add your driving licence to book a self-drive car";
     setErrors(e);
     if (Object.keys(e).length) return;
+    // Self-drive needs the licence on the account, so sign in first and let them add it here.
+    if (draft!.needsLicence && !user) return requireAuth(() => toast("Signed in. Add your driving licence below to continue."));
     requireAuth(() => { setStep(2); window.scrollTo({ top: 0, behavior: "smooth" }); });
+  }
+
+  /** Tap a saved traveller: fills the next empty name, or removes them if already added. */
+  function toggleTraveller(name: string) {
+    setNames((n) => {
+      const at = n.indexOf(name);
+      if (at >= 0) return n.map((x, i) => (i === at ? "" : x));
+      const empty = n.findIndex((x) => !x.trim());
+      return empty < 0 ? n : n.map((x, i) => (i === empty ? name : x));
+    });
   }
 
   const walletShort = !!user && user.walletBalance < total;
@@ -70,7 +92,11 @@ export function CheckoutScreen() {
       await new Promise((r) => setTimeout(r, 1400));
       const b = await api.bookings.create({
         service: draft!.service, title: draft!.title, subtitle: draft!.subtitle, amount: total, payment: method,
-        lines: [...draft!.summary, ["Travellers", names.join(", ")], ["Paid via", method.toUpperCase()], ...(coupon ? [["Coupon", `${coupon.code} (−${inr(coupon.off)})`] as [string, string]] : [])],
+        lines: [
+          ...draft!.summary, ["Travellers", names.join(", ")], ["Paid via", method.toUpperCase()],
+          ...(coupon ? [["Coupon", `${coupon.code} (−${inr(coupon.off)})`] as [string, string]] : []),
+          ...(gstInvoice && user?.gst ? [[GSTIN_LINE, `${user.gst.gstin} · ${user.gst.name}`] as [string, string]] : []),
+        ],
       });
       await refreshBookings();
       setDraft(null);
@@ -106,6 +132,18 @@ export function CheckoutScreen() {
               <motion.div key="s1" initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-5">
                 <div className="panel p-5 space-y-4">
                   <p className="font-semibold">Traveller details</p>
+                  {savedTravellers.length > 0 && (
+                    <div>
+                      <p className="text-xs text-muted mb-2">Saved travellers: tap to add</p>
+                      <div className="flex flex-wrap gap-2">
+                        {savedTravellers.map((t) => (
+                          <button key={t.id} type="button" data-on={names.includes(t.name)} onClick={() => toggleTraveller(t.name)} className="chip flex items-center gap-1.5 !text-xs">
+                            <UserRound size={13} />{t.name}<span className="text-subtle">· {t.age}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {draft.travellers.map((label, i) => (
                     <div key={label} className="grid sm:grid-cols-[120px_1fr] items-start gap-2 sm:gap-3">
                       <label htmlFor={`t${i}`} className="text-sm text-gold pt-3">{label}</label>
@@ -123,10 +161,31 @@ export function CheckoutScreen() {
                   <div><label className="label" htmlFor="ce">Email (optional)</label><input id="ce" className={cx("field mt-1.5", errors.email && "!border-danger/60")} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />{errors.email && <p className="text-xs text-danger mt-1">{errors.email}</p>}</div>
                 </div>
                 {draft.needsLicence && (
-                  <label className={cx("panel p-5 flex items-start gap-3 cursor-pointer", errors.licence && "!border-danger/60")}>
-                    <input type="checkbox" className="mt-1 accent-brand" checked={licence} onChange={(e) => setLicence(e.target.checked)} />
-                    <span className="text-sm text-soft">I have a valid driving licence (1+ year old) and will show it with Aadhaar/passport at pickup.</span>
+                  <div className={cx("panel p-5 space-y-4", errors.licence && "!border-danger/60")}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-semibold">Driving licence</p>
+                      {user && <LicenceBadge user={user} />}
+                    </div>
+                    {!user ? (
+                      <p className="text-sm text-muted">Self-drive needs a verified licence. You&apos;ll add it after signing in.</p>
+                    ) : user.licence.status === "none" ? (
+                      <LicenceForm onSaved={() => setErrors(({ licence: _, ...rest }) => rest)} />
+                    ) : (
+                      <p className="text-sm text-muted">
+                        {user.licence.number && <span className="font-mono text-soft">{formatLicence(user.licence.number)} · </span>}
+                        {user.licence.status === "verified" ? "Verified. Bring the original licence and Aadhaar or passport to pickup." : "Under review. You can book now; it must be verified before pickup."}
+                      </p>
+                    )}
+                    {errors.licence && <p className="text-xs text-danger">{errors.licence}</p>}
+                  </div>
+                )}
+                {user?.gst ? (
+                  <label className="panel p-5 flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" className="mt-1 accent-brand" checked={gstInvoice} onChange={(e) => setGstInvoice(e.target.checked)} />
+                    <span className="text-sm text-soft">Get a GST invoice for <b>{user.gst.name}</b> <span className="font-mono text-xs text-subtle">({user.gst.gstin})</span></span>
                   </label>
+                ) : user && (
+                  <p className="text-xs text-muted">Travelling for work? <Link href="/account?tab=business" className="text-gold">Add GST details</Link> to get a GST invoice.</p>
                 )}
                 <div className="flex items-start gap-2 text-xs text-muted"><Info size={14} className="shrink-0 mt-0.5 text-gold" />{draft.policy}</div>
                 <GoldButton className="w-full sm:w-auto" onClick={next}>Continue to payment</GoldButton>
@@ -262,6 +321,7 @@ export function ConfirmedScreen() {
       </motion.div>
       <div className="flex flex-wrap justify-center gap-3 mt-8">
         <Link href="/bookings" className="btn-gold rounded-xl px-6 py-3">View my trips</Link>
+        <GhostLink href={`/invoice${qs({ id: b.id })}`}>Invoice</GhostLink>
         <GhostLink href="/">Back to home</GhostLink>
       </div>
     </div>
@@ -347,15 +407,16 @@ export function BookingsScreen() {
                           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                             {b.lines.map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-subtle">{k}</dt><dd className="text-right">{v}</dd></div>)}
                           </dl>
-                          {b.status === "confirmed" && (
-                            <div className="mt-4 flex items-center gap-3">
-                              {confirming === b.id ? (
+                          {b.status !== "cancelled" && (
+                            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
+                              <Link href={`/invoice${qs({ id: b.id })}`} className="text-sm text-gold flex items-center gap-1.5"><FileText size={15} />Invoice</Link>
+                              {b.status === "confirmed" && (confirming === b.id ? (
                                 <>
                                   <span className="text-sm text-soft">Cancel this booking?</span>
                                   <button disabled={busy} onClick={() => cancel(b)} className="text-sm px-3 py-1.5 rounded-lg bg-danger/15 text-danger hover:bg-danger/25">{busy ? "Cancelling…" : "Yes, cancel"}</button>
                                   <button onClick={() => setConfirming(null)} className="text-sm text-muted">Keep it</button>
                                 </>
-                              ) : <button onClick={() => setConfirming(b.id)} className="text-sm text-danger hover:text-danger">Cancel booking</button>}
+                              ) : <button onClick={() => setConfirming(b.id)} className="text-sm text-danger hover:text-danger">Cancel booking</button>)}
                             </div>
                           )}
                         </div>

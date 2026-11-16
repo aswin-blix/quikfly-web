@@ -7,11 +7,104 @@ export const PAYMENT_METHODS = ["upi", "card", "netbanking", "wallet", "cash"] a
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export type BookingStatus = "confirmed" | "ongoing" | "completed" | "cancelled";
 
+export const GENDERS = ["female", "male", "other"] as const;
+export type Gender = (typeof GENDERS)[number];
+
+/** Driving-licence check for self-drive rentals. "pending" turns "verified" after a short review. */
+export type LicenceStatus = "none" | "pending" | "verified";
+
 export interface User {
   id: string;
   name: string;
   phone: string;
   walletBalance: number;
+  email: string | null;
+  gender: Gender | null;
+  /** YYYY-MM-DD */
+  dob: string | null;
+  /** False until the sign-up step (name etc.) is done. */
+  profileComplete: boolean;
+  /** This user's own code to share. */
+  referralCode: string;
+  /** True once a friend's code has been applied (only allowed once). */
+  referred: boolean;
+  licence: { status: LicenceStatus; number: string | null; expiry: string | null };
+  /** Business details printed on GST invoices. */
+  gst: { gstin: string; name: string } | null;
+  /** Share rides between NIGHT_HOURS with emergency contacts automatically. */
+  autoShareNightRides: boolean;
+}
+
+/** Fields a user can change on their profile. Send only what changes; null clears. */
+export interface ProfileUpdate {
+  name?: string;
+  email?: string | null;
+  gender?: Gender | null;
+  dob?: string | null;
+  gst?: { gstin: string; name: string } | null;
+  autoShareNightRides?: boolean;
+}
+
+/** Result of signing in. */
+export interface AuthResult {
+  token: string;
+  user: User;
+  /** First sign-in: show the "complete your profile" step. */
+  isNew: boolean;
+  /** The account was scheduled for deletion and signing in cancelled that. */
+  restored: boolean;
+}
+
+export const SAVED_PLACE_KINDS = ["home", "work", "other"] as const;
+export type SavedPlaceKind = (typeof SAVED_PLACE_KINDS)[number];
+
+export interface SavedPlace {
+  id: string;
+  kind: SavedPlaceKind;
+  /** "Home", "Work", or the user's own label. */
+  label: string;
+  place: Place;
+}
+
+export interface Traveller {
+  id: string;
+  name: string;
+  age: number;
+  gender: Gender;
+}
+
+export interface EmergencyContact {
+  id: string;
+  name: string;
+  phone: string;
+  relation: string | null;
+}
+
+export type WalletTxnKind = "welcome" | "payment" | "refund" | "referral" | "opening";
+
+export interface WalletTransaction {
+  id: string;
+  kind: WalletTxnKind;
+  /** Positive = money in, negative = money out. */
+  amount: number;
+  note: string;
+  bookingId: string | null;
+  createdAt: string;
+}
+
+/** What a shared ride link shows. Personal details are trimmed. */
+export interface SharedRide {
+  riderName: string;
+  service: "bike" | "car";
+  status: "active" | "cancelled";
+  /** When the driver started heading to the pickup (ISO). */
+  startedAt: string;
+  pickup: Place;
+  drop: Place;
+  distanceKm: number;
+  durationMin: number;
+  etaMin: number;
+  driver: { name: string; rating: number; vehicle: string; plate: string };
 }
 
 export interface Place {

@@ -3,7 +3,7 @@
 export const API_PREFIX = "/v1";
 
 export const SESSION_TTL_DAYS = 30;
-export const NEW_USER_WALLET_BALANCE = 500;
+export { WELCOME_CREDIT as NEW_USER_WALLET_BALANCE } from "@quikfly/shared";
 export const DEFAULT_USER_NAME = "Guest";
 export const PHONE_COUNTRY_CODE = "+91";
 export const PHONE_DIGITS = 10;

@@ -39,20 +39,39 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 |---|---|---|
 | GET | `/health` | liveness check |
 | POST | `/auth/otp` | `{ phone }` → `{ sent }` (no SMS yet) |
-| POST | `/auth/verify` | `{ phone, otp, name? }` → `{ token, user }`; creates the user on first login |
+| POST | `/auth/verify` | `{ phone, otp }` → `{ token, user, isNew, restored }`. Creates the user on first login (₹500 welcome credit, referral code); `isNew` stays true until a name is saved; signing in within 30 days of deleting restores the account (`restored`) |
 | POST | `/auth/logout` | ends the session for the bearer token (always succeeds) |
+| GET 🔒 | `/auth/me` | the signed-in user |
+| PATCH 🔒 | `/me` | any of `{ name, email, gender, dob, gst: { gstin, name }, autoShareNightRides }`; `null` clears. Saving a name completes sign-up |
+| POST 🔒 | `/me/phone/otp` | `{ phone }`: checks the new number is free (OTP is the demo code) |
+| POST 🔒 | `/me/phone` | `{ phone, otp }` → user with the new number |
+| POST 🔒 | `/me/logout-all` | ends every session for the account |
+| POST 🔒 | `/me/delete` | `{ otp }`: schedules deletion (30-day grace), ends all sessions |
+| POST 🔒 | `/me/referral` | `{ code }`: once per account; both users get ₹100 (`REFERRAL_BONUS`) |
+| PUT 🔒 | `/me/licence` | `{ number, expiry }`: driving licence for self-drive; `pending`, then `verified` after `LICENCE_REVIEW_SECONDS` (simulated) |
+| GET / POST 🔒 | `/me/places` | saved places; POST `{ kind: home\|work\|other, placeId, label? }` (Home and Work replace) |
+| DELETE 🔒 | `/me/places/:id` | remove a saved place |
+| GET / POST 🔒 | `/me/travellers` | saved co-travellers; POST `{ name, age, gender }` |
+| DELETE 🔒 | `/me/travellers/:id` | remove a traveller |
+| GET / POST 🔒 | `/me/contacts` | emergency contacts (max 3); POST `{ name, phone, relation? }` |
+| DELETE 🔒 | `/me/contacts/:id` | remove a contact |
+| GET 🔒 | `/me/wallet` | wallet history, newest first: `welcome`, `payment`, `refund`, `referral`, `opening` |
 | GET | `/places?q=` | place autocomplete |
 | POST | `/rides/quote` | `{ service, pickupId, dropId }` → fares for each ride option |
 | POST 🔒 | `/rides` | `{ optionId, pickupId, dropId, payment }` → ride with driver and OTP |
 | POST 🔒 | `/rides/:id/cancel` | cancel a ride |
+| POST 🔒 | `/rides/:id/share` | `{ token, expiresAt }`: a 24-hour link to follow the ride (same link if one is live) |
+| GET | `/share/:token` | public, no sign-in: the shared ride (first name, driver, vehicle, route, start time, status) |
 | GET | `/buses?from=&to=&date=` | bus search (same search, same results) |
 | GET | `/buses/:id/seats?date=` | seat layout and availability |
 | GET | `/tours` | holiday packages |
 | GET | `/rentals/cars?city=` | self-drive / chauffeur cars |
 | GET | `/rentals/travel-vehicles` | group vehicles |
 | GET 🔒 | `/bookings` | the signed-in user's bookings, newest first |
-| POST 🔒 | `/bookings` | `{ service, title, subtitle, amount, lines }` → booking |
-| POST 🔒 | `/bookings/:id/cancel` | cancel a booking |
+| POST 🔒 | `/bookings` | `{ service, title, subtitle, amount, payment, lines }` → booking. `payment: "wallet"` is deducted in the same transaction and refused (400) if the balance is too low |
+| GET 🔒 | `/bookings/:id` | one booking (for invoices) |
+| POST 🔒 | `/bookings/:id/cancel` | cancel; refunds a wallet payment; 409 if already cancelled or completed |
+| POST 🔒 | `/bookings/:id/complete` | mark a finished trip (called by the website when a simulated ride ends; the driver app will own this) |
 
 ## Settings (`wrangler.jsonc` → `vars`)
 

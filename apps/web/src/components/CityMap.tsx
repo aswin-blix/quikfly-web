@@ -12,6 +12,17 @@ export function routePoint(a: Pt, b: Pt, t: number): Pt {
   const u = 1 - t;
   return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y };
 }
+/** Where the simulated driver starts before heading to the pickup. */
+export const driverStartFor = (pickup: Pt): Pt => ({ x: Math.max(4, pickup.x - 14), y: Math.min(96, pickup.y + 12) });
+
+/** Simulated vehicle position for a ride phase, with t = progress through that phase (0..1). */
+export function vehiclePosition(phase: "arriving" | "ontrip" | "done", pickup: Pt, drop: Pt, t: number): Pt {
+  if (phase === "done") return drop;
+  if (phase === "ontrip") return routePoint(pickup, drop, t);
+  const s = driverStartFor(pickup);
+  return { x: s.x + (pickup.x - s.x) * t, y: s.y + (pickup.y - s.y) * t };
+}
+
 function control(a: Pt, b: Pt): Pt {
   const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
   const dx = b.x - a.x, dy = b.y - a.y;
