@@ -1,0 +1,13 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // Static hosting for the website: a Worker with no code that serves the `next build` export.
+  // Build first (see `deploy` in package.json), then `wrangler deploy` uploads ./out.
+  "name": "quikfly-web",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./out",
+    // /bus/search serves out/bus/search.html; unknown paths get out/404.html.
+    "html_handling": "drop-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

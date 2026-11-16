@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "quikfly-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  // Non-secret settings. Override per environment in the Cloudflare dashboard.
+  "vars": {
+    // Fixed login code while there is no SMS provider. Remove when real OTP is added.
+    "DEMO_OTP": "1234",
+    // Comma-separated website origins allowed to call the API, or "*" for any.
+    "ALLOWED_ORIGINS": "*"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "quikfly-db",
+      "database_id": "99ec343a-609e-423f-8dbc-42019dc957b7",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
