@@ -44,9 +44,15 @@ await expect("PATCH /me sets the name and completes sign-up", call("PATCH", "/me
 // Catalog
 const places = await expect("GET /places", call("GET", "/places"), 200, (j) => j.length > 5);
 await expect("GET /places?q=airport", call("GET", "/places?q=airport"), 200, (j) => j.length === 1);
-await expect("GET /tours", call("GET", "/tours"), 200, (j) => j.length > 0 && j[0].itinerary.length > 0);
-await expect("GET /rentals/cars", call("GET", "/rentals/cars?city=Chennai"), 200, (j) => j.length > 0);
-await expect("GET /rentals/travel-vehicles", call("GET", "/rentals/travel-vehicles"), 200, (j) => j.length > 0);
+const tours = await expect("GET /tours", call("GET", "/tours"), 200, (j) => j.length > 0 && j[0].itinerary.length > 0);
+await expect("GET /tours/:slug", call("GET", `/tours/${tours[0].slug}`), 200, (j) => j.id === tours[0].id);
+await expect("GET /tours/:slug unknown is 404", call("GET", "/tours/no-such-trip"), 404);
+const cars = await expect("GET /rentals/cars", call("GET", "/rentals/cars?city=Chennai"), 200, (j) => j.length > 0);
+await expect("GET /rentals/cars/:id", call("GET", `/rentals/cars/${cars[0].id}`), 200, (j) => j.name === cars[0].name);
+const vehicles = await expect("GET /rentals/travel-vehicles", call("GET", "/rentals/travel-vehicles"), 200, (j) => j.length > 0);
+const cfg = await expect("GET /config", call("GET", "/config", null, false), 200,
+  (j) => j.places.length > 5 && j.rideOptions.length > 0 && j.cities.length > 0 && j.offers.length > 0 && j.faqs.length > 0
+    && j.groupDestinations.length > 0 && typeof j.settings.welcomeCredit === "number" && typeof j.settings.surgeHours === "string");
 
 // Buses
 const busPath = "/buses?from=Chennai&to=Bengaluru&date=2026-12-01";
@@ -54,7 +60,28 @@ const buses = await expect("GET /buses", call("GET", busPath), 200, (j) => j.len
 const again = (await call("GET", busPath)).json;
 check("GET /buses is stable for the same search", JSON.stringify(buses) === JSON.stringify(again));
 await expect("GET /buses needs from/to/date", call("GET", "/buses?from=Chennai"), 400);
-await expect("GET /buses/:id/seats", call("GET", `/buses/${encodeURIComponent(buses[0].id)}/seats?date=2026-12-01`), 200, (j) => j.length === 36);
+const seatPath = (bus) => `/buses/${encodeURIComponent(bus.id)}/seats?from=Chennai&to=Bengaluru&date=2026-12-01`;
+const seats = await expect("GET /buses/:id/seats", call("GET", seatPath(buses[0])), 200, (j) => j.length === 36 && j.every((x) => x.price >= buses[0].fare));
+await expect("GET /buses/:id/seats needs the route", call("GET", `/buses/${encodeURIComponent(buses[0].id)}/seats?date=2026-12-01`), 400);
+await expect("GET /buses/:id/seats unknown bus is 404", call("GET", "/buses/nope/seats?from=Chennai&to=Bengaluru&date=2026-12-01"), 404);
+
+// Quotes: the API prices every booking
+const free = seats.filter((x) => !x.booked).slice(0, 2);
+const busQuoteBody = { service: "bus", busId: buses[0].id, from: "Chennai", to: "Bengaluru", date: "2026-12-01", seatIds: free.map((x) => x.id) };
+const busQuote = await expect("POST /quotes (bus)", call("POST", "/quotes", busQuoteBody, false), 201,
+  (j) => j.id && j.service === "bus" && j.total === j.lines.reduce((a, l) => a + l.amount, 0) && j.lines[0].amount === free[0].price + free[1].price);
+const taken = seats.find((x) => x.booked);
+if (taken) await expect("POST /quotes refuses a booked seat", call("POST", "/quotes", { ...busQuoteBody, seatIds: [taken.id] }), 409);
+await expect("POST /quotes refuses too many seats", call("POST", "/quotes", { ...busQuoteBody, seatIds: seats.slice(0, 7).map((x) => x.id) }), 400);
+const tourQuote = await expect("POST /quotes (tour)", call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 2, kids: 1 }), 201,
+  (j) => j.lines[0].amount === tours[0].price * 2 && j.lines[1].amount === Math.round((tours[0].price * cfg.settings.tourChildPercent) / 100));
+await expect("POST /quotes (self-drive)", call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "self", start: "2026-12-01T10:00", end: "2026-12-02T10:00", kmPlan: "limited", protection: "standard", doorstep: false }), 201,
+  (j) => j.lines[0].amount === cars[0].pricePerHour * 24 && j.lines.at(-1).amount === cfg.settings.rentDeposit);
+await expect("POST /quotes refuses a return before pickup", call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "driver", start: "2026-12-02T10:00", end: "2026-12-01T10:00", kmPlan: "limited", protection: "standard", doorstep: false }), 400);
+await expect("POST /quotes (group travel)", call("POST", "/quotes", { service: "rentals", vehicleId: vehicles[0].id, trip: "outstation", destinationId: cfg.groupDestinations[0].id, days: 1 }), 201,
+  (j) => j.lines[0].label.includes("km") && j.total > 0);
+await expect("POST /quotes refuses an unknown item", call("POST", "/quotes", { service: "tours", tourId: "nope", adults: 1, kids: 0 }), 400);
+await expect("POST /quotes refuses rides", call("POST", "/quotes", { service: "car" }), 400);
 
 // Rides
 const [a, b] = places;
@@ -63,15 +90,19 @@ const quotes = await expect("POST /rides/quote", call("POST", "/rides/quote", { 
 await expect("POST /rides/quote rejects an unknown place", call("POST", "/rides/quote", { service: "car", pickupId: "nope", dropId: b.id }), 400);
 const rideInput = { optionId: quotes[0].option.id, pickupId: a.id, dropId: b.id, payment: "cash" };
 await expect("POST /rides needs sign-in", call("POST", "/rides", rideInput, false), 401);
-const ride = await expect("POST /rides", call("POST", "/rides", rideInput), 201, (j) => j.id && j.driver.plate && j.otp.length === 4);
+const ride = await expect("POST /rides", call("POST", "/rides", rideInput), 201,
+  (j) => j.id && j.driver.plate && j.otp.length === 4 && quotes[0].option.models.includes(j.driver.vehicle) && !("id" in j.driver));
 await expect("POST /rides/:id/cancel", call("POST", `/rides/${ride.id}/cancel`), 200);
 await expect("POST /rides/:id/cancel unknown ride", call("POST", "/rides/RDNOPE/cancel"), 404);
 
-// Bookings
+// Bookings: priced by a quote or a ride, never by the client
 await expect("GET /bookings needs sign-in", call("GET", "/bookings", null, false), 401);
-const newBooking = (extra) => ({ service: "bus", title: "Chennai → Bengaluru", subtitle: "Smoke test", amount: 950, payment: "upi", lines: [["Seats", "L1"]], ...extra });
-const booking = await expect("POST /bookings", call("POST", "/bookings", newBooking()), 201,
-  (j) => j.id && j.status === "confirmed" && j.payment === "upi" && j.lines[0][1] === "L1");
+const newBooking = (extra) => ({ service: "bus", title: "Chennai → Bengaluru", subtitle: "Smoke test", payment: "upi", lines: [["Seats", "L1"]], ...extra });
+await expect("POST /bookings needs a quote", call("POST", "/bookings", newBooking({ amount: 1 })), 400, (j) => /quote/i.test(j.message));
+const booking = await expect("POST /bookings charges the quote, not the client", call("POST", "/bookings", newBooking({ quoteId: busQuote.id, amount: 1 })), 201,
+  (j) => j.id && j.status === "confirmed" && j.amount === busQuote.total && j.lines[0][1] === "L1");
+await expect("a quote works only once", call("POST", "/bookings", newBooking({ quoteId: busQuote.id })), 409);
+await expect("a quote is for one service", call("POST", "/bookings", newBooking({ service: "tours", quoteId: busQuote.id })), 400);
 await expect("POST /bookings rejects a bad service", call("POST", "/bookings", newBooking({ service: "x" })), 400);
 await expect("POST /bookings needs a payment method", call("POST", "/bookings", newBooking({ payment: undefined })), 400);
 await expect("GET /bookings lists it first", call("GET", "/bookings"), 200, (j) => j[0].id === booking.id);
@@ -79,25 +110,52 @@ await expect("POST /bookings/:id/cancel", call("POST", `/bookings/${booking.id}/
 await expect("POST /bookings/:id/cancel twice is refused", call("POST", `/bookings/${booking.id}/cancel`), 409, (j) => !!j.message);
 await expect("POST /bookings/:id/cancel unknown booking", call("POST", "/bookings/QFNOPE/cancel"), 404);
 
-// Wallet: debit on booking, refuse an overdraft, refund on cancel. Relative to the
-// current balance, because this test user is reused across runs.
+// Wallet: debit on booking, refuse an overdraft (and give the quote back), refund on cancel.
+// Relative to the current balance, because this test user is reused across runs.
 const me = await expect("GET /auth/me", call("GET", "/auth/me"), 200, (j) => j.phone === `+91 ${PHONE}` && typeof j.walletBalance === "number");
 const balance = () => call("GET", "/auth/me").then((r) => r.json.walletBalance);
 const start = me.walletBalance;
 await expect("GET /auth/me needs sign-in", call("GET", "/auth/me", null, false), 401);
-await expect("wallet booking over the balance is refused", call("POST", "/bookings", newBooking({ payment: "wallet", amount: start + 1 })), 400);
-check("refused wallet booking leaves the balance alone", (await balance()) === start);
-if (start >= 100) {
-  const paid = await expect("wallet booking", call("POST", "/bookings", newBooking({ payment: "wallet", amount: 100 })), 201, (j) => j.payment === "wallet");
-  check("wallet booking deducts the amount", (await balance()) === start - 100);
+if (tourQuote.total > start) {
+  await expect("wallet booking over the balance is refused", call("POST", "/bookings", newBooking({ service: "tours", quoteId: tourQuote.id, payment: "wallet" })), 400, (j) => /wallet/i.test(j.message));
+  check("refused wallet booking leaves the balance alone", (await balance()) === start);
+  await expect("the refused booking gave the quote back", call("POST", "/bookings", newBooking({ service: "tours", quoteId: tourQuote.id, payment: "upi" })), 201, (j) => j.amount === tourQuote.total);
+} else {
+  check("smoke user's wallet is below a holiday price", false, `balance is ${start}`);
+}
+const walletRide = (await call("POST", "/rides", { ...rideInput, payment: "wallet" })).json;
+if (start >= walletRide.quote.fare) {
+  const paid = await expect("wallet ride booking", call("POST", "/bookings", newBooking({ service: "car", rideId: walletRide.id, payment: "wallet" })), 201,
+    (j) => j.payment === "wallet" && j.amount === walletRide.quote.fare);
+  check("wallet booking deducts the fare", (await balance()) === start - walletRide.quote.fare);
+  await expect("a ride is booked only once", call("POST", "/bookings", newBooking({ service: "car", rideId: walletRide.id })), 409);
   await expect("cancel wallet booking", call("POST", `/bookings/${paid.id}/cancel`), 200, (j) => j.status === "cancelled");
   check("cancelling refunds the wallet", (await balance()) === start);
 } else {
-  check("smoke user has at least ₹100 in the wallet", false, `balance is ${start}`);
+  check("smoke user can afford one ride from the wallet", false, `balance is ${start}, fare ${walletRide.quote.fare}`);
 }
+await expect("a ride booking needs the ride", call("POST", "/bookings", newBooking({ service: "car" })), 400);
+await expect("a cancelled ride can't be booked", call("POST", "/bookings", newBooking({ service: "car", rideId: ride.id })), 400);
+
+// Coupons
+const tourQuote2 = (await call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 1, kids: 0 })).json;
+const holiday = cfg.offers.find((o) => o.code === "HOLIDAY10");
+const expected = Math.min(holiday.maxDiscount, Math.round((tourQuote2.total * holiday.percent) / 100));
+await expect("POST /offers/check needs sign-in", call("POST", "/offers/check", { code: "HOLIDAY10", quoteId: tourQuote2.id }, false), 401);
+await expect("POST /offers/check", call("POST", "/offers/check", { code: "holiday10", quoteId: tourQuote2.id }), 200,
+  (j) => j.code === "HOLIDAY10" && j.discount === expected && j.total === tourQuote2.total - expected);
+await expect("coupon for another service is refused", call("POST", "/offers/check", { code: "EBIKE", quoteId: tourQuote2.id }), 400, (j) => /only on/.test(j.message));
+await expect("unknown coupon is refused", call("POST", "/offers/check", { code: "NOPE123", quoteId: tourQuote2.id }), 400);
+const busMin = cfg.offers.find((o) => o.code === "BUS150");
+const cheapBus = (await call("POST", "/quotes", { ...busQuoteBody, seatIds: [free[0].id] })).json;
+if (cheapBus.total < busMin.minAmount) await expect("coupon below its minimum is refused", call("POST", "/offers/check", { code: "BUS150", quoteId: cheapBus.id }), 400, (j) => /at least/.test(j.message));
+const discounted = await expect("booking with a coupon", call("POST", "/bookings", newBooking({ service: "tours", quoteId: tourQuote2.id, couponCode: "HOLIDAY10", lines: [["Coupon", "fake"]] })), 201,
+  (j) => j.amount === tourQuote2.total - expected && j.lines.filter(([k]) => k === "Coupon").length === 1 && j.lines.find(([k]) => k === "Coupon")[1].startsWith("HOLIDAY10"));
+await call("POST", `/bookings/${discounted.id}/cancel`);
 
 // Completing a trip
-const trip = await expect("POST /bookings (trip)", call("POST", "/bookings", newBooking({ service: "car", payment: "cash" })), 201);
+const tripRide = (await call("POST", "/rides", rideInput)).json;
+const trip = await expect("POST /bookings (trip)", call("POST", "/bookings", newBooking({ service: "car", rideId: tripRide.id, payment: "cash" })), 201);
 await expect("POST /bookings/:id/complete", call("POST", `/bookings/${trip.id}/complete`), 200, (j) => j.status === "completed");
 await expect("completed booking can't be cancelled", call("POST", `/bookings/${trip.id}/cancel`), 409);
 await expect("POST /bookings/:id/complete unknown booking", call("POST", "/bookings/QFNOPE/complete"), 404);
@@ -139,10 +197,23 @@ await expect("referral: only once", call("POST", "/me/referral", { code: meA.ref
 await expect("wallet history shows the referral", call("GET", "/me/wallet"), 200, (j) => j[0].kind === "referral" && j[0].amount === 100);
 
 // Wallet history records payments and refunds
-const paidB = (await call("POST", "/bookings", newBooking({ payment: "wallet", amount: 250 }), tokenB)).json;
+const rideB = (await call("POST", "/rides", { ...rideInput, payment: "wallet" }, tokenB)).json;
+const fareB = rideB.quote.fare;
+const paidB = (await call("POST", "/bookings", newBooking({ service: "car", rideId: rideB.id, payment: "wallet" }), tokenB)).json;
 await call("POST", `/bookings/${paidB.id}/cancel`, null, tokenB);
 await expect("wallet history: payment and refund are logged", call("GET", "/me/wallet", null, tokenB), 200,
-  (j) => j[0].kind === "refund" && j[0].amount === 250 && j[1].kind === "payment" && j[1].amount === -250 && j[1].bookingId === paidB.id);
+  (j) => j[0].kind === "refund" && j[0].amount === fareB && j[1].kind === "payment" && j[1].amount === -fareB && j[1].bookingId === paidB.id);
+await expect("another user's ride can't be booked", call("POST", "/bookings", newBooking({ service: "car", rideId: rideB.id })), 404);
+
+// Coupon limits per customer: QUIKFLY50 works 3 times for a cab, then stops
+const limited = cfg.offers.find((o) => o.code === "QUIKFLY50");
+for (let i = 1; i <= limited.perUserLimit; i++) {
+  const r = (await call("POST", "/rides", rideInput, tokenB)).json;
+  await expect(`QUIKFLY50 use ${i} of ${limited.perUserLimit}`, call("POST", "/bookings", newBooking({ service: "car", rideId: r.id, couponCode: "QUIKFLY50" }), tokenB), 201,
+    (j) => j.amount === r.quote.fare - Math.min(limited.maxDiscount, Math.round((r.quote.fare * limited.percent) / 100)));
+}
+const extraRide = (await call("POST", "/rides", rideInput, tokenB)).json;
+await expect("QUIKFLY50 is refused after its per-customer limit", call("POST", "/offers/check", { code: "QUIKFLY50", rideId: extraRide.id }, tokenB), 400, (j) => /already used/.test(j.message));
 
 // Bookings are private
 await expect("GET /bookings/:id", call("GET", `/bookings/${paidB.id}`, null, tokenB), 200, (j) => j.id === paidB.id);

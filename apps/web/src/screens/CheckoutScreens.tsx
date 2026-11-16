@@ -6,7 +6,6 @@ import { useApp } from "@/components/AppProvider";
 import { TweenNumber } from "@/components/motion";
 import { Empty, GhostLink, GoldButton, Spinner } from "@/components/ui";
 import { api, DEMO_MODE } from "@/lib/api";
-import { COUPONS } from "@/lib/api/data";
 import { cx, inr, prettyDateTime } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
@@ -30,6 +29,7 @@ export function CheckoutScreen() {
   const [code, setCode] = useState("");
   const [coupon, setCoupon] = useState<{ code: string; off: number } | null>(null);
   const [couponErr, setCouponErr] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
   const [paying, setPaying] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -48,17 +48,27 @@ export function CheckoutScreen() {
   }
 
   const svc = serviceByKey(draft.service);
-  const subtotal = draft.fare.reduce((a, f) => a + f.amount, 0);
+  // The API priced this booking (draft.quote) and checks coupons against that price.
+  const subtotal = draft.quote.total;
   const total = Math.max(0, subtotal - (coupon?.off ?? 0));
 
+  /** Asks the API what the code takes off this quote. Coupons have per-customer limits, so sign in first. */
   function applyCoupon() {
-    const c = COUPONS[code.trim().toUpperCase()];
+    const entered = code.trim();
     setCouponErr("");
-    if (!c) return setCouponErr("Invalid coupon code");
-    if (c.service !== draft!.service && !(c.service === "car" && draft!.service === "bike")) return setCouponErr(`This code is only valid on ${serviceByKey(c.service as never).action}`);
-    const off = Math.min(c.max, Math.round((subtotal * c.pct) / 100));
-    setCoupon({ code: code.trim().toUpperCase(), off });
-    toast(`Coupon applied · you save ${inr(off)}`);
+    if (!entered) return setCouponErr("Enter a coupon code");
+    requireAuth(async () => {
+      setCouponBusy(true);
+      try {
+        const r = await api.offers.check(entered, { quoteId: draft!.quote.id });
+        setCoupon({ code: r.code, off: r.discount });
+        toast(`Coupon applied · you save ${inr(r.discount)}`);
+      } catch (e) {
+        setCouponErr((e as Error).message);
+      } finally {
+        setCouponBusy(false);
+      }
+    });
   }
 
   function next() {
@@ -92,10 +102,10 @@ export function CheckoutScreen() {
     try {
       await new Promise((r) => setTimeout(r, 1400));
       const b = await api.bookings.create({
-        service: draft!.service, title: draft!.title, subtitle: draft!.subtitle, amount: total, payment: method,
+        service: draft!.service, title: draft!.title, subtitle: draft!.subtitle, payment: method,
+        quoteId: draft!.quote.id, couponCode: coupon?.code,
         lines: [
-          ...draft!.summary, ["Travellers", names.join(", ")], ["Paid via", method.toUpperCase()],
-          ...(coupon ? [["Coupon", `${coupon.code} (−${inr(coupon.off)})`] as [string, string]] : []),
+          ...draft!.summary, ["Traveller names", names.join(", ")], ["Paid via", method.toUpperCase()],
           ...(gstInvoice && user?.gst ? [[GSTIN_LINE, `${user.gst.gstin} · ${user.gst.name}`] as [string, string]] : []),
         ],
       });
@@ -231,7 +241,7 @@ export function CheckoutScreen() {
               {draft.summary.map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-subtle shrink-0">{k}</dt><dd className="text-right">{v}</dd></div>)}
             </dl>
             <div className="p-4 space-y-1.5 text-sm">
-              {draft.fare.map((f) => <div key={f.label} className="flex justify-between gap-3"><span className="text-muted">{f.label}</span><span>{inr(f.amount)}</span></div>)}
+              {draft.quote.lines.map((f) => <div key={f.label} className="flex justify-between gap-3"><span className="text-muted">{f.label}</span><span>{inr(f.amount)}</span></div>)}
               <AnimatePresence>
                 {coupon && (
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="flex justify-between text-success">
@@ -249,7 +259,7 @@ export function CheckoutScreen() {
               <p className="text-sm font-semibold flex items-center gap-2 mb-2"><BadgePercent size={16} className="text-gold" />Have a coupon?</p>
               <div className="flex gap-2">
                 <input className="field !py-2 uppercase" placeholder="e.g. BUS150" value={code} onChange={(e) => setCode(e.target.value)} aria-label="Coupon code" />
-                <button onClick={applyCoupon} className="px-4 rounded-xl border border-gold/50 text-gold text-sm hover:bg-gold/10">Apply</button>
+                <button onClick={applyCoupon} disabled={couponBusy} className="px-4 rounded-xl border border-gold/50 text-gold text-sm hover:bg-gold/10 disabled:opacity-60">{couponBusy ? <Spinner size={14} /> : "Apply"}</button>
               </div>
               {couponErr && <motion.p initial={{ x: -6 }} animate={{ x: [6, -4, 2, 0] }} className="text-xs text-danger mt-2">{couponErr}</motion.p>}
               <Link href="/offers" className="text-xs text-subtle hover:text-gold mt-2 inline-block">See all offers →</Link>

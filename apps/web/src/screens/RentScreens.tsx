@@ -5,16 +5,17 @@ import { BadgeCheck, CalendarClock, Car, FileCheck2, Fuel, Gauge, Home, KeyRound
 import { useApp } from "@/components/AppProvider";
 import { Select } from "@/components/BookingWidget";
 import { Parallax, Reveal, TweenNumber } from "@/components/motion";
-import { Breadcrumbs, Empty, GoldButton, PageHeader, Segmented } from "@/components/ui";
+import { Breadcrumbs, Empty, GoldButton, PageHeader, Segmented, Spinner } from "@/components/ui";
+import { useRentalCars } from "@/components/catalog-hooks";
 import { api } from "@/lib/api";
-import { CITIES, RENTAL_CARS } from "@quikfly/shared";
+
 import { cx, inr, prettyDateTime } from "@/lib/format";
 import { defaultRentalWindow } from "@/lib/rentals";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
-import type { RentalCar } from "@quikfly/shared";
+import { RENT_PLANS, RENT_PROTECTION_LABEL, priceRent, rentHours, sumLines, type RentalCar } from "@quikfly/shared";
+import { useConfig, useSettings } from "@/components/ConfigProvider";
 
 const carImg = (c: RentalCar) => (["SUV", "Luxury", "MUV"].includes(c.category) ? "/assets/s4.jpg" : "/assets/s1.jpg");
-const hoursBetween = (a: string, b: string) => Math.max(4, Math.ceil((new Date(b).getTime() - new Date(a).getTime()) / 3600000) || 0);
 
 function useTrip() {
   const defaults = useMemo(() => defaultRentalWindow(), []);
@@ -30,6 +31,7 @@ function useTrip() {
 /* ───────────── /rent-a-car ───────────── */
 
 export function RentScreen() {
+  const CITIES = (useConfig()?.cities ?? []).map((c) => c.name);
   const trip = useTrip();
   const [city, setCity] = useState(trip.city);
   const [start, setStart] = useState(trip.start);
@@ -43,7 +45,7 @@ export function RentScreen() {
   useEffect(() => { setCars(null); api.rentals.cars(city).then(setCars); }, [city]);
 
   const valid = new Date(end) > new Date(start);
-  const hours = hoursBetween(start, end);
+  const hours = rentHours(start, end);
   const days = Math.max(1, Math.ceil(hours / 24));
   const price = (c: RentalCar) => c.pricePerHour * hours + (mode === "driver" ? c.driverPerDay * days : 0);
   const toggle = (arr: string[], v: string, set: (x: string[]) => void) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
@@ -111,45 +113,46 @@ export function RentScreen() {
 
 /* ───────────── /rent-a-car/[id] ───────────── */
 
-const KM_PLANS = [
-  { id: "limited", label: "140 km/day", sub: "₹12/km beyond limit", mult: 1 },
-  { id: "unlimited", label: "Unlimited km", sub: "Drive as much as you like", mult: 1.25 },
-] as const;
-const PROTECTION = [
-  { id: "standard", label: "Standard", perDay: 199, sub: "You pay up to ₹10,000 for damage" },
-  { id: "peace", label: "Peace of mind", perDay: 399, sub: "You pay up to ₹2,000 for damage" },
-] as const;
+/** What each protection plan leaves the customer to pay for damage (shown as help text). */
+const PROTECTION_SUB = { standard: "You pay up to ₹10,000 for damage", peace: "You pay up to ₹2,000 for damage" } as const;
 
 export function RentDetailScreen({ id }: { id: string }) {
   const trip = useTrip();
-  const car = RENTAL_CARS.find((c) => c.id === id);
-  const { setDraft } = useApp();
+  const cars = useRentalCars();
+  const car = cars?.find((c) => c.id === id);
+  const settings = useSettings();
+  const { setDraft, toast } = useApp();
   const nav = useNav();
-  const [km, setKm] = useState<(typeof KM_PLANS)[number]["id"]>("limited");
-  const [prot, setProt] = useState<(typeof PROTECTION)[number]["id"]>("standard");
+  const [km, setKm] = useState<keyof typeof RENT_PLANS>("limited");
+  const [prot, setProt] = useState<keyof typeof RENT_PROTECTION_LABEL>("standard");
   const [delivery, setDelivery] = useState<"pickup" | "doorstep">("pickup");
+  const [pricing, setPricing] = useState(false);
 
+  if (!cars) return <div className="max-w-7xl mx-auto px-4 py-24 grid place-items-center text-gold" role="status" aria-label="Loading"><Spinner size={28} /></div>;
   if (!car) return <div className="max-w-7xl mx-auto px-4 py-20"><Empty icon={<Car size={40} />} text="Car not found." action={<Link href="/rent-a-car" className="text-gold">See all cars</Link>} /></div>;
 
   const self = trip.mode === "self";
-  const hours = hoursBetween(trip.start, trip.end);
-  const days = Math.max(1, Math.ceil(hours / 24));
-  const plan = KM_PLANS.find((p) => p.id === km)!;
-  const protection = PROTECTION.find((p) => p.id === prot)!;
-  const rental = Math.round(car.pricePerHour * hours * (self ? plan.mult : 1));
-  const lines = [
-    { label: `Rental (${hours} hrs${self ? `, ${plan.label}` : ""})`, amount: rental },
-    ...(self ? [{ label: `${protection.label} protection`, amount: protection.perDay * days }] : [{ label: `Driver (${days} day${days > 1 ? "s" : ""})`, amount: car.driverPerDay * days }]),
-    ...(delivery === "doorstep" ? [{ label: "Doorstep delivery & pickup", amount: 299 }] : []),
-    ...(self ? [{ label: "Refundable security deposit", amount: 2000 }] : []),
-  ];
-  const total = lines.reduce((a, l) => a + l.amount, 0);
+  const choice = { mode: trip.mode, start: trip.start, end: trip.end, kmPlan: km, protection: prot, doorstep: delivery === "doorstep" } as const;
+  // Live estimate while choosing (same maths and settings as the API); book() charges the API's quote.
+  const lines = priceRent(car, choice, settings);
+  const total = sumLines(lines);
+  const plan = RENT_PLANS[km];
+  const protectionLabel = RENT_PROTECTION_LABEL[prot];
 
-  function book() {
+  async function book() {
+    setPricing(true);
+    let quote;
+    try {
+      quote = await api.quotes.create({ service: "rent", carId: car!.id, ...choice });
+    } catch (e) {
+      toast((e as Error).message, "err");
+      setPricing(false);
+      return;
+    }
     setDraft({
       service: "rent", title: `${car!.name} · ${self ? "Self-drive" : "With driver"}`, subtitle: `${trip.city} · ${car!.category}`, image: carImg(car!),
-      summary: [["Pickup", prettyDateTime(trip.start)], ["Return", prettyDateTime(trip.end)], ["Delivery", delivery === "doorstep" ? "Doorstep" : `Self pickup · ${trip.city} hub`], ...(self ? [["Plan", `${plan.label} · ${protection.label}`] as [string, string]] : [])],
-      fare: lines, travellers: ["Primary driver"], needsLicence: self,
+      summary: [["Pickup", prettyDateTime(trip.start)], ["Return", prettyDateTime(trip.end)], ["Delivery", delivery === "doorstep" ? "Doorstep" : `Self pickup · ${trip.city} hub`], ...(self ? [["Plan", `${plan.label} · ${protectionLabel}`] as [string, string]] : [])],
+      quote, travellers: ["Primary driver"], needsLicence: self,
       policy: "Free cancellation up to 24 hours before pickup. Deposit refunded within 48 hours of return.",
     });
     nav.push("/checkout");
@@ -178,14 +181,14 @@ export function RentDetailScreen({ id }: { id: string }) {
 
           {self && (
             <OptionGroup title="Kilometre plan" id="km" value={km} onChange={setKm}
-              options={KM_PLANS.map((p) => [p.id, p.label, p.sub, p.mult > 1 ? "+25%" : "Best value"])} />
+              options={(Object.keys(RENT_PLANS) as (keyof typeof RENT_PLANS)[]).map((k) => [k, RENT_PLANS[k].label, RENT_PLANS[k].sub, k === "unlimited" ? `+${settings.rentUnlimitedKmExtraPercent}%` : "Best value"])} />
           )}
           {self && (
             <OptionGroup title="Damage protection" id="prot" value={prot} onChange={setProt}
-              options={PROTECTION.map((p) => [p.id, p.label, p.sub, `${inr(p.perDay)}/day`])} />
+              options={(Object.keys(RENT_PROTECTION_LABEL) as (keyof typeof RENT_PROTECTION_LABEL)[]).map((k) => [k, RENT_PROTECTION_LABEL[k], PROTECTION_SUB[k], `${inr(k === "peace" ? settings.rentProtectionPeacePerDay : settings.rentProtectionStandardPerDay)}/day`])} />
           )}
           <OptionGroup title="Delivery" id="del" value={delivery} onChange={setDelivery}
-            options={[["pickup", "Self pickup", `QuikFly hub, ${trip.city}`, "Free"], ["doorstep", "Doorstep delivery", "Delivered & collected at your address", inr(299)]]} />
+            options={[["pickup", "Self pickup", `QuikFly hub, ${trip.city}`, "Free"], ["doorstep", "Doorstep delivery", "Delivered & collected at your address", inr(settings.rentDoorstepFee)]]} />
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="panel p-5"><p className="font-semibold flex items-center gap-2"><BadgeCheck size={18} className="text-gold" />Features</p>
@@ -219,7 +222,7 @@ export function RentDetailScreen({ id }: { id: string }) {
             <div className="border-t border-line pt-3 flex justify-between items-end">
               <span className="text-sm text-muted">Total</span><TweenNumber value={total} format={inr} className="text-2xl font-bold text-gold" />
             </div>
-            <GoldButton className="w-full" onClick={book}>Continue to book</GoldButton>
+            <GoldButton className="w-full" loading={pricing} onClick={book}>Continue to book</GoldButton>
             <p className="text-[11px] text-subtle text-center">Free cancellation up to 24 hrs before pickup</p>
           </motion.div>
         </aside>

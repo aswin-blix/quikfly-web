@@ -9,15 +9,17 @@ import { Select } from "@/components/BookingWidget";
 import { fadeUp, Marquee, Reveal, StaggerGroup } from "@/components/motion";
 import { Accordion, Empty, GoldButton, PageHeader, SectionTitle, Segmented, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
-import { BUS_OPERATORS, CITIES } from "@quikfly/shared";
-import { FAQS, POPULAR_ROUTES } from "@/lib/api/data";
 import { cx, inr, prettyDate, shiftISO, todayISO } from "@/lib/format";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import type { Bus, Seat } from "@quikfly/shared";
+import { useConfig, useSettings } from "@/components/ConfigProvider";
 
 /* ───────────── /bus — landing ───────────── */
 
 export function BusScreen() {
+  const BUS_OPERATORS = (useConfig()?.busOperators ?? []).map((o) => o.name);
+  const FAQS = useConfig()?.faqs ?? [];
+  const POPULAR_ROUTES = (useConfig()?.popularRoutes ?? []).map((r) => [r.from, r.to] as [string, string]);
   return (
     <>
       <PageHeader crumbs={[["Home", "/"], ["Bus"]]} title="Bus tickets" icon={<BusFront className="text-gold" size={36} />}
@@ -68,6 +70,7 @@ export function BusScreen() {
 }
 
 function BusSearchBar({ initial }: { initial?: { from: string; to: string; date: string } }) {
+  const CITIES = (useConfig()?.cities ?? []).map((c) => c.name);
   const nav = useNav();
   const [from, setFrom] = useState(initial?.from ?? "Chennai");
   const [to, setTo] = useState(initial?.to ?? "Bengaluru");
@@ -252,28 +255,38 @@ export function BusResultsScreen() {
 }
 
 function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: string; date: string }) {
-  const { setDraft } = useApp();
+  const { setDraft, toast } = useApp();
+  const lowerExtra = useSettings().busLowerDeckExtra;
+  const [pricing, setPricing] = useState(false);
   const nav = useNav();
   const [seats, setSeats] = useState<Seat[] | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [priceFilter, setPriceFilter] = useState<"all" | "lower" | "upper">("all");
   const [boarding, setBoarding] = useState(0);
   const [dropping, setDropping] = useState(0);
-  useEffect(() => { api.buses.seats(bus.id, date).then(setSeats); }, [bus.id, date]);
+  useEffect(() => { api.buses.seats({ id: bus.id, from, to }, date).then(setSeats).catch((e: Error) => { toast(e.message, "err"); setSeats([]); }); }, [bus.id, from, to, date, toast]);
 
-  const price = (s: Seat) => bus.fare + (s.deck === "lower" ? 50 : 0);
   const chosen = (seats ?? []).filter((s) => picked.includes(s.id));
-  const total = chosen.reduce((a, s) => a + price(s), 0);
+  const total = chosen.reduce((a, s) => a + s.price, 0);
   const drops = [`${to} – Main Bus Stand`, `${to} – Ring Road`, `${to} – City Center`];
   const bTimes = [bus.depart, addMin(bus.depart, 20), addMin(bus.depart, 45)];
   const dTimes = drops.map((_, i) => addMin(bus.arrive, i * 15));
 
-  function proceed() {
-    const gst = Math.round(total * 0.05);
+  /** Gets the API's price for the chosen seats, then opens checkout with it. */
+  async function proceed() {
+    setPricing(true);
+    let quote;
+    try {
+      quote = await api.quotes.create({ service: "bus", busId: bus.id, from, to, date, seatIds: chosen.map((s) => s.id) });
+    } catch (e) {
+      toast((e as Error).message, "err");
+      setPricing(false);
+      return;
+    }
     setDraft({
       service: "bus", title: `${from} → ${to}`, subtitle: `${bus.operator} · ${bus.type}`, image: "/assets/s2.jpg",
       summary: [["Date", prettyDate(date)], ["Departure", `${bTimes[boarding]} from ${bus.boardingPoints[boarding]}`], ["Arrival", `${dTimes[dropping]} at ${drops[dropping]}`], ["Seats", chosen.map((s) => s.label).join(", ")]],
-      fare: [{ label: `Base fare (${chosen.length} seat${chosen.length > 1 ? "s" : ""})`, amount: total }, { label: "GST (5%)", amount: gst }],
+      quote,
       travellers: chosen.map((s) => `Seat ${s.label}`),
       policy: "Free cancellation up to 12 hours before departure. 50% refund until 4 hours before departure.",
     });
@@ -286,14 +299,14 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
       <div>
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <span className="label mr-1">Seat price</span>
-          {([["all", "All"], ["lower", inr(bus.fare + 50)], ["upper", inr(bus.fare)]] as const).map(([k, l]) => (
+          {([["all", "All"], ["lower", inr(bus.fare + lowerExtra)], ["upper", inr(bus.fare)]] as const).map(([k, l]) => (
             <button key={k} data-on={priceFilter === k} onClick={() => setPriceFilter(k)} className="chip !text-xs">{l}</button>
           ))}
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
           {(["lower", "upper"] as const).map((deck) => (
             <div key={deck} className={cx("rounded-2xl border border-line p-4 transition-opacity", priceFilter !== "all" && priceFilter !== deck && "opacity-30")}>
-              <div className="flex justify-between items-center mb-3"><p className="label">{deck} deck · {inr(bus.fare + (deck === "lower" ? 50 : 0))}</p>{deck === "lower" && <span className="text-[10px] text-subtle border border-line rounded px-1.5">Driver</span>}</div>
+              <div className="flex justify-between items-center mb-3"><p className="label">{deck} deck · {inr(bus.fare + (deck === "lower" ? lowerExtra : 0))}</p>{deck === "lower" && <span className="text-[10px] text-subtle border border-line rounded px-1.5">Driver</span>}</div>
               <div className="grid grid-cols-[1fr_1fr_14px_1fr] gap-2">
                 {seats.filter((s) => s.deck === deck).map((s) => {
                   const on = picked.includes(s.id);
@@ -327,7 +340,7 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
         <div className="rounded-2xl bg-coal border border-line p-4 text-sm space-y-2">
           <div className="flex justify-between"><span className="text-muted">Seats</span><span>{chosen.map((s) => s.label).join(", ") || "—"}</span></div>
           <div className="flex justify-between font-bold text-lg"><span>Amount</span><span className="text-gold">{inr(total)}</span></div>
-          <GoldButton className="w-full" disabled={!chosen.length} onClick={proceed}>Proceed to book <ArrowRight size={16} /></GoldButton>
+          <GoldButton className="w-full" disabled={!chosen.length} loading={pricing} onClick={proceed}>Proceed to book <ArrowRight size={16} /></GoldButton>
           {!chosen.length && <p className="text-[11px] text-subtle text-center">Select up to 6 seats</p>}
         </div>
       </div>

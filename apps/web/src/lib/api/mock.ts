@@ -1,30 +1,27 @@
-// Demo-mode implementation of the API contract. Simulates latency and keeps
-// data in the browser so the client can click through every flow offline.
+// Demo-mode implementation of the API contract. Simulates latency and keeps data in the
+// browser so the client can click through every flow offline. The catalog is the shared
+// seed and settings are the defaults; prices use the same @quikfly/shared pricing as the API.
 // Storage helpers: ./mock-store.ts. Account endpoints: ./mock-account.ts.
 import type { QuikflyApi } from "./contract";
-import type { Booking, Bus, FareQuote, Seat } from "@quikfly/shared";
-import { BUS_OPERATORS, DRIVERS, PLACES, RENTAL_CARS, RIDE_OPTIONS, TOURS, TRAVEL_VEHICLES, VEHICLES } from "@quikfly/shared";
+import {
+  BUS_OPERATORS, CATALOG_SEED, DEFAULT_SETTINGS, QUOTE_TTL_MINUTES, RIDE_SIM, couponDiscount, generateBuses, generateSeats, pick,
+  priceBus, priceGroup, priceRent, priceTour, rideQuotes, sumLines,
+  type AppConfig, type Booking, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
+} from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
 import { KEYS, currentUser, fail, load, save, uid, wait, walletEntry, type MockRide } from "./mock-store";
 
 export { MOCK_OTP } from "./mock-store";
 
-const pick = <T,>(arr: T[], seed: number) => arr[Math.abs(seed) % arr.length];
-
-// Deterministic pseudo-random so the same search shows the same results.
-function seeded(str: string) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
-  return () => {
-    h = Math.imul(h ^ (h >>> 15), 2246822507);
-    h = Math.imul(h ^ (h >>> 13), 3266489909);
-    return ((h ^= h >>> 16) >>> 0) / 4294967296;
-  };
-}
+const settings = DEFAULT_SETTINGS;
+const seed = CATALOG_SEED;
+const QUOTES_KEY = "quikfly.mockQuotes";
 
 const bookingsStore = () => load<Booking[]>(KEYS.bookings, []);
 const saveBookings = (list: Booking[]) => save(KEYS.bookings, list);
 const ridesStore = () => load<Record<string, MockRide>>(KEYS.rides, {});
+type StoredQuote = PriceQuote & { used?: boolean };
+const quotesStore = () => load<Record<string, StoredQuote>>(QUOTES_KEY, {});
 
 /** Updates an active booking; refuses ones already cancelled or completed (409 on the API). */
 function finishBooking(id: string, status: "cancelled" | "completed") {
@@ -36,11 +33,57 @@ function finishBooking(id: string, status: "cancelled" | "completed") {
   return b;
 }
 
-function placeById(id: string) {
-  return PLACES.find((x) => x.id === id) ?? fail("Unknown place");
+const placeById = (id: string) => seed.place.find((x) => x.id === id) ?? fail("Unknown place.");
+const byId = <T extends { id: string }>(list: T[], id: string, what: string) => list.find((x) => x.id === id) ?? fail(`Unknown ${what}.`);
+const busFor = (from: string, to: string, date: string, id: string) =>
+  generateBuses(BUS_OPERATORS.map((o) => o.name), settings, from, to, date).find((b) => b.id === id) ?? fail("That bus isn't running on this route and date.");
+
+function priceLines(r: QuoteRequest): FareLine[] {
+  switch (r.service) {
+    case "bus": {
+      const seats = generateSeats(busFor(r.from, r.to, r.date, r.busId), r.date, settings);
+      return priceBus(r.seatIds.map((id) => seats.find((s) => s.id === id) ?? fail("Unknown seat.")), settings);
+    }
+    case "tours": return priceTour(byId(seed.tour, r.tourId, "holiday"), r.adults, r.kids, settings);
+    case "rent": return priceRent(byId(seed.rentalCar, r.carId, "car"), r, settings);
+    case "rentals": {
+      const km = r.trip === "outstation" ? byId(seed.groupDestination, r.destinationId ?? "", "destination").km : 0;
+      return priceGroup(byId(seed.travelVehicle, r.vehicleId, "vehicle"), r.trip, km, r.days, settings);
+    }
+  }
+}
+
+/** Gross price of a booking (quote total or ride fare), like the API. */
+function gross(input: Pick<NewBooking, "service" | "quoteId" | "rideId">): number {
+  if (input.service === "bike" || input.service === "car") {
+    const r = ridesStore()[input.rideId ?? ""] ?? fail("Ride not found.");
+    return r.ride.quote.fare;
+  }
+  const q = quotesStore()[input.quoteId ?? ""] ?? fail("That price isn't valid. Please check the price again.");
+  if (q.used) fail("This price was already used for a booking.");
+  if (Date.parse(q.expiresAt) < Date.now()) fail("This price has expired. Please check the price again.");
+  return q.total;
+}
+
+function coupon(code: string, service: ServiceKey, total: number): CouponCheck {
+  const offer = seed.offer.find((o) => o.code === code.trim().toUpperCase()) ?? fail("That coupon code isn't valid.");
+  const used = bookingsStore().filter((b) => b.status !== "cancelled" && b.lines.some(([k, v]) => k === "Coupon" && v.startsWith(offer.code))).length;
+  const r = couponDiscount(offer, service, total, new Date().toISOString().slice(0, 10), used);
+  if ("error" in r) fail(r.error);
+  return { code: offer.code, discount: (r as { discount: number }).discount, total: total - (r as { discount: number }).discount };
 }
 
 export const mockApi: QuikflyApi = {
+  config: {
+    async get() {
+      await wait(250);
+      const config: AppConfig = {
+        settings, places: seed.place, rideOptions: seed.rideOption, cities: seed.city, busOperators: seed.busOperator, popularRoutes: seed.popularRoute,
+        groupDestinations: seed.groupDestination, offers: seed.offer, faqs: seed.faq,
+      };
+      return config;
+    },
+  },
   auth: mockAuth,
   account: mockAccount,
   savedPlaces: mockSavedPlaces,
@@ -50,41 +93,33 @@ export const mockApi: QuikflyApi = {
   places: {
     async search(q) {
       const s = q.trim().toLowerCase();
-      if (!s) return PLACES;
-      return PLACES.filter((p) => `${p.name} ${p.area}`.toLowerCase().includes(s));
+      return s ? seed.place.filter((p) => `${p.name} ${p.area}`.toLowerCase().includes(s)) : seed.place;
     },
   },
 
   rides: {
     async quote(service, pickupId, dropId) {
       await wait(700);
-      const a = placeById(pickupId), b = placeById(dropId);
-      const distanceKm = Math.max(1.5, Math.round(Math.hypot(a.x - b.x, a.y - b.y) * 0.32 * 10) / 10);
-      const hour = new Date().getHours();
-      const surge = hour >= 8 && hour <= 10 || hour >= 17 && hour <= 20 ? 1.2 : 1;
-      return RIDE_OPTIONS.filter((o) => o.service === service).map<FareQuote>((option, i) => {
-        const speed = option.service === "bike" ? 24 : 20; // km/h city average
-        const durationMin = Math.round((distanceKm / speed) * 60) + 3;
-        const fare = Math.round((option.baseFare + option.perKm * distanceKm + option.perMin * durationMin) * surge);
-        return { option, fare, distanceKm, durationMin, etaMin: 2 + ((i * 3 + Math.round(distanceKm)) % 6) };
-      });
+      return rideQuotes(seed.rideOption.filter((o) => o.service === service), placeById(pickupId), placeById(dropId), settings, new Date().getHours());
     },
     async book({ optionId, pickupId, dropId, payment }) {
       await wait(2600); // "searching for drivers"
-      const quotes = await mockApi.rides.quote(RIDE_OPTIONS.find((o) => o.id === optionId)!.service, pickupId, dropId);
-      const quote = quotes.find((q) => q.option.id === optionId)!;
-      const seed = Date.now();
-      const d = pick(DRIVERS, seed);
-      const state = pick(["TN 09", "TN 07", "TN 22", "TN 10"], seed >> 3);
-      const letters = pick(["AB", "CK", "BZ", "DM", "EQ"], seed >> 5);
+      const option = byId(seed.rideOption, optionId, "ride type");
+      const quote = (await mockApi.rides.quote(option.service, pickupId, dropId)).find((q) => q.option.id === optionId)!;
+      const s = Date.now();
+      const { id: _id, ...driver } = pick(seed.driver, s);
       const ride = {
         id: uid("RD"),
         quote,
         pickup: placeById(pickupId),
         drop: placeById(dropId),
         payment,
-        otp: String(1000 + (seed % 9000)),
-        driver: { ...d, vehicle: pick(VEHICLES[optionId], seed >> 2), plate: `${state} ${letters} ${1000 + (seed % 8999)}` },
+        otp: String(1000 + (s % 9000)),
+        driver: {
+          ...driver,
+          vehicle: pick(option.models, s >> 2),
+          plate: `${pick(RIDE_SIM.plateStates, s >> 3)} ${pick(RIDE_SIM.plateLetters, s >> 5)} ${1000 + (s % 8999)}`,
+        },
       };
       save(KEYS.rides, { ...ridesStore(), [ride.id]: { ride, startedAt: new Date().toISOString(), cancelled: false } });
       return ride;
@@ -119,69 +154,46 @@ export const mockApi: QuikflyApi = {
   buses: {
     async search(from, to, date) {
       await wait(800);
-      const rnd = seeded(`${from}-${to}-${date}`);
-      const types = [
-        { type: "A/C Sleeper (2+1)", ac: true, sleeper: true },
-        { type: "A/C Seater / Sleeper (2+1)", ac: true, sleeper: true },
-        { type: "Volvo Multi-Axle A/C Seater (2+2)", ac: true, sleeper: false },
-        { type: "Non A/C Seater (2+2)", ac: false, sleeper: false },
-        { type: "Bharat Benz A/C Sleeper (2+1)", ac: true, sleeper: true },
-      ];
-      const hours = 5 + Math.floor(rnd() * 5);
-      const list: Bus[] = Array.from({ length: 7 }, (_, i) => {
-        const t = types[Math.floor(rnd() * types.length)];
-        const dh = 16 + i + Math.floor(rnd() * 2);
-        const dm = [0, 15, 30, 45][Math.floor(rnd() * 4)];
-        const dur = hours + Math.floor(rnd() * 3);
-        const ah = (dh + dur) % 24;
-        const fmt = (h: number, m: number) => `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-        const base = (t.ac ? 650 : 420) + (t.sleeper ? 250 : 0) + Math.floor(rnd() * 400);
-        return {
-          id: `bus${i}-${from}-${to}`.replace(/\s/g, ""),
-          operator: i === 0 ? "QuikFly Travels" : BUS_OPERATORS[1 + Math.floor(rnd() * (BUS_OPERATORS.length - 1))],
-          ...t,
-          depart: fmt(dh, dm),
-          arrive: fmt(ah, (dm + 30) % 60),
-          duration: `${dur}h 30m`,
-          fare: Math.round(base / 10) * 10,
-          seatsLeft: 4 + Math.floor(rnd() * 28),
-          rating: Math.round((3.8 + rnd() * 1.1) * 10) / 10,
-          amenities: ["Water bottle", "Charging point", "Blanket", "Reading light", "Live tracking", "CCTV"].filter(() => rnd() > 0.35),
-          boardingPoints: [`${from} – Main Bus Stand`, `${from} – Bypass`, `${from} – City Center`],
-        };
-      });
-      return list.sort((a, b) => a.depart.localeCompare(b.depart));
+      return generateBuses(BUS_OPERATORS.map((o) => o.name), settings, from, to, date);
     },
-    async seats(busId, date) {
+    async seats(bus, date) {
       await wait(500);
-      const rnd = seeded(busId + date);
-      const sleeper = true; // demo layout is a 2+1 sleeper for every bus
-      const seats: Seat[] = [];
-      // 2+1 layout: cols 0,1 (double) | aisle | col 2 (single), 6 rows per deck
-      (["lower", "upper"] as const).forEach((deck) => {
-        for (let row = 0; row < 6; row++) {
-          for (let col = 0; col < 3; col++) {
-            const n = seats.length + 1;
-            seats.push({
-              id: `${deck[0].toUpperCase()}${n}`,
-              label: `${deck === "lower" ? "L" : "U"}${row * 3 + col + 1}`,
-              deck, row, col, sleeper,
-              booked: rnd() < 0.38,
-              ladies: rnd() < 0.08,
-              price: 0,
-            });
-          }
-        }
-      });
-      return seats;
+      return generateSeats(busFor(bus.from, bus.to, date, bus.id), date, settings);
     },
   },
 
-  tours: { async list() { await wait(300); return TOURS; } },
+  tours: {
+    async list() { await wait(300); return seed.tour; },
+    async get(slug) { await wait(200); return seed.tour.find((t) => t.slug === slug) ?? fail("That holiday package isn't available."); },
+  },
 
   rentals: {
-    async cars() { await wait(400); return RENTAL_CARS; },
-    async travelVehicles() { await wait(300); return TRAVEL_VEHICLES; },
+    async cars() { await wait(400); return seed.rentalCar; },
+    async car(id) { await wait(200); return byId(seed.rentalCar, id, "car"); },
+    async travelVehicles() { await wait(300); return seed.travelVehicle; },
+  },
+
+  quotes: {
+    async create(r) {
+      await wait(350);
+      const lines = priceLines(r);
+      const q: PriceQuote = { id: uid("QT"), service: r.service, lines, total: sumLines(lines), expiresAt: new Date(Date.now() + QUOTE_TTL_MINUTES * 60_000).toISOString() };
+      save(QUOTES_KEY, { ...quotesStore(), [q.id]: q });
+      return q;
+    },
+  },
+
+  offers: {
+    async check(code, ref) {
+      await wait(400);
+      currentUser();
+      if ("rideId" in ref) {
+        const r = ridesStore()[ref.rideId] ?? fail("Ride not found.");
+        return coupon(code, r.ride.quote.option.service, r.ride.quote.fare);
+      }
+      const q = quotesStore()[ref.quoteId] ?? fail("That price isn't valid.");
+      return coupon(code, q.service, q.total);
+    },
   },
 
   bookings: {
@@ -189,10 +201,25 @@ export const mockApi: QuikflyApi = {
     async get(id) { await wait(200); return bookingsStore().find((b) => b.id === id) ?? fail("Booking not found."); },
     async create(input) {
       await wait(900);
-      const b: Booking = { ...input, id: uid("QF"), status: "confirmed", createdAt: new Date().toISOString() };
+      const total = gross(input);
+      const c = input.couponCode ? coupon(input.couponCode, input.service, total) : null;
+      const amount = total - (c?.discount ?? 0);
+      const lines: [string, string][] = [
+        ...input.lines.filter(([k]) => k !== "Coupon"),
+        ...(c ? [["Coupon", `${c.code} (−₹${c.discount.toLocaleString("en-IN")})`] as [string, string]] : []),
+      ];
+      const b: Booking = {
+        id: uid("QF"), service: input.service, title: input.title, subtitle: input.subtitle, payment: input.payment,
+        amount, lines, status: "confirmed", createdAt: new Date().toISOString(),
+      };
       if (input.payment === "wallet") {
-        if (currentUser().walletBalance < input.amount) fail("Not enough wallet balance. Choose another payment method.");
-        walletEntry("payment", -input.amount, `Paid · ${input.title}`, b.id);
+        if (currentUser().walletBalance < amount) fail("Not enough wallet balance. Choose another payment method.");
+        walletEntry("payment", -amount, `Paid · ${input.title}`, b.id);
+      }
+      if (input.quoteId) {
+        const qs = quotesStore();
+        qs[input.quoteId] = { ...qs[input.quoteId], used: true };
+        save(QUOTES_KEY, qs);
       }
       saveBookings([b, ...bookingsStore()]);
       return b;

@@ -40,6 +40,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 const qs = (o: Record<string, string>) => "?" + new URLSearchParams(o).toString();
 
 export const httpApi: QuikflyApi = {
+  config: { get: () => req("GET", "/config") },
   auth: {
     sendOtp: (phone) => req("POST", "/auth/otp", { phone }),
     async verifyOtp(phone, otp) {
@@ -88,13 +89,19 @@ export const httpApi: QuikflyApi = {
   },
   buses: {
     search: (from, to, date) => req("GET", `/buses${qs({ from, to, date })}`),
-    seats: (busId, date) => req("GET", `/buses/${busId}/seats${qs({ date })}`),
+    seats: (bus, date) => req("GET", `/buses/${encodeURIComponent(bus.id)}/seats${qs({ from: bus.from, to: bus.to, date })}`),
   },
-  tours: { list: () => req("GET", "/tours") },
+  tours: {
+    list: () => req("GET", "/tours"),
+    get: (slug) => req("GET", `/tours/${encodeURIComponent(slug)}`),
+  },
   rentals: {
     cars: (city) => req("GET", `/rentals/cars${qs({ city })}`),
+    car: (id) => req("GET", `/rentals/cars/${encodeURIComponent(id)}`),
     travelVehicles: () => req("GET", "/rentals/travel-vehicles"),
   },
+  quotes: { create: (r) => req("POST", "/quotes", r) },
+  offers: { check: (code, ref) => req("POST", "/offers/check", { code, ...ref }) },
   bookings: {
     list: () => req("GET", "/bookings"),
     get: (id) => req("GET", `/bookings/${encodeURIComponent(id)}`),

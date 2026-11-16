@@ -38,6 +38,7 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | Method | Endpoint | Purpose |
 |---|---|---|
 | GET | `/health` | liveness check |
+| GET | `/config` | everything the apps load at start-up: `{ settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers, faqs }` (visible items only) |
 | POST | `/auth/otp` | `{ phone }` → `{ sent }` (no SMS yet) |
 | POST | `/auth/verify` | `{ phone, otp }` → `{ token, user, isNew, restored }`. Creates the user on first login (₹500 welcome credit, referral code); `isNew` stays true until a name is saved; signing in within 30 days of deleting restores the account (`restored`) |
 | POST | `/auth/logout` | ends the session for the bearer token (always succeeds) |
@@ -56,19 +57,23 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | GET / POST 🔒 | `/me/contacts` | emergency contacts (max 3); POST `{ name, phone, relation? }` |
 | DELETE 🔒 | `/me/contacts/:id` | remove a contact |
 | GET 🔒 | `/me/wallet` | wallet history, newest first: `welcome`, `payment`, `refund`, `referral`, `opening` |
-| GET | `/places?q=` | place autocomplete |
-| POST | `/rides/quote` | `{ service, pickupId, dropId }` → fares for each ride option |
+| GET | `/places?q=` | place autocomplete (visible catalog places) |
+| POST | `/rides/quote` | `{ service, pickupId, dropId }` → fares for each visible ride option; surge from settings |
 | POST 🔒 | `/rides` | `{ optionId, pickupId, dropId, payment }` → ride with driver and OTP |
 | POST 🔒 | `/rides/:id/cancel` | cancel a ride |
 | POST 🔒 | `/rides/:id/share` | `{ token, expiresAt }`: a 24-hour link to follow the ride (same link if one is live) |
 | GET | `/share/:token` | public, no sign-in: the shared ride (first name, driver, vehicle, route, start time, status) |
 | GET | `/buses?from=&to=&date=` | bus search (same search, same results) |
-| GET | `/buses/:id/seats?date=` | seat layout and availability |
+| GET | `/buses/:id/seats?from=&to=&date=` | seat layout, availability and each seat's price (the bus is regenerated from its route and date) |
 | GET | `/tours` | holiday packages |
+| GET | `/tours/:slug` | one package (404 if hidden or missing) |
 | GET | `/rentals/cars?city=` | self-drive / chauffeur cars |
+| GET | `/rentals/cars/:id` | one car |
 | GET | `/rentals/travel-vehicles` | group vehicles |
+| POST | `/quotes` | prices a booking: `{ service: "bus", busId, from, to, date, seatIds }`, `{ service: "tours", tourId, adults, kids }`, `{ service: "rent", carId, mode, start, end, kmPlan, protection, doorstep }` or `{ service: "rentals", vehicleId, trip, destinationId?, days }` → `{ id, service, lines, total, expiresAt }`. Valid 30 min, usable once |
+| POST 🔒 | `/offers/check` | `{ code, quoteId }` or `{ code, rideId }` → `{ code, discount, total }`; 400 says why a code can't be used (other service, expired, below minimum, per-customer limit, unknown) |
 | GET 🔒 | `/bookings` | the signed-in user's bookings, newest first |
-| POST 🔒 | `/bookings` | `{ service, title, subtitle, amount, payment, lines }` → booking. `payment: "wallet"` is deducted in the same transaction and refused (400) if the balance is too low |
+| POST 🔒 | `/bookings` | `{ service, title, subtitle, payment, lines, quoteId \| rideId, couponCode? }` → booking. **The API sets the amount** from the quote (bus, tours, rent, rentals) or the ride (bike, car), minus the coupon; any `amount` sent is ignored. A quote or ride books once (409 after). `payment: "wallet"` is deducted in the same transaction and refused (400) if the balance is too low, which also gives the quote back |
 | GET 🔒 | `/bookings/:id` | one booking (for invoices) |
 | POST 🔒 | `/bookings/:id/cancel` | cancel; refunds a wallet payment; 409 if already cancelled or completed |
 | POST 🔒 | `/bookings/:id/complete` | mark a finished trip (called by the website when a simulated ride ends; the driver app will own this) |
@@ -86,6 +91,12 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | GET 🛡 | `/admin/settings` | current business settings (defaults in `@quikfly/shared` `settings.ts`) `[dashboard.view]` |
 | PATCH 🛡 | `/admin/settings` | change settings; only known keys with the right type `[settings.edit]` |
 | GET 🛡 | `/admin/audit?page=&entity=&entityId=` | audit log, newest first, 25 per page `[audit.view]` |
+| GET 🛡 | `/admin/catalog` | each catalog kind with item counts and whether this admin can edit it `[dashboard.view]` |
+| GET 🛡 | `/admin/catalog/:kind` | all items of a kind, hidden ones included. Kinds and fields: `packages/shared/src/catalog-kinds.ts` `[the kind's permission]` |
+| POST 🛡 | `/admin/catalog/:kind` | `{ data, active?, sort? }` → new item; `data` is validated against the kind's fields; unique fields (tour slug, offer code, city name...) give 409 |
+| PUT 🛡 | `/admin/catalog/:kind/:id` | change `data`, `active` (show/hide) and/or `sort` |
+| DELETE 🛡 | `/admin/catalog/:kind/:id` | remove an item (bookings keep their own copy of what was bought) |
+| POST 🛡 | `/admin/catalog/reset` | replace the whole catalog with the seed (demo reset) `[settings.edit]` |
 
 ## Settings (`wrangler.jsonc` → `vars`)
 
@@ -94,7 +105,7 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | `DEMO_OTP` | Fixed login code while there is no SMS provider. Every number signs in with it. |
 | `ALLOWED_ORIGINS` | Comma-separated website origins allowed by CORS, or `*`. |
 
-Business settings that staff change at runtime (licence auto-approve, later fares and bonuses) live in the `settings` table, read through `services/settings.ts` with a 30-second cache per Worker isolate.
+Business settings that staff change at runtime (fares, surge, bus fares, GST rates, bonuses, rental fees, company details, licence auto-approve) live in the `settings` table, read through `services/settings.ts`; keys, defaults and allowed values are in `packages/shared/src/settings.ts`. The catalog lives in `catalog_items` (`services/catalog.ts`), filled from the seed in `packages/shared/src/catalog.ts` on first use. Both are cached for 30 seconds per Worker isolate, so an admin edit can take up to 30 s to show everywhere. Prices are computed by `packages/shared/src/pricing.ts` (`services/quotes.ts`, `services/rides.ts`).
 
 Sessions are random bearer tokens; only their SHA-256 hash is stored, and they expire after `SESSION_TTL_DAYS` (`src/config.ts`). Admin sessions work the same way (`admin_sessions`, 12 hours). Admin passwords are PBKDF2-SHA256 hashes (`lib/password.ts`).
 
@@ -126,4 +137,4 @@ Locally, `node scripts/smoke-admin.mjs http://localhost:8787/v1` creates its own
 
 ## Not yet built
 
-Real SMS OTP, payments, live driver tracking. The catalog is still served from `@quikfly/shared` until slice L2 of the admin work moves it into D1 (see `docs/roadmap.md`).
+Real SMS OTP, payments, live driver tracking, real bus inventory (the timetable is generated).

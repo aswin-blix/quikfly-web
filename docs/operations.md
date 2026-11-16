@@ -55,3 +55,6 @@ The smoke test reuses one test user (+91 90000 00001) and leaves cancelled or co
 | Website served by `wrangler dev` (in `apps/web`) loads but nothing is clickable; console shows `ChunkLoadError` | The site was rebuilt after `wrangler dev` started, and it still serves the old file list | Restart `wrangler dev` after every `next build` |
 | Browser automation: clicks land under the bottom bar, or date inputs stay empty | Smooth scrolling and native date pickers | Scroll the target to the centre (`behavior: "instant"`) before clicking; set date inputs through the native value setter plus an `input` event |
 | Website shows "Request failed (401)" and signs out | Session expired or revoked | Expected; sign in again |
+| `next dev` shows "missing param in generateStaticParams" for a holiday or car | That item was added in the admin after the build; only the real host falls back to the 404 page, which renders it | Test on a build: `NEXT_PUBLIC_API_URL=<api> npx next build` then `npx wrangler dev --port <port>` in `apps/web` |
+| An admin edit doesn't show yet | The API caches catalog and settings for 30 s per isolate; the website loads /config once per page load | Wait up to 30 s and reload |
+| Checkout says the price expired or was already used | Quotes are valid 30 minutes and book once | Go back to the service page and book again (a new quote is fetched) |

@@ -1,18 +1,21 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Briefcase, Home, MapPin, Trash2 } from "lucide-react";
-import { PLACES, SAVED_PLACE_KINDS, type SavedPlace, type SavedPlaceKind } from "@quikfly/shared";
+import { SAVED_PLACE_KINDS, type SavedPlace, type SavedPlaceKind } from "@quikfly/shared";
 import { api } from "@/lib/api";
 import { GoldButton } from "../ui";
 import { ErrorText, Field, ItemRow, Section, useAction } from "./kit";
+import { useConfig } from "@/components/ConfigProvider";
 
 export const PLACE_ICON: Record<SavedPlaceKind, typeof Home> = { home: Home, work: Briefcase, other: MapPin };
 const KIND_LABEL: Record<SavedPlaceKind, string> = { home: "Home", work: "Work", other: "Other" };
 
 export function PlacesSection() {
+  const PLACES = useConfig()?.places ?? [];
   const [places, setPlaces] = useState<SavedPlace[] | null>(null);
   const [kind, setKind] = useState<SavedPlaceKind>("home");
-  const [placeId, setPlaceId] = useState(PLACES[0].id);
+  const [picked, setPlaceId] = useState("");
+  const placeId = picked || PLACES[0]?.id || "";
   const [label, setLabel] = useState("");
   const { run, busy, error } = useAction();
 

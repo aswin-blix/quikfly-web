@@ -11,7 +11,8 @@ Read this file first. Then read:
 ## Map
 
 ```
-apps/web/         Next.js 16 static export (App Router). Screens never call fetch().
+apps/web/         Next.js 16 static export (App Router). Screens never call fetch() and never import catalog seed data:
+                  useConfig()/useSettings() (components/ConfigProvider.tsx) and components/catalog-hooks.ts give them API data.
   src/app/        thin route files (metadata + one screen)
   src/screens/    page-level UI          src/components/  shared UI (shell, sheets, RidePanel, ui.tsx)
   src/lib/api/    contract.ts (interface) · http.ts (real API) · mock.ts (demo, localStorage) · index.ts (picks one)
@@ -26,9 +27,10 @@ apps/api/         Cloudflare Worker: Hono + D1 (SQLite)
   migrations/     numbered D1 SQL files; never edit an applied one, add a new one
   scripts/        smoke.mjs (customer endpoints) · smoke-admin.mjs (admin endpoints) · create-admin.mjs (staff accounts)
 apps/mobile/      Flutter app (Phase 3, not started)
-packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation patterns, limits,
-                  business constants), catalog.ts (seed data), admin.ts (roles, PERMISSIONS, admin shapes),
-                  settings.ts (runtime Settings + defaults)
+packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation patterns, limits),
+                  catalog.ts (SEED data only) + catalog-kinds.ts (12 kinds, fields, validation), settings.ts
+                  (runtime Settings, defaults, rules), pricing.ts (all price maths + bus/ride simulation),
+                  admin.ts (roles, PERMISSIONS, admin shapes)
 ```
 
 ## Commands (repo root)
@@ -52,12 +54,13 @@ npm run deploy              # production; read docs/operations.md first
 2. **Separation of concerns.** Routes validate, services hold logic and SQL, screens render. Shared rules (regexes, limits, bonus amounts) live in `packages/shared/src/rules.ts`, so the API enforces them and the apps check early with the same values.
 3. **No hard-coded tunables.** Customisable values go in named constants (`apps/api/src/config.ts`, `packages/shared/src/rules.ts`, `apps/web/src/lib/*`), and colours go in `tokens.css`. Use token utilities (`text-gold`, `bg-coal`...), never raw hex or Tailwind palette colours.
 4. **Admin writes are audited and permission-checked.** Every `/admin` route that changes data uses `requireAdmin("<permission>")` and writes an `audit_log` row (`services/admin/audit.ts`; use `auditStatement` inside the change's `db.batch()` so both land together). New permissions go in `PERMISSIONS` (`packages/shared/src/admin.ts`); the admin UI hides what a role can't do using the same map. Runtime-tunable business values belong in `Settings` (`packages/shared/src/settings.ts`), not `config.ts`.
-5. **Money changes are atomic.** Any wallet debit or credit runs in one `db.batch()` together with its `wallet_transactions` row (see `services/bookings.ts`, `services/account.ts`).
-6. **Free tier only** until the client signs off: no paid SMS, payment gateway, maps, Play Store fee or domain. Simulate instead, and label simulations honestly in the UI (e.g. "demo: no SMS sent").
-7. **Responsive and friendly UI.** Every screen must work at 390 px (phone), tablet and desktop, in light and dark mode. Verify in a browser at phone width before calling UI work done.
-8. **Routing:** screens use only `Link`, `useNav`, `usePath` and `useQuery` from `src/lib/nav.tsx`, never `next/navigation`, so the single-file SPA build keeps working. New pages need a file in `src/app/` **and** an entry in `src/spa/SpaApp.tsx`.
-9. **Git:** branch from `main`, open a PR, never push to `main`. Use merge commits. Commit messages say what changed and why.
-10. **Docs are part of the change.** Update `docs/roadmap.md` (tick items, add new ones), the READMEs, and `docs/decisions.md` for any new trade-off.
+5. **The API sets every price.** Bookings carry a `quoteId` (`POST /quotes`) or `rideId`, never an amount. Price maths lives only in `packages/shared/src/pricing.ts`; apps may call it for live estimates, but checkout always charges the API's quote.
+6. **Money changes are atomic.** Any wallet debit or credit runs in one `db.batch()` together with its `wallet_transactions` row (see `services/bookings.ts`, `services/account.ts`).
+7. **Free tier only** until the client signs off: no paid SMS, payment gateway, maps, Play Store fee or domain. Simulate instead, and label simulations honestly in the UI (e.g. "demo: no SMS sent").
+8. **Responsive and friendly UI.** Every screen must work at 390 px (phone), tablet and desktop, in light and dark mode. Verify in a browser at phone width before calling UI work done.
+9. **Routing:** screens use only `Link`, `useNav`, `usePath` and `useQuery` from `src/lib/nav.tsx`, never `next/navigation`, so the single-file SPA build keeps working. New pages need a file in `src/app/` **and** an entry in `src/spa/SpaApp.tsx`.
+10. **Git:** branch from `main`, open a PR, never push to `main`. Use merge commits. Commit messages say what changed and why.
+11. **Docs are part of the change.** Update `docs/roadmap.md` (tick items, add new ones), the READMEs, and `docs/decisions.md` for any new trade-off.
 
 ## Gotchas
 
@@ -66,3 +69,6 @@ npm run deploy              # production; read docs/operations.md first
 - Right after `wrangler deploy`, Cloudflare serves old and new versions for about a minute. Wait before running the production smoke test.
 - `npm run build:demo` uses POSIX env syntax and won't run from Windows cmd; use Git Bash.
 - `apps/web/quikfly-web-architecture.md` is an old copy of the web README. Treat it as stale.
+- Free plan: at most 50 D1 queries per request. Keep loops of statements out of request paths (the catalog seed is one `json_each` insert for this reason).
+- `next dev` errors on detail pages that weren't pre-built (new admin-created holidays/cars). Test those on a build served with `npx wrangler dev` in `apps/web`.
+- React lists derived from API data with `useMemo` must list that data in the dependencies, or they stay empty after it loads.

@@ -1,6 +1,7 @@
-import { REFERRAL_BONUS, type ProfileUpdate, type User } from "@quikfly/shared";
+import type { ProfileUpdate, User } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { checkOtp, getUserRow, normalisePhone, toUser, type UserRow } from "./auth";
+import { getSettings } from "./settings";
 import { txnStatement } from "./wallet";
 
 async function reload(db: D1Database, userId: string): Promise<User> {
@@ -62,7 +63,7 @@ export async function deleteAccount(db: D1Database, demoOtp: string, userId: str
   ]);
 }
 
-/** Applies a friend's code once: both accounts get REFERRAL_BONUS in their wallet. */
+/** Applies a friend's code once: both accounts get the referral bonus (Settings) in their wallet. */
 export async function applyReferral(db: D1Database, userId: string, code: string): Promise<User> {
   const me = await getUserRow(db, userId);
   if (!me) throw notFound("Account not found.");
@@ -70,6 +71,7 @@ export async function applyReferral(db: D1Database, userId: string, code: string
   if (me.referral_code === code) throw badRequest("You can't use your own referral code.");
   const friend = await db.prepare("SELECT * FROM users WHERE referral_code = ? AND deleted_at IS NULL").bind(code).first<UserRow>();
   if (!friend) throw badRequest("That referral code doesn't exist.");
+  const REFERRAL_BONUS = (await getSettings(db)).referralBonus;
 
   await db.batch([
     db.prepare("UPDATE users SET referred_by = ?, wallet_balance = wallet_balance + ? WHERE id = ? AND referred_by IS NULL")

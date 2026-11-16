@@ -2,7 +2,7 @@
 // Stylised demo map. Swap for Google Maps / Mapbox / OLA Maps when going live —
 // the props (pickup, drop, vehicle position) stay the same.
 import type { Place } from "@quikfly/shared";
-import { PLACES } from "@quikfly/shared";
+import { useConfig } from "@/components/ConfigProvider";
 
 export type Pt = { x: number; y: number };
 
@@ -35,6 +35,7 @@ export function CityMap({
   pickup?: Place | null; drop?: Place | null; vehicle?: Pt | null; vehicleFrom?: Pt | null;
   showRoute?: boolean; searching?: boolean; kind?: "bike" | "car";
 }) {
+  const PLACES = useConfig()?.places ?? [];
   const c = pickup && drop ? control(pickup, drop) : null;
   return (
     <div className="relative w-full h-full min-h-[320px] overflow-hidden rounded-[1.25rem] border border-line bg-[var(--map-bg)]">

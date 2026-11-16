@@ -9,7 +9,8 @@ import { me } from "./routes/me";
 import { share } from "./routes/share";
 import { bookings } from "./routes/bookings";
 import { buses } from "./routes/buses";
-import { rentals, tours } from "./routes/catalog";
+import { config, rentals, tours } from "./routes/catalog";
+import { offers, quotes } from "./routes/quotes";
 import { places } from "./routes/places";
 import { rides } from "./routes/rides";
 
@@ -29,7 +30,10 @@ const v1 = new Hono<AppEnv>()
   .get("/health", (c) => c.json({ ok: true }))
   .route("/auth", auth)
   .route("/me", me)
+  .route("/config", config)
   .route("/share", share)
+  .route("/quotes", quotes)
+  .route("/offers", offers)
   .route("/places", places)
   .route("/rides", rides)
   .route("/buses", buses)

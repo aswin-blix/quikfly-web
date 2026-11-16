@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { Booking, CheckoutDraft, User } from "@quikfly/shared";
 import { api, UNAUTHORIZED_EVENT } from "@/lib/api";
+import { ConfigProvider } from "./ConfigProvider";
 
 type Toast = { id: number; text: string; tone: "ok" | "err" };
 
@@ -47,7 +48,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const raw = localStorage.getItem(USER_KEY);
       if (raw) setUserState(JSON.parse(raw));
       const d = sessionStorage.getItem(DRAFT_KEY);
-      if (d) setDraftState(JSON.parse(d));
+      // Drafts saved before prices came from the API have no quote: drop them.
+      const parsed = d ? JSON.parse(d) : null;
+      if (parsed?.quote) setDraftState(parsed);
     } catch { /* ignore */ }
   }, []);
 
@@ -115,7 +118,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       user, setUser, signOut, requireAuth, loginOpen, closeLogin,
       bookings, refreshBookings, draft, setDraft, toast, toasts,
     }}>
-      {children}
+      <ConfigProvider>{children}</ConfigProvider>
     </AppCtx.Provider>
   );
 }

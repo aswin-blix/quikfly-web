@@ -2,7 +2,7 @@
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · GSAP 3 · Framer Motion · lucide-react
 
-A clickable website for all six QuikFly services. Every service has its own page, and everything runs on a built-in mock API until the real backend is ready.
+The customer website for all six QuikFly services. All data and every price come from the API (`apps/api`): the catalog and business settings are edited in the admin panel (`apps/admin`). Without `NEXT_PUBLIC_API_URL` it runs on a built-in mock API (offline demo) that uses the shared seed and the same pricing code.
 
 ## Pages
 
@@ -91,10 +91,16 @@ src/
       mock.ts     demo implementation (seeded data, simulated latency, localStorage)
       http.ts     real REST implementation (Bearer token, JSON)
       index.ts    mock or http, based on NEXT_PUBLIC_API_URL
-      data.ts     website-only content: offers, coupons, popular routes, FAQs
+  components/ConfigProvider.tsx  loads GET /config once: useConfig() (places, ride types, cities, bus operators,
+                                  routes, destinations, offers, FAQs) and useSettings() (fares, GST, bonuses, company...)
+  components/catalog-hooks.ts     useTours(), useRentalCars(), useTravelVehicles(): bigger lists, fetched once per page load
 ```
 
-Domain types and catalog data (places, ride options, buses, tours, rentals) come from `@quikfly/shared` (`packages/shared`), the same package the API uses.
+**Where data comes from.** Screens never import catalog data from `@quikfly/shared` (it's only the seed). Small lists come from `useConfig()`, bigger ones from `catalog-hooks.ts`, and amounts the owner can change from `useSettings()`. While `/config` loads, lists are empty and `useSettings()` returns the defaults (fine for labels; prices are never taken from it).
+
+**Prices.** Service screens show a live estimate with the shared pricing functions (`priceTour`, `priceRent`, `priceGroup`... from `@quikfly/shared`) and the loaded settings, so options update instantly. On "Book" they call `api.quotes.create(...)` and put the returned quote in the checkout draft; checkout shows the quote's lines, checks coupons with `api.offers.check`, and books with `quoteId` (rides book with `rideId`). The API sets the amount.
+
+**Detail pages for new items.** `/holidays/[slug]` and `/rent-a-car/[id]` are pre-built for the seed items. Holidays and cars added in the admin later have no file, so the host serves the 404 page; `app/not-found.tsx` recognises those addresses and renders the detail screen, which loads the item from the API. (`next dev` can't do this: it errors on unknown slugs. Test it on a build served with `npx wrangler dev`.)
 
 Set `NEXT_PUBLIC_API_URL` (see `.env.example`) to switch to the real API in `apps/api`; no screen changes are needed. The endpoint list is in [apps/api/README.md](../api/README.md).
 
@@ -110,7 +116,7 @@ Set `NEXT_PUBLIC_API_URL` (see `.env.example`) to switch to the real API in `app
 - **Live tracking:** WebSockets (e.g. Laravel Reverb or Socket.IO) instead of the simulated vehicle animation.
 - **Payments:** Razorpay or Cashfree at checkout.
 - **SEO / SSR:** drop `output: "export"` if you need server rendering, middleware or route handlers.
-- Driver/partner app and admin panel (fleet, pricing, bookings, payouts).
+- Driver and partner apps; payouts. (The admin panel is `apps/admin`.)
 
 ## Author
 

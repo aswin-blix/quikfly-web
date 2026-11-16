@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { PhoneCall, Share2, ShieldAlert, Trash2, UserRound } from "lucide-react";
 import { LIMITS, NIGHT_HOURS, PATTERNS, type EmergencyContact } from "@quikfly/shared";
-import { SAFETY } from "@/lib/account";
+import { EMERGENCY_NUMBER } from "@/lib/account";
+import { useSettings } from "../ConfigProvider";
 import { api } from "@/lib/api";
 import { useApp } from "../AppProvider";
 import { GoldButton } from "../ui";
@@ -11,6 +12,7 @@ import { ErrorText, Field, ItemRow, Section, Toggle, useAction } from "./kit";
 const hour = (h: number) => `${h % 12 || 12} ${h < 12 ? "am" : "pm"}`;
 
 export function SafetySection() {
+  const SAFETY = { emergency: EMERGENCY_NUMBER, safetyLine: useSettings().safetyLine };
   const { user, setUser, toast } = useApp();
   const [contacts, setContacts] = useState<EmergencyContact[] | null>(null);
   const [name, setName] = useState("");

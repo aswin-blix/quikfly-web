@@ -7,7 +7,8 @@ import { CircleCheck, MapPin, Navigation, ShieldCheck, Star, XCircle } from "luc
 import { RIDE_SIMULATION, type SharedRide } from "@quikfly/shared";
 import { CityMap, driverStartFor, vehiclePosition } from "@/components/CityMap";
 import { Empty, Spinner } from "@/components/ui";
-import { SAFETY } from "@/lib/account";
+import { EMERGENCY_NUMBER } from "@/lib/account";
+import { useSettings } from "@/components/ConfigProvider";
 import { api } from "@/lib/api";
 import { useQuery } from "@/lib/nav";
 
@@ -24,6 +25,7 @@ function progress(startedAt: string, now: number): { phase: Phase; t: number } {
 }
 
 export function TrackScreen() {
+  const SAFETY = { emergency: EMERGENCY_NUMBER, safetyLine: useSettings().safetyLine };
   const token = useQuery().get("t") ?? "";
   const [ride, setRide] = useState<SharedRide | null>(null);
   const [error, setError] = useState("");

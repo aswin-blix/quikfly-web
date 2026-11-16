@@ -1,6 +1,7 @@
 import type {
-  AuthResult, Booking, Bus, EmergencyContact, FareQuote, Gender, PaymentMethod, Place, ProfileUpdate, RentalCar, Ride,
-  SavedPlace, SavedPlaceKind, Seat, ServiceKey, SharedRide, TourPackage, Traveller, TravelVehicle, User, WalletTransaction,
+  AppConfig, AuthResult, Booking, Bus, CouponCheck, EmergencyContact, FareQuote, Gender, NewBooking, PaymentMethod, Place, PriceQuote,
+  ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
+  WalletTransaction,
 } from "@quikfly/shared";
 
 /**
@@ -11,6 +12,10 @@ import type {
  * Change all three, plus the API and its smoke test, together (see AGENTS.md).
  */
 export interface QuikflyApi {
+  config: {
+    /** GET /config: settings and the small catalog lists, loaded once at start-up (components/ConfigProvider.tsx). */
+    get(): Promise<AppConfig>;
+  };
   auth: {
     /** POST /auth/otp */
     sendOtp(phone: string): Promise<{ sent: boolean }>;
@@ -82,26 +87,41 @@ export interface QuikflyApi {
   buses: {
     /** GET /buses?from=&to=&date= */
     search(from: string, to: string, date: string): Promise<Bus[]>;
-    /** GET /buses/:id/seats?date= */
-    seats(busId: string, date: string): Promise<Seat[]>;
+    /** GET /buses/:id/seats?from=&to=&date= (each seat carries its price) */
+    seats(bus: { id: string; from: string; to: string }, date: string): Promise<Seat[]>;
   };
   tours: {
     /** GET /tours */
     list(): Promise<TourPackage[]>;
+    /** GET /tours/:slug (rejects when hidden or missing) */
+    get(slug: string): Promise<TourPackage>;
   };
   rentals: {
     /** GET /rentals/cars?city= */
     cars(city: string): Promise<RentalCar[]>;
+    /** GET /rentals/cars/:id */
+    car(id: string): Promise<RentalCar>;
     /** GET /rentals/travel-vehicles */
     travelVehicles(): Promise<TravelVehicle[]>;
+  };
+  quotes: {
+    /** POST /quotes: the API's price for a bus, holiday, self-drive or group booking. */
+    create(req: QuoteRequest): Promise<PriceQuote>;
+  };
+  offers: {
+    /** POST /offers/check: what a coupon takes off a quote or a ride (rejects with the reason). */
+    check(code: string, ref: { quoteId: string } | { rideId: string }): Promise<CouponCheck>;
   };
   bookings: {
     /** GET /bookings */
     list(): Promise<Booking[]>;
     /** GET /bookings/:id */
     get(id: string): Promise<Booking>;
-    /** POST /bookings: a wallet payment is deducted here and fails if the balance is too low. */
-    create(input: Omit<Booking, "id" | "createdAt" | "status"> & { service: ServiceKey }): Promise<Booking>;
+    /**
+     * POST /bookings: priced by `quoteId` (or `rideId` for rides) minus `couponCode`; the API sets
+     * the amount. A wallet payment is deducted here and fails if the balance is too low.
+     */
+    create(input: NewBooking): Promise<Booking>;
     /** POST /bookings/:id/cancel: refunds a wallet payment. */
     cancel(id: string): Promise<Booking>;
     /** POST /bookings/:id/complete: marks a finished trip (stand-in for the driver app). */
