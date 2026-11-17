@@ -226,7 +226,10 @@ class Constrained extends StatelessWidget {
   final double maxWidth;
   @override
   // heightFactor 1: take the child's height, so it also works in bottom bars.
-  Widget build(BuildContext context) => Center(heightFactor: 1, child: ConstrainedBox(constraints: BoxConstraints(maxWidth: maxWidth), child: child));
+  // The SizedBox gives the child the full (capped) width, so cards line up edge to edge.
+  Widget build(BuildContext context) => Center(
+      heightFactor: 1,
+      child: ConstrainedBox(constraints: BoxConstraints(maxWidth: maxWidth), child: SizedBox(width: double.infinity, child: child)));
 }
 
 /// Standard padded, scrollable screen body capped at a readable width.

@@ -81,6 +81,26 @@ void main() {
     expect(seats.where((s) => !s.booked), isNotEmpty);
   });
 
+  test('rental quotes and licence', () async {
+    final cars = await api.cars();
+    final start = DateTime.now().add(const Duration(days: 3));
+    String fmt(DateTime d) => d.toIso8601String().substring(0, 16);
+    final rent = await api.quote({
+      'service': 'rent', 'carId': cars.first.id, 'mode': 'self', 'start': fmt(start), 'end': fmt(start.add(const Duration(hours: 26))),
+      'kmPlan': 'limited', 'protection': 'standard', 'doorstep': false,
+    });
+    expect(rent.service, ServiceKey.rent);
+    expect(rent.lines.length, greaterThanOrEqualTo(2));
+    final vehicles = await api.travelVehicles();
+    final group = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'outstation', 'destinationId': config.groupDestinations.first.id, 'days': 2});
+    expect(group.total, greaterThan(0));
+    final local = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'local', 'days': 1});
+    expect(local.total, vehicles.first.localPackage);
+    final u = await api.submitLicence('TN0920190001234', fmt(DateTime.now().add(const Duration(days: 400))).substring(0, 10));
+    expect(u.licence.status, anyOf(LicenceStatus.pending, LicenceStatus.verified));
+    expect(u.licence.number, 'TN0920190001234');
+  });
+
   test('errors carry the API message', () async {
     await expectLater(api.verifyOtp('+91 $phone', '0000'), throwsA(isA<ApiException>().having((e) => e.message, 'message', isNotEmpty)));
   });

@@ -157,7 +157,7 @@ class _LicencePanelState extends ConsumerState<LicencePanel> {
               },
               child: InputDecorator(
                 decoration: const InputDecoration(labelText: 'Valid till', suffixIcon: Icon(Icons.calendar_today, size: 18)),
-                child: Text(_expiry == null ? 'Pick a date' : shortDate(_expiry!), style: TextStyle(color: _expiry == null ? c.fgSubtle : c.fg)),
+                child: Text(_expiry == null ? 'Pick a date' : longDate(_expiry!), style: TextStyle(color: _expiry == null ? c.fgSubtle : c.fg)),
               ),
             ),
             FormError(_err),

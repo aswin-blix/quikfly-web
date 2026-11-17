@@ -406,7 +406,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ),
       if (d.needsLicence) ...[
         const SizedBox(height: 12),
-        LicencePanel(error: _errors['licence'], onSaved: () => setState(() => _errors.remove('licence'))),
+        LicencePanel(showForm: false, error: _errors['licence'], onSaved: () => setState(() => _errors.remove('licence'))),
       ],
       const SizedBox(height: 12),
       if (user?.gst != null)

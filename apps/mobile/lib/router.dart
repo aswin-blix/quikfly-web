@@ -14,6 +14,8 @@ import 'screens/help/help_screen.dart';
 import 'screens/holidays/holiday_screens.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/offers/offers_screen.dart';
+import 'screens/rent/group_screen.dart';
+import 'screens/rent/rent_screens.dart';
 import 'screens/ride/ride_screen.dart';
 import 'screens/shell.dart';
 import 'screens/trips/trips_screen.dart';
@@ -66,9 +68,9 @@ final router = GoRouter(
       builder: (_, s) => ConfirmedScreen(id: s.pathParameters['id']!, booking: s.extra is Booking ? s.extra as Booking : null),
     ),
     GoRoute(path: '/invoice/:id', parentNavigatorKey: _rootKey, builder: (_, s) => InvoiceScreen(id: s.pathParameters['id']!)),
-    _soon('/rent', 'Rent a car'),
-    _soon('/rent/:id', 'Rental car'),
-    _soon('/group', 'Group travel'),
+    GoRoute(path: '/rent', parentNavigatorKey: _rootKey, builder: (_, _) => const RentScreen()),
+    GoRoute(path: '/rent/:id', parentNavigatorKey: _rootKey, builder: (_, s) => RentDetailScreen(id: s.pathParameters['id']!)),
+    GoRoute(path: '/group', parentNavigatorKey: _rootKey, builder: (_, _) => const GroupScreen()),
     _soon('/account/:section', 'Account settings'),
   ],
   errorBuilder: (_, _) => const ComingSoonScreen(title: 'This page'),
