@@ -265,6 +265,9 @@ export interface TravelVehicle {
   features: string[];
 }
 
+/** The booking line that records a coupon ("HOLIDAY10 (−₹2,940)"). Written by the API only; apps may show it as is. */
+export const COUPON_LINE = "Coupon";
+
 export interface Booking {
   id: string;
   service: ServiceKey;
