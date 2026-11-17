@@ -9,6 +9,8 @@
 
 Admin panel (`apps/admin`): production https://quikfly-admin.quikfly-api.workers.dev (owner account `admin@quikfly.com`; the owner keeps the password, reset it with `create-admin.mjs`); local `npm run dev:admin` on :3100. It talks to the same API.
 
+Android app (`apps/mobile`): latest APK https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk (GitHub Releases, `app-v0.1.0` first); builds use the production API unless `--dart-define=API_URL` says otherwise. Details in the Android app section below.
+
 - Cloudflare account: the owner's (log in with `npx wrangler login`). The workers.dev subdomain is `quikfly-api`, which is why both URLs contain it.
 - Production website settings are in `apps/web/.env.production` (API URL, demo OTP hint). Public values only.
 - Local website against the local API: create `apps/web/.env.local` with `NEXT_PUBLIC_API_URL=http://localhost:8787/v1` and `NEXT_PUBLIC_DEMO_OTP=1234`. Without it, the site uses the mock API.
