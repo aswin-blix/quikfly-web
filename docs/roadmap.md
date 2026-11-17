@@ -33,7 +33,7 @@ Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs s
 | ID | Step | Who | Output | Status |
 |---|---|---|---|---|
 | D0 | Phone-test sign-off: fix what the owner found testing 0.1.1 (closes Phase 3 / M6) | Owner reports, Claude fixes | PRs, app 0.1.2 if needed | ⬜ |
-| D1 | Production rehearsal of the core flow (script below), timing each step | Claude drives admin + website + phone (adb), owner watches | Work-log entry with results and timings; bugs fixed in PRs | 🔄 parts 1–3 done, wallet refund + licence left |
+| D1 | Production rehearsal of the core flow (script below), timing each step | Claude drives admin + website + phone (adb), owner watches | Work-log entry with results and timings; bugs fixed in PRs | ✅ done (staff-cancel wallet refund skipped by the owner: covered by the automated tests) |
 | D2 | Demo script for the presenter: `docs/demo-script.md` | Claude writes, owner reviews | Doc (setup checklist, talk track, demo data, what's simulated, timings, fallbacks) | ⬜ |
 | D3 | Demo data and settings on production: **keep the data** (decision 1); only check settings (read-only) and explain test entries in the script | Claude | Settings checked; D2 script says how to describe the existing test bookings | ⬜ |
 | D4 | Fallbacks and resilience checks | Claude | Section in the demo script; any fixes | ⬜ |
@@ -83,6 +83,9 @@ What's there now: smoke tests ran against production, leaving test accounts **+9
     4. App shows an Invoice button on cancelled bookings (the invoice screen then says there's no invoice).
     5. The customer doesn't see staff's cancellation reason in the app (admin does).
     6. Staff cancelling a ride while the customer's ride screen is open doesn't update that screen (the simulation keeps running). Avoid that in the demo.
+  - **Licence round** (owner tapped on the phone, Claude worked admin): submitted `TN09 20190001234` → appeared in the admin queue at once → rejected with a reason → the app switched to "Not approved: <reason>" by itself in about 5–7 s → owner tapped "Submit again" → back in the queue → approved → the app showed "Verified" in about 7 s. Works as designed (the app polls every 5 s while a review is pending).
+  - Staff cancel → wallet refund: skipped at the owner's choice (option (b)); it is covered by the customer and admin smoke tests. For the live demo use a wallet-paid bus seat (finding 1).
+  - D1 result: the admin → website + app → book → staff cancel flow and the licence approval both work on production; changes show within seconds.
   - Incident: driving the phone by coordinates, a tap meant for the ride's Cancel button landed on Share after the trip started and opened WhatsApp's "Send to…" list; Back was pressed at once and nothing was sent. From now on: screenshot before every tap, no taps near Share/Call/SOS, and the owner taps on the phone for time-sensitive steps.
 
 ### After Phase 4
