@@ -27,7 +27,9 @@ apps/api/         Cloudflare Worker: Hono + D1 (SQLite)
   src/config.ts   tunable API values that are NOT (yet) runtime settings
   migrations/     numbered D1 SQL files; never edit an applied one, add a new one
   scripts/        smoke.mjs (customer endpoints) · smoke-admin.mjs (admin endpoints) · create-admin.mjs (staff accounts)
-apps/mobile/      Flutter app (Phase 3, not started)
+apps/mobile/      Flutter Android app (Phase 3, in progress; read apps/mobile/README.md). Same endpoints as the website:
+  lib/api/        api.dart (one method per endpoint) · models.dart (Dart copy of packages/shared types + Rules)
+  lib/theme/      tokens.dart mirrors apps/web tokens.css · lib/screens/ one folder per area · test/api_contract_test.dart
 packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation patterns, limits),
                   catalog.ts (SEED data only) + catalog-kinds.ts (12 kinds, fields, validation), settings.ts
                   (runtime Settings, defaults, rules), pricing.ts (all price maths + bus/ride simulation),
@@ -46,12 +48,13 @@ npm run build               # API dry-run bundle + website export + admin export
 npm run smoke               # API end-to-end tests against the local API (node apps/api/scripts/smoke.mjs <baseUrl> for others)
 npm run smoke:admin         # admin endpoints against the local API; creates its own test admins
 npm run deploy              # production; read docs/operations.md first
+cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://127.0.0.1:8787/v1   # app checks
 ```
 
 ## Rules
 
 1. **One contract, four implementations.** An API change touches all of these in the same change:
-   `packages/shared` types → `apps/api` route + service (+ migration) → `apps/web/src/lib/api/contract.ts` → `http.ts` → `mock.ts` → `scripts/smoke.mjs` checks → the endpoint table in `apps/api/README.md`. The Flutter app will consume the same endpoints.
+   `packages/shared` types → `apps/api` route + service (+ migration) → `apps/web/src/lib/api/contract.ts` → `http.ts` → `mock.ts` → `scripts/smoke.mjs` checks → the endpoint table in `apps/api/README.md` → `apps/mobile/lib/api/models.dart` + `api.dart` when the app uses it, and its contract test.
 2. **Separation of concerns.** Routes validate, services hold logic and SQL, screens render. Shared rules (regexes, limits, bonus amounts) live in `packages/shared/src/rules.ts`, so the API enforces them and the apps check early with the same values.
 3. **No hard-coded tunables.** Customisable values go in named constants (`apps/api/src/config.ts`, `packages/shared/src/rules.ts`, `apps/web/src/lib/*`), and colours go in `tokens.css`. Use token utilities (`text-gold`, `bg-coal`...), never raw hex or Tailwind palette colours.
 4. **Admin writes are audited and permission-checked.** Every `/admin` route that changes data uses `requireAdmin("<permission>")` and writes an `audit_log` row (`services/admin/audit.ts`; use `auditStatement` inside the change's `db.batch()` so both land together). New permissions go in `PERMISSIONS` (`packages/shared/src/admin.ts`); the admin UI hides what a role can't do using the same map. Runtime-tunable business values belong in `Settings` (`packages/shared/src/settings.ts`), not `config.ts`.

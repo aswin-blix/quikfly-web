@@ -12,11 +12,35 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started
 | 2. Website on Cloudflare | ✅ | Live. Demo fixes in PR #5 (ride completion, real wallet, bus times, date strip, rental defaults, cancel errors, holiday tabs) |
 | 2b. Complete the web version: accounts + competitor features | ✅ | Live. PR #6, deployed 2026-11-16 (migration 0003) |
 | 2c. Admin panel (lean) + everything from the API | ✅ | Live. PRs #8 (L1), #9 (L2), #10 (L3), released 2026-11-17 (migrations 0004 + 0005). Admin at https://quikfly-admin.quikfly-api.workers.dev. Tracker below |
-| 3. Flutter Android app (`apps/mobile`) | ⬜ | **Next.** Signed APK shared by link; same API (catalog, settings and prices come from `/config`, catalog endpoints and `/quotes`) |
+| 3. Flutter Android app (`apps/mobile`) | 🔄 | **In progress.** Full parity with the website, slices M1–M6 (tracker below). Signed APK on GitHub Releases; same API |
 | 4. Demo hardening | ⬜ | Rehearse: edit a price in admin → see it on the web and the phone → book → cancel → refund. "Reset catalog" (L2) covers most of "reset demo data" |
 | 5. Admin, full | ⬜ | The parts cut from the lean plan: customers screen (wallet adjust, suspend, sign out everywhere, cancel deletion), booking notes, SOS alerts in admin, team screen, CSV export |
 
-## Current task: lean admin panel (L1–L3) 🔄
+## Current task: Flutter Android app (M1–M6) 🔄
+
+Started 2026-11-17. Owner's choices: **full parity** with the website for the first APK the client sees; live price estimates **ask the API** (`POST /quotes`, debounced), no price maths in Dart; APK published as a **GitHub Release** (public repo, no login to download) and linked from the website's "Get it on Google Play" button; package id **`com.quikfly.app`**. Details in [decisions.md](decisions.md) and [apps/mobile/README.md](../apps/mobile/README.md).
+
+### Feature tracker
+
+| ID | Slice | API calls | Code | Contract test | Browser (390 px, light + dark) | APK |
+|---|---|---|---|---|---|---|
+| M1 | Foundation: scaffold, tokens + themes, API client + models, session (secure storage), tab shell (Home, Services sheet, Offers, My Trips, Account), OTP sign-in + sign-up + referral, home, offers, My Trips (cancel + refund), account hub, help, theme toggle | `/config`, `/auth/*`, `PATCH /me`, `/me/referral`, `/tours`, `/bookings` | ✅ | ✅ | ✅ | 🔄 |
+| M2 | Rides: bike taxi + cab, place search, fares, driver search, tracking with OTP on a drawn map, cancel, share link, SOS, rating | `/places`, `/rides/*`, `/bookings` (rideId), `/bookings/:id/complete` | ⬜ | ⬜ | ⬜ | ⬜ |
+| M3 | Bus + holidays + checkout: bus search + date strip + filters, seat map, holiday list + detail, shared checkout (travellers, coupon, payment), confirmation, invoice | `/buses`, `/buses/:id/seats`, `/tours/:slug`, `/quotes`, `/offers/check`, `/bookings` | ⬜ | ⬜ | ⬜ | ⬜ |
+| M4 | Rentals: self-drive / chauffeur cars, car detail, licence check, group vehicles | `/rentals/*`, `/me/licence`, `/quotes` | ⬜ | ⬜ | ⬜ | ⬜ |
+| M5 | Account: profile, change number, wallet history, saved places, travellers, emergency contacts, auto-share night rides, referral, sign out everywhere, delete account | `/me/*` | ⬜ | ⬜ | ⬜ | ⬜ |
+| M6 | Release: upload key, signed release APK, GitHub Release, website download link (B9) | — | ⬜ | — | — | ⬜ |
+
+Each slice: `flutter analyze` → contract test against the local API → browser pass of the web build at 390 px in light and dark → APK builds → docs + memory → commit (owner asked for regular commits) → PR.
+
+### Work log
+
+- 2026-11-17 Plan agreed (choices above). Branch `feat/mobile-m1`.
+- 2026-11-17 **M1** (commits "Mobile M1: Flutter scaffold..." and "Mobile M1: app shell..."): `flutter create` (Android + web for dev previews), `com.quikfly.app`, release signing from git-ignored `android/key.properties` (debug key fallback), INTERNET permission, cleartext only in debug, Outfit static weights + Archivo Black bundled, launcher icon from the logo's Q. `theme/tokens.dart` mirrors `tokens.css`; `api/api.dart` one method per endpoint (never an amount); `api/models.dart` mirrors `types.ts` + `Rules`; session token in secure storage, 401 signs out. Screens: tab shell, login (phone → OTP with demo hint → profile + referral), home (services, offers, popular routes, trending holidays, safety, help), offers (filter by service, copy code), My Trips (tabs, details, cancel with wallet refund), account hub, help centre; other routes show "coming in the next build". `test/api_contract_test.dart`: 6 tests pass against the local API.
+  - Browser pass (web build at 390 px against the local API): home lists from the API; new number → OTP 1234 auto-submits → profile step → account with ₹500; light mode on account, trips, home. Fixed during the pass: selected theme segment had gold text on gold (now a segmented-button theme); route chips were indented by their tap padding; the logo washed out in light mode (`AppLogo` dark badge).
+- Next: M2 rides.
+
+## Released: lean admin panel (L1–L3) ✅
 
 Requested 2026-11-16. Owner chose the **lean** plan: prove the model end to end (edit data in admin → website and app show it → book → cancel → refund) before the Flutter app; the rest of the admin comes after the client demo (Phase 5).
 
@@ -47,10 +71,7 @@ Each slice: typecheck → smoke (`smoke.mjs` + `smoke-admin.mjs`) → browser pa
 - 2026-11-17 **L3** (branch `feat/admin-l3`): API `services/admin/bookings.ts` (search with q/status/service/India-time dates, detail with wallet entries, coupon and staff history, cancel with reason + wallet refund via the shared `cancelBookingRow`, complete), `services/admin/licences.ts` (queue by status, approve/reject pending only, reason stored as `licence_note`, audited with the number), `routes/admin/operations.ts`. Admin: `/bookings` (filters kept in the URL, table on desktop, cards on phones), `/bookings/view` (summary, customer, wallet, staff actions, cancel with `ReasonDialog`, mark completed), `/licences` (To review / Rejected / Approved, approve, reject with a reason the customer sees); dashboard queue links now live. Website: rejection message shows only the reviewer's reason. Admin smoke grows to 96 checks (bookings search/filter/detail, staff cancel refunds the wallet, 409s, licence reject → customer sees reason → resubmit → approve, content role 403s); customer smoke 126.
   - Browser pass: customer submits licence on the website (390 px) → staff reject in admin (desktop; reason required) → the account page shows "Not approved: <reason>" without reloading → resubmit → staff approve → website shows Verified; staff find the customer's wallet ride by phone, cancel with a reason → wallet ₹300 → ₹500, booking history shows the reason, customer's My Trips lists it under Cancelled; bookings list, detail and licences fit at 390 px. Fixed during the pass: booking filters overlapped at desktop width and were tall on phones (now two rows on desktop, paired controls on phones, labelled dates).
 - 2026-11-17 **Released**: #8 → #9 → #10 merged; remote migrations 0004 + 0005; API, website and admin deployed. Production owner account `admin@quikfly.com` created with `create-admin.mjs` (password held by the owner). Production smoke: customer 126/126, admin 83/83 (the lockout and second-role checks run only locally). Browser: website holidays (8 packages from the API) and admin login checked at 390 px. Fixed: `smoke-admin.mjs` now retries the "auto-approve on" licence check until other Worker isolates pick up the setting (it already did this for "off").
-- Next (pick up here in a new session):
-  1. Check PR #11 (this release record + smoke-admin retry) is merged: `gh pr view 11 --json state`. If it is still open, ask the owner before merging it.
-  2. Start Phase 3, the Flutter app in `apps/mobile`: plan the screens and API calls first and agree them with the owner. The app uses the same endpoints as the website (`apps/api/README.md`): `GET /config` for settings and lists, catalog endpoints, `POST /quotes` before every booking (never send an amount), OTP login (demo OTP 1234).
-  - Known small items: new holiday/car detail pages added after a build return HTTP 404 status (render fine; fixed by the next deploy); a leftover Vercel GitHub app posts a failing check on every PR (ignore it, or the owner uninstalls it).
+- Known small items: new holiday/car detail pages added after a build return HTTP 404 status (render fine; fixed by the next deploy); a leftover Vercel GitHub app posts a failing check on every PR (ignore it, or the owner uninstalls it).
 
 ## Released: Part A (accounts) + B1–B4 ✅
 
