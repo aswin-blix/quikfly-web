@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'api/models.dart';
 import 'screens/account/account_screen.dart';
+import 'screens/account/account_sections.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/bus/bus_screens.dart';
 import 'screens/checkout/checkout_screen.dart';
 import 'screens/checkout/confirmed_screen.dart';
 import 'screens/checkout/invoice_screen.dart';
-import 'screens/coming_soon.dart';
+import 'screens/not_found.dart';
 import 'screens/help/help_screen.dart';
 import 'screens/holidays/holiday_screens.dart';
 import 'screens/home/home_screen.dart';
@@ -21,8 +22,6 @@ import 'screens/shell.dart';
 import 'screens/trips/trips_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
-
-GoRoute _soon(String path, String title) => GoRoute(path: path, parentNavigatorKey: _rootKey, builder: (_, _) => ComingSoonScreen(title: title));
 
 final router = GoRouter(
   navigatorKey: _rootKey,
@@ -44,7 +43,6 @@ final router = GoRouter(
       parentNavigatorKey: _rootKey,
       builder: (_, s) => RideScreen(key: ValueKey(s.pathParameters['service']), service: s.pathParameters['service'] == 'bike' ? ServiceKey.bike : ServiceKey.car),
     ),
-    // Later slices replace these placeholders.
     GoRoute(path: '/bus', parentNavigatorKey: _rootKey, builder: (_, _) => const BusScreen()),
     GoRoute(
       path: '/bus/search',
@@ -71,7 +69,7 @@ final router = GoRouter(
     GoRoute(path: '/rent', parentNavigatorKey: _rootKey, builder: (_, _) => const RentScreen()),
     GoRoute(path: '/rent/:id', parentNavigatorKey: _rootKey, builder: (_, s) => RentDetailScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/group', parentNavigatorKey: _rootKey, builder: (_, _) => const GroupScreen()),
-    _soon('/account/:section', 'Account settings'),
+    GoRoute(path: '/account/:section', parentNavigatorKey: _rootKey, builder: (_, s) => AccountSectionScreen(section: s.pathParameters['section']!)),
   ],
-  errorBuilder: (_, _) => const ComingSoonScreen(title: 'This page'),
+  errorBuilder: (_, _) => const NotFoundScreen(),
 );

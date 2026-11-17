@@ -105,6 +105,29 @@ void main() {
     await expectLater(api.verifyOtp('+91 $phone', '0000'), throwsA(isA<ApiException>().having((e) => e.message, 'message', isNotEmpty)));
   });
 
+  test('account sections write and read back', () async {
+    final u = await api.updateProfile({'email': 'contract@example.com', 'gender': 'female', 'dob': '1995-06-15', 'gst': {'gstin': '33ABCDE1234F1Z5', 'name': 'Contract Co'}});
+    expect(u.email, 'contract@example.com');
+    expect(u.gender, Gender.female);
+    expect(u.gst?.gstin, '33ABCDE1234F1Z5');
+    final places = await api.savePlace('home', config.places.first.id);
+    final home = places.firstWhere((p) => p.kind == 'home');
+    expect(home.place.id, config.places.first.id);
+    expect((await api.removePlace(home.id)).any((p) => p.id == home.id), isFalse);
+    final ts = await api.addTraveller('Contract Kid', 9, Gender.other);
+    final kid = ts.firstWhere((t) => t.name == 'Contract Kid');
+    expect(kid.age, 9);
+    await api.removeTraveller(kid.id);
+    final cs = await api.contacts();
+    if (cs.length < Rules.emergencyContacts) {
+      final added = await api.addContact('Contract Contact', '9876543210', relation: 'Friend');
+      final x = added.firstWhere((c) => c.name == 'Contract Contact');
+      expect(x.relation, 'Friend');
+      await api.removeContact(x.id);
+    }
+    await api.updateProfile({'gst': null});
+  });
+
   test('wallet and saved lists parse', () async {
     expect(await api.wallet(), isA<List<WalletTransaction>>());
     expect(await api.savedPlaces(), isA<List<SavedPlace>>());
