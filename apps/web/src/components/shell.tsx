@@ -2,7 +2,7 @@
 // Site chrome: header, footer, login modal, toasts, page transition.
 import { AnimatePresence, motion, MotionConfig, useMotionValueEvent, useScroll } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, CircleCheck, HelpCircle, LayoutGrid, Ticket, TriangleAlert, User as UserIcon, Wallet } from "lucide-react";
+import { ChevronDown, CircleCheck, Download, HelpCircle, LayoutGrid, Ticket, TriangleAlert, User as UserIcon, Wallet } from "lucide-react";
 import { AppProvider, useApp } from "./AppProvider";
 import { LoginModal } from "./LoginModal";
 import { BottomNav, BottomNavProvider } from "./BottomNav";
@@ -14,7 +14,7 @@ import { api, DEMO_MODE, DEMO_OTP } from "@/lib/api";
 import { cx, inr } from "@/lib/format";
 import { Link, usePath } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
-import { AUTHOR } from "@/lib/site";
+import { ANDROID_APP, AUTHOR } from "@/lib/site";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePath();
@@ -135,7 +135,10 @@ function Footer() {
           <img src="/assets/logo.png" alt="QuikFly" className="h-14 rounded-lg" />
           <p className="text-muted mt-4 max-w-sm">Rides, buses, holidays and rentals in one app. One login, one wallet, every journey.</p>
           <div className="flex gap-3 mt-5">
-            {["Google Play", "App Store"].map((s) => <span key={s} className="px-3 py-2 rounded-lg border border-line text-xs text-soft">Get it on {s}</span>)}
+            <a href={ANDROID_APP.downloadUrl} download className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gold/50 text-xs text-gold hover:bg-gold/10">
+              <Download size={14} />Android app (APK)
+            </a>
+            <span className="px-3 py-2 rounded-lg border border-line text-xs text-muted">iPhone: coming later</span>
           </div>
         </div>
         <FooterCol title="Services" links={SERVICES.map((s) => [s.action, s.href])} />

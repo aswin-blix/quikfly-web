@@ -8,7 +8,7 @@ The customer website for all six QuikFly services. All data and every price come
 
 | Route | What it does | Pattern borrowed from |
 |---|---|---|
-| `/` | Hero with a booking widget for every service, service cards, swipeable "six ways to move" carousel (arrows + progress bar), count-up stats, offers, popular bus routes, trending holidays, safety, testimonials, app download, FAQ | Uber (booking form in the hero), Rapido (big service tiles) |
+| `/` | Hero with a booking widget for every service, service cards, swipeable "six ways to move" carousel (arrows + progress bar), count-up stats, offers, popular bus routes, trending holidays, safety, testimonials, Android app download (direct APK from GitHub Releases; footer has the same link), FAQ | Uber (booking form in the hero), Rapido (big service tiles) |
 | `/bike-taxi`, `/cab` | Pickup/drop → fare per vehicle type → driver search → live tracking with ride OTP → rating; plus ride options, fare rates and FAQ | Uber / Ola / Rapido |
 | `/bus` | Route search with swap, quick date chips, popular routes, offers | redBus |
 | `/bus/search` | 7-day date strip, filter sidebar (departure time, AC/sleeper, max price, rating, operator), sort, expandable seat map with boarding/dropping points | redBus |
@@ -85,7 +85,7 @@ src/
     nav.tsx       routing helpers (Next routes or in-memory)
     gsap.ts       GSAP + plugins registration
     theme.ts      light/dark theme logic (storage, system preference, no-flash script)
-    site.ts       site-wide facts (author credit)
+    site.ts       site-wide facts (author credit, ANDROID_APP download links)
     api/
       contract.ts QuikflyApi interface: the only thing screens depend on
       mock.ts     demo implementation (seeded data, simulated latency, localStorage)

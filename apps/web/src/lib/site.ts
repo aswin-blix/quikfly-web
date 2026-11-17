@@ -13,3 +13,15 @@ export const AUTHOR = {
   name: "Aswin Blix",
   url: "https://aswinblix.dev/",
 } as const;
+
+/**
+ * The Android app: a signed APK on GitHub Releases (no Play Store until the client signs off).
+ * The "latest" links always serve the newest release, so they don't change per version.
+ */
+export const ANDROID_APP = {
+  downloadUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk",
+  /** Release page: install steps, the file for older (32-bit) phones, checksums. */
+  releaseUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest",
+  size: "about 22 MB",
+  minAndroid: "Android 7.0+",
+} as const;
