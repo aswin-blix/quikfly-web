@@ -7,7 +7,7 @@
 | Production | https://quikfly-web.quikfly-api.workers.dev | https://quikfly-api.quikfly-api.workers.dev/v1 | D1 `quikfly-db` (id in `apps/api/wrangler.jsonc`, region APAC) |
 | Local | http://localhost:3000 (`npm run dev:web`) | http://localhost:8787/v1 (`npm run dev:api`) | local D1 in `apps/api/.wrangler/` |
 
-Admin panel (`apps/admin`): production address set at the L1 release (`quikfly-admin.quikfly-api.workers.dev` planned); local `npm run dev:admin` on :3100. It talks to the same API.
+Admin panel (`apps/admin`): production https://quikfly-admin.quikfly-api.workers.dev (owner account `admin@quikfly.com`; the owner keeps the password, reset it with `create-admin.mjs`); local `npm run dev:admin` on :3100. It talks to the same API.
 
 - Cloudflare account: the owner's (log in with `npx wrangler login`). The workers.dev subdomain is `quikfly-api`, which is why both URLs contain it.
 - Production website settings are in `apps/web/.env.production` (API URL, demo OTP hint). Public values only.

@@ -11,8 +11,8 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started
 | 1. API (Workers + Hono + D1) | ✅ | Live. PR #4 |
 | 2. Website on Cloudflare | ✅ | Live. Demo fixes in PR #5 (ride completion, real wallet, bus times, date strip, rental defaults, cancel errors, holiday tabs) |
 | 2b. Complete the web version: accounts + competitor features | ✅ | Live. PR #6, deployed 2026-11-16 (migration 0003) |
-| 2c. Admin panel (lean) + everything from the API | 🔄 | Code complete, PRs #8 (L1) → #9 (L2) → #10 (L3) open, stacked; then release. Tracker below |
-| 3. Flutter Android app (`apps/mobile`) | ⬜ | Signed APK shared by link; same API. Can start once L2 is live (catalog, settings and prices come from the API) |
+| 2c. Admin panel (lean) + everything from the API | ✅ | Live. PRs #8 (L1), #9 (L2), #10 (L3), released 2026-11-17 (migrations 0004 + 0005). Admin at https://quikfly-admin.quikfly-api.workers.dev. Tracker below |
+| 3. Flutter Android app (`apps/mobile`) | ⬜ | **Next.** Signed APK shared by link; same API (catalog, settings and prices come from `/config`, catalog endpoints and `/quotes`) |
 | 4. Demo hardening | ⬜ | Rehearse: edit a price in admin → see it on the web and the phone → book → cancel → refund. "Reset catalog" (L2) covers most of "reset demo data" |
 | 5. Admin, full | ⬜ | The parts cut from the lean plan: customers screen (wallet adjust, suspend, sign out everywhere, cancel deletion), booking notes, SOS alerts in admin, team screen, CSV export |
 
@@ -46,7 +46,8 @@ Each slice: typecheck → smoke (`smoke.mjs` + `smoke-admin.mjs`) → browser pa
 - 2026-11-17 L2 PR #9 opened (stacked on #8).
 - 2026-11-17 **L3** (branch `feat/admin-l3`): API `services/admin/bookings.ts` (search with q/status/service/India-time dates, detail with wallet entries, coupon and staff history, cancel with reason + wallet refund via the shared `cancelBookingRow`, complete), `services/admin/licences.ts` (queue by status, approve/reject pending only, reason stored as `licence_note`, audited with the number), `routes/admin/operations.ts`. Admin: `/bookings` (filters kept in the URL, table on desktop, cards on phones), `/bookings/view` (summary, customer, wallet, staff actions, cancel with `ReasonDialog`, mark completed), `/licences` (To review / Rejected / Approved, approve, reject with a reason the customer sees); dashboard queue links now live. Website: rejection message shows only the reviewer's reason. Admin smoke grows to 96 checks (bookings search/filter/detail, staff cancel refunds the wallet, 409s, licence reject → customer sees reason → resubmit → approve, content role 403s); customer smoke 126.
   - Browser pass: customer submits licence on the website (390 px) → staff reject in admin (desktop; reason required) → the account page shows "Not approved: <reason>" without reloading → resubmit → staff approve → website shows Verified; staff find the customer's wallet ride by phone, cancel with a reason → wallet ₹300 → ₹500, booking history shows the reason, customer's My Trips lists it under Cancelled; bookings list, detail and licences fit at 390 px. Fixed during the pass: booking filters overlapped at desktop width and were tall on phones (now two rows on desktop, paired controls on phones, labelled dates).
-- Next: owner merges #8 → #9 → #10, then release (migrations 0004 + 0005, API, owner account, smoke, website, admin). Then Phase 3 (Flutter).
+- 2026-11-17 **Released**: #8 → #9 → #10 merged; remote migrations 0004 + 0005; API, website and admin deployed. Production owner account `admin@quikfly.com` created with `create-admin.mjs` (password held by the owner). Production smoke: customer 126/126, admin 83/83 (the lockout and second-role checks run only locally). Browser: website holidays (8 packages from the API) and admin login checked at 390 px. Fixed: `smoke-admin.mjs` now retries the "auto-approve on" licence check until other Worker isolates pick up the setting (it already did this for "off").
+- Next: Phase 3 (Flutter).
 
 ## Released: Part A (accounts) + B1–B4 ✅
 
