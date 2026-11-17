@@ -2,7 +2,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight, BadgePercent, ChevronLeft, ChevronRight, Headphones, IndianRupee, MapPin, PhoneCall, Quote, Route, ShieldCheck, Share2, Smartphone, Sparkles, Star, Timer, UserCheck, Wallet,
+  ArrowRight, BadgePercent, Download, ChevronLeft, ChevronRight, Headphones, IndianRupee, MapPin, PhoneCall, Quote, Route, ShieldCheck, Share2, Smartphone, Sparkles, Star, Timer, UserCheck, Wallet,
 } from "lucide-react";
 import { BookingWidget } from "@/components/BookingWidget";
 import { SceneArt } from "@/components/SceneArt";
@@ -12,6 +12,7 @@ import { inr, todayISO } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
+import { ANDROID_APP } from "@/lib/site";
 import { useApp } from "@/components/AppProvider";
 import { useConfig } from "@/components/ConfigProvider";
 import { useTours } from "@/components/catalog-hooks";
@@ -361,18 +362,25 @@ function AppDownload() {
         <div className="p-8 sm:p-12">
           <Smartphone className="text-gold" size={30} />
           <h2 className="font-display text-3xl sm:text-4xl mt-4">Your next trip is one tap away</h2>
-          <p className="text-muted mt-3">Live tracking, instant OTP, wallet cashback and app-only offers. Android & iOS apps launching soon.</p>
+          <p className="text-muted mt-3">Live tracking, instant OTP, wallet cashback and app-only offers. The Android app is ready to try; the iPhone app comes later.</p>
           <ul className="mt-6 space-y-2 text-sm text-soft">
             {[[Timer, "Rides in under 5 minutes"], [Wallet, "QuikFly wallet with instant refunds"], [Headphones, "In-app 24×7 support"]].map(([I, t]) => {
               const Icon = I as typeof Timer;
               return <li key={t as string} className="flex items-center gap-2"><Icon size={16} className="text-gold" />{t as string}</li>;
             })}
           </ul>
-          <div className="flex gap-3 mt-8">
-            {["Google Play", "App Store"].map((s) => (
-              <motion.span key={s} whileHover={{ y: -3 }} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-fg text-ink text-sm font-semibold"><Smartphone size={16} />{s}</motion.span>
-            ))}
+          <div className="flex flex-wrap items-center gap-3 mt-8">
+            <motion.a whileHover={{ y: -3 }} href={ANDROID_APP.downloadUrl} download
+              className="btn-gold flex items-center gap-2.5 px-5 py-3 rounded-xl text-sm font-semibold">
+              <Download size={18} />
+              <span className="text-left leading-tight">Download for Android<span className="block text-[11px] font-normal opacity-80">APK · {ANDROID_APP.size} · {ANDROID_APP.minAndroid}</span></span>
+            </motion.a>
+            <span className="flex items-center gap-2 px-4 py-3 rounded-xl border border-line text-sm text-muted"><Smartphone size={16} />iPhone: coming later</span>
           </div>
+          <p className="text-xs text-subtle mt-3">
+            Not on Google Play yet, so Android asks you to allow the install.{" "}
+            <a href={ANDROID_APP.releaseUrl} target="_blank" rel="noopener noreferrer" className="text-gold hover:underline">Install steps and older phones</a>
+          </p>
         </div>
         <div className="relative h-[420px] flex items-end justify-center overflow-hidden bg-gradient-to-br from-gold/10 to-transparent">
           <Parallax amount={100} className="w-[230px]">

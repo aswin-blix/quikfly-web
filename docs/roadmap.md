@@ -54,9 +54,9 @@ Each slice: `flutter analyze` → contract test against the local API → browse
 - 2026-11-17 Installed the signed arm64 APK on the owner's OnePlus CPH2649 (Android 17) over USB: installs, starts, loads production data (welcome credit, places). The owner is testing the flows on the phone.
 - 2026-11-17 **Published** at the owner's request: GitHub Release `app-v0.1.0` (tag on `ef84897`, the commit the APKs were built from), marked latest, assets `QuikFly-arm64.apk` (21.7 MB) and `QuikFly-armv7.apk` (19.3 MB) with tester-facing notes, checksums and the certificate fingerprint. Anonymous download from `releases/latest/download/…` returns both files with matching SHA-256. https://github.com/aswin-blix/quikfly-web/releases/tag/app-v0.1.0
 - Next (pick up here), remaining M6 steps:
-  1. Website "Get it on Google Play" buttons (home `AppDownload` section and footer in `components/shell.tsx`) → link to `releases/latest/download/QuikFly-arm64.apk` (B9). Needs a website deploy; ask the owner. Label it honestly (e.g. "Download the Android app (APK)") since it isn't on Google Play yet.
-  2. Fix anything the owner finds in the phone test.
-  3. PR for `feat/mobile-release` (gradle signing + docs), then tick M6.
+  1. Fix anything the owner finds in the phone test.
+  2. Tick M6 once the phone test is signed off.
+- 2026-11-17 **Website download button** (owner asked to update and deploy): home "Your next trip is one tap away" section now has "Download for Android · APK · about 22 MB · Android 7.0+" linking to `releases/latest/download/QuikFly-arm64.apk`, an honest "iPhone: coming later" chip, and a note that Android asks to allow the install (with a link to the release page for install steps and older phones); the footer's "Get it on Google Play / App Store" chips became "Android app (APK)" + "iPhone: coming later". Links live in `ANDROID_APP` (`apps/web/src/lib/site.ts`). Typecheck passes; browser-checked at 390 px (light and dark) and desktop.
 
 ## Released: lean admin panel (L1–L3) ✅
 
@@ -106,6 +106,6 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 - B6 Free reschedule for bus and holiday bookings (redBus FlexiTicket)
 - B7 Self-serve "Modify booking" for rentals (Zoomcar)
 - B8 Women-only bike option (Rapido Bike Pink)
-- B9 Save partner applications to the API; point the "Google Play" button at the APK (the button part is M6 step 1 above; the APK is live)
+- B9 Save partner applications to the API (the download-button half of B9 shipped with M6)
 - Light-mode logo: needs a file from the owner or client
 - After client sign-off (paid): SMS OTP, payment gateway, real maps, live tracking, Play Store listing, custom domain, Truecaller/Google login, EMI, ride insurance
