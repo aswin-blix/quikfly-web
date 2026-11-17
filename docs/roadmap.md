@@ -29,7 +29,7 @@ Started 2026-11-17. Owner's choices: **full parity** with the website for the fi
 | M3 | Bus + holidays + checkout: bus search + date strip + filters, seat map, holiday list + detail, shared checkout (travellers, coupon, payment), confirmation, invoice | `/buses`, `/buses/:id/seats`, `/tours/:slug`, `/quotes`, `/offers/check`, `/bookings` | ✅ | ✅ | ✅ | ✅ |
 | M4 | Rentals: self-drive / chauffeur cars, car detail, licence check, group vehicles | `/rentals/*`, `/me/licence`, `/quotes` | ✅ | ✅ | ✅ | ✅ |
 | M5 | Account: profile, change number, wallet history, saved places, travellers, emergency contacts, auto-share night rides, referral, sign out everywhere, delete account | `/me/*` | ✅ | ✅ | ✅ | ✅ |
-| M6 | Release: upload key, signed release APK, GitHub Release, website download link (B9) | — | 🔄 | — | — | 🔄 |
+| M6 | Release: upload key, signed release APK, GitHub Release, website download link (B9) | — | 🔄 key + signed APKs done | — | — | ✅ signed |
 
 Each slice: `flutter analyze` → contract test against the local API → browser pass of the web build at 390 px in light and dark → APK builds → docs + memory → commit (owner asked for regular commits) → PR.
 
@@ -50,7 +50,12 @@ Each slice: `flutter analyze` → contract test against the local API → browse
   - Browser pass: wallet history from the API (₹500 welcome, −₹240 ride); safety in light mode → contact added → auto-share switch enabled.
 - 2026-11-17 PRs #12 and #13 merged by Claude at the owner's request (#13 retargeted to `main` first). The release APK builds (58 MB universal, debug-signed).
 - 2026-11-17 **M6 started** (branch `feat/mobile-release`, owner creating the key with Claude): `android/app/build.gradle.kts` reads the keystore password from `QUIKFLY_KEYSTORE_PASSWORD` (never written to disk) and fails a release build if a key is configured but the password is missing; `android/key.properties` (git-ignored, path + alias only) created locally pointing at `C:/Users/AswinBlix/keys/quikfly-upload.jks`; the `keys` folder exists, **the key itself is not created yet**.
-- Next (pick up here):
+- 2026-11-17 **Upload key created** by the owner in their own terminal (`C:\Users\AswinBlix\keys\quikfly-upload.jks`, alias `quikfly`, SHA-256 `C7:84:CE:F5:50:DC:5F:A5:FC:64:C5:5A:2E:C6:EE:C8:99:81:FD:2D:75:0A:FF:9A:49:6C:9B:40:17:03:3A:AE`). First build failed with "keystore password was incorrect" because of how the environment variable was set (the key itself was fine: `keytool -list` accepted the password); setting it with `Read-Host -MaskInput` fixed it. Owner built `--split-per-abi`: arm64-v8a 21.7 MB, armeabi-v7a 19.3 MB, x86_64 23.3 MB. `apksigner verify --print-certs`: all three verify (v2), signer `CN=QuikFly, O=QuikFly Mobility Pvt. Ltd.`, digest matches the key. Package `com.quikfly.app`, version 0.1.0, target SDK 36. The old universal debug-signed `app-release.apk` was deleted from the build folder so it can't be shared by mistake.
+- Next (pick up here), remaining M6 steps:
+  1. Install `app-arm64-v8a-release.apk` on a real Android phone and run the demo flow against production (sign-up, ride, bus with coupon, holiday, self-drive licence, cancel → wallet refund).
+  2. Ask the owner before publishing: GitHub Release on the public repo (tag e.g. `app-v0.1.0`, attach the arm64 and armeabi-v7a APKs) + website "Get it on Google Play" button (B9) linking to the latest release.
+  3. PR for `feat/mobile-release` (docs + gradle), then tick M6.
+- Done earlier in M6 (for reference):
   1. The owner runs the `keytool -genkeypair` command from `apps/mobile/README.md` → Release in their own terminal and backs up the `.jks` and password. Then check the file exists and `keytool -list -v -keystore ...` shows alias `quikfly` (needs the password, so the owner runs it, or check the certificate on the built APK instead).
   2. Owner chooses how builds get the password (session env var in their terminal, or a user environment variable visible after restarting VS Code).
   3. Build `flutter build apk --release --split-per-abi`, verify with `keytool -printcert -jarfile` that the APK carries the QuikFly certificate (not "Android Debug"); install on a real Android phone if possible.
