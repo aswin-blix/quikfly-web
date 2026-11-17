@@ -75,20 +75,26 @@ assets/                fonts (Outfit static weights, Archivo Black), images (ser
 
 ## Release (signed APK)
 
-1. Once per machine, create the upload key (keep it and its passwords outside the repo, and back them up: losing the key means the app can't be updated):
-   ```bash
-   keytool -genkey -v -keystore %USERPROFILE%\keys\quikfly-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias quikfly
+The upload key signs every APK shared with the client. Android installs an update only when it is signed with the same key, so **losing the key or its password means the client's app can never be updated**. The owner keeps both and backs them up.
+
+1. Once per machine, the owner creates the key in their own terminal (keytool asks for the password; it never goes into a file or a chat):
+   ```powershell
+   keytool -genkeypair -v -keystore "$env:USERPROFILE\keys\quikfly-upload.jks" -storetype PKCS12 -keyalg RSA -keysize 2048 -validity 10000 -alias quikfly -dname "CN=QuikFly, O=QuikFly Mobility Pvt. Ltd., L=Chennai, ST=Tamil Nadu, C=IN"
    ```
-2. Create `apps/mobile/android/key.properties` (git-ignored):
+   If `keytool` isn't on the PATH, it's in the JDK's `bin` folder. PKCS12 uses one password for the store and the key.
+2. `apps/mobile/android/key.properties` (git-ignored) points at the key, without the password:
    ```
    storeFile=C:/Users/<you>/keys/quikfly-upload.jks
-   storePassword=...
    keyAlias=quikfly
-   keyPassword=...
    ```
-   Without it, release builds are signed with the debug key (fine for testing, not for sharing).
-3. Bump `version:` in `pubspec.yaml` (`1.2.0+5`: the number after `+` must go up every release), then:
+3. Give the build the password through the environment (or add a `storePassword=` line to `key.properties` if you accept it on disk):
+   ```powershell
+   $env:QUIKFLY_KEYSTORE_PASSWORD = "<password>"     # this terminal only
+   ```
+   With `key.properties` present and no password, release builds stop with an error instead of falling back to the debug key. Without `key.properties`, release builds use the debug key (fine for testing, never for sharing).
+4. Bump `version:` in `pubspec.yaml` (`1.2.0+5`: the number after `+` must go up every release), then build one APK per phone type (about 20 MB each instead of one 58 MB file):
    ```bash
-   flutter build apk --release      # build/app/outputs/flutter-apk/app-release.apk
+   flutter build apk --release --split-per-abi   # build/app/outputs/flutter-apk/app-arm64-v8a-release.apk (most phones), armeabi-v7a, x86_64
    ```
-4. Publish it as a GitHub Release (see `docs/operations.md`); the website's "Get it on Google Play" button links to the latest release.
+   Check the signature: `keytool -printcert -jarfile build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` must show the QuikFly certificate, not "Android Debug".
+5. Publish as a GitHub Release (owner's approval needed; see `docs/operations.md`); the website's "Get it on Google Play" button links to the latest release.

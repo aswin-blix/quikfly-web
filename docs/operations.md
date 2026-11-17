@@ -35,6 +35,13 @@ Order matters: **migration → API → website**. The new website may call endpo
 
 The smoke test reuses one test user (+91 90000 00001) and leaves cancelled or completed bookings on it. That's expected.
 
+## Android app (apps/mobile)
+
+- Builds against the production API by default; `--dart-define=API_URL=...` points it elsewhere (see `apps/mobile/README.md`).
+- Signed release: upload key at `%USERPROFILE%\keys\quikfly-upload.jks` (owner keeps it and the password, backed up), `apps/mobile/android/key.properties` (git-ignored) with path + alias, password in `QUIKFLY_KEYSTORE_PASSWORD`. Steps in `apps/mobile/README.md` → Release.
+- Distribution: GitHub Release on the public repo (pending the owner's first approval), linked from the website's "Get it on Google Play" button.
+- Contract test before a release: `flutter test --dart-define=API_URL=<api>/v1`. Against production it uses the test number +91 90000 00002 and leaves a cancelled booking and a pending licence on it.
+
 ## Testing
 
 - `npm run typecheck`: must pass.
