@@ -1,0 +1,91 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Admin design tokens: the only place for colours, fonts and radii.
+   Brand gold matches the website (apps/web/src/styles/tokens.css); surfaces are
+   calmer and denser because this is a work tool. Light and dark are both
+   first-class; the theme follows the device unless staff pick one.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --brand: #f2c14e;
+  --brand-light: #ffd978;
+  --brand-dark: #c8961e;
+  --on-brand: #120d00;
+
+  --font-body: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-code: ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  --card-radius: .9rem;
+  --field-radius: .6rem;
+
+  --sidebar-width: 15rem;
+
+  /* Switch knob: white on both the gold (on) and grey (off) tracks, in both themes. */
+  --toggle-knob: #ffffff;
+}
+
+:root, [data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --surface-raised: #f1efe9;
+  --surface-field: #ffffff;
+  --border: #e4e0d6;
+  --border-strong: #b5afa1;
+
+  --fg: #1b1a1f;
+  --fg-strong: #000000;
+  --fg-muted: #5d5a65;
+  --fg-subtle: #7a7782;
+
+  --accent: #8f5f00;
+  --accent-ring: rgba(200, 150, 30, .25);
+  --nav-active-bg: #fbf1d9;
+
+  --success: #0b7a52;
+  --danger: #c62828;
+  --warning: #b45309;
+  --info: #1d5fa8;
+
+  --overlay: rgba(20, 16, 6, .45);
+  --skeleton-base: #ece9e1;
+  --skeleton-shine: #f7f5f0;
+  --shadow: 0 1px 2px rgba(40, 30, 0, .05), 0 8px 24px -16px rgba(40, 30, 0, .2);
+
+  /* Charts: single-series bars. Validated with the dataviz palette script (contrast ≥ 3:1 vs surface). */
+  --chart-bar: #a87410;
+  --chart-bar-hover: #8a5f0c;
+  --chart-grid: #ece9e1;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b0b0e;
+  --surface: #14141a;
+  --surface-raised: #1c1c24;
+  --surface-field: #101015;
+  --border: #2a2a33;
+  --border-strong: #5b5b66;
+
+  --fg: #ececf1;
+  --fg-strong: #ffffff;
+  --fg-muted: #a1a1aa;
+  --fg-subtle: #7c7c86;
+
+  --accent: #f2c14e;
+  --accent-ring: rgba(242, 193, 78, .2);
+  --nav-active-bg: #2a2416;
+
+  --success: #34d399;
+  --danger: #f87171;
+  --warning: #fdba74;
+  --info: #7cb3f0;
+
+  --overlay: rgba(0, 0, 0, .65);
+  --skeleton-base: #1a1a21;
+  --skeleton-shine: #24242c;
+  --shadow: none;
+
+  --chart-bar: #c8961e;
+  --chart-bar-hover: #e0ad38;
+  --chart-grid: #23232b;
+}

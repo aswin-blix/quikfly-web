@@ -3,6 +3,8 @@ import type { EmergencyContact, Ride, SavedPlace, Traveller, User, WalletTransac
 
 /** Login code accepted by the mock API. */
 export const MOCK_OTP = "1234";
+/** Demo mode has no admin to review licences; a submitted one turns verified after this long. */
+export const MOCK_LICENCE_REVIEW_SECONDS = 20;
 export { WELCOME_CREDIT as NEW_USER_WALLET } from "@quikfly/shared";
 
 export const wait = (ms = 450) => new Promise((r) => setTimeout(r, ms));

@@ -1,12 +1,12 @@
 // Mock (demo mode) versions of the account endpoints. Same rules as the API,
 // using the shared limits and patterns, but stored in this browser only.
 import {
-  DELETION_GRACE_DAYS, LICENCE_REVIEW_SECONDS, LIMITS, PATTERNS, PLACES, REFERRAL_BONUS, compactCode,
+  DELETION_GRACE_DAYS, LIMITS, PATTERNS, PLACES, REFERRAL_BONUS, compactCode,
   type EmergencyContact, type SavedPlace, type Traveller, type User,
 } from "@quikfly/shared";
 import type { QuikflyApi } from "./contract";
 import {
-  KEYS, MOCK_OTP, NEW_USER_WALLET, currentUser, drop, fail, load, patchUser, resetAccount, save, saveUser, uid, wait, walletEntry,
+  KEYS, MOCK_LICENCE_REVIEW_SECONDS, MOCK_OTP, NEW_USER_WALLET, currentUser, drop, fail, load, patchUser, resetAccount, save, saveUser, uid, wait, walletEntry,
 } from "./mock-store";
 
 const checkOtp = (otp: string) => otp === MOCK_OTP || fail(`Invalid OTP. Use ${MOCK_OTP} in demo mode.`);
@@ -19,14 +19,14 @@ function newUser(phone: string): User {
   return {
     id: uid("U"), name: "Guest", phone, walletBalance: 0, email: null, gender: null, dob: null, profileComplete: false,
     referralCode: "QF" + Math.random().toString(36).slice(2, 8).toUpperCase(), referred: false,
-    licence: { status: "none", number: null, expiry: null }, gst: null, autoShareNightRides: false,
+    licence: { status: "none", number: null, expiry: null, note: null }, gst: null, autoShareNightRides: false,
   };
 }
 
-/** Licence status moves from pending to verified after the review time, as on the API. */
+/** Demo mode has no admin to review licences, so pending turns verified after a short wait. */
 function withLicenceStatus(u: User): User {
   const submitted = load<number | null>("quikfly.mockLicenceAt", null);
-  if (u.licence.status !== "pending" || !submitted || Date.now() - submitted < LICENCE_REVIEW_SECONDS * 1000) return u;
+  if (u.licence.status !== "pending" || !submitted || Date.now() - submitted < MOCK_LICENCE_REVIEW_SECONDS * 1000) return u;
   return { ...u, licence: { ...u.licence, status: "verified" } };
 }
 
@@ -97,7 +97,7 @@ export const mockAccount: QuikflyApi["account"] = {
     if (!PATTERNS.licence.test(number)) fail("Enter the licence number as printed, e.g. TN09 20190001234.");
     if (Date.parse(`${expiry}T00:00:00Z`) <= Date.now()) fail("This licence has expired. Renew it before booking self-drive.");
     save("quikfly.mockLicenceAt", Date.now());
-    return patchUser({ licence: { status: "pending", number, expiry } });
+    return patchUser({ licence: { status: "pending", number, expiry, note: null } });
   },
   async walletHistory() { await wait(250); return load(KEYS.wallet, []); },
 };

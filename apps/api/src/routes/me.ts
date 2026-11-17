@@ -12,6 +12,7 @@ import {
   applyReferral, changePhone, deleteAccount, requestPhoneChange, signOutEverywhere, submitLicence, updateProfile,
 } from "../services/account";
 import { normalisePhone } from "../services/auth";
+import { getSettings } from "../services/settings";
 import {
   addContact, addTraveller, listContacts, listPlaces, listTravellers, removeContact, removePlace, removeTraveller, savePlace,
 } from "../services/saved";
@@ -88,7 +89,7 @@ export const me = new Hono<AppEnv>()
     const daysLeft = (Date.parse(`${expiry}T00:00:00Z`) - Date.now()) / 86_400_000;
     if (!(daysLeft >= LIMITS.licenceMinDaysLeft)) throw badRequest("This licence has expired. Renew it before booking self-drive.");
     if (c.var.user.dob && ageFrom(c.var.user.dob) < 18) throw badRequest("You must be 18 or older to drive.");
-    return c.json(await submitLicence(c.env.DB, c.var.user.id, number, expiry));
+    return c.json(await submitLicence(c.env.DB, c.var.user.id, number, expiry, (await getSettings(c.env.DB)).licenceAutoApprove));
   })
 
   // Saved places

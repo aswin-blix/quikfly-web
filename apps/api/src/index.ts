@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { API_PREFIX } from "./config";
 import type { AppEnv } from "./env";
 import { HttpError } from "./lib/errors";
+import { admin } from "./routes/admin";
 import { auth } from "./routes/auth";
 import { me } from "./routes/me";
 import { share } from "./routes/share";
@@ -34,7 +35,8 @@ const v1 = new Hono<AppEnv>()
   .route("/buses", buses)
   .route("/tours", tours)
   .route("/rentals", rentals)
-  .route("/bookings", bookings);
+  .route("/bookings", bookings)
+  .route("/admin", admin);
 
 app.get("/", (c) => c.json({ name: "QuikFly API", version: API_PREFIX.slice(1) }));
 app.route(API_PREFIX, v1);

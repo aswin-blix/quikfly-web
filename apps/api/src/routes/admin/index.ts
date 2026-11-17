@@ -1,0 +1,66 @@
+// Staff endpoints under /v1/admin. Every route past login needs an admin token; routes that
+// change data check a permission and write an audit row. Bookings, licences, catalog and
+// offers routers mount here as they are added.
+import { Hono } from "hono";
+import { ADMIN_RULES, DEFAULT_SETTINGS, type Settings } from "@quikfly/shared";
+import type { AppEnv } from "../../env";
+import { badRequest } from "../../lib/errors";
+import { bearerToken } from "../../middleware/auth";
+import { requireAdmin } from "../../middleware/admin";
+import { jsonBody, str } from "../../lib/validate";
+import { audit, listAudit } from "../../services/admin/audit";
+import { adminLogin, endAdminSession } from "../../services/admin/auth";
+import { dashboardStats } from "../../services/admin/stats";
+import { getSettings, updateSettings } from "../../services/settings";
+
+/** Positive page number from `?page=`, default 1. */
+const pageParam = (v: string | undefined) => Math.max(1, parseInt(v ?? "1", 10) || 1);
+
+/** Accepts only known settings keys with the same type as the default. */
+function settingsPatch(body: Record<string, unknown>): Partial<Settings> {
+  const patch: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (!(key in DEFAULT_SETTINGS)) throw badRequest(`Unknown setting "${key}".`);
+    const expected = typeof (DEFAULT_SETTINGS as unknown as Record<string, unknown>)[key];
+    if (typeof value !== expected) throw badRequest(`"${key}" must be a ${expected}.`);
+    if (expected === "number" && !Number.isFinite(value as number)) throw badRequest(`"${key}" must be a number.`);
+    patch[key] = value;
+  }
+  if (!Object.keys(patch).length) throw badRequest("Nothing to update.");
+  return patch as Partial<Settings>;
+}
+
+export const admin = new Hono<AppEnv>()
+  .post("/auth/login", async (c) => {
+    const body = await jsonBody(c);
+    return c.json(await adminLogin(c.env.DB, str(body, "email", 200), str(body, "password", ADMIN_RULES.passwordMax)));
+  })
+  .post("/auth/logout", requireAdmin(), async (c) => {
+    await endAdminSession(c.env.DB, bearerToken(c)!);
+    return c.json({ signedOut: true });
+  })
+  .get("/auth/me", requireAdmin(), (c) => c.json(c.var.admin))
+
+  // Dashboard: ?days=1..statsMaxDays (default 7)
+  .get("/stats", requireAdmin("dashboard.view"), async (c) => {
+    const days = Math.min(ADMIN_RULES.statsMaxDays, Math.max(1, parseInt(c.req.query("days") ?? "7", 10) || 7));
+    return c.json(await dashboardStats(c.env.DB, days));
+  })
+
+  // Audit log: ?page=&entity=&entityId=
+  .get("/audit", requireAdmin("audit.view"), async (c) =>
+    c.json(await listAudit(c.env.DB, pageParam(c.req.query("page")), c.req.query("entity")?.trim() || undefined, c.req.query("entityId")?.trim() || undefined)))
+
+  // Settings: any admin can read, owners change.
+  .get("/settings", requireAdmin("dashboard.view"), async (c) => c.json(await getSettings(c.env.DB)))
+  .patch("/settings", requireAdmin("settings.edit"), async (c) => {
+    const patch = settingsPatch(await jsonBody(c));
+    const before = await getSettings(c.env.DB);
+    const after = await updateSettings(c.env.DB, patch);
+    const changed = Object.keys(patch) as (keyof Settings)[];
+    await audit(c.env.DB, {
+      adminId: c.var.admin.id, action: "settings.update", entity: "settings",
+      detail: { before: Object.fromEntries(changed.map((k) => [k, before[k]])), after: Object.fromEntries(changed.map((k) => [k, after[k]])) },
+    });
+    return c.json(after);
+  });

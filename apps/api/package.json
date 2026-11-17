@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply quikfly-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply quikfly-db --remote",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:admin": "node scripts/smoke-admin.mjs"
   },
   "dependencies": {
     "hono": "^4.13.19",

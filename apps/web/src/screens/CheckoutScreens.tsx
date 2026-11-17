@@ -12,7 +12,7 @@ import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
 import { formatLicence, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
-import { LicenceBadge, LicenceForm, useLicencePolling } from "@/components/account/LicenceSection";
+import { LicenceBadge, LicenceForm, licenceMessage, useLicencePolling } from "@/components/account/LicenceSection";
 import { GSTIN_LINE } from "@/lib/invoice";
 
 /* ───────────── /checkout ───────────── */
@@ -67,6 +67,7 @@ export function CheckoutScreen() {
     if (!/^\d{10}$/.test(phone)) e.phone = "Enter a 10-digit mobile number";
     if (email && !/^\S+@\S+\.\S+$/.test(email)) e.email = "Enter a valid email";
     if (draft!.needsLicence && user?.licence.status === "none") e.licence = "Add your driving licence to book a self-drive car";
+    if (draft!.needsLicence && user?.licence.status === "rejected") e.licence = "Your licence wasn't approved. Submit it again to book a self-drive car";
     setErrors(e);
     if (Object.keys(e).length) return;
     // Self-drive needs the licence on the account, so sign in first and let them add it here.
@@ -168,12 +169,15 @@ export function CheckoutScreen() {
                     </div>
                     {!user ? (
                       <p className="text-sm text-muted">Self-drive needs a verified licence. You&apos;ll add it after signing in.</p>
-                    ) : user.licence.status === "none" ? (
-                      <LicenceForm onSaved={() => setErrors(({ licence: _, ...rest }) => rest)} />
+                    ) : user.licence.status === "none" || user.licence.status === "rejected" ? (
+                      <>
+                        {user.licence.status === "rejected" && <p className="text-sm text-danger">{licenceMessage(user)}</p>}
+                        <LicenceForm onSaved={() => setErrors(({ licence: _, ...rest }) => rest)} />
+                      </>
                     ) : (
                       <p className="text-sm text-muted">
                         {user.licence.number && <span className="font-mono text-soft">{formatLicence(user.licence.number)} · </span>}
-                        {user.licence.status === "verified" ? "Verified. Bring the original licence and Aadhaar or passport to pickup." : "Under review. You can book now; it must be verified before pickup."}
+                        {licenceMessage(user)}
                       </p>
                     )}
                     {errors.licence && <p className="text-xs text-danger">{errors.licence}</p>}

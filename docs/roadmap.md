@@ -1,8 +1,8 @@
- 🔄 | 🔄 | 🔄 | 🔄 | 🔄 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |# Roadmap and progress
+# Roadmap and progress
 
 Goal: a live client demo of the website and an Android app on one API, at ₹0 (see [decisions.md](decisions.md)).
 
-Legend: ✅ done · 🔄 in progress · ✅ |not started
+Legend: ✅ done · 🔄 in progress · ⬜ not started
 
 ## Phases
 
@@ -10,72 +10,47 @@ Legend: ✅ done · 🔄 in progress · ✅ |not started
 |---|---|---|
 | 1. API (Workers + Hono + D1) | ✅ | Live. PR #4 |
 | 2. Website on Cloudflare | ✅ | Live. Demo fixes in PR #5 (ride completion, real wallet, bus times, date strip, rental defaults, cancel errors, holiday tabs) |
-| 2b. Complete the web version: accounts + competitor features | 🔄 | **Current task.** See the tracker below. Branch `feat/accounts` |
-| 3. Flutter Android app (`apps/mobile`) | ⬜ | Signed APK shared by link; same API |
-| 4. Demo hardening | ⬜ | Reset-demo-data endpoint; rehearse booking on the phone and seeing it on the web |
+| 2b. Complete the web version: accounts + competitor features | ✅ | Live. PR #6, deployed 2026-11-16 (migration 0003) |
+| 2c. Admin panel (lean) + everything from the API | 🔄 | Branch `feat/admin`, one PR per slice. Tracker below |
+| 3. Flutter Android app (`apps/mobile`) | ⬜ | Signed APK shared by link; same API. Can start once L2 is live (catalog, settings and prices come from the API) |
+| 4. Demo hardening | ⬜ | Rehearse: edit a price in admin → see it on the web and the phone → book → cancel → refund. "Reset catalog" (L2) covers most of "reset demo data" |
+| 5. Admin, full | ⬜ | The parts cut from the lean plan: customers screen (wallet adjust, suspend, sign out everywhere, cancel deletion), booking notes, SOS alerts in admin, team screen, CSV export |
 
-## Current task: Part A (accounts) + B1–B4
+## Current task: lean admin panel (L1–L3) 🔄
 
-Requested 2026-11-16. Scope came from a competitor review of Uber, Ola, Rapido, redBus, MakeMyTrip and Zoomcar. Branch: `feat/accounts` (not merged, not deployed).
+Requested 2026-11-16. Owner chose the **lean** plan: prove the model end to end (edit data in admin → website and app show it → book → cancel → refund) before the Flutter app; the rest of the admin comes after the client demo (Phase 5).
+
+Decisions (details in [decisions.md](decisions.md)): separate app `apps/admin` on its own Worker; admin login by email + password (the customer demo OTP is public); fixed roles with a permission map in `packages/shared`; every admin write is audited; catalog and business settings move into D1 so admin edits reach the website and the app; prices are computed by the API (quotes), not by the website; licences need manual approval, with an auto-approve setting for unattended demos; detail-page URLs stay as they are (pre-built for known items, the 404 page renders new ones from the API).
 
 ### Feature tracker
 
-| ID | Feature | Shared | API | Web | Mock | Smoke tests | Browser-checked |
+| ID | Slice | Shared | API | Admin UI | Website | Smoke | Browser |
 |---|---|---|---|---|---|---|---|
-| A1 | Sign-up step: after OTP, new users complete their profile (name, optional email, optional referral code) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| A2 | `/account` profile: edit name, email, gender, DOB | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| A3 | Change mobile number (OTP to the new number) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| A4 | Saved places (Home, Work, other) + one-tap picks in the ride panel | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| A5 | Saved travellers + one-tap fill at checkout | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| A6 | Emergency contacts (max 3) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| A7 | Wallet page: balance + labelled transaction history + refund timings | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| A8 | Delete account: OTP, 30-day grace, restored on sign-in, wallet-loss warning | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| A9 | Sign out of all devices | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| B1 | Safety centre: SOS sheet in a live ride (Call 112, safety line, alert contacts, share), public trip-tracking link `/track`, "auto-share night rides" switch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| B2 | Driving-licence check before self-drive (pending → verified, simulated) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| B3 | Printable tax invoice from My Trips (`/invoice`), with GST details saved in the account and applied at checkout | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| B4 | Referral code: each user has one; applying a friend's code gives both ₹100 wallet credit (once) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| L1 | Foundation: `apps/admin` scaffold, admin login + sessions + lockout, roles/permissions, audit log, `create-admin` script, dashboard (bookings, revenue, cancellations, new customers; by service; by day; queues; latest bookings) | ✅ | ✅ | ✅ | n/a | ✅ | ✅ |
+| L2 | Data from the API: catalog (places, ride options, drivers, tours, rental cars, group vehicles, cities, bus operators, popular routes, FAQs) and settings (fares, surge, bus fares, welcome credit, referral bonus, GST rates, licence auto-approve, invoice company details, helpline) in D1; public `GET /config`; server-side quotes for every service; website reads everything from the API (loading states, detail pages for new items via the 404 page); admin catalog + settings editors; reset catalog to seed; settings cache in the Worker | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| L3 | Operations-lite: bookings (search, filter, detail, cancel + wallet refund, complete); licence queue (approve / reject with reason, customer sees it, resubmit); coupons in D1 checked by the API at quote/booking (expiry, min amount, max discount, uses per customer) with an offers editor | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
-### Work log (by layer)
+Each slice: typecheck → smoke (`smoke.mjs` + `smoke-admin.mjs`) → browser pass at 390 px and desktop → docs + memory → PR → merge → migrate → deploy API → wait 60 s → production smoke → deploy web + admin.
 
-**Shared (`packages/shared`)**: ✅
-- [x] `types.ts`: extended `User` (email, gender, dob, profileComplete, referralCode, referred, licence, gst, autoShareNightRides); `ProfileUpdate`, `AuthResult` (isNew, restored), `SavedPlace`, `Traveller`, `EmergencyContact`, `WalletTransaction`, `SharedRide`
-- [x] `rules.ts`: `LIMITS`, `REFERRAL_BONUS`, `DELETION_GRACE_DAYS`, `LICENCE_REVIEW_SECONDS`, `SHARE_LINK_HOURS`, `NIGHT_HOURS`, `RIDE_SIMULATION`, `PATTERNS` (phone, email, GSTIN, licence, referral code), helpers
+### Work log
 
-**API (`apps/api`)**: ✅ (94 smoke checks pass, 3 runs in a row, local)
-- [x] Migration `0003_accounts.sql`: user columns, `saved_places`, `travellers`, `emergency_contacts`, `wallet_transactions` (+ opening-balance backfill), `ride_shares`
-- [x] `services/wallet.ts`: ledger statement helper, transaction list
-- [x] `services/auth.ts`: full `toUser`, referral code on sign-up, welcome-credit entry, `isNew` / `restored`, 30-day restore-or-erase, deleted users rejected
-- [x] `services/account.ts`: profile update (a name completes sign-up), phone change, sign out everywhere, delete, referral, licence
-- [x] `services/saved.ts`: places, travellers, contacts with limits
-- [x] `services/bookings.ts`: write ledger rows on wallet debit and refund; `getBooking`
-- [x] `services/share.ts`: create share token for a ride; public read
-- [x] `routes/me.ts`: `PATCH /me`, `POST /me/phone/otp`, `POST /me/phone`, `POST /me/logout-all`, `POST /me/delete`, `POST /me/referral`, `PUT /me/licence`, `GET|POST /me/places`, `DELETE /me/places/:id`, the same for `/me/travellers` and `/me/contacts`, `GET /me/wallet`
-- [x] `routes/auth.ts`: verify returns `AuthResult`
-- [x] `GET /bookings/:id`, `POST /rides/:id/share`, `GET /share/:token`
-- [x] Smoke tests for every new endpoint (incl. deletion grace restore, referral twice, limits)
-- [x] `apps/api/README.md` endpoint table
+- 2026-11-16 Plan agreed (lean). `packages/shared/src/admin.ts` (roles, `PERMISSIONS`, admin shapes), `settings.ts` (`Settings` + defaults); `LicenceStatus` gains `rejected` and a `note`.
+- 2026-11-16 **L1 API** (commit "Admin L1: API"): migration `0004_admin.sql` (admin_users, admin_sessions, audit_log, settings, stored licence status); `lib/password.ts` (PBKDF2 via Web Crypto); `services/admin/{auth,audit,stats}.ts`, `services/settings.ts` (30 s cache); `middleware/admin.ts` `requireAdmin(permission)`; `routes/admin/index.ts` (login/logout/me, stats, settings, audit); licence submit now stores `pending` (or `verified` when `licenceAutoApprove` is on), the old 20 s simulation is gone; `scripts/create-admin.mjs`; `scripts/smoke-admin.mjs` (31 checks: login, same message for unknown email, lockout, role 403s, stats, settings validation, audit, setting reaches the customer licence flow). Customer smoke still 94/94.
+- 2026-11-16 **L1 admin UI** (commit "Admin L1: admin app"): `apps/admin` (Next 16 static export, own Worker `quikfly-admin`): login (with `?next=` limited to same-site paths), session + `<RequireAdmin permission>`, sidebar / phone menu filtered by role, light + dark (device default, toggle), dashboard (date presets, 4 stat tiles, revenue/bookings by day column chart with tooltip + table view, revenue by service, queues, wallet liability, latest bookings), settings (generic form from `settings-fields.ts`, sticky save bar), audit log (filter, expandable before/after, pager). Root scripts `dev:admin`, admin in `build`/`typecheck`/`deploy`.
+  - Browser pass (local API, port 8795): wrong password message, sign-in, dashboard at 1280 px and 390 px in dark and light, all four date ranges, settings toggle → save → audit row with before/after. Fixed during the pass: 30/90-day charts pushed the page sideways on phones (grid needed `grid-cols-1`, bars/labels `min-w-0`); phone axis shows every other label; switch knob is white in both themes.
+- Next: L2 (catalog + settings in D1, quotes, website on API data, admin editors).
 
-**Web (`apps/web`)**: ✅ code complete (browser pass under Verification)
-- [x] Contract + `http.ts` + `mock.ts` for all new endpoints (mock split into `mock-store.ts`, `mock-account.ts`, `mock.ts`)
-- [x] Login modal (`components/LoginModal.tsx`): phone → OTP → "complete your profile" (name, optional email, optional referral code) for new users; "account restored" message
-- [x] `lib/account.ts`: section list, labels, safety numbers, refund timings; `WELCOME_CREDIT` moved to shared rules
-- [x] `/account` page (`screens/AccountScreen.tsx`, sections in `components/account/`): Profile, Wallet, Refer & earn, Saved places, Travellers, Safety (contacts + auto-share switch), Driving licence (form reused by checkout), Business / GST, Login & security (change number, sign out everywhere, delete). Phones: list then section (`?tab=`); desktop: sidebar. In the SPA router
-- [x] Header avatar and wallet link to `/account`; mobile account sheet links to profile, wallet, refer, safety and all settings
-- [x] Ride panel: "Your places" chips and saved places at the top of the place picker; SOS button → `components/SafetySheet.tsx` (Call 112, safety line, share, alert contacts; alerts simulated and labelled); Share trip (Web Share or copy); night rides auto-shared when the switch is on
-- [x] `/track?t=` public page (`screens/TrackScreen.tsx`): map, driver, plate, route, progress computed from the start time with the shared `RIDE_SIMULATION`; re-checks every 15 s; `noindex`. In the SPA router
-- [x] `SharedRide.service` added (API, mock, smoke) so the map shows a bike or car; vehicle-position helpers moved into `CityMap.tsx`
-- [x] Checkout: saved-traveller chips (tap to fill or remove), "GST invoice" option when GST details are saved (adds a `GSTIN` booking line), licence card for self-drive (form inline if missing; pending can book; replaces the checkbox); email pre-filled from the profile
-- [x] My Trips and the confirmation page link to `/invoice?id=` (`screens/InvoiceScreen.tsx`): GST-inclusive maths and per-service rates in `lib/invoice.ts`, seller details in `lib/site.ts` (`COMPANY`, placeholders), paper tokens in `tokens.css`, print styles hide the site chrome. `noindex`, in the SPA router
+## Released: Part A (accounts) + B1–B4 ✅
 
-**Verification and release**: 🔄
-- [x] `npm run typecheck`, smoke ×2 locally (94 checks)
-- [x] Browser pass at 390 px (and desktop, light mode) against the local API: sign-up with referral, every account section, licence pending → verified, saved-place chips, SOS sheet, share + `/track`, night auto-share, self-drive checkout with GST invoice, printed invoice, bus traveller chips, change number, delete + restore. Demo (mock) mode: sign-up, wallet history, saved place
-- [x] Fixes from the pass: print rule hid the invoice header/footer (now only `.no-print` is hidden); duplicate "Welcome" toast from the Login buttons
-- [ ] PR → merge → `db:migrate:remote` → deploy → production smoke test
+PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number, saved places, saved travellers, emergency contacts, wallet history, delete account (30-day grace), sign out everywhere; safety centre (SOS sheet, `/track` share links, auto-share night rides); driving-licence check; printable GST invoices; referral codes. 94 smoke checks; browser-checked at 390 px and desktop. Full log: `git show 43f8350:docs/roadmap.md`.
 
 ## Backlog (agreed ideas, not scheduled)
 
+- Phase 5 items above (customers screen, booking notes, SOS in admin, team screen, CSV export)
+- Cloudflare Access in front of the admin address (free ≤ 50 users) when a custom domain exists, or earlier if the `workers.dev` toggle is available
+- `packages/ui` if a third web app appears (admin copies `tokens.css` and a few primitives from the website for now)
+- Partner portals (bus operators, car owners) if the client lets others list on QuikFly
+- Live dispatcher map (rides are simulated); support tickets; payouts
 - B5 Ride scheduling (book for later)
 - B6 Free reschedule for bus and holiday bookings (redBus FlexiTicket)
 - B7 Self-serve "Modify booking" for rentals (Zoomcar)

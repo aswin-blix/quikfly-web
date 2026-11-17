@@ -48,7 +48,7 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/me/logout-all` | ends every session for the account |
 | POST 🔒 | `/me/delete` | `{ otp }`: schedules deletion (30-day grace), ends all sessions |
 | POST 🔒 | `/me/referral` | `{ code }`: once per account; both users get ₹100 (`REFERRAL_BONUS`) |
-| PUT 🔒 | `/me/licence` | `{ number, expiry }`: driving licence for self-drive; `pending`, then `verified` after `LICENCE_REVIEW_SECONDS` (simulated) |
+| PUT 🔒 | `/me/licence` | `{ number, expiry }`: driving licence for self-drive; `pending` until an admin approves or rejects it (`licence.note` holds the reason), or `verified` at once when the `licenceAutoApprove` setting is on |
 | GET / POST 🔒 | `/me/places` | saved places; POST `{ kind: home\|work\|other, placeId, label? }` (Home and Work replace) |
 | DELETE 🔒 | `/me/places/:id` | remove a saved place |
 | GET / POST 🔒 | `/me/travellers` | saved co-travellers; POST `{ name, age, gender }` |
@@ -73,6 +73,20 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/bookings/:id/cancel` | cancel; refunds a wallet payment; 409 if already cancelled or completed |
 | POST 🔒 | `/bookings/:id/complete` | mark a finished trip (called by the website when a simulated ride ends; the driver app will own this) |
 
+### Admin (`/admin/*`, staff only)
+
+Staff sign in with email + password (accounts come from `scripts/create-admin.mjs`; there is no sign-up). 🛡 = admin bearer token; the permission in brackets is checked against the role (`PERMISSIONS` in `@quikfly/shared`), 403 when the role lacks it. Every change writes an `audit_log` row.
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/admin/auth/login` | `{ email, password }` → `{ token, admin }`. 401 for a wrong email or password (same message for both); 429 after 5 failures (locked 15 min) |
+| POST 🛡 | `/admin/auth/logout` | ends the session |
+| GET 🛡 | `/admin/auth/me` | the signed-in admin |
+| GET 🛡 | `/admin/stats?days=` | dashboard numbers for the last 1–90 days (default 7, India time): totals, by service, by day, queues, latest bookings `[dashboard.view]` |
+| GET 🛡 | `/admin/settings` | current business settings (defaults in `@quikfly/shared` `settings.ts`) `[dashboard.view]` |
+| PATCH 🛡 | `/admin/settings` | change settings; only known keys with the right type `[settings.edit]` |
+| GET 🛡 | `/admin/audit?page=&entity=&entityId=` | audit log, newest first, 25 per page `[audit.view]` |
+
 ## Settings (`wrangler.jsonc` → `vars`)
 
 | Name | Purpose |
@@ -80,7 +94,19 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | `DEMO_OTP` | Fixed login code while there is no SMS provider. Every number signs in with it. |
 | `ALLOWED_ORIGINS` | Comma-separated website origins allowed by CORS, or `*`. |
 
-Sessions are random bearer tokens; only their SHA-256 hash is stored, and they expire after `SESSION_TTL_DAYS` (`src/config.ts`).
+Business settings that staff change at runtime (licence auto-approve, later fares and bonuses) live in the `settings` table, read through `services/settings.ts` with a 30-second cache per Worker isolate.
+
+Sessions are random bearer tokens; only their SHA-256 hash is stored, and they expire after `SESSION_TTL_DAYS` (`src/config.ts`). Admin sessions work the same way (`admin_sessions`, 12 hours). Admin passwords are PBKDF2-SHA256 hashes (`lib/password.ts`).
+
+## Admin accounts
+
+```bash
+node scripts/create-admin.mjs --local  owner@example.com "Your Name" owner        # local D1, prints a generated password
+node scripts/create-admin.mjs --remote owner@example.com "Your Name" owner        # production
+node scripts/create-admin.mjs --remote ops@example.com "Ops Person" operations "ChosenPassword123"
+```
+
+Roles: `owner` (everything), `operations` (bookings, licences, catalog), `content` (catalog, offers). Running the script again for the same email resets the password and clears a lockout.
 
 ## Deploy (free tier)
 
@@ -91,10 +117,13 @@ npx wrangler login          # once per machine
 npm run db:migrate:remote   # only when migrations/ has a new file
 npm run deploy
 node scripts/smoke.mjs https://quikfly-api.quikfly-api.workers.dev/v1   # leaves one test user (+91 9000000001)
+node scripts/smoke-admin.mjs https://quikfly-api.quikfly-api.workers.dev/v1 <owner email> <password>   # admin endpoints
 ```
+
+Locally, `node scripts/smoke-admin.mjs http://localhost:8787/v1` creates its own test admins and also checks roles and lockout.
 
 `ALLOWED_ORIGINS` is `*` for now. To lock it down, set it to the website origin plus `http://localhost:3000`. The Flutter app is not affected, because CORS only applies to browsers.
 
 ## Not yet built
 
-Real SMS OTP, payments, live driver tracking, and an admin panel for the catalog (it is served from `@quikfly/shared` until then).
+Real SMS OTP, payments, live driver tracking. The catalog is still served from `@quikfly/shared` until slice L2 of the admin work moves it into D1 (see `docs/roadmap.md`).

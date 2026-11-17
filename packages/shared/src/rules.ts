@@ -17,8 +17,6 @@ export const LIMITS = {
 export const WELCOME_CREDIT = 500;
 export const REFERRAL_BONUS = 100;
 export const DELETION_GRACE_DAYS = 30;
-/** Simulated licence review time before "pending" becomes "verified". */
-export const LICENCE_REVIEW_SECONDS = 20;
 export const SHARE_LINK_HOURS = 24;
 /** Local hours [from, to) counted as night for auto-sharing rides. */
 export const NIGHT_HOURS: [number, number] = [22, 6];
