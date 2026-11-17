@@ -89,12 +89,18 @@ The upload key signs every APK shared with the client. Android installs an updat
    ```
 3. Give the build the password through the environment (or add a `storePassword=` line to `key.properties` if you accept it on disk):
    ```powershell
-   $env:QUIKFLY_KEYSTORE_PASSWORD = "<password>"     # this terminal only
+   $env:QUIKFLY_KEYSTORE_PASSWORD = Read-Host "Keystore password" -MaskInput     # this terminal only; hidden, not in history
    ```
+   Don't type the password inside double quotes: PowerShell expands `$` in `"..."`, which silently changes a password containing `$` ("keystore password was incorrect").
    With `key.properties` present and no password, release builds stop with an error instead of falling back to the debug key. Without `key.properties`, release builds use the debug key (fine for testing, never for sharing).
 4. Bump `version:` in `pubspec.yaml` (`1.2.0+5`: the number after `+` must go up every release), then build one APK per phone type (about 20 MB each instead of one 58 MB file):
    ```bash
    flutter build apk --release --split-per-abi   # build/app/outputs/flutter-apk/app-arm64-v8a-release.apk (most phones), armeabi-v7a, x86_64
    ```
-   Check the signature: `keytool -printcert -jarfile build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` must show the QuikFly certificate, not "Android Debug".
+   Check the signature with the SDK's `apksigner` (`keytool -printcert -jarfile` prints nothing: these APKs use signature scheme v2 only):
+   ```bash
+   <android-sdk>/build-tools/<version>/apksigner verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+   ```
+   It must show `CN=QuikFly, O=QuikFly Mobility Pvt. Ltd.` and certificate SHA-256 `c784cef550dc5fa5fc64c55a2ec6eec89981fd2d750aff9a496c9b4017033aae`, never `CN=Android Debug`.
+   Split APKs get version codes per ABI (e.g. 2001 for arm64-v8a with `+1`); that's normal.
 5. Publish as a GitHub Release (owner's approval needed; see `docs/operations.md`); the website's "Get it on Google Play" button links to the latest release.
