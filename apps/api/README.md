@@ -97,6 +97,13 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | PUT 🛡 | `/admin/catalog/:kind/:id` | change `data`, `active` (show/hide) and/or `sort` |
 | DELETE 🛡 | `/admin/catalog/:kind/:id` | remove an item (bookings keep their own copy of what was bought) |
 | POST 🛡 | `/admin/catalog/reset` | replace the whole catalog with the seed (demo reset) `[settings.edit]` |
+| GET 🛡 | `/admin/bookings?q=&status=&service=&from=&to=&page=` | all customers' bookings, newest first, 25 per page; `q` matches booking id, title, customer name or phone; dates are India time `[bookings.view]` |
+| GET 🛡 | `/admin/bookings/:id` | `{ booking (with customer), wallet entries, coupon, history (staff actions) }` `[bookings.view]` |
+| POST 🛡 | `/admin/bookings/:id/cancel` | `{ reason }` (5–300 chars) → cancels an active booking; a wallet payment is refunded to the customer's wallet in the same transaction; 409 if already finished `[bookings.manage]` |
+| POST 🛡 | `/admin/bookings/:id/complete` | marks an active booking completed `[bookings.manage]` |
+| GET 🛡 | `/admin/licences?status=` | licence queue: `pending` (default, oldest first), `rejected` or `verified` `[licences.review]` |
+| POST 🛡 | `/admin/licences/:userId/approve` | pending → verified `[licences.review]` |
+| POST 🛡 | `/admin/licences/:userId/reject` | `{ reason }` → rejected; the customer sees the reason (`licence.note`) and can submit again `[licences.review]` |
 
 ## Settings (`wrangler.jsonc` → `vars`)
 
