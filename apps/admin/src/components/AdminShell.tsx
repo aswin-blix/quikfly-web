@@ -1,8 +1,8 @@
 "use client";
 // Page frame: sidebar on desktop, top bar + slide-in menu on phones. The login page renders bare.
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { LogOut, Menu, Moon, Sun, X } from "lucide-react";
 import { ADMIN_ROLE_INFO } from "@quikfly/shared";
 import { cx } from "@/lib/format";
@@ -34,11 +34,13 @@ function ThemeButton() {
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const path = usePathname();
+  const search = useSearchParams().toString();
+  const full = search ? `${path}?${search}` : path;
   const { can } = useSession();
   return (
     <nav aria-label="Admin sections" className="flex flex-col gap-0.5">
       {NAV.filter((n) => LIVE_ROUTES.has(n.href) && can(n.permission)).map((n) => {
-        const active = isActive(n.href, path);
+        const active = isActive(n.href, path, full);
         return (
           <Link key={n.href} href={n.href} onClick={onNavigate} aria-current={active ? "page" : undefined}
             className={cx("flex items-center gap-3 px-3 py-2 rounded-field text-sm transition-colors",
@@ -88,7 +90,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-(--sidebar-width) flex-col border-r border-line bg-surface px-3 py-4">
         <div className="px-3 pb-5"><Wordmark /></div>
-        <div className="flex-1 overflow-y-auto"><NavList /></div>
+        <div className="flex-1 overflow-y-auto"><Suspense><NavList /></Suspense></div>
         <AccountFooter />
       </aside>
 
@@ -109,7 +111,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <Wordmark />
               <button onClick={() => setOpen(false)} aria-label="Close menu" className="size-9 grid place-items-center rounded-field hover:bg-raised"><X size={18} /></button>
             </div>
-            <div className="flex-1 overflow-y-auto"><NavList onNavigate={() => setOpen(false)} /></div>
+            <div className="flex-1 overflow-y-auto"><Suspense><NavList onNavigate={() => setOpen(false)} /></Suspense></div>
             <AccountFooter />
           </div>
         </div>

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useHideBottomNav } from "./BottomNav";
 import { ArrowUpDown, Clock, MapPin, Navigation, Phone, Share2, Siren, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { PLACES, RIDE_SIMULATION, isNightHour } from "@quikfly/shared";
+import { RIDE_SIMULATION, isNightHour } from "@quikfly/shared";
 import type { FareQuote, PaymentMethod, Place, Ride, SavedPlace } from "@quikfly/shared";
 import { trackUrl } from "@/lib/account";
 import { cx, inr } from "@/lib/format";
@@ -14,6 +14,7 @@ import { useApp } from "./AppProvider";
 import { CityMap, driverStartFor, vehiclePosition, type Pt } from "./CityMap";
 import { SafetySheet } from "./SafetySheet";
 import { GoldButton, Spinner } from "./ui";
+import { useConfig } from "@/components/ConfigProvider";
 
 type Phase = "plan" | "searching" | "arriving" | "ontrip" | "done";
 
@@ -23,9 +24,18 @@ const RIDE_PAYMENTS: PaymentMethod[] = ["upi", "cash", "wallet", "card"];
 const { arriveMs: ARRIVE_MS, tripMs: TRIP_MS } = RIDE_SIMULATION;
 
 export function RidePanel({ service, initialFrom, initialTo }: { service: "bike" | "car"; initialFrom?: string | null; initialTo?: string | null }) {
+  const PLACES = useConfig()?.places ?? [];
   const { user, requireAuth, refreshBookings, toast } = useApp();
-  const [pickup, setPickup] = useState<Place | null>(PLACES.find((p) => p.id === initialFrom) ?? PLACES[2]);
-  const [drop, setDrop] = useState<Place | null>(PLACES.find((p) => p.id === initialTo && p.id !== initialFrom) ?? null);
+  const [pickup, setPickup] = useState<Place | null>(null);
+  const [drop, setDrop] = useState<Place | null>(null);
+  // Places arrive with /config: once they do, pre-fill from the link (or a sensible default).
+  const placesReady = PLACES.length > 0;
+  useEffect(() => {
+    if (!placesReady) return;
+    setPickup((p) => p ?? PLACES.find((x) => x.id === initialFrom) ?? PLACES[Math.min(2, PLACES.length - 1)]);
+    setDrop((d) => d ?? PLACES.find((x) => x.id === initialTo && x.id !== initialFrom) ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placesReady]);
   const [quotes, setQuotes] = useState<FareQuote[] | null>(null);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [selected, setSelected] = useState<string>("");
@@ -124,7 +134,7 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
       try {
         r = await api.rides.book({ optionId: quote.option.id, pickupId: pickup.id, dropId: drop.id, payment });
         const b = await api.bookings.create({
-          service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, amount: r.quote.fare, payment,
+          service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, rideId: r.id, payment,
           lines: [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
         });
         setRide(r); setBookingId(b.id); setT(0); setPhase("arriving");

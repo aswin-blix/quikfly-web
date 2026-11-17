@@ -2,6 +2,7 @@
 import { LIMITS, type EmergencyContact, type Gender, type SavedPlace, type SavedPlaceKind, type Traveller } from "@quikfly/shared";
 import { badRequest, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
+import { visible } from "./catalog";
 import { placeById } from "./places";
 
 async function assertRoom(db: D1Database, table: string, userId: string, max: number, what: string) {
@@ -21,15 +22,17 @@ interface PlaceRow { id: string; kind: SavedPlaceKind; label: string; place_id: 
 export async function listPlaces(db: D1Database, userId: string): Promise<SavedPlace[]> {
   const { results } = await db.prepare("SELECT * FROM saved_places WHERE user_id = ? ORDER BY CASE kind WHEN 'home' THEN 0 WHEN 'work' THEN 1 ELSE 2 END, created_at")
     .bind(userId).all<PlaceRow>();
-  // Skip places that left the catalogue rather than failing the whole list.
+  // Skip places that were hidden or removed from the catalog rather than failing the whole list.
+  const places = new Map((await visible(db, "place")).map((p) => [p.id, p]));
   return results.flatMap((r) => {
-    try { return [{ id: r.id, kind: r.kind, label: r.label, place: placeById(r.place_id) }]; } catch { return []; }
+    const place = places.get(r.place_id);
+    return place ? [{ id: r.id, kind: r.kind, label: r.label, place }] : [];
   });
 }
 
 /** Home and Work are single slots: saving one again replaces it. */
 export async function savePlace(db: D1Database, userId: string, kind: SavedPlaceKind, placeId: string, label?: string) {
-  placeById(placeId);
+  await placeById(db, placeId);
   const finalLabel = kind === "home" ? "Home" : kind === "work" ? "Work" : label;
   if (!finalLabel) throw badRequest('"label" is required for other places.');
   if (kind === "other") await assertRoom(db, "saved_places", userId, LIMITS.savedPlaces, "places");

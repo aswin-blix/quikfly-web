@@ -1,9 +1,8 @@
 import { DELETION_GRACE_DAYS, type AuthResult, type Gender, type LicenceStatus, type User } from "@quikfly/shared";
-import {
-  DEFAULT_USER_NAME, NEW_USER_WALLET_BALANCE, PHONE_COUNTRY_CODE, PHONE_DIGITS, SESSION_TTL_DAYS,
-} from "../config";
+import { DEFAULT_USER_NAME, PHONE_COUNTRY_CODE, PHONE_DIGITS, SESSION_TTL_DAYS } from "../config";
 import { badRequest } from "../lib/errors";
 import { randomToken, sha256, uid } from "../lib/random";
+import { getSettings } from "./settings";
 import { txnStatement } from "./wallet";
 
 export interface UserRow {
@@ -50,12 +49,13 @@ const referralCode = () => "QF" + [...crypto.getRandomValues(new Uint8Array(6))]
 
 async function createUser(db: D1Database, phone: string) {
   const id = uid("U");
+  const credit = (await getSettings(db)).welcomeCredit;
   for (let attempt = 0; ; attempt++) {
     try {
       await db.batch([
         db.prepare("INSERT INTO users (id, phone, name, wallet_balance, created_at, referral_code) VALUES (?, ?, ?, ?, ?, ?)")
-          .bind(id, phone, DEFAULT_USER_NAME, NEW_USER_WALLET_BALANCE, new Date().toISOString(), referralCode()),
-        txnStatement(db, { userId: id, kind: "welcome", amount: NEW_USER_WALLET_BALANCE, note: "Welcome credit" }),
+          .bind(id, phone, DEFAULT_USER_NAME, credit, new Date().toISOString(), referralCode()),
+        ...(credit ? [txnStatement(db, { userId: id, kind: "welcome", amount: credit, note: "Welcome credit" })] : []),
       ]);
       return (await getUserRow(db, id))!;
     } catch (e) {

@@ -3,3 +3,5 @@ export * from "./catalog";
 export * from "./rules";
 export * from "./admin";
 export * from "./settings";
+export * from "./catalog-kinds";
+export * from "./pricing";

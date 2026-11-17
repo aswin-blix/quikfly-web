@@ -1,15 +1,16 @@
 "use client";
 import { useState } from "react";
 import { Copy, Share2 } from "lucide-react";
-import { REFERRAL_BONUS } from "@quikfly/shared";
 import { api } from "@/lib/api";
 import { inr } from "@/lib/format";
 import { useApp } from "../AppProvider";
+import { useSettings } from "../ConfigProvider";
 import { GoldButton } from "../ui";
 import { ErrorText, Field, Section, useAction } from "./kit";
 
 export function ReferSection() {
   const { user, setUser, toast } = useApp();
+  const REFERRAL_BONUS = useSettings().referralBonus;
   const [code, setCode] = useState("");
   const { run, busy, error } = useAction();
   if (!user) return null;

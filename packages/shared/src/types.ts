@@ -125,6 +125,41 @@ export interface RideOption {
   baseFare: number;
   perKm: number;
   perMin: number;
+  /** Vehicle models a driver of this type may arrive in, e.g. "Maruti Swift". */
+  models: string[];
+}
+
+/** A driver on the roster (catalog). A booked ride gets one, plus a vehicle and plate. */
+export interface DriverProfile {
+  id: string;
+  name: string;
+  rating: number;
+  trips: number;
+  phone: string;
+}
+
+export interface City {
+  id: string;
+  name: string;
+}
+
+export interface BusOperator {
+  id: string;
+  name: string;
+}
+
+/** A bus route shortcut shown on the bus page. */
+export interface PopularRoute {
+  id: string;
+  from: string;
+  to: string;
+}
+
+/** An outstation destination for group travel, with the one-way distance from Chennai. */
+export interface GroupDestination {
+  id: string;
+  name: string;
+  km: number;
 }
 
 export interface FareQuote {
@@ -243,6 +278,7 @@ export interface Booking {
   lines: [string, string][];
 }
 
+/** A coupon. The API checks it at booking; the website only shows it. */
 export interface Offer {
   id: string;
   code: string;
@@ -250,12 +286,93 @@ export interface Offer {
   description: string;
   service: ServiceKey | "all";
   hue: number;
+  /** Discount as a percentage of the total (100 = flat discount up to maxDiscount). */
+  percent: number;
+  /** Largest discount in rupees. */
+  maxDiscount: number;
+  /** Smallest booking total the code works on, in rupees (0 = any). */
+  minAmount: number;
+  /** Last day the code works (YYYY-MM-DD, India time), or null for no end. */
+  validUntil: string | null;
+  /** Times one customer may use it, or null for no limit. */
+  perUserLimit: number | null;
 }
 
+export const FAQ_CATEGORIES = ["Rides", "Bus", "Holidays", "Rentals", "Payments", "Account"] as const;
+
 export interface Faq {
+  id: string;
   q: string;
   a: string;
-  category: "Rides" | "Bus" | "Holidays" | "Rentals" | "Payments" | "Account";
+  category: (typeof FAQ_CATEGORIES)[number];
+}
+
+/** One line of a price breakdown. */
+export interface FareLine {
+  label: string;
+  amount: number;
+}
+
+/**
+ * A price worked out by the API. Bookings refer to it by id, so the amount
+ * can't be changed in the browser. Valid until `expiresAt`, and only once.
+ */
+export interface PriceQuote {
+  id: string;
+  service: ServiceKey;
+  lines: FareLine[];
+  total: number;
+  expiresAt: string;
+}
+
+export const RENT_KM_PLANS = ["limited", "unlimited"] as const;
+export const RENT_PROTECTION = ["standard", "peace"] as const;
+
+/** What to price. Rides are quoted by POST /rides/quote instead. */
+export type QuoteRequest =
+  | { service: "bus"; busId: string; from: string; to: string; date: string; seatIds: string[] }
+  | { service: "tours"; tourId: string; adults: number; kids: number }
+  | {
+      service: "rent"; carId: string; mode: "self" | "driver";
+      /** Local date-times "YYYY-MM-DDTHH:mm". */
+      start: string; end: string;
+      kmPlan: (typeof RENT_KM_PLANS)[number]; protection: (typeof RENT_PROTECTION)[number]; doorstep: boolean;
+    }
+  | { service: "rentals"; vehicleId: string; trip: "local" | "outstation"; destinationId?: string; days: number };
+
+/** Result of checking a coupon against a quote. */
+export interface CouponCheck {
+  code: string;
+  discount: number;
+  /** Total after the discount. */
+  total: number;
+}
+
+/** Everything the apps load once at start-up (GET /config). Lists contain only visible items. */
+export interface AppConfig {
+  settings: import("./settings").Settings;
+  places: Place[];
+  rideOptions: RideOption[];
+  cities: City[];
+  busOperators: BusOperator[];
+  popularRoutes: PopularRoute[];
+  groupDestinations: GroupDestination[];
+  offers: Offer[];
+  faqs: Faq[];
+}
+
+/** Body of POST /bookings. The amount comes from the quote (or the ride), never the client. */
+export interface NewBooking {
+  service: ServiceKey;
+  title: string;
+  subtitle: string;
+  payment: PaymentMethod;
+  lines: [string, string][];
+  /** For bus, tours, rent and rentals. */
+  quoteId?: string;
+  /** For bike and car rides (the ride carries its fare). */
+  rideId?: string;
+  couponCode?: string;
 }
 
 /** What the generic /checkout page needs; created by any service page. */
@@ -265,7 +382,8 @@ export interface CheckoutDraft {
   subtitle: string;
   image?: string;
   summary: [string, string][];
-  fare: { label: string; amount: number }[];
+  /** The API's price for this booking; checkout shows its lines and books with its id. */
+  quote: PriceQuote;
   travellers: string[];          // labels for name fields, e.g. ["Seat L4", "Seat L5"]
   needsLicence?: boolean;
   policy: string;

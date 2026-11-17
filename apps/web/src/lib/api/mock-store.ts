@@ -5,7 +5,9 @@ import type { EmergencyContact, Ride, SavedPlace, Traveller, User, WalletTransac
 export const MOCK_OTP = "1234";
 /** Demo mode has no admin to review licences; a submitted one turns verified after this long. */
 export const MOCK_LICENCE_REVIEW_SECONDS = 20;
-export { WELCOME_CREDIT as NEW_USER_WALLET } from "@quikfly/shared";
+import { DEFAULT_SETTINGS } from "@quikfly/shared";
+/** Demo mode uses the default settings (it has no admin panel). */
+export const NEW_USER_WALLET = DEFAULT_SETTINGS.welcomeCredit;
 
 export const wait = (ms = 450) => new Promise((r) => setTimeout(r, ms));
 export const uid = (p: string) => `${p}${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 90 + 10)}`;

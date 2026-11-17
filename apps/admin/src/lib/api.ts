@@ -1,6 +1,9 @@
 // The admin panel's only door to the backend. Screens call `adminApi`, never fetch().
 // Endpoints are listed in apps/api/README.md (Admin section).
-import type { AdminLoginResult, AdminStats, AdminUser, AuditEntry, Page, Settings } from "@quikfly/shared";
+import type { AdminLoginResult, AdminStats, AdminUser, AuditEntry, CatalogItem, CatalogKind, Page, Settings } from "@quikfly/shared";
+
+export interface CatalogKindSummary { kind: CatalogKind; total: number; visible: number; canEdit: boolean }
+export interface CatalogItemInput { data?: Record<string, unknown>; active?: boolean; sort?: number }
 
 const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 const TOKEN_KEY = "quikfly.admin.token";
@@ -67,4 +70,12 @@ export const adminApi = {
     update: (patch: Partial<Settings>) => req<Settings>("PATCH", "/admin/settings", patch),
   },
   audit: (page: number, entity?: string) => req<Page<AuditEntry>>("GET", `/admin/audit${qs({ page, entity })}`),
+  catalog: {
+    kinds: () => req<CatalogKindSummary[]>("GET", "/admin/catalog"),
+    list: (kind: CatalogKind) => req<CatalogItem[]>("GET", `/admin/catalog/${kind}`),
+    create: (kind: CatalogKind, body: CatalogItemInput) => req<CatalogItem>("POST", `/admin/catalog/${kind}`, body),
+    update: (kind: CatalogKind, id: string, body: CatalogItemInput) => req<CatalogItem>("PUT", `/admin/catalog/${kind}/${encodeURIComponent(id)}`, body),
+    remove: (kind: CatalogKind, id: string) => req<{ deleted: boolean }>("DELETE", `/admin/catalog/${kind}/${encodeURIComponent(id)}`),
+    reset: () => req<{ reset: boolean }>("POST", "/admin/catalog/reset"),
+  },
 };

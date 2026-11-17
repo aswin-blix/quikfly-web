@@ -2,7 +2,7 @@
 // change data check a permission and write an audit row. Bookings, licences, catalog and
 // offers routers mount here as they are added.
 import { Hono } from "hono";
-import { ADMIN_RULES, DEFAULT_SETTINGS, type Settings } from "@quikfly/shared";
+import { ADMIN_RULES, checkSetting, type Settings } from "@quikfly/shared";
 import type { AppEnv } from "../../env";
 import { badRequest } from "../../lib/errors";
 import { bearerToken } from "../../middleware/auth";
@@ -12,19 +12,18 @@ import { audit, listAudit } from "../../services/admin/audit";
 import { adminLogin, endAdminSession } from "../../services/admin/auth";
 import { dashboardStats } from "../../services/admin/stats";
 import { getSettings, updateSettings } from "../../services/settings";
+import { adminCatalog } from "./catalog";
 
 /** Positive page number from `?page=`, default 1. */
 const pageParam = (v: string | undefined) => Math.max(1, parseInt(v ?? "1", 10) || 1);
 
-/** Accepts only known settings keys with the same type as the default. */
+/** Accepts only known settings with allowed values (SETTING_RULES in @quikfly/shared). */
 function settingsPatch(body: Record<string, unknown>): Partial<Settings> {
   const patch: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
-    if (!(key in DEFAULT_SETTINGS)) throw badRequest(`Unknown setting "${key}".`);
-    const expected = typeof (DEFAULT_SETTINGS as unknown as Record<string, unknown>)[key];
-    if (typeof value !== expected) throw badRequest(`"${key}" must be a ${expected}.`);
-    if (expected === "number" && !Number.isFinite(value as number)) throw badRequest(`"${key}" must be a number.`);
-    patch[key] = value;
+    const error = checkSetting(key, value);
+    if (error) throw badRequest(error);
+    patch[key] = typeof value === "string" ? value.trim() : value;
   }
   if (!Object.keys(patch).length) throw badRequest("Nothing to update.");
   return patch as Partial<Settings>;
@@ -63,4 +62,6 @@ export const admin = new Hono<AppEnv>()
       detail: { before: Object.fromEntries(changed.map((k) => [k, before[k]])), after: Object.fromEntries(changed.map((k) => [k, after[k]])) },
     });
     return c.json(after);
-  });
+  })
+
+  .route("/catalog", adminCatalog);

@@ -8,13 +8,13 @@ import { BookingWidget } from "@/components/BookingWidget";
 import { SceneArt } from "@/components/SceneArt";
 import { CountUp, fadeUp, Magnetic, Marquee, Parallax, Reveal, SplitHeadline, StaggerGroup, Tilt } from "@/components/motion";
 import { Accordion, GhostLink, SectionTitle } from "@/components/ui";
-import { TOURS } from "@quikfly/shared";
-import { FAQS, OFFERS, POPULAR_ROUTES } from "@/lib/api/data";
 import { inr, todayISO } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
 import { useApp } from "@/components/AppProvider";
+import { useConfig } from "@/components/ConfigProvider";
+import { useTours } from "@/components/catalog-hooks";
 
 export function HomeScreen() {
   return (
@@ -209,6 +209,7 @@ function Stats() {
 
 /* ── Offers: draggable carousel (Framer Motion drag) ── */
 function Offers() {
+  const OFFERS = useConfig()?.offers ?? [];
   const wrap = useRef<HTMLDivElement>(null);
   const { toast } = useApp();
   return (
@@ -243,6 +244,8 @@ function Offers() {
 }
 
 function Popular() {
+  const TOURS = useTours() ?? [];
+  const POPULAR_ROUTES = (useConfig()?.popularRoutes ?? []).map((r) => [r.from, r.to] as [string, string]);
   return (
     <section className="max-w-7xl mx-auto px-4 py-12 grid lg:grid-cols-2 gap-8">
       <Reveal>
@@ -401,7 +404,8 @@ function PhoneMock() {
 }
 
 function FaqTeaser() {
-  const [items] = useState(() => FAQS.filter((_, i) => [0, 3, 6, 8].includes(i)));
+  const FAQS = useConfig()?.faqs ?? [];
+  const items = FAQS.filter((_, i) => [0, 3, 6, 8].includes(i));
   return (
     <section className="max-w-4xl mx-auto px-4 py-16">
       <SectionTitle center eyebrow="Questions" title="Good to know" />

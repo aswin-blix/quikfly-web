@@ -9,7 +9,7 @@ import { shareRide } from "../services/share";
 export const rides = new Hono<AppEnv>()
   .post("/quote", async (c) => {
     const body = await jsonBody(c);
-    return c.json(quoteRides(oneOf(body, "service", ["bike", "car"] as const), str(body, "pickupId"), str(body, "dropId")));
+    return c.json(await quoteRides(c.env.DB, oneOf(body, "service", ["bike", "car"] as const), str(body, "pickupId"), str(body, "dropId")));
   })
   .post("/", requireUser, async (c) => {
     const body = await jsonBody(c);

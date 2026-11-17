@@ -4,13 +4,15 @@
 import { useEffect, useState } from "react";
 import { BellRing, PhoneCall, Share2, ShieldAlert, Siren } from "lucide-react";
 import type { EmergencyContact } from "@quikfly/shared";
-import { SAFETY } from "@/lib/account";
+import { EMERGENCY_NUMBER } from "@/lib/account";
+import { useSettings } from "./ConfigProvider";
 import { api } from "@/lib/api";
 import { Link } from "@/lib/nav";
 import { useApp } from "./AppProvider";
 import { Modal } from "./ui";
 
 export function SafetySheet({ open, onClose, onShare }: { open: boolean; onClose: () => void; onShare: () => void }) {
+  const SAFETY = { emergency: EMERGENCY_NUMBER, safetyLine: useSettings().safetyLine };
   const { toast } = useApp();
   const [contacts, setContacts] = useState<EmergencyContact[] | null>(null);
 

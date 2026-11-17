@@ -3,8 +3,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { Gift } from "lucide-react";
-import { LIMITS, PATTERNS, REFERRAL_BONUS } from "@quikfly/shared";
-import { NEW_USER_WALLET_HINT } from "@/lib/account";
+import { LIMITS, PATTERNS } from "@quikfly/shared";
+import { newUserWalletHint } from "@/lib/account";
+import { useSettings } from "./ConfigProvider";
 import { api, DEMO_OTP } from "@/lib/api";
 import { cx, inr } from "@/lib/format";
 import { useApp } from "./AppProvider";
@@ -15,6 +16,7 @@ const TITLES: Record<Step, string> = { phone: "Login or sign up", otp: "Verify O
 
 export function LoginModal() {
   const { loginOpen, closeLogin, setUser, toast } = useApp();
+  const settings = useSettings();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -64,14 +66,14 @@ export function LoginModal() {
         try {
           user = await api.account.applyReferral(code.trim());
           setUser(user);
-          toast(`Referral applied: ${inr(REFERRAL_BONUS)} added to your wallet`);
+          toast(`Referral applied: ${inr(settings.referralBonus)} added to your wallet`);
         } catch (e) {
           // The profile is saved; let them fix the code or skip it.
           setCode(""); setShowCode(true);
           throw new Error(`${(e as Error).message} You can try another code or continue without one.`);
         }
       }
-      toast(`Welcome to QuikFly, ${user.name}! ${NEW_USER_WALLET_HINT}`);
+      toast(`Welcome to QuikFly, ${user.name}! ${newUserWalletHint(settings.welcomeCredit)}`.trim());
       close(true);
     });
   };
@@ -124,7 +126,7 @@ export function LoginModal() {
                 <div>
                   <label className="label" htmlFor="sc">Referral code</label>
                   <input id="sc" className="field mt-1.5 uppercase" placeholder="e.g. QF7K2M9P" value={code} onChange={(e) => setCode(e.target.value)} />
-                  <p className="text-xs text-muted mt-1">You and your friend each get {inr(REFERRAL_BONUS)} in your wallets.</p>
+                  <p className="text-xs text-muted mt-1">You and your friend each get {inr(settings.referralBonus)} in your wallets.</p>
                 </div>
               ) : (
                 <button type="button" onClick={() => setShowCode(true)} className="text-sm text-gold flex items-center gap-1.5"><Gift size={15} />Have a referral code?</button>

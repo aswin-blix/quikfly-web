@@ -5,18 +5,21 @@ import { BedDouble, CalendarDays, Camera, Car, Check, Clock, Hotel, Palmtree, Pl
 import { useApp } from "@/components/AppProvider";
 import { SceneArt } from "@/components/SceneArt";
 import { Reveal, Tilt, TweenNumber } from "@/components/motion";
-import { Breadcrumbs, Counter, Empty, GoldButton, PageHeader, SectionTitle, Segmented } from "@/components/ui";
-import { TOURS } from "@quikfly/shared";
+import { Breadcrumbs, Counter, Empty, GoldButton, PageHeader, SectionTitle, Segmented, Spinner } from "@/components/ui";
+import { useSettings } from "@/components/ConfigProvider";
+import { api } from "@/lib/api";
 import { cx, inr, prettyDate, todayISO } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, useNav, useQuery } from "@/lib/nav";
-import type { TourPackage, TourTheme } from "@quikfly/shared";
+import { childPrice, type TourPackage, type TourTheme } from "@quikfly/shared";
+import { useTours } from "@/components/catalog-hooks";
 
 const THEMES: [TourTheme | "all", string][] = [["all", "All"], ["beach", "Beaches"], ["hills", "Hill stations"], ["international", "International"], ["weekend", "Weekend"], ["heritage", "Heritage"]];
 
 /* ───────────── /holidays ───────────── */
 
 export function HolidaysScreen() {
+  const TOURS = useTours() ?? [];
   const q = useQuery();
   const [theme, setTheme] = useState<TourTheme | "all">((q.get("theme") as TourTheme) || "all");
   const [dur, setDur] = useState<"any" | "short" | "mid" | "long">("any");
@@ -29,7 +32,7 @@ export function HolidaysScreen() {
       (dur === "any" || (dur === "short" ? t.days <= 3 : dur === "mid" ? t.days >= 4 && t.days <= 5 : t.days >= 6)) &&
       t.price <= budget);
     return l.sort((a, b) => sort === "price" ? a.price - b.price : sort === "duration" ? a.days - b.days : b.rating - a.rating);
-  }, [theme, dur, budget, sort]);
+  }, [TOURS, theme, dur, budget, sort]);
 
   return (
     <>
@@ -108,9 +111,13 @@ function TourCard({ t }: { t: TourPackage }) {
 /* ───────────── /holidays/[slug] ───────────── */
 
 export function HolidayDetailScreen({ slug }: { slug: string }) {
+  const toursList = useTours();
+  const TOURS = toursList ?? [];
+  const settings = useSettings();
+  const [pricing, setPricing] = useState(false);
   const tour = TOURS.find((t) => t.slug === slug);
   const ref = useRef<HTMLDivElement>(null);
-  const { setDraft } = useApp();
+  const { setDraft, toast } = useApp();
   const nav = useNav();
   const [date, setDate] = useState(todayISO(14));
   const [adults, setAdults] = useState(2);
@@ -124,18 +131,29 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
     gsap.utils.toArray<HTMLElement>(".itin-day").forEach((el) => gsap.from(el, { opacity: 0, x: 30, duration: 0.6, scrollTrigger: { trigger: el, start: "top 88%" } }));
   }, { scope: ref, dependencies: [tab] });
 
+  if (!toursList) return <div className="max-w-7xl mx-auto px-4 py-24 grid place-items-center text-gold" role="status" aria-label="Loading"><Spinner size={28} /></div>;
   if (!tour) return <div className="max-w-7xl mx-auto px-4 py-20"><Empty icon={<Palmtree size={40} />} text="Package not found." action={<Link href="/holidays" className="text-gold">Browse holidays</Link>} /></div>;
 
-  const kidPrice = Math.round(tour.price * 0.6);
+  // Live estimate while choosing; the price charged is the API's quote fetched in book().
+  const kidPrice = childPrice(tour, settings);
   const subtotal = tour.price * adults + kidPrice * kids;
-  const taxes = Math.round(subtotal * 0.05);
+  const taxes = Math.round((subtotal * settings.gstTours) / 100);
   const similar = TOURS.filter((t) => t.id !== tour.id && t.themes.some((x) => tour.themes.includes(x))).slice(0, 3);
 
-  function book() {
+  async function book() {
+    setPricing(true);
+    let quote;
+    try {
+      quote = await api.quotes.create({ service: "tours", tourId: tour!.id, adults, kids });
+    } catch (e) {
+      toast((e as Error).message, "err");
+      setPricing(false);
+      return;
+    }
     setDraft({
       service: "tours", title: tour!.title, subtitle: `${tour!.location} · ${tour!.days}D/${tour!.nights}N`,
       summary: [["Start date", prettyDate(date)], ["Travellers", `${adults} adult${adults > 1 ? "s" : ""}${kids ? `, ${kids} child${kids > 1 ? "ren" : ""}` : ""}`], ["Hotels", `${tour!.hotelStars}★ · ${tour!.meals}`], ["Includes", tour!.includes.join(", ")]],
-      fare: [{ label: `${adults} adult × ${inr(tour!.price)}`, amount: tour!.price * adults }, ...(kids ? [{ label: `${kids} child × ${inr(kidPrice)}`, amount: kidPrice * kids }] : []), { label: "GST (5%)", amount: taxes }],
+      quote,
       travellers: [...Array(adults).fill(0).map((_, i) => `Adult ${i + 1}`), ...Array(kids).fill(0).map((_, i) => `Child ${i + 1}`)],
       policy: tour!.cancellation,
     });
@@ -211,7 +229,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
               <span className="text-sm text-muted">Total incl. GST</span>
               <TweenNumber value={subtotal + taxes} format={inr} className="text-2xl font-bold" />
             </div>
-            <GoldButton className="w-full" onClick={book}>Book now</GoldButton>
+            <GoldButton className="w-full" loading={pricing} onClick={book}>Book now</GoldButton>
             <p className="text-[11px] text-subtle text-center">No payment today in demo · Free expert call</p>
           </motion.div>
         </aside>

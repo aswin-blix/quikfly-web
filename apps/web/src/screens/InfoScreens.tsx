@@ -5,15 +5,16 @@ import { BadgePercent, Bike, Bus, Car, CircleCheck, Compass, Copy, Headphones, I
 import { useApp } from "@/components/AppProvider";
 import { fadeUp, Reveal, StaggerGroup, Tilt, TweenNumber } from "@/components/motion";
 import { Accordion, Empty, GhostLink, GoldButton, PageHeader, SectionTitle, Segmented } from "@/components/ui";
-import { FAQS, OFFERS } from "@/lib/api/data";
 import { cx, inr } from "@/lib/format";
 import { Link } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
 import type { Faq } from "@quikfly/shared";
+import { useConfig } from "@/components/ConfigProvider";
 
 /* ───────────── /offers ───────────── */
 
 export function OffersScreen() {
+  const OFFERS = useConfig()?.offers ?? [];
   const { toast } = useApp();
   const [filter, setFilter] = useState<string>("all");
   const shown = OFFERS.filter((o) => filter === "all" || o.service === filter);
@@ -174,9 +175,10 @@ function Slider({ label, value, min, max, onChange }: { label: string; value: nu
 const CATS: Faq["category"][] = ["Rides", "Bus", "Holidays", "Rentals", "Payments", "Account"];
 
 export function HelpScreen() {
+  const FAQS = useConfig()?.faqs ?? [];
   const [query, setQuery] = useState("");
   const [cat, setCat] = useState<Faq["category"] | "All">("All");
-  const shown = useMemo(() => FAQS.filter((f) => (cat === "All" || f.category === cat) && `${f.q} ${f.a}`.toLowerCase().includes(query.toLowerCase())), [query, cat]);
+  const shown = useMemo(() => FAQS.filter((f) => (cat === "All" || f.category === cat) && `${f.q} ${f.a}`.toLowerCase().includes(query.toLowerCase())), [FAQS, query, cat]);
 
   return (
     <>

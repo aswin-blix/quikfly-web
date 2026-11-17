@@ -4,13 +4,13 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { ArrowLeftRight, ArrowRight, MapPin, Navigation } from "lucide-react";
-import { CITIES, PLACES } from "@quikfly/shared";
 import { cx, todayISO } from "@/lib/format";
 import { defaultRentalWindow } from "@/lib/rentals";
 import { qs, useNav } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
 import type { ServiceKey, TourTheme } from "@quikfly/shared";
 import { GoldButton, Segmented } from "./ui";
+import { useConfig } from "./ConfigProvider";
 
 type Tab = "ride" | "bus" | "tours" | "rent" | "rentals";
 const TABS: [Tab, ServiceKey, string][] = [["ride", "car", "Rides"], ["bus", "bus", "Bus"], ["tours", "tours", "Holidays"], ["rent", "rent", "Rent a Car"], ["rentals", "rentals", "Group"]];
@@ -47,6 +47,7 @@ export function BookingWidget() {
 }
 
 function RideForm() {
+  const PLACES = useConfig()?.places ?? [];
   const nav = useNav();
   const [kind, setKind] = useState<"bike" | "cab">("cab");
   const [from, setFrom] = useState("p3");
@@ -64,6 +65,7 @@ function RideForm() {
 }
 
 function BusForm() {
+  const CITIES = (useConfig()?.cities ?? []).map((c) => c.name);
   const nav = useNav();
   const [from, setFrom] = useState("Chennai");
   const [to, setTo] = useState("Bengaluru");
@@ -101,6 +103,7 @@ function ToursForm() {
 }
 
 function RentForm() {
+  const CITIES = (useConfig()?.cities ?? []).map((c) => c.name);
   const nav = useNav();
   const [city, setCity] = useState("Chennai");
   const [start, setStart] = useState(() => defaultRentalWindow().start);

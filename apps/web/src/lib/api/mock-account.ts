@@ -1,7 +1,7 @@
 // Mock (demo mode) versions of the account endpoints. Same rules as the API,
 // using the shared limits and patterns, but stored in this browser only.
 import {
-  DELETION_GRACE_DAYS, LIMITS, PATTERNS, PLACES, REFERRAL_BONUS, compactCode,
+  CATALOG_SEED, DEFAULT_SETTINGS, DELETION_GRACE_DAYS, LIMITS, PATTERNS, compactCode,
   type EmergencyContact, type SavedPlace, type Traveller, type User,
 } from "@quikfly/shared";
 import type { QuikflyApi } from "./contract";
@@ -88,7 +88,7 @@ export const mockAccount: QuikflyApi["account"] = {
     if (code === u.referralCode) fail("You can't use your own referral code.");
     if (!PATTERNS.referralCode.test(code)) fail("That referral code doesn't look right.");
     // Demo mode has one account per browser, so any well-formed code counts as a friend's.
-    walletEntry("referral", REFERRAL_BONUS, `Referral bonus · code ${code}`);
+    walletEntry("referral", DEFAULT_SETTINGS.referralBonus, `Referral bonus · code ${code}`);
     return patchUser({ referred: true });
   },
   async submitLicence(input, expiry) {
@@ -132,7 +132,7 @@ export const mockSavedPlaces: QuikflyApi["savedPlaces"] = {
   async list() { await wait(200); return placesList.get(); },
   async save(kind, placeId, label) {
     await wait(300);
-    const place = PLACES.find((p) => p.id === placeId) ?? fail("Unknown place.");
+    const place = CATALOG_SEED.place.find((p) => p.id === placeId) ?? fail("Unknown place.");
     const finalLabel = kind === "home" ? "Home" : kind === "work" ? "Work" : label?.trim() || fail('"label" is required for other places.');
     if (kind !== "other") save(KEYS.places, placesList.get().filter((p) => p.kind !== kind));
     const order = { home: 0, work: 1, other: 2 };

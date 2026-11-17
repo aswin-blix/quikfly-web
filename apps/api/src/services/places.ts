@@ -1,13 +1,10 @@
-import { PLACES } from "@quikfly/shared";
-import { badRequest } from "../lib/errors";
+import type { Place } from "@quikfly/shared";
+import { visible, visibleById } from "./catalog";
 
-export function searchPlaces(q: string) {
+export async function searchPlaces(db: D1Database, q: string): Promise<Place[]> {
+  const places = await visible(db, "place");
   const s = q.trim().toLowerCase();
-  return s ? PLACES.filter((p) => `${p.name} ${p.area}`.toLowerCase().includes(s)) : PLACES;
+  return s ? places.filter((p) => `${p.name} ${p.area}`.toLowerCase().includes(s)) : places;
 }
 
-export function placeById(id: string) {
-  const p = PLACES.find((x) => x.id === id);
-  if (!p) throw badRequest("Unknown place.");
-  return p;
-}
+export const placeById = (db: D1Database, id: string) => visibleById(db, "place", id);

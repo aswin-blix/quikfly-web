@@ -4,13 +4,14 @@ import { BadgeCheck, Clock, HardHat, IndianRupee, KeyRound, MapPin, Share2, Shie
 import { RidePanel } from "@/components/RidePanel";
 import { fadeUp, Reveal, StaggerGroup } from "@/components/motion";
 import { Accordion, PageHeader, SectionTitle } from "@/components/ui";
-import { RIDE_OPTIONS } from "@quikfly/shared";
-import { FAQS } from "@/lib/api/data";
 import { inr } from "@/lib/format";
 import { Link, useQuery } from "@/lib/nav";
 import { serviceByKey, SERVICES } from "@/lib/services";
+import { useConfig } from "@/components/ConfigProvider";
 
 export function RideScreen({ service }: { service: "bike" | "car" }) {
+  const FAQS = useConfig()?.faqs ?? [];
+  const RIDE_OPTIONS = useConfig()?.rideOptions ?? [];
   const q = useQuery();
   const s = serviceByKey(service);
   const options = RIDE_OPTIONS.filter((o) => o.service === service);

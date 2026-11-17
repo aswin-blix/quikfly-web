@@ -5,40 +5,50 @@ import { Caravan, Check, Fuel, Route, ShieldCheck, Users, X } from "lucide-react
 import { useApp } from "@/components/AppProvider";
 import { Reveal, TweenNumber } from "@/components/motion";
 import { Counter, GoldButton, PageHeader, SectionTitle, Segmented } from "@/components/ui";
+import { useConfig, useSettings } from "@/components/ConfigProvider";
+import { useTravelVehicles } from "@/components/catalog-hooks";
 import { api } from "@/lib/api";
 import { cx, inr, prettyDate, todayISO } from "@/lib/format";
 import { useNav, useQuery } from "@/lib/nav";
-import type { TravelVehicle } from "@quikfly/shared";
+import { groupBillKm, priceGroup, sumLines, type TravelVehicle } from "@quikfly/shared";
 
-const DESTINATIONS: Record<string, number> = {
-  Mahabalipuram: 60, Pondicherry: 150, Tirupati: 140, Vellore: 140, Yelagiri: 230, Bengaluru: 350, Madurai: 460, Ooty: 560, Kodaikanal: 530,
-};
 const vehicleImg = (v: TravelVehicle) => (v.seats <= 7 ? "/assets/s4.jpg" : v.seats >= 26 ? "/assets/s2.jpg" : "/assets/s5.jpg");
 
 export function TravelRentalsScreen() {
   const q = useQuery();
-  const { setDraft } = useApp();
+  const { setDraft, toast } = useApp();
   const nav = useNav();
+  const settings = useSettings();
+  const destinations = useConfig()?.groupDestinations ?? [];
+  const [pricing, setPricing] = useState<string | null>(null);
   const [type, setType] = useState<"outstation" | "local">("outstation");
   const [dest, setDest] = useState("Pondicherry");
   const [date, setDate] = useState(q.get("date") || todayISO(2));
   const [days, setDays] = useState(2);
   const [pax, setPax] = useState(Number(q.get("pax")) || 10);
-  const [vehicles, setVehicles] = useState<TravelVehicle[]>([]);
+  const vehicles = useTravelVehicles() ?? [];
   const [compare, setCompare] = useState<string[]>([]);
-  useEffect(() => { api.rentals.travelVehicles().then(setVehicles); }, []);
-
-  const roundKm = DESTINATIONS[dest] * 2;
-  const billKm = (v: TravelVehicle) => type === "local" ? 80 * days : Math.max(roundKm, v.minKmPerDay * days);
-  const estimate = (v: TravelVehicle) => type === "local" ? v.localPackage * days : billKm(v) * v.perKm + v.driverBataPerDay * days;
+  const destination = destinations.find((d) => d.name === dest) ?? destinations[0];
+  const oneWayKm = destination?.km ?? 0;
+  // Live estimates (same maths and settings as the API); book() charges the API's quote.
+  const billKm = (v: TravelVehicle) => groupBillKm(v, type, oneWayKm, days, settings);
+  const estimate = (v: TravelVehicle) => sumLines(priceGroup(v, type, oneWayKm, days, settings));
   const fits = vehicles.filter((v) => v.seats >= pax);
 
-  function book(v: TravelVehicle) {
-    const base = estimate(v);
+  async function book(v: TravelVehicle) {
+    setPricing(v.id);
+    let quote;
+    try {
+      quote = await api.quotes.create({ service: "rentals", vehicleId: v.id, trip: type, destinationId: type === "outstation" ? destination?.id : undefined, days });
+    } catch (e) {
+      toast((e as Error).message, "err");
+      setPricing(null);
+      return;
+    }
     setDraft({
       service: "rentals", title: v.name, subtitle: type === "local" ? `Chennai local · ${days} day(s)` : `Chennai ⇄ ${dest} round trip`, image: vehicleImg(v),
-      summary: [["Trip", type === "local" ? "Local · 8 hr / 80 km per day" : `Round trip to ${dest}`], ["Start", prettyDate(date)], ["Days", String(days)], ["Passengers", String(pax)], ["Billable distance", `${billKm(v)} km`]],
-      fare: type === "local" ? [{ label: `Local package × ${days}`, amount: base }] : [{ label: `${billKm(v)} km × ${inr(v.perKm)}`, amount: billKm(v) * v.perKm }, { label: `Driver bata × ${days}`, amount: v.driverBataPerDay * days }],
+      summary: [["Trip", type === "local" ? `Local · 8 hr / ${settings.groupLocalKmPerDay} km per day` : `Round trip to ${dest}`], ["Start", prettyDate(date)], ["Days", String(days)], ["Passengers", String(pax)], ["Billable distance", `${billKm(v)} km`]],
+      quote,
       travellers: ["Lead traveller"],
       policy: "Free cancellation up to 48 hours before trip start. Tolls, parking & state permits paid on actuals.",
     });
@@ -56,8 +66,8 @@ export function TravelRentalsScreen() {
           <Segmented id="trip-type" value={type} onChange={setType} options={[["outstation", "Outstation"], ["local", "Local"]]} />
           {type === "outstation" ? (
             <div><label className="label" htmlFor="dst">Chennai to</label>
-              <select id="dst" className="field mt-1.5" value={dest} onChange={(e) => setDest(e.target.value)}>{Object.keys(DESTINATIONS).map((d) => <option key={d}>{d}</option>)}</select></div>
-          ) : <div><p className="label">Package</p><div className="field mt-1.5 text-muted">8 hrs / 80 km per day</div></div>}
+              <select id="dst" className="field mt-1.5" value={dest} onChange={(e) => setDest(e.target.value)}>{destinations.map((d) => <option key={d.id}>{d.name}</option>)}</select></div>
+          ) : <div><p className="label">Package</p><div className="field mt-1.5 text-muted">8 hrs / {settings.groupLocalKmPerDay} km per day</div></div>}
           <div><label className="label" htmlFor="tdate">Start date</label><input id="tdate" type="date" className="field mt-1.5" min={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></div>
           <div className="min-w-[140px]"><p className="label mb-2">Days</p><Counter label="" value={days} min={1} max={15} onChange={setDays} /></div>
           <div className="min-w-[140px]"><p className="label mb-2">Passengers</p><Counter label="" value={pax} min={1} max={45} onChange={setPax} /></div>
@@ -65,7 +75,7 @@ export function TravelRentalsScreen() {
       </PageHeader>
 
       <section className="max-w-7xl mx-auto px-4">
-        <p className="text-sm text-muted mb-4">{fits.length} vehicles seat {pax}+ {type === "outstation" && <>· ~{roundKm} km round trip</>} · tolls & permits extra · tick up to 3 to compare</p>
+        <p className="text-sm text-muted mb-4">{fits.length} vehicles seat {pax}+ {type === "outstation" && <>· ~{oneWayKm * 2} km round trip</>} · tolls & permits extra · tick up to 3 to compare</p>
         <motion.div layout className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
           <AnimatePresence mode="popLayout">
             {fits.map((v) => (
@@ -83,7 +93,7 @@ export function TravelRentalsScreen() {
                   <p className="text-xs text-subtle">{type === "local" ? `${inr(v.localPackage)} per day` : `${inr(v.perKm)}/km · min ${v.minKmPerDay} km/day · bata ${inr(v.driverBataPerDay)}/day`}</p>
                   <div className="mt-auto pt-3 border-t border-line flex items-end justify-between">
                     <div><p className="text-[11px] text-subtle">Estimated fare</p><TweenNumber value={estimate(v)} format={inr} className="text-xl font-bold text-gold" /></div>
-                    <GoldButton className="!py-2 !px-4 text-sm" onClick={() => book(v)}>Book</GoldButton>
+                    <GoldButton className="!py-2 !px-4 text-sm" loading={pricing === v.id} onClick={() => book(v)}>Book</GoldButton>
                   </div>
                 </div>
               </motion.div>

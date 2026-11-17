@@ -1,15 +1,13 @@
 // Website-side account settings: section list, labels and help text.
-// Business rules (limits, patterns, bonus amounts) live in @quikfly/shared.
-import { WELCOME_CREDIT, type WalletTxnKind } from "@quikfly/shared";
+// Business rules (limits, patterns) live in @quikfly/shared; amounts the owner can change
+// (welcome credit, referral bonus, safety line) come from the API settings (useSettings()).
+import type { WalletTxnKind } from "@quikfly/shared";
 import { inr } from "./format";
 
-export const NEW_USER_WALLET_HINT = `${inr(WELCOME_CREDIT)} welcome credit is in your wallet.`;
+export const newUserWalletHint = (welcomeCredit: number) => (welcomeCredit ? `${inr(welcomeCredit)} welcome credit is in your wallet.` : "");
 
-/** Numbers shown in the safety sheet. 112 is India's national emergency number. */
-export const SAFETY = {
-  emergency: "112",
-  safetyLine: "1800 123 4567",
-};
+/** India's national emergency number (the QuikFly safety line comes from settings). */
+export const EMERGENCY_NUMBER = "112";
 
 /** Public page where someone can follow a shared ride. */
 export const trackUrl = (token: string) => `${location.origin}/track?${new URLSearchParams({ t: token })}`;
