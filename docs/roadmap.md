@@ -33,7 +33,7 @@ Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs s
 | ID | Step | Who | Output | Status |
 |---|---|---|---|---|
 | D0 | Phone-test sign-off: fix what the owner found testing 0.1.1 (closes Phase 3 / M6) | Owner reports, Claude fixes | PRs, app 0.1.2 if needed | ⬜ |
-| D1 | Production rehearsal of the core flow (script below), timing each step | Claude drives admin + website + phone (adb), owner watches | Work-log entry with results and timings; bugs fixed in PRs | ⬜ |
+| D1 | Production rehearsal of the core flow (script below), timing each step | Claude drives admin + website + phone (adb), owner watches | Work-log entry with results and timings; bugs fixed in PRs | 🔄 parts 1–3 done, wallet refund + licence left |
 | D2 | Demo script for the presenter: `docs/demo-script.md` | Claude writes, owner reviews | Doc (setup checklist, talk track, demo data, what's simulated, timings, fallbacks) | ⬜ |
 | D3 | Demo data and settings on production: **keep the data** (decision 1); only check settings (read-only) and explain test entries in the script | Claude | Settings checked; D2 script says how to describe the existing test bookings | ⬜ |
 | D4 | Fallbacks and resilience checks | Claude | Section in the demo script; any fixes | ⬜ |
@@ -65,6 +65,25 @@ What's there now: smoke tests ran against production, leaving test accounts **+9
 - APK already installed on the demo phone (don't rely on downloading during the demo); a second phone with 0.1.1 if available.
 - Admin session: sign in before the demo (sessions last 12 hours).
 - Check on a phone over mobile data that `/config` and quotes respond quickly (Workers don't sleep; D1 free-plan limits are per request).
+
+### Phase 4 work log
+
+- 2026-11-17 Plan merged (PR #18); decision 1 = keep the current production data (PR #19).
+- 2026-11-17 **D1 rehearsal, first run** (owner signed in to admin in Chrome; customer = the owner's own account on the OnePlus, app 0.1.1):
+  - Pre-checks (read-only): `licenceAutoApprove` off, welcome credit ₹500, six offers live, surge ×1.2 during 8–10 and 17–20 (a demo in those hours shows higher ride fares).
+  - Admin → apps: Goa Beach Holiday ₹14,499 → ₹13,999 in the admin catalog; the public API served it about 1 s after saving (well inside the 30 s cache); website Goa page and the app's holiday list showed ₹13,999; a 2-adult quote = ₹29,398 on the API and in the app. Hid offer EBIKE: gone from `/config` in about 1 s and from the app (Bike Taxi filter: "No offers for this service right now").
+  - Customer on the phone: cab T. Nagar → Airport, Mini ₹240 from the wallet → driver assigned → trip completed (wallet ₹500 → ₹260). Goa holiday 2 adults with HOLIDAY10 via the offers sheet → −₹2,940 → ₹26,458 by UPI → confirmed (`QFMWKY4U2N208`). Payment step correctly disabled the wallet (₹260, not enough).
+  - Staff: both bookings at the top of admin Bookings; cancelled the holiday with a reason → admin shows "Cancelled by Admin" with the reason; the app lists it under Cancelled.
+  - Restored: Goa back to ₹14,499 and EBIKE shown again (checked on the API).
+  - **Not done yet:** staff cancel → instant wallet refund (needs an active wallet-paid booking: rides finish on their own in about 20 s, so use a bus seat or a holiday paid from the wallet), and the licence submit / reject / resubmit / approve round.
+  - **Findings for D2/D5:**
+    1. Staff can only cancel active bookings; a ride completes about 20 s after booking, so the "staff cancel → wallet refund" demo moment needs a wallet-paid bus seat (a new account's ₹500 covers one non-AC seat) or similar. Put this in the demo script.
+    2. Admin booking page shows the coupon line twice ("HOLIDAY10 (−₹2,940)").
+    3. App booking card shows both "Paid via UPI" (booking line) and "Paid by UPI" (the card's own row).
+    4. App shows an Invoice button on cancelled bookings (the invoice screen then says there's no invoice).
+    5. The customer doesn't see staff's cancellation reason in the app (admin does).
+    6. Staff cancelling a ride while the customer's ride screen is open doesn't update that screen (the simulation keeps running). Avoid that in the demo.
+  - Incident: driving the phone by coordinates, a tap meant for the ride's Cancel button landed on Share after the trip started and opened WhatsApp's "Send to…" list; Back was pressed at once and nothing was sent. From now on: screenshot before every tap, no taps near Share/Call/SOS, and the owner taps on the phone for time-sensitive steps.
 
 ### After Phase 4
 
