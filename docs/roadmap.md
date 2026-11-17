@@ -34,10 +34,10 @@ Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs s
 |---|---|---|---|---|
 | D0 | Phone-test sign-off: fix what the owner found testing 0.1.1 (closes Phase 3 / M6) | Owner reports, Claude fixes | PRs, app 0.1.2 if needed | ⬜ |
 | D1 | Production rehearsal of the core flow (script below), timing each step | Claude drives admin + website + phone (adb), owner watches | Work-log entry with results and timings; bugs fixed in PRs | 🔄 parts 1–3 done, wallet refund + licence left |
-| D2 | Demo script for the presenter: `docs/demo-script.md` | Claude writes, owner reviews | Doc (setup checklist, talk track, demo data, what's simulated, timings, fallbacks) | ⬜ |
+| D2 | Demo script for the presenter: `docs/demo-script.md` | Claude writes, owner reviews | Doc (setup checklist, talk track, demo data, what's simulated, timings, fallbacks) | 🔄 drafted, owner to review |
 | D3 | Demo data and settings on production: **keep the data** (decision 1); only check settings (read-only) and explain test entries in the script | Claude | Settings checked; D2 script says how to describe the existing test bookings | ⬜ |
 | D4 | Fallbacks and resilience checks | Claude | Section in the demo script; any fixes | ⬜ |
-| D5 | Polish: light-mode logo, rough edges from D1 | Claude (logo needs the file) | PRs | ⬜ |
+| D5 | Polish: light-mode logo, rough edges from D1 | Claude (logo needs the file) | PRs | 🔄 findings 2–4 fixed (needs API + admin deploy, app 0.1.2); 5 waits for a decision; logo needs the file |
 | D6 | Dress rehearsal: one full timed run from the script, after D3, on the demo devices | Owner presents, Claude watches/supports | Sign-off; Phase 4 ✅ | ⬜ |
 
 ### D1 rehearsal script (expected result in brackets)
@@ -84,6 +84,9 @@ What's there now: smoke tests ran against production, leaving test accounts **+9
     5. The customer doesn't see staff's cancellation reason in the app (admin does).
     6. Staff cancelling a ride while the customer's ride screen is open doesn't update that screen (the simulation keeps running). Avoid that in the demo.
   - Incident: driving the phone by coordinates, a tap meant for the ride's Cancel button landed on Share after the trip started and opened WhatsApp's "Send to…" list; Back was pressed at once and nothing was sent. From now on: screenshot before every tap, no taps near Share/Call/SOS, and the owner taps on the phone for time-sensitive steps.
+
+- 2026-11-17 **D5 fixes** (branch `phase4/d5-fixes-d2-script`): finding 2, admin booking page no longer shows the coupon twice (`COUPON_LINE` moved to `packages/shared`, used by the API and admin); finding 3, the app's trip card adds "Paid by" only when the booking has no "Paid via"/"Payment" line; finding 4, no Invoice button on cancelled bookings in the app (the website already hid it). Typecheck, `flutter analyze`, local customer + admin smoke tests pass. To reach users: deploy API + admin after merge; the app fix ships with the next app release (0.1.2). Finding 5 (show the customer staff's cancellation reason) needs an API contract change (reason on the booking, all four implementations); waiting for the owner's call. Finding 6 is a demo-script note.
+- 2026-11-17 **D2 drafted:** `docs/demo-script.md` (links, setup checklist with surge hours / auto-approve / licence state, nine demo steps with rehearsed timings and talk track, the bus-seat refund tip, what's simulated and what to say, things to avoid, existing test data, fallbacks including the offline single-file build, after-demo restore). Admin labels in it checked against the code.
 
 ### After Phase 4
 

@@ -6,6 +6,7 @@ Read this file first. Then read:
 - [docs/roadmap.md](docs/roadmap.md): status and the in-progress checklist. **Start here when continuing work.**
 - [docs/decisions.md](docs/decisions.md): why things are built this way. Don't reverse a decision without asking the owner.
 - [docs/operations.md](docs/operations.md): environments, deploying, testing, troubleshooting.
+- [docs/demo-script.md](docs/demo-script.md): the client demo, step by step (Phase 4).
 - [apps/api/README.md](apps/api/README.md): endpoint list. [apps/web/README.md](apps/web/README.md): pages, theming, navigation. [apps/admin/README.md](apps/admin/README.md): admin panel structure and rules.
 
 ## Map

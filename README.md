@@ -12,7 +12,7 @@ packages/
   shared/     @quikfly/shared: domain types, rules, settings, pricing and catalog seed used by api, web and admin
 ```
 
-**Docs:** [AGENTS.md](AGENTS.md) (how to work in this repo) · [docs/roadmap.md](docs/roadmap.md) (status and current task) · [docs/decisions.md](docs/decisions.md) (why) · [docs/operations.md](docs/operations.md) (deploying, testing, troubleshooting).
+**Docs:** [AGENTS.md](AGENTS.md) (how to work in this repo) · [docs/roadmap.md](docs/roadmap.md) (status and current task) · [docs/decisions.md](docs/decisions.md) (why) · [docs/operations.md](docs/operations.md) (deploying, testing, troubleshooting) · [docs/demo-script.md](docs/demo-script.md) (client demo).
 
 The website, the admin panel and the app call the same API. Types live once in `packages/shared/src/types.ts`; change them there (the app's Dart copy is `apps/mobile/lib/api/models.dart`).
 
