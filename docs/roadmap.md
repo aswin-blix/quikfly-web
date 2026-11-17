@@ -93,6 +93,8 @@ What's there now: smoke tests ran against production, leaving test accounts **+9
 
 - 2026-11-17 PRs #21 and #22 merged (conflict in the D1/D2 rows resolved); **API and admin deployed** from `main` (API `8a09a901`, admin `7ee775f9`; no migration). Production customer smoke: all checks passed. Admin booking `QFMWKY4U2N208` now shows the coupon once. The app's trip-card fixes reach phones with app 0.1.2.
 
+- 2026-11-17 **App 0.1.2 prepared** (branch `release/app-0.1.2`, `version: 0.1.2+3`, arm64 version code 3002): ships the D5 trip-card fixes (no duplicate "Paid by", no Invoice button on cancelled bookings). Owner builds; Claude verifies and installs; GitHub Release `app-v0.1.2` after the owner's yes.
+
 ### After Phase 4
 
 Phase 5 (full admin: customers screen, booking notes, SOS alerts, team, CSV export) and the backlog. Paid items (SMS OTP, payment gateway, maps, Play Store) wait for the client's sign-off.
