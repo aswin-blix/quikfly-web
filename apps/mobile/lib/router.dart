@@ -2,12 +2,14 @@
 // Paths follow the website where they can (holidays/:slug, bookings by id).
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'api/models.dart';
 import 'screens/account/account_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/coming_soon.dart';
 import 'screens/help/help_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/offers/offers_screen.dart';
+import 'screens/ride/ride_screen.dart';
 import 'screens/shell.dart';
 import 'screens/trips/trips_screen.dart';
 
@@ -30,12 +32,12 @@ final router = GoRouter(
     ),
     GoRoute(path: '/login', parentNavigatorKey: _rootKey, builder: (_, _) => const LoginScreen()),
     GoRoute(path: '/help', parentNavigatorKey: _rootKey, builder: (_, _) => const HelpScreen()),
-    // Later slices replace these placeholders.
     GoRoute(
       path: '/ride/:service',
       parentNavigatorKey: _rootKey,
-      builder: (_, s) => ComingSoonScreen(title: s.pathParameters['service'] == 'bike' ? 'Bike taxi' : 'Cab rides'),
+      builder: (_, s) => RideScreen(key: ValueKey(s.pathParameters['service']), service: s.pathParameters['service'] == 'bike' ? ServiceKey.bike : ServiceKey.car),
     ),
+    // Later slices replace these placeholders.
     _soon('/bus', 'Bus booking'),
     _soon('/bus/search', 'Bus search'),
     _soon('/holidays', 'Holidays'),

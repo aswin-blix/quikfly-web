@@ -53,6 +53,7 @@ class QfColors extends ThemeExtension<QfColors> {
     required this.mapRoad,
     required this.mapRoadLine,
     required this.mapLandmark,
+    required this.mapLandmarkText,
     required this.mapLabelBg,
     required this.mapLabelText,
     required this.mapPinOutline,
@@ -64,7 +65,7 @@ class QfColors extends ThemeExtension<QfColors> {
   final Color accent, accentDeep, accentPale;
   final Color success, danger, warning, highlight;
   final Color overlay, skeleton;
-  final Color mapBg, mapGrid, mapWater, mapPark, mapRoad, mapRoadLine, mapLandmark, mapLabelBg, mapLabelText, mapPinOutline;
+  final Color mapBg, mapGrid, mapWater, mapPark, mapRoad, mapRoadLine, mapLandmark, mapLandmarkText, mapLabelBg, mapLabelText, mapPinOutline;
 
   static const dark = QfColors(
     bg: Color(0xFF07070A),
@@ -95,6 +96,7 @@ class QfColors extends ThemeExtension<QfColors> {
     mapRoad: Color(0xFF22232B),
     mapRoadLine: Color(0xFF3A3220),
     mapLandmark: Color(0xFF4A4A55),
+    mapLandmarkText: Color(0xFF5D5D6A),
     mapLabelBg: Color(0xFF0B0B0F),
     mapLabelText: Color(0xFFFFFFFF),
     mapPinOutline: Color(0xFF07070A),
@@ -129,6 +131,7 @@ class QfColors extends ThemeExtension<QfColors> {
     mapRoad: Color(0xFFFFFFFF),
     mapRoadLine: Color(0xFFE2C97F),
     mapLandmark: Color(0xFF9A968B),
+    mapLandmarkText: Color(0xFF7B776D),
     mapLabelBg: Color(0xFFFFFFFF),
     mapLabelText: Color(0xFF1B1920),
     mapPinOutline: Color(0xFFFFFFFF),

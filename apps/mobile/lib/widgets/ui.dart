@@ -184,9 +184,9 @@ class KeyValue extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(child: Text(label, style: style.copyWith(color: bold ? c.fgStrong : c.fgMuted))),
+        Expanded(flex: 3, child: Text(label, style: style.copyWith(color: bold ? c.fgStrong : c.fgMuted))),
         const SizedBox(width: 12),
-        Flexible(child: Text(value, textAlign: TextAlign.right, style: style.copyWith(color: valueColor ?? (bold ? c.fgStrong : c.fg)))),
+        Expanded(flex: 2, child: Text(value, textAlign: TextAlign.right, style: style.copyWith(color: valueColor ?? (bold ? c.fgStrong : c.fg)))),
       ]),
     );
   }
