@@ -15,6 +15,9 @@ String isoDate(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
 /// "Tue, 18 Nov"
 String shortDate(DateTime d) => DateFormat('EEE, d MMM').format(d);
 
+/// "18 Nov 2026"
+String longDate(DateTime d) => DateFormat('d MMM yyyy').format(d);
+
 /// "18 Nov 2026, 4:05 pm"
 String dateTime(DateTime d) => DateFormat('d MMM yyyy, h:mm a').format(d).replaceAll('AM', 'am').replaceAll('PM', 'pm');
 

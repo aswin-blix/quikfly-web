@@ -38,7 +38,7 @@ flutter analyze                                                   # must be clea
 flutter test --dart-define=API_URL=http://127.0.0.1:8787/v1      # contract test against a running API
 ```
 
-`test/api_contract_test.dart` signs in a throwaway number, then parses real responses (config, user, rides, bookings, catalog, quotes, buses, seats, wallet, saved lists) into the Dart models. Run it whenever `packages/shared/src/types.ts` changes. Without `API_URL` it runs against production with the test number +91 90000 00002.
+`test/api_contract_test.dart` signs in a throwaway number, then parses real responses into the Dart models and checks the flows the app uses: config, user, ride booking + share link, catalog, quote + coupon + booking, bus seats, rent and group quotes, licence, account writes (profile, places, travellers, contacts, GST), wallet. Run it whenever `packages/shared/src/types.ts` changes. Without `API_URL` it runs against production with the test number +91 90000 00002.
 
 ## Layout
 
@@ -51,7 +51,10 @@ lib/
   api/                 api.dart (one method per endpoint, ApiException) · models.dart (mirrors packages/shared types + Rules)
   state/               providers.dart (api, /config, session, theme mode) · catalog.dart (tours, cars, vehicles, bookings)
   widgets/             ui.dart (Panel, GoldButton, ErrorBox, EmptyState, Skeleton, Pill, KeyValue, toast, confirm, ScreenList) · art.dart · logo.dart · offer_card.dart
-  screens/             one folder per area: auth, home, offers, trips, account, help (more per slice)
+  screens/             auth, home, offers, trips, account (hub + account_sections), help, ride (+ place search),
+                       bus, holidays, checkout (checkout, confirmed, invoice), rent (cars, group travel), not_found
+  state/checkout.dart  CheckoutDraft (what a service screen hands to checkout) + LiveQuote (debounced POST /quotes)
+  widgets/             also city_map.dart (painted demo map), safety_sheet.dart, licence_panel.dart, counter.dart
 assets/                fonts (Outfit static weights, Archivo Black), images (service photos, logo), icon (launcher icon sources)
 ```
 

@@ -57,6 +57,21 @@ void main() {
     final q = await api.quote({'service': 'tours', 'tourId': tours.first.id, 'adults': 2, 'kids': 0});
     expect(q.total, greaterThan(0));
     expect(q.lines, isNotEmpty);
+    final tour = await api.tour(tours.first.slug);
+    expect(tour.id, tours.first.id);
+    // A coupon is checked against the quote, then the booking is charged the quote (minus the coupon).
+    final code = config.offers.where((o) => o.service == 'tours' || o.service == 'all').firstOrNull?.code;
+    var expected = q.total;
+    if (code != null) {
+      final check = await api.checkCoupon(code, quoteId: q.id);
+      expect(check.total, lessThanOrEqualTo(q.total));
+      expected = check.total;
+    }
+    final booking = await api.createBooking(
+        service: ServiceKey.tours, title: 'Contract test tour', subtitle: tour.location, payment: PaymentMethod.upi, lines: const [], quoteId: q.id, couponCode: code);
+    expect(booking.amount, expected);
+    expect((await api.booking(booking.id)).id, booking.id);
+    await api.cancelBooking(booking.id);
     expect((await api.cars()), isNotEmpty);
     expect((await api.travelVehicles()), isNotEmpty);
     final date = DateTime.now().add(const Duration(days: 2)).toIso8601String().substring(0, 10);
@@ -66,8 +81,51 @@ void main() {
     expect(seats.where((s) => !s.booked), isNotEmpty);
   });
 
+  test('rental quotes and licence', () async {
+    final cars = await api.cars();
+    final start = DateTime.now().add(const Duration(days: 3));
+    String fmt(DateTime d) => d.toIso8601String().substring(0, 16);
+    final rent = await api.quote({
+      'service': 'rent', 'carId': cars.first.id, 'mode': 'self', 'start': fmt(start), 'end': fmt(start.add(const Duration(hours: 26))),
+      'kmPlan': 'limited', 'protection': 'standard', 'doorstep': false,
+    });
+    expect(rent.service, ServiceKey.rent);
+    expect(rent.lines.length, greaterThanOrEqualTo(2));
+    final vehicles = await api.travelVehicles();
+    final group = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'outstation', 'destinationId': config.groupDestinations.first.id, 'days': 2});
+    expect(group.total, greaterThan(0));
+    final local = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'local', 'days': 1});
+    expect(local.total, vehicles.first.localPackage);
+    final u = await api.submitLicence('TN0920190001234', fmt(DateTime.now().add(const Duration(days: 400))).substring(0, 10));
+    expect(u.licence.status, anyOf(LicenceStatus.pending, LicenceStatus.verified));
+    expect(u.licence.number, 'TN0920190001234');
+  });
+
   test('errors carry the API message', () async {
     await expectLater(api.verifyOtp('+91 $phone', '0000'), throwsA(isA<ApiException>().having((e) => e.message, 'message', isNotEmpty)));
+  });
+
+  test('account sections write and read back', () async {
+    final u = await api.updateProfile({'email': 'contract@example.com', 'gender': 'female', 'dob': '1995-06-15', 'gst': {'gstin': '33ABCDE1234F1Z5', 'name': 'Contract Co'}});
+    expect(u.email, 'contract@example.com');
+    expect(u.gender, Gender.female);
+    expect(u.gst?.gstin, '33ABCDE1234F1Z5');
+    final places = await api.savePlace('home', config.places.first.id);
+    final home = places.firstWhere((p) => p.kind == 'home');
+    expect(home.place.id, config.places.first.id);
+    expect((await api.removePlace(home.id)).any((p) => p.id == home.id), isFalse);
+    final ts = await api.addTraveller('Contract Kid', 9, Gender.other);
+    final kid = ts.firstWhere((t) => t.name == 'Contract Kid');
+    expect(kid.age, 9);
+    await api.removeTraveller(kid.id);
+    final cs = await api.contacts();
+    if (cs.length < Rules.emergencyContacts) {
+      final added = await api.addContact('Contract Contact', '9876543210', relation: 'Friend');
+      final x = added.firstWhere((c) => c.name == 'Contract Contact');
+      expect(x.relation, 'Friend');
+      await api.removeContact(x.id);
+    }
+    await api.updateProfile({'gst': null});
   });
 
   test('wallet and saved lists parse', () async {
