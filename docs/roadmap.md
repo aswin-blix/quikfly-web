@@ -22,7 +22,7 @@ Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs s
 
 ### Decisions needed from the owner before starting
 
-1. **Demo data cleanup (D3):** pick option (a), (b) or (c) below. Recommended: (b), once, shortly before the demo.
+1. ✅ **Demo data cleanup (D3): (a) keep the current data** (owner, 2026-11-17: "keep the current demo data"). Nothing on production is deleted and the catalog is not reset.
 2. **Demo accounts:** a dedicated demo number for the presenter (any 10-digit number signs in with OTP 1234; suggested +91 90000 00100) rather than a personal number. A second number for the "new customer" moment.
 3. **Who presents, on which devices:** phone model (the OnePlus CPH2649 with 0.1.1 is tested), laptop for admin + website, mobile data or Wi-Fi.
 4. **Demo date:** so the cleanup and the dress rehearsal (D6) happen close to it.
@@ -35,7 +35,7 @@ Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs s
 | D0 | Phone-test sign-off: fix what the owner found testing 0.1.1 (closes Phase 3 / M6) | Owner reports, Claude fixes | PRs, app 0.1.2 if needed | ⬜ |
 | D1 | Production rehearsal of the core flow (script below), timing each step | Claude drives admin + website + phone (adb), owner watches | Work-log entry with results and timings; bugs fixed in PRs | ⬜ |
 | D2 | Demo script for the presenter: `docs/demo-script.md` | Claude writes, owner reviews | Doc (setup checklist, talk track, demo data, what's simulated, timings, fallbacks) | ⬜ |
-| D3 | Clean demo data and settings on production | Owner decides, Claude executes after approval | Clean dashboard and queues; seed catalog; settings checked | ⬜ |
+| D3 | Demo data and settings on production: **keep the data** (decision 1); only check settings (read-only) and explain test entries in the script | Claude | Settings checked; D2 script says how to describe the existing test bookings | ⬜ |
 | D4 | Fallbacks and resilience checks | Claude | Section in the demo script; any fixes | ⬜ |
 | D5 | Polish: light-mode logo, rough edges from D1 | Claude (logo needs the file) | PRs | ⬜ |
 | D6 | Dress rehearsal: one full timed run from the script, after D3, on the demo devices | Owner presents, Claude watches/supports | Sign-off; Phase 4 ✅ | ⬜ |
@@ -53,10 +53,10 @@ Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs s
 
 What's there now: smoke tests ran against production, leaving test accounts **+91 90000 00001** (customer smoke: cancelled/completed bookings) and **+91 90000 00002** (admin smoke + app contract test: bookings, a licence in the queue, audit-log rows), plus any accounts made while testing on phones. They appear in the admin dashboard totals, bookings list and licence queue.
 
-- **(a) Leave it** and explain it as test traffic. No risk, least tidy.
+- **(a) Leave it** and explain it as test traffic. No risk, least tidy. **← chosen by the owner.**
 - **(b) One-off cleanup (recommended):** first `wrangler d1 export --remote` (backup file kept outside the repo), then an owner-approved SQL script via `wrangler d1 execute --remote` that deletes the listed test accounts and everything attached to them (bookings, rides, wallet entries, saved items, sessions), keeping the owner's admin account and the catalog. Irreversible apart from the backup; the exact list and SQL are shown to the owner before running. After it, don't run the production smoke tests until after the demo (they add test data back).
 - **(c) Build an owner-only "Reset demo data" admin action** (audited, with confirmation). Reusable for every future demo, but it's new feature work (fits Phase 5).
-- In all cases: "Reset to sample data" for the catalog, check settings (`licenceAutoApprove` **off** so the approval moment works, welcome credit ₹500, surge hours suit the demo time).
+- Settings to check (without changing anything unless the owner asks): `licenceAutoApprove` **off** so the approval moment works, welcome credit ₹500, surge hours suit the demo time. Keeping the data means no "Reset to sample data": D1 restores the one price and offer it changes by hand. The rehearsal (D1) and later test runs add more test bookings; the demo script explains them as earlier test traffic.
 
 ### D4 fallbacks to prepare
 
