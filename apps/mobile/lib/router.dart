@@ -5,8 +5,13 @@ import 'package:go_router/go_router.dart';
 import 'api/models.dart';
 import 'screens/account/account_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/bus/bus_screens.dart';
+import 'screens/checkout/checkout_screen.dart';
+import 'screens/checkout/confirmed_screen.dart';
+import 'screens/checkout/invoice_screen.dart';
 import 'screens/coming_soon.dart';
 import 'screens/help/help_screen.dart';
+import 'screens/holidays/holiday_screens.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/offers/offers_screen.dart';
 import 'screens/ride/ride_screen.dart';
@@ -38,14 +43,32 @@ final router = GoRouter(
       builder: (_, s) => RideScreen(key: ValueKey(s.pathParameters['service']), service: s.pathParameters['service'] == 'bike' ? ServiceKey.bike : ServiceKey.car),
     ),
     // Later slices replace these placeholders.
-    _soon('/bus', 'Bus booking'),
-    _soon('/bus/search', 'Bus search'),
-    _soon('/holidays', 'Holidays'),
-    _soon('/holidays/:slug', 'Holiday package'),
+    GoRoute(path: '/bus', parentNavigatorKey: _rootKey, builder: (_, _) => const BusScreen()),
+    GoRoute(
+      path: '/bus/search',
+      parentNavigatorKey: _rootKey,
+      builder: (_, s) {
+        final q = s.uri.queryParameters;
+        return BusResultsScreen(
+          key: ValueKey(s.uri.toString()),
+          from: q['from'] ?? 'Chennai',
+          to: q['to'] ?? 'Bengaluru',
+          date: parseIso(q['date'], DateTime.now().add(const Duration(days: 1))),
+        );
+      },
+    ),
+    GoRoute(path: '/holidays', parentNavigatorKey: _rootKey, builder: (_, _) => const HolidaysScreen()),
+    GoRoute(path: '/holidays/:slug', parentNavigatorKey: _rootKey, builder: (_, s) => HolidayDetailScreen(slug: s.pathParameters['slug']!)),
+    GoRoute(path: '/checkout', parentNavigatorKey: _rootKey, builder: (_, _) => const CheckoutScreen()),
+    GoRoute(
+      path: '/confirmed/:id',
+      parentNavigatorKey: _rootKey,
+      builder: (_, s) => ConfirmedScreen(id: s.pathParameters['id']!, booking: s.extra is Booking ? s.extra as Booking : null),
+    ),
+    GoRoute(path: '/invoice/:id', parentNavigatorKey: _rootKey, builder: (_, s) => InvoiceScreen(id: s.pathParameters['id']!)),
     _soon('/rent', 'Rent a car'),
     _soon('/rent/:id', 'Rental car'),
     _soon('/group', 'Group travel'),
-    _soon('/invoice/:id', 'Invoice'),
     _soon('/account/:section', 'Account settings'),
   ],
   errorBuilder: (_, _) => const ComingSoonScreen(title: 'This page'),

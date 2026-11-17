@@ -57,6 +57,21 @@ void main() {
     final q = await api.quote({'service': 'tours', 'tourId': tours.first.id, 'adults': 2, 'kids': 0});
     expect(q.total, greaterThan(0));
     expect(q.lines, isNotEmpty);
+    final tour = await api.tour(tours.first.slug);
+    expect(tour.id, tours.first.id);
+    // A coupon is checked against the quote, then the booking is charged the quote (minus the coupon).
+    final code = config.offers.where((o) => o.service == 'tours' || o.service == 'all').firstOrNull?.code;
+    var expected = q.total;
+    if (code != null) {
+      final check = await api.checkCoupon(code, quoteId: q.id);
+      expect(check.total, lessThanOrEqualTo(q.total));
+      expected = check.total;
+    }
+    final booking = await api.createBooking(
+        service: ServiceKey.tours, title: 'Contract test tour', subtitle: tour.location, payment: PaymentMethod.upi, lines: const [], quoteId: q.id, couponCode: code);
+    expect(booking.amount, expected);
+    expect((await api.booking(booking.id)).id, booking.id);
+    await api.cancelBooking(booking.id);
     expect((await api.cars()), isNotEmpty);
     expect((await api.travelVehicles()), isNotEmpty);
     final date = DateTime.now().add(const Duration(days: 2)).toIso8601String().substring(0, 10);
