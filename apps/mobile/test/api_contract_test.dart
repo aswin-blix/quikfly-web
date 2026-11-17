@@ -41,6 +41,9 @@ void main() {
     expect(quotes, isNotEmpty);
     final ride = await api.bookRide(quotes.first.option.id, a.id, b.id, PaymentMethod.cash);
     expect(ride.otp, hasLength(4));
+    final link = await api.shareRide(ride.id);
+    expect(link.token, isNotEmpty);
+    expect(link.expiresAt.isAfter(DateTime.now()), isTrue);
     final booking = await api.createBooking(
         service: ServiceKey.car, title: 'Contract test ride', subtitle: '${a.name} → ${b.name}', payment: PaymentMethod.cash, lines: const [], rideId: ride.id);
     expect(booking.amount, quotes.first.fare);

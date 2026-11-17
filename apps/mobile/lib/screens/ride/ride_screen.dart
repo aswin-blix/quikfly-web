@@ -155,6 +155,11 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   Future<void> _cancel() async {
     final ok = await confirm(context, title: 'Cancel this ride?', message: 'No charges apply while the driver is on the way.', yes: 'Cancel ride', danger: true);
     if (!ok || !mounted) return;
+    // The dialog may have stayed open until the trip started; cancelling is only for the wait.
+    if (_phase != RidePhase.arriving) {
+      toast(context, 'Your trip has already started, so it can no longer be cancelled.');
+      return;
+    }
     _clock.stop();
     final api = ref.read(apiProvider);
     try {
@@ -521,7 +526,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       const SizedBox(height: 10),
       Row(children: [
         FilledButton.icon(
-          style: FilledButton.styleFrom(backgroundColor: c.danger, foregroundColor: Colors.white, minimumSize: const Size(0, 48)),
+          style: FilledButton.styleFrom(backgroundColor: c.danger, foregroundColor: Brand.onGold, minimumSize: const Size(0, 48)),
           onPressed: () => showSafetySheet(context, onShare: _share),
           icon: const Icon(Icons.sos, size: 18),
           label: const Text('SOS'),

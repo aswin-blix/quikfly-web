@@ -51,7 +51,7 @@ class _SafetySheet extends ConsumerWidget {
                   CircleAvatar(
                     radius: 22,
                     backgroundColor: danger ? c.danger : Brand.gold.withValues(alpha: 0.12),
-                    child: Icon(icon, color: danger ? Colors.white : c.accent, size: 20),
+                    child: Icon(icon, color: danger ? Brand.onGold : c.accent, size: 20),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
