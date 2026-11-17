@@ -31,19 +31,31 @@ android {
         versionName = flutter.versionName
     }
 
-    // Release signing reads android/key.properties (never committed; see apps/mobile/README.md).
-    // Without it, release builds fall back to the debug key so `flutter run --release` still works.
+    // Release signing: android/key.properties (git-ignored) holds storeFile and keyAlias. The password
+    // comes from the QUIKFLY_KEYSTORE_PASSWORD environment variable, so it is never written to disk
+    // (a storePassword line in key.properties also works). See apps/mobile/README.md.
+    // Without key.properties, release builds use the debug key so `flutter run --release` still works.
     val keyProps = Properties().apply {
         val f = rootProject.file("key.properties")
         if (f.exists()) f.inputStream().use { load(it) }
     }
+    val keystorePassword: String? = System.getenv("QUIKFLY_KEYSTORE_PASSWORD") ?: keyProps.getProperty("storePassword")
     signingConfigs {
         if (keyProps.isNotEmpty()) {
             create("release") {
                 storeFile = file(keyProps.getProperty("storeFile"))
-                storePassword = keyProps.getProperty("storePassword")
                 keyAlias = keyProps.getProperty("keyAlias")
-                keyPassword = keyProps.getProperty("keyPassword")
+                storePassword = keystorePassword
+                // PKCS12 keystores (keytool's default) use one password for the store and the key.
+                keyPassword = System.getenv("QUIKFLY_KEY_PASSWORD") ?: keyProps.getProperty("keyPassword") ?: keystorePassword
+            }
+        }
+    }
+    // A configured key without its password must fail loudly, not quietly ship a debug-signed APK.
+    if (keyProps.isNotEmpty() && keystorePassword == null) {
+        gradle.taskGraph.whenReady {
+            if (allTasks.any { it.name.contains("Release") }) {
+                throw GradleException("Set QUIKFLY_KEYSTORE_PASSWORD to the upload key's password before building a release APK.")
             }
         }
     }

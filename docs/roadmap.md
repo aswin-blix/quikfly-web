@@ -29,7 +29,7 @@ Started 2026-11-17. Owner's choices: **full parity** with the website for the fi
 | M3 | Bus + holidays + checkout: bus search + date strip + filters, seat map, holiday list + detail, shared checkout (travellers, coupon, payment), confirmation, invoice | `/buses`, `/buses/:id/seats`, `/tours/:slug`, `/quotes`, `/offers/check`, `/bookings` | ✅ | ✅ | ✅ | ✅ |
 | M4 | Rentals: self-drive / chauffeur cars, car detail, licence check, group vehicles | `/rentals/*`, `/me/licence`, `/quotes` | ✅ | ✅ | ✅ | ✅ |
 | M5 | Account: profile, change number, wallet history, saved places, travellers, emergency contacts, auto-share night rides, referral, sign out everywhere, delete account | `/me/*` | ✅ | ✅ | ✅ | ✅ |
-| M6 | Release: upload key, signed release APK, GitHub Release, website download link (B9) | — | ⬜ | — | — | ⬜ |
+| M6 | Release: upload key, signed release APK, GitHub Release, website download link (B9) | — | 🔄 | — | — | 🔄 |
 
 Each slice: `flutter analyze` → contract test against the local API → browser pass of the web build at 390 px in light and dark → APK builds → docs + memory → commit (owner asked for regular commits) → PR.
 
@@ -48,7 +48,13 @@ Each slice: `flutter analyze` → contract test against the local API → browse
   - Browser pass: Maruti Swift self-drive 24 h → ₹4,335 (rental + protection + deposit, from the API) → checkout asks for the licence → "TN09 2019-0001234" + expiry → "Under review"; group travel shows API estimates per vehicle. Fixed during the pass: cards with left-aligned content didn't fill the width (`Constrained` now gives full width); checkout hides the licence form once submitted; expiry date shows the year.
 - 2026-11-17 **M5 account** (commit "Mobile M5: ..."): `screens/account/account_sections.dart` covers every website account tab (profile, wallet history + refund timings, saved places, travellers, emergency contacts + auto-share night rides, licence, refer & earn, GST details, change mobile with OTP, sign out everywhere, delete account). Placeholder screen removed; unknown addresses show a not-found page. Contract test: 8 tests (config, user, ride + share, catalog + coupon + quote booking, rental quotes + licence, account writes, errors, lists), all pass against the local API.
   - Browser pass: wallet history from the API (₹500 welcome, −₹240 ride); safety in light mode → contact added → auto-share switch enabled.
-- Next: M6 release. Needs the owner: an upload signing key (the owner keeps it and its passwords) and approval to publish the APK as a GitHub Release. The release APK already builds (signed with the debug key until `android/key.properties` exists).
+- 2026-11-17 PRs #12 and #13 merged by Claude at the owner's request (#13 retargeted to `main` first). The release APK builds (58 MB universal, debug-signed).
+- 2026-11-17 **M6 started** (branch `feat/mobile-release`, owner creating the key with Claude): `android/app/build.gradle.kts` reads the keystore password from `QUIKFLY_KEYSTORE_PASSWORD` (never written to disk) and fails a release build if a key is configured but the password is missing; `android/key.properties` (git-ignored, path + alias only) created locally pointing at `C:/Users/AswinBlix/keys/quikfly-upload.jks`; the `keys` folder exists, **the key itself is not created yet**.
+- Next (pick up here):
+  1. The owner runs the `keytool -genkeypair` command from `apps/mobile/README.md` → Release in their own terminal and backs up the `.jks` and password. Then check the file exists and `keytool -list -v -keystore ...` shows alias `quikfly` (needs the password, so the owner runs it, or check the certificate on the built APK instead).
+  2. Owner chooses how builds get the password (session env var in their terminal, or a user environment variable visible after restarting VS Code).
+  3. Build `flutter build apk --release --split-per-abi`, verify with `keytool -printcert -jarfile` that the APK carries the QuikFly certificate (not "Android Debug"); install on a real Android phone if possible.
+  4. Ask the owner before publishing: GitHub Release on the public repo + website "Get it on Google Play" button (B9) linking to it. Then docs/operations.md release steps, PR for `feat/mobile-release`.
 
 ## Released: lean admin panel (L1–L3) ✅
 
