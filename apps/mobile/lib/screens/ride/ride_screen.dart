@@ -432,7 +432,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   }
 
   String _rideImage(RideOption o) =>
-      _bike ? 'assets/images/s0.jpg' : (o.id == 'prime' || o.id == 'suv' ? 'assets/images/s4.jpg' : 'assets/images/s1.jpg');
+      _bike ? serviceOf(ServiceKey.bike).image : (o.id == 'prime' || o.id == 'suv' ? serviceOf(ServiceKey.rent).image : serviceOf(ServiceKey.car).image);
 
   Widget _label(String s) => Padding(
         padding: const EdgeInsets.only(bottom: 8),

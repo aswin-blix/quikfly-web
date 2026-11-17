@@ -55,7 +55,8 @@ lib/
                        bus, holidays, checkout (checkout, confirmed, invoice), rent (cars, group travel), not_found
   state/checkout.dart  CheckoutDraft (what a service screen hands to checkout) + LiveQuote (debounced POST /quotes)
   widgets/             also city_map.dart (painted demo map), safety_sheet.dart, licence_panel.dart, counter.dart
-assets/                fonts (Outfit static weights, Archivo Black), images (service photos, logo), icon (launcher icon sources)
+assets/                fonts (Outfit static weights, Archivo Black), images/ (logo) and images/services/ (one 1200 px WebP per service,
+                       same files as the website; screens use serviceOf(key).image), icon (launcher icon sources)
 ```
 
 ## Rules (same as the website)

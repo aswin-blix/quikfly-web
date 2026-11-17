@@ -37,7 +37,7 @@ export function RideScreen({ service }: { service: "bike" | "car" }) {
         <StaggerGroup className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {options.map((o) => (
             <motion.div key={o.id} variants={fadeUp} whileHover={{ y: -6 }} className="panel p-5">
-              <img src={service === "bike" ? "/assets/s0.jpg" : o.id === "prime" || o.id === "suv" ? "/assets/s4.jpg" : "/assets/s1.jpg"} alt="" className="w-full h-28 object-cover rounded-xl" />
+              <img src={service === "bike" ? serviceByKey("bike").image : o.id === "prime" || o.id === "suv" ? serviceByKey("rent").image : serviceByKey("car").image} alt="" className="w-full h-28 object-cover rounded-xl" />
               <p className="font-semibold text-lg mt-4 flex items-center justify-between">{o.name}<span className="text-xs text-muted flex items-center gap-1"><Users size={12} />{o.seats}</span></p>
               <p className="text-sm text-muted mt-1">{o.description}</p>
               <p className="text-xs text-subtle mt-3 border-t border-line pt-3">Base {inr(o.baseFare)} · {inr(o.perKm)}/km · {inr(o.perMin)}/min</p>

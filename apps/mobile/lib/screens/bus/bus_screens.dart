@@ -9,6 +9,7 @@ import '../../state/checkout.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
+import '../../core/services.dart';
 
 /// Date strip on the results page: days shown, and how many before the searched date.
 const dateStripDays = 7;
@@ -605,7 +606,7 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
             service: ServiceKey.bus,
             title: '${widget.from} → ${widget.to}',
             subtitle: '${_bus.operator} · ${_bus.type}',
-            image: 'assets/images/s2.jpg',
+            image: serviceOf(ServiceKey.bus).image,
             summary: [
               ('Date', shortDate(widget.date)),
               ('Departure', '${_bTimes[_boarding]} from ${pts.isEmpty ? widget.from : pts[_boarding.clamp(0, pts.length - 1)]}'),

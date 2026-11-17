@@ -12,6 +12,7 @@ import '../../state/checkout.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
+import '../../core/services.dart';
 
 /// Default pickup and return times (apps/web/src/lib/rentals.ts RENTAL_DEFAULTS).
 abstract final class RentalDefaults {
@@ -49,7 +50,7 @@ int rentHours(DateTime a, DateTime b) {
   return h < RentalDefaults.minHours ? RentalDefaults.minHours : h;
 }
 
-String carImage(RentalCar c) => const ['SUV', 'Luxury', 'MUV'].contains(c.category) ? 'assets/images/s4.jpg' : 'assets/images/s1.jpg';
+String carImage(RentalCar c) => const ['SUV', 'Luxury', 'MUV'].contains(c.category) ? serviceOf(ServiceKey.rent).image : serviceOf(ServiceKey.car).image;
 
 /// The trip being planned, shared by the list and the car page.
 class RentTrip {

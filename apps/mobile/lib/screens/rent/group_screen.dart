@@ -14,11 +14,12 @@ import '../../theme/tokens.dart';
 import '../../widgets/counter.dart';
 import '../../widgets/ui.dart';
 import '../bus/bus_screens.dart' show DateField;
+import '../../core/services.dart';
 
 /// Longest group booking and most vehicles compared at once.
 const groupMaxDays = 15, groupMaxPassengers = 45, compareMax = 3;
 
-String vehicleImage(TravelVehicle v) => v.seats <= 7 ? 'assets/images/s4.jpg' : v.seats >= 26 ? 'assets/images/s2.jpg' : 'assets/images/s5.jpg';
+String vehicleImage(TravelVehicle v) => v.seats <= 7 ? serviceOf(ServiceKey.rent).image : v.seats >= 26 ? serviceOf(ServiceKey.bus).image : serviceOf(ServiceKey.rentals).image;
 
 class GroupScreen extends ConsumerStatefulWidget {
   const GroupScreen({super.key});
