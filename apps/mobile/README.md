@@ -103,4 +103,9 @@ The upload key signs every APK shared with the client. Android installs an updat
    ```
    It must show `CN=QuikFly, O=QuikFly Mobility Pvt. Ltd.` and certificate SHA-256 `c784cef550dc5fa5fc64c55a2ec6eec89981fd2d750aff9a496c9b4017033aae`, never `CN=Android Debug`.
    Split APKs get version codes per ABI (e.g. 2001 for arm64-v8a with `+1`); that's normal.
-5. Publish as a GitHub Release (owner's approval needed; see `docs/operations.md`); the website's "Get it on Google Play" button links to the latest release.
+5. Publish as a GitHub Release (owner's approval for each release). Copy the arm64 and armeabi-v7a APKs to the **stable names** `QuikFly-arm64.apk` and `QuikFly-armv7.apk`, so `https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk` always serves the newest build:
+   ```bash
+   gh release create app-v<version> QuikFly-arm64.apk QuikFly-armv7.apk --target <full commit sha> \
+     --title "QuikFly Android app <version> (demo)" --notes-file notes.md --latest
+   ```
+   Notes are written for testers: which file to pick, how to install from outside the Play Store, demo OTP and simulated payments, SHA-256 of each file and the certificate fingerprint (copy the layout of `app-v0.1.0`). `--target` needs the full 40-character SHA. Don't mark it pre-release: `releases/latest` skips pre-releases.
