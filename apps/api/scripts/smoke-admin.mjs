@@ -82,8 +82,9 @@ const cust = (await call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: O
 const C = cust?.token;
 check("customer signs in", !!C);
 const licence = { number: "TN0920190007777", expiry: "2035-01-01" };
-await expect("licence auto-approved while the setting is on", call("PUT", "/me/licence", licence, C), 200,
-  (j) => j.licence.status === "verified" && j.licence.note === null);
+// Other Worker isolates may still hold "off" for SETTINGS_CACHE_MS, so retry until the new value reaches them.
+await eventually("licence auto-approved while the setting is on", () => call("PUT", "/me/licence", licence, C),
+  (r) => r.status === 200 && r.json?.licence?.status === "verified" && r.json.licence.note === null);
 await expect("PATCH /admin/settings: licence auto-approve off", call("PATCH", "/admin/settings", { licenceAutoApprove: false }, T), 200, (j) => j.licenceAutoApprove === false);
 // Other Worker isolates may hold the old value for SETTINGS_CACHE_MS; retry once after that window.
 let resub = await call("PUT", "/me/licence", licence, C);
