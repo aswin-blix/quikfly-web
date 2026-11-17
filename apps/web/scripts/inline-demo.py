@@ -17,10 +17,11 @@ html = re.sub(r'<script src="(/_next/[^"]+\.js)"[^>]*></script>', script, html)
 # React re-inserts the stylesheet from the RSC payload; point it at an empty CSS (real CSS is inlined above).
 html = re.sub(r'/_next/static/(?:css|chunks)/[\w-]+\.css', 'data:text/css,%2F*inlined*%2F', html)
 
-for img in sorted((out / "assets").iterdir()):
-    mime = "image/jpeg" if img.suffix == ".jpg" else "image/png"
+MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml"}
+for img in sorted(p for p in (out / "assets").rglob("*") if p.is_file()):
+    mime = MIME.get(img.suffix.lower(), "application/octet-stream")
     uri = f"data:{mime};base64," + base64.b64encode(img.read_bytes()).decode()
-    html = html.replace(f"/assets/{img.name}", uri)
+    html = html.replace(f"/assets/{img.relative_to(out / 'assets').as_posix()}", uri)
 
 left = re.findall(r'(?:src|href)="/_next[^"]*"', html)
 html = html.replace("\ufffd", "\\uFFFD")  # only occurs inside JS string literals

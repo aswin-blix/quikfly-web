@@ -11,8 +11,9 @@ import { api } from "@/lib/api";
 import { cx, inr, prettyDate, todayISO } from "@/lib/format";
 import { useNav, useQuery } from "@/lib/nav";
 import { groupBillKm, priceGroup, sumLines, type TravelVehicle } from "@quikfly/shared";
+import { serviceByKey } from "@/lib/services";
 
-const vehicleImg = (v: TravelVehicle) => (v.seats <= 7 ? "/assets/s4.jpg" : v.seats >= 26 ? "/assets/s2.jpg" : "/assets/s5.jpg");
+const vehicleImg = (v: TravelVehicle) => (v.seats <= 7 ? serviceByKey("rent").image : v.seats >= 26 ? serviceByKey("bus").image : serviceByKey("rentals").image);
 
 export function TravelRentalsScreen() {
   const q = useQuery();

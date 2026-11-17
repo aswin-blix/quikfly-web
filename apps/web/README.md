@@ -111,6 +111,7 @@ Set `NEXT_PUBLIC_API_URL` (see `.env.example`) to switch to the real API in `app
 ## Before production
 
 - **Images:** the service photos are cropped from the client's small banner (about 120×80 px each) and look soft at large sizes. Get high-resolution originals of the vehicles, plus real photos for holiday packages (currently illustrated SVG scenes).
+- **Service photos:** `public/assets/services/<service>.webp` (1200 px WebP, about 70–110 KB). `SERVICES` in `src/lib/services.ts` holds each path in full (the single-file demo build inlines images by exact path), and other screens reuse them through `serviceByKey(key).image`. The app ships the same files in `apps/mobile/assets/images/services/`; replace both together.
 - **Logo:** `public/assets/logo.png` is 1.3 MB and its silver lettering is designed for dark backgrounds. Export a compressed version and consider a light-mode variant.
 - **Maps:** replace the illustrated map in `CityMap.tsx` with Google Maps, Mapbox or Ola Maps; the props stay the same.
 - **Live tracking:** WebSockets (e.g. Laravel Reverb or Socket.IO) instead of the simulated vehicle animation.

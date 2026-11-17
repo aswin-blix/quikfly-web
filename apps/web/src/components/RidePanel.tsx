@@ -15,6 +15,7 @@ import { CityMap, driverStartFor, vehiclePosition, type Pt } from "./CityMap";
 import { SafetySheet } from "./SafetySheet";
 import { GoldButton, Spinner } from "./ui";
 import { useConfig } from "@/components/ConfigProvider";
+import { serviceByKey } from "@/lib/services";
 
 type Phase = "plan" | "searching" | "arriving" | "ontrip" | "done";
 
@@ -210,7 +211,7 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
                   <motion.button initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} whileTap={{ scale: 0.98 }} key={q.option.id} onClick={() => setSelected(q.option.id)}
                     className={cx("w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all",
                       selected === q.option.id ? "border-gold bg-gold/[0.07]" : "border-line hover:border-line-strong")}>
-                    <img src={service === "bike" ? "/assets/s0.jpg" : q.option.id === "prime" || q.option.id === "suv" ? "/assets/s4.jpg" : "/assets/s1.jpg"} alt="" className="w-16 h-11 object-cover rounded-lg" />
+                    <img src={service === "bike" ? serviceByKey("bike").image : q.option.id === "prime" || q.option.id === "suv" ? serviceByKey("rent").image : serviceByKey("car").image} alt="" className="w-16 h-11 object-cover rounded-lg" />
                     <div className="flex-1">
                       <p className="font-semibold flex items-center gap-2">{q.option.name}
                         <span className="text-xs text-muted font-normal flex items-center gap-0.5"><Users size={12} />{q.option.seats}</span>

@@ -13,6 +13,7 @@ import { cx, inr, prettyDate, shiftISO, todayISO } from "@/lib/format";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import type { Bus, Seat } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
+import { serviceByKey } from "@/lib/services";
 
 /* ───────────── /bus — landing ───────────── */
 
@@ -284,7 +285,7 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
       return;
     }
     setDraft({
-      service: "bus", title: `${from} → ${to}`, subtitle: `${bus.operator} · ${bus.type}`, image: "/assets/s2.jpg",
+      service: "bus", title: `${from} → ${to}`, subtitle: `${bus.operator} · ${bus.type}`, image: serviceByKey("bus").image,
       summary: [["Date", prettyDate(date)], ["Departure", `${bTimes[boarding]} from ${bus.boardingPoints[boarding]}`], ["Arrival", `${dTimes[dropping]} at ${drops[dropping]}`], ["Seats", chosen.map((s) => s.label).join(", ")]],
       quote,
       travellers: chosen.map((s) => `Seat ${s.label}`),

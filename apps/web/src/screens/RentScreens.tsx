@@ -14,8 +14,9 @@ import { defaultRentalWindow } from "@/lib/rentals";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { RENT_PLANS, RENT_PROTECTION_LABEL, priceRent, rentHours, sumLines, type RentalCar } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
+import { serviceByKey } from "@/lib/services";
 
-const carImg = (c: RentalCar) => (["SUV", "Luxury", "MUV"].includes(c.category) ? "/assets/s4.jpg" : "/assets/s1.jpg");
+const carImg = (c: RentalCar) => (["SUV", "Luxury", "MUV"].includes(c.category) ? serviceByKey("rent").image : serviceByKey("car").image);
 
 function useTrip() {
   const defaults = useMemo(() => defaultRentalWindow(), []);

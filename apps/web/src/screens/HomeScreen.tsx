@@ -11,7 +11,7 @@ import { Accordion, GhostLink, SectionTitle } from "@/components/ui";
 import { inr, todayISO } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs } from "@/lib/nav";
-import { SERVICES } from "@/lib/services";
+import { serviceByKey, SERVICES } from "@/lib/services";
 import { ANDROID_APP } from "@/lib/site";
 import { useApp } from "@/components/AppProvider";
 import { useConfig } from "@/components/ConfigProvider";
@@ -316,7 +316,7 @@ function Safety() {
       </div>
       <Parallax amount={80}>
         <div className="relative rounded-3xl overflow-hidden border border-gold/20">
-          <img src="/assets/s0.jpg" alt="" className="w-full aspect-[4/3] object-cover" />
+          <img src={serviceByKey("bike").image} alt="" className="w-full aspect-[4/3] object-cover" />
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.3 }}
             className="absolute bottom-4 left-4 right-4 sm:right-auto panel p-4 flex items-center gap-3">
             <span className="w-10 h-10 rounded-full bg-success/15 text-success grid place-items-center"><ShieldCheck size={20} /></span>
