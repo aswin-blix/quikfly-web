@@ -13,8 +13,62 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started
 | 2b. Complete the web version: accounts + competitor features | ✅ | Live. PR #6, deployed 2026-11-16 (migration 0003) |
 | 2c. Admin panel (lean) + everything from the API | ✅ | Live. PRs #8 (L1), #9 (L2), #10 (L3), released 2026-11-17 (migrations 0004 + 0005). Admin at https://quikfly-admin.quikfly-api.workers.dev. Tracker below |
 | 3. Flutter Android app (`apps/mobile`) | 🔄 | Full parity with the website (M1–M5 merged, PRs #12 #13). **v0.1.1 is the latest release** (v0.1.0 2026-11-17, v0.1.1 the same day with the new photos) as a signed APK on GitHub Releases (https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk); website download button and new service photos live (PR #14). Left: phone-test fixes |
-| 4. Demo hardening | ⬜ | Rehearse: edit a price in admin → see it on the web and the phone → book → cancel → refund. "Reset catalog" (L2) covers most of "reset demo data" |
+| 4. Demo hardening | ⬜ | **Planned** 2026-11-17, waiting for the owner's go-ahead and decisions (plan below): rehearse admin → website + phone → book → cancel → refund on production, demo script, clean demo data, fallbacks, dress rehearsal |
 | 5. Admin, full | ⬜ | The parts cut from the lean plan: customers screen (wallet adjust, suspend, sign out everywhere, cancel deletion), booking notes, SOS alerts in admin, team screen, CSV export |
+
+## Next task: Phase 4, demo hardening (planned, waiting for go-ahead) ⬜
+
+Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs start to finish without surprises, on production, with the website, the admin panel and the Android app (0.1.1) together. **Not in scope:** new features (only fixes for problems the rehearsal finds) and anything paid (rule 7).
+
+### Decisions needed from the owner before starting
+
+1. **Demo data cleanup (D3):** pick option (a), (b) or (c) below. Recommended: (b), once, shortly before the demo.
+2. **Demo accounts:** a dedicated demo number for the presenter (any 10-digit number signs in with OTP 1234; suggested +91 90000 00100) rather than a personal number. A second number for the "new customer" moment.
+3. **Who presents, on which devices:** phone model (the OnePlus CPH2649 with 0.1.1 is tested), laptop for admin + website, mobile data or Wi-Fi.
+4. **Demo date:** so the cleanup and the dress rehearsal (D6) happen close to it.
+5. **Light-mode logo file** from the owner or client (D5), or agree to demo in dark mode.
+
+### Steps
+
+| ID | Step | Who | Output | Status |
+|---|---|---|---|---|
+| D0 | Phone-test sign-off: fix what the owner found testing 0.1.1 (closes Phase 3 / M6) | Owner reports, Claude fixes | PRs, app 0.1.2 if needed | ⬜ |
+| D1 | Production rehearsal of the core flow (script below), timing each step | Claude drives admin + website + phone (adb), owner watches | Work-log entry with results and timings; bugs fixed in PRs | ⬜ |
+| D2 | Demo script for the presenter: `docs/demo-script.md` | Claude writes, owner reviews | Doc (setup checklist, talk track, demo data, what's simulated, timings, fallbacks) | ⬜ |
+| D3 | Clean demo data and settings on production | Owner decides, Claude executes after approval | Clean dashboard and queues; seed catalog; settings checked | ⬜ |
+| D4 | Fallbacks and resilience checks | Claude | Section in the demo script; any fixes | ⬜ |
+| D5 | Polish: light-mode logo, rough edges from D1 | Claude (logo needs the file) | PRs | ⬜ |
+| D6 | Dress rehearsal: one full timed run from the script, after D3, on the demo devices | Owner presents, Claude watches/supports | Sign-off; Phase 4 ✅ | ⬜ |
+
+### D1 rehearsal script (expected result in brackets)
+
+1. **Admin changes reach both apps.** In admin (laptop), change the Goa Beach Holiday price (₹14,499 → e.g. ₹13,999) [saved, audit row]. Within 30 s (API cache) the website `/holidays` and the app's holiday list show the new price after a refresh, and a quote for 2 adults uses it. Hide one offer [gone from the website Offers page and the app Offers tab], then show it again.
+2. **New customer on the phone.** Sign up with a fresh number [₹500 welcome credit]. Book a cab paid from the wallet [driver, OTP, trip completes in about 20 s; wallet −fare]. Book a holiday with a coupon by UPI [simulated payment, confirmation, invoice].
+3. **Staff see and act.** In admin, find the customer's bookings by phone number [both listed, dashboard totals move]. Cancel the wallet booking with a reason [app: wallet refunded at once, booking under Cancelled with the reason].
+4. **Licence approval.** On the phone, start a self-drive booking and submit a licence [Under review]. In admin, approve it in the licence queue [app shows Verified within about 5 s, no reload]. Also check reject → reason shown → resubmit.
+5. **Restore.** Put the price and offer back (or use "Reset to sample data" in admin catalog, owner only).
+6. Record per step: time taken, anything confusing on screen, any error. Known waits to mention in the script: up to 30 s for admin edits to show, about 9 s driver arrival + 12 s trip.
+
+### D3 options: test data on production
+
+What's there now: smoke tests ran against production, leaving test accounts **+91 90000 00001** (customer smoke: cancelled/completed bookings) and **+91 90000 00002** (admin smoke + app contract test: bookings, a licence in the queue, audit-log rows), plus any accounts made while testing on phones. They appear in the admin dashboard totals, bookings list and licence queue.
+
+- **(a) Leave it** and explain it as test traffic. No risk, least tidy.
+- **(b) One-off cleanup (recommended):** first `wrangler d1 export --remote` (backup file kept outside the repo), then an owner-approved SQL script via `wrangler d1 execute --remote` that deletes the listed test accounts and everything attached to them (bookings, rides, wallet entries, saved items, sessions), keeping the owner's admin account and the catalog. Irreversible apart from the backup; the exact list and SQL are shown to the owner before running. After it, don't run the production smoke tests until after the demo (they add test data back).
+- **(c) Build an owner-only "Reset demo data" admin action** (audited, with confirmation). Reusable for every future demo, but it's new feature work (fits Phase 5).
+- In all cases: "Reset to sample data" for the catalog, check settings (`licenceAutoApprove` **off** so the approval moment works, welcome credit ₹500, surge hours suit the demo time).
+
+### D4 fallbacks to prepare
+
+- Slow or no network on the phone: switch Wi-Fi ↔ mobile data; the website on the laptop shows the same flows.
+- Last resort without the API: the single-file offline demo (`npm run build:demo`, mock API) opened from the laptop.
+- APK already installed on the demo phone (don't rely on downloading during the demo); a second phone with 0.1.1 if available.
+- Admin session: sign in before the demo (sessions last 12 hours).
+- Check on a phone over mobile data that `/config` and quotes respond quickly (Workers don't sleep; D1 free-plan limits are per request).
+
+### After Phase 4
+
+Phase 5 (full admin: customers screen, booking notes, SOS alerts, team, CSV export) and the backlog. Paid items (SMS OTP, payment gateway, maps, Play Store) wait for the client's sign-off.
 
 ## Current task: Flutter Android app (M1–M6) 🔄
 
