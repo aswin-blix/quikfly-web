@@ -133,6 +133,14 @@ ThemeData buildTheme(Brightness brightness) {
       trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? Brand.goldDark : c.surfaceRaised),
       trackOutlineColor: WidgetStateProperty.all(c.border),
     ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? Brand.gold : Colors.transparent),
+        foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? Brand.onGold : c.fgSoft),
+        side: WidgetStateProperty.all(BorderSide(color: c.border)),
+        textStyle: WidgetStateProperty.all(const TextStyle(fontFamily: Brand.bodyFont, fontWeight: FontWeight.w600, fontSize: 13)),
+      ),
+    ),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: c.accent),
     listTileTheme: ListTileThemeData(iconColor: c.fgMuted, textColor: c.fg),
   );

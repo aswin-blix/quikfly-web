@@ -18,5 +18,10 @@ String shortDate(DateTime d) => DateFormat('EEE, d MMM').format(d);
 /// "18 Nov 2026, 4:05 pm"
 String dateTime(DateTime d) => DateFormat('d MMM yyyy, h:mm a').format(d).replaceAll('AM', 'am').replaceAll('PM', 'pm');
 
-/// "+91 98765 43210"
-String phoneDisplay(String p) => p.length == 10 ? '+91 ${p.substring(0, 5)} ${p.substring(5)}' : p;
+/// "9876543210" or "+91 9876543210" (the API's format) → "+91 98765 43210"
+String phoneDisplay(String p) {
+  final d = p.replaceAll(RegExp(r'\D'), '');
+  if (d.length < 10) return p;
+  final n = d.substring(d.length - 10);
+  return '+91 ${n.substring(0, 5)} ${n.substring(5)}';
+}
