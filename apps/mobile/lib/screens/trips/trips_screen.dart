@@ -86,6 +86,9 @@ String statusLabel(BookingStatus s) => switch (s) {
       BookingStatus.cancelled => 'Cancelled',
     };
 
+/// Booking line labels that already say how it was paid (checkout writes "Paid via", rides "Payment").
+const _paymentLines = {'Paid via', 'Payment'};
+
 String paymentLabel(String p) => switch (p) {
       'upi' => 'UPI',
       'card' => 'Card',
@@ -182,9 +185,12 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               const SizedBox(height: 6),
               KeyValue('Booking ID', b.id),
               for (final l in b.lines) KeyValue(l.$1, l.$2),
-              KeyValue('Paid by', paymentLabel(b.payment)),
+              // Bookings usually carry their own "Paid via" / "Payment" line; add one only when they don't.
+              if (!b.lines.any((l) => _paymentLines.contains(l.$1))) KeyValue('Paid by', paymentLabel(b.payment)),
               const SizedBox(height: 10),
-              Row(children: [
+              // Cancelled bookings have no invoice and nothing left to cancel.
+              if (b.status != BookingStatus.cancelled)
+                Row(children: [
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => context.push('/invoice/${b.id}'),

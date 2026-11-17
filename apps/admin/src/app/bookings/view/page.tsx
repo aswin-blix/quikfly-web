@@ -3,7 +3,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, ChevronLeft, XCircle } from "lucide-react";
-import type { AdminBookingDetail } from "@quikfly/shared";
+import { COUPON_LINE, type AdminBookingDetail } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ReasonDialog } from "@/components/ReasonDialog";
 import { Badge, Button, ErrorBox, PageHeader } from "@/components/ui";
@@ -57,7 +57,8 @@ function Detail({ id }: { id: string }) {
           </div>
           <dl className="grid gap-2 text-sm">
             <Row k="Route / item" v={b.subtitle} />
-            {b.lines.map(([k, v], i) => <Row key={`${k}-${i}`} k={k} v={v} />)}
+            {/* The coupon has its own row by the amount below, so skip the booking's copy of it. */}
+            {b.lines.filter(([k]) => k !== COUPON_LINE).map(([k, v], i) => <Row key={`${k}-${i}`} k={k} v={v} />)}
           </dl>
           <div className="border-t border-line mt-4 pt-4 grid gap-1 text-sm">
             {coupon && <Row k="Coupon" v={`${coupon.code} (−${inr(coupon.discount)})`} />}

@@ -1,4 +1,4 @@
-import type { Booking, BookingStatus, NewBooking, PaymentMethod, ServiceKey } from "@quikfly/shared";
+import { COUPON_LINE, type Booking, type BookingStatus, type NewBooking, type PaymentMethod, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { checkCoupon } from "./offers";
@@ -18,8 +18,6 @@ export const toBooking = (r: BookingRow): Booking => ({
 /** Statuses a booking can still be cancelled or completed from. */
 export const ACTIVE = "('confirmed', 'ongoing')";
 
-/** The line that records a coupon on the booking. Written by the API only. */
-export const COUPON_LINE = "Coupon";
 
 export async function listBookings(db: D1Database, userId: string) {
   const { results } = await db.prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC")
