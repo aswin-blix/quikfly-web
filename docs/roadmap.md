@@ -12,13 +12,26 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started
 | 2. Website on Cloudflare | ✅ | Live. Demo fixes in PR #5 (ride completion, real wallet, bus times, date strip, rental defaults, cancel errors, holiday tabs) |
 | 2b. Complete the web version: accounts + competitor features | ✅ | Live. PR #6, deployed 2026-11-16 (migration 0003) |
 | 2c. Admin panel (lean) + everything from the API | ✅ | Live. PRs #8 (L1), #9 (L2), #10 (L3), released 2026-11-17 (migrations 0004 + 0005). Admin at https://quikfly-admin.quikfly-api.workers.dev. Tracker below |
-| 3. Flutter Android app (`apps/mobile`) | 🔄 | Full parity with the website (M1–M5 merged, PRs #12 #13). **v0.1.1 is the latest release** (v0.1.0 2026-11-17, v0.1.1 the same day with the new photos) as a signed APK on GitHub Releases (https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk); website download button and new service photos live (PR #14). Left: phone-test fixes |
-| 4. Demo hardening | ⬜ | **Planned** 2026-11-17, waiting for the owner's go-ahead and decisions (plan below): rehearse admin → website + phone → book → cancel → refund on production, demo script, clean demo data, fallbacks, dress rehearsal |
+| 3. Flutter Android app (`apps/mobile`) | 🔄 | Full parity with the website (M1–M5 merged, PRs #12 #13). **v0.1.2 is the latest release** (0.1.0, 0.1.1 new photos, 0.1.2 trip-card fixes; all 2026-11-17) as a signed APK on GitHub Releases (https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk); website download button live. Left: the owner's phone-test sign-off (Phase 4 D0) |
+| 4. Demo hardening | 🔄 | **In progress** (plan below): D1 production rehearsal ✅, D2 demo script drafted, D5 fixes shipped (API, admin, app 0.1.2); open decisions and D0/D4/D6 left |
 | 5. Admin, full | ⬜ | The parts cut from the lean plan: customers screen (wallet adjust, suspend, sign out everywhere, cancel deletion), booking notes, SOS alerts in admin, team screen, CSV export |
 
-## Next task: Phase 4, demo hardening (planned, waiting for go-ahead) ⬜
+## Current task: Phase 4, demo hardening 🔄
 
-Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs start to finish without surprises, on production, with the website, the admin panel and the Android app (0.1.1) together. **Not in scope:** new features (only fixes for problems the rehearsal finds) and anything paid (rule 7).
+Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs start to finish without surprises, on production, with the website, the admin panel and the Android app (0.1.2) together. **Not in scope:** new features (only fixes for problems the rehearsal finds) and anything paid (rule 7).
+
+### Pick up here (next session)
+
+State on 2026-11-17, end of day: everything is merged to `main`; production runs the latest API, website and admin; the latest app is **0.1.2** (https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk), installed on the owner's OnePlus test phone. No open PRs.
+
+1. **D0, phone-test sign-off:** ask the owner what they found using 0.1.2 on the phone; fix in PRs (next app release 0.1.3 the same way: bump on a `release/app-…` branch → owner builds with `QUIKFLY_KEYSTORE_PASSWORD` set via `Read-Host -MaskInput` → Claude verifies with `apksigner`/`aapt2` and `adb install -r` → owner says yes → `gh release create app-v… QuikFly-arm64.apk QuikFly-armv7.apk --target <full sha of the bump commit> --latest`).
+2. **D2:** the owner reviews `docs/demo-script.md`; apply their changes.
+3. **Finding 5 decision:** show customers staff's cancellation reason? Needs an API contract change (rule 1: shared types → API → web contract/http/mock → smoke → README → app models + contract test).
+4. **Open decisions 2–5** below (demo numbers, presenter devices, demo date, light-mode logo).
+5. **D4** fallbacks (build the offline `quikfly-demo.html` with `npm run build:demo` in Git Bash and check it), then **D6** dress rehearsal on the demo devices.
+6. Owner housekeeping: remove the Vercel GitHub app (https://github.com/settings/installations → Vercel → Configure → remove quikfly-web) to stop the PR emails and failing check; delete or keep the six original `.webp` images in the repo root (untracked).
+
+Working rules learned in this phase: production data is kept (decision 1), never delete it or reset the catalog without a new explicit request; merging needs the owner to say "merge"; on the owner's phone take a screenshot before every adb tap and let the owner tap time-sensitive steps.
 
 ### Decisions needed from the owner before starting
 
@@ -32,12 +45,12 @@ Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs s
 
 | ID | Step | Who | Output | Status |
 |---|---|---|---|---|
-| D0 | Phone-test sign-off: fix what the owner found testing 0.1.1 (closes Phase 3 / M6) | Owner reports, Claude fixes | PRs, app 0.1.2 if needed | ⬜ |
+| D0 | Phone-test sign-off: fix what the owner finds testing the app (now 0.1.2) on the phone (closes Phase 3 / M6) | Owner reports, Claude fixes | PRs, app 0.1.3 if needed | ⬜ |
 | D1 | Production rehearsal of the core flow (script below), timing each step | Claude drives admin + website + phone (adb), owner watches | Work-log entry with results and timings; bugs fixed in PRs | ✅ done (staff-cancel wallet refund skipped by the owner: covered by the automated tests) |
 | D2 | Demo script for the presenter: `docs/demo-script.md` | Claude writes, owner reviews | Doc (setup checklist, talk track, demo data, what's simulated, timings, fallbacks) | 🔄 drafted, owner to review |
 | D3 | Demo data and settings on production: **keep the data** (decision 1); only check settings (read-only) and explain test entries in the script | Claude | Settings checked; D2 script says how to describe the existing test bookings | ⬜ |
 | D4 | Fallbacks and resilience checks | Claude | Section in the demo script; any fixes | ⬜ |
-| D5 | Polish: light-mode logo, rough edges from D1 | Claude (logo needs the file) | PRs | 🔄 findings 2–4 fixed; API + admin deployed (admin fix live); app fix waits for 0.1.2; 5 waits for a decision; logo needs the file |
+| D5 | Polish: light-mode logo, rough edges from D1 | Claude (logo needs the file) | PRs | 🔄 findings 2–4 fixed and shipped (API + admin deployed, app 0.1.2 released); 5 waits for a decision; logo needs the file |
 | D6 | Dress rehearsal: one full timed run from the script, after D3, on the demo devices | Owner presents, Claude watches/supports | Sign-off; Phase 4 ✅ | ⬜ |
 
 ### D1 rehearsal script (expected result in brackets)
@@ -95,11 +108,13 @@ What's there now: smoke tests ran against production, leaving test accounts **+9
 
 - 2026-11-17 **App 0.1.2 prepared** (branch `release/app-0.1.2`, `version: 0.1.2+3`, arm64 version code 2003: Flutter adds 1000 × ABI to the build number, so arm64 is 2000 + 3): ships the D5 trip-card fixes (no duplicate "Paid by", no Invoice button on cancelled bookings). Owner builds; Claude verifies and installs; GitHub Release `app-v0.1.2` after the owner's yes. **Built and verified:** arm64 22.1 MB (2003), armeabi-v7a 19.7 MB (1003), x86_64 23.7 MB (4003), all signed `CN=QuikFly`; installed over 0.1.1 on the OnePlus in place (first-install time kept). The first `adb install` returned nothing and changed nothing (likely the phone's install prompt); the retry succeeded.
 
+- 2026-11-17 **App 0.1.2 published** at the owner's request: GitHub Release `app-v0.1.2` (tag on `b975da0`, the version-bump commit the APKs were built from), latest, same asset names; `releases/latest/download/…` (the website's button) serves it, checksums match (arm64 `3cc2b152…`). PR #24 merged.
+
 ### After Phase 4
 
 Phase 5 (full admin: customers screen, booking notes, SOS alerts, team, CSV export) and the backlog. Paid items (SMS OTP, payment gateway, maps, Play Store) wait for the client's sign-off.
 
-## Current task: Flutter Android app (M1–M6) 🔄
+## Phase 3: Flutter Android app (M1–M6), released; sign-off pending 🔄
 
 Started 2026-11-17. Owner's choices: **full parity** with the website for the first APK the client sees; live price estimates **ask the API** (`POST /quotes`, debounced), no price maths in Dart; APK published as a **GitHub Release** (public repo, no login to download) and linked from the website's "Get it on Google Play" button; package id **`com.quikfly.app`**. Details in [decisions.md](decisions.md) and [apps/mobile/README.md](../apps/mobile/README.md).
 
@@ -136,7 +151,7 @@ Each slice: `flutter analyze` → contract test against the local API → browse
 - 2026-11-17 **Upload key created** by the owner in their own terminal (`C:\Users\AswinBlix\keys\quikfly-upload.jks`, alias `quikfly`, SHA-256 `C7:84:CE:F5:50:DC:5F:A5:FC:64:C5:5A:2E:C6:EE:C8:99:81:FD:2D:75:0A:FF:9A:49:6C:9B:40:17:03:3A:AE`). First build failed with "keystore password was incorrect" because of how the environment variable was set (the key itself was fine: `keytool -list` accepted the password); setting it with `Read-Host -MaskInput` fixed it. Owner built `--split-per-abi`: arm64-v8a 21.7 MB, armeabi-v7a 19.3 MB, x86_64 23.3 MB. `apksigner verify --print-certs`: all three verify (v2), signer `CN=QuikFly, O=QuikFly Mobility Pvt. Ltd.`, digest matches the key. Package `com.quikfly.app`, version 0.1.0, target SDK 36. The old universal debug-signed `app-release.apk` was deleted from the build folder so it can't be shared by mistake.
 - 2026-11-17 Installed the signed arm64 APK on the owner's OnePlus CPH2649 (Android 17) over USB: installs, starts, loads production data (welcome credit, places). The owner is testing the flows on the phone.
 - 2026-11-17 **Published** at the owner's request: GitHub Release `app-v0.1.0` (tag on `ef84897`, the commit the APKs were built from), marked latest, assets `QuikFly-arm64.apk` (21.7 MB) and `QuikFly-armv7.apk` (19.3 MB) with tester-facing notes, checksums and the certificate fingerprint. Anonymous download from `releases/latest/download/…` returns both files with matching SHA-256. https://github.com/aswin-blix/quikfly-web/releases/tag/app-v0.1.0
-- Next (pick up here), remaining M6 steps:
+- Remaining M6 step (tracked as Phase 4 D0): the owner's phone-test sign-off.
   1. Fix anything the owner finds in the phone test.
   2. ✅ **App 0.1.1** (new service photos), branch `release/app-0.1.1`, PR #16 merged: `version: 0.1.1+2` committed (arm64 version code 2002 > 2001, so it installs over 0.1.0). Owner builds `flutter build apk --release --split-per-abi` with `QUIKFLY_KEYSTORE_PASSWORD` set; Claude verifies the signature with apksigner and installs on the phone; the GitHub Release `app-v0.1.1` (same stable asset names) waits for the owner's yes. **Built and verified 2026-11-17:** arm64 22.1 MB (version code 2002), armeabi-v7a 19.7 MB (1002), x86_64 23.7 MB (4002), all signed `CN=QuikFly` (digest `c784cef5…`), six photos in `assets/images/services/`; installed over 0.1.0 on the OnePlus with `adb install -r` (first-install time kept, sign-in, wallet and theme kept) and the home grid shows the new photos. **Published** at the owner's request: GitHub Release `app-v0.1.1` (tag on `b0446ea`, the version-bump commit the APKs were built from), latest, same asset names; `releases/latest/download/QuikFly-arm64.apk` (the website's button) now serves 0.1.1 (SHA-256 `9d288677…` matches the build).
   3. Tick M6 once the phone test is signed off.

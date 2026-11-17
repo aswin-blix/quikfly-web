@@ -28,7 +28,7 @@ apps/api/         Cloudflare Worker: Hono + D1 (SQLite)
   src/config.ts   tunable API values that are NOT (yet) runtime settings
   migrations/     numbered D1 SQL files; never edit an applied one, add a new one
   scripts/        smoke.mjs (customer endpoints) · smoke-admin.mjs (admin endpoints) · create-admin.mjs (staff accounts)
-apps/mobile/      Flutter Android app (Phase 3; v0.1.0 released on GitHub Releases; read apps/mobile/README.md). Same endpoints as the website:
+apps/mobile/      Flutter Android app (Phase 3; latest release v0.1.2 on GitHub Releases; read apps/mobile/README.md). Same endpoints as the website:
   lib/api/        api.dart (one method per endpoint) · models.dart (Dart copy of packages/shared types + Rules)
   lib/theme/      tokens.dart mirrors apps/web tokens.css · lib/screens/ one folder per area · test/api_contract_test.dart
 packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation patterns, limits),

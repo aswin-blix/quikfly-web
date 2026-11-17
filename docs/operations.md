@@ -41,7 +41,7 @@ The smoke test reuses one test user (+91 90000 00001) and leaves cancelled or co
 
 - Builds against the production API by default; `--dart-define=API_URL=...` points it elsewhere (see `apps/mobile/README.md`).
 - Signed release: upload key at `%USERPROFILE%\keys\quikfly-upload.jks`, alias `quikfly`, certificate SHA-256 `C7:84:CE:F5:50:DC:5F:A5:FC:64:C5:5A:2E:C6:EE:C8:99:81:FD:2D:75:0A:FF:9A:49:6C:9B:40:17:03:3A:AE` (owner keeps the file and the password, backed up), `apps/mobile/android/key.properties` (git-ignored) with path + alias, password in `QUIKFLY_KEYSTORE_PASSWORD`. Steps in `apps/mobile/README.md` → Release.
-- Distribution: GitHub Releases on the public repo (tags `app-v<version>`). Latest APK, no login: https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk (older phones: `QuikFly-armv7.apk`). Releases: `app-v0.1.0` and `app-v0.1.1` (new photos, latest), both 2026-11-17. A new release with the same asset names automatically becomes what the website's download button serves.
+- Distribution: GitHub Releases on the public repo (tags `app-v<version>`). Latest APK, no login: https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk (older phones: `QuikFly-armv7.apk`). Releases (all 2026-11-17): `app-v0.1.0`, `app-v0.1.1` (new service photos), `app-v0.1.2` (trip-card fixes, latest). A new release with the same asset names automatically becomes what the website's download button serves.
 - Contract test before a release: `flutter test --dart-define=API_URL=<api>/v1`. Against production it uses the test number +91 90000 00002 and leaves a cancelled booking and a pending licence on it.
 
 ## Testing
