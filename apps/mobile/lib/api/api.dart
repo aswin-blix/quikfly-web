@@ -107,6 +107,33 @@ class QuikFlyApi {
   Future<VendorApplication> acceptVendorAgreement(String name) => _post('/vendor/onboarding/agreement', _vendor, {'name': name, 'accept': true});
   Future<VendorApplication> requestVendorSticker() => _post('/vendor/onboarding/sticker', _vendor);
 
+  // ── Partner fleet (live partners): every call returns the whole fleet ──
+  VendorFleet _fleet(dynamic d) => VendorFleet.fromJson(d as Json);
+  Future<VendorFleet> vendorFleet() => _get('/vendor/fleet', _fleet);
+  Future<VendorFleet> addVendorVehicle(Json details) => _post('/vendor/vehicles', _fleet, details);
+
+  /// part: details · rc · insurance · audit (rc/insurance on a live vehicle is a renewal QuikFly checks).
+  Future<VendorFleet> saveVendorVehicle(String id, String part, Json body) => _put('/vendor/vehicles/$id/$part', _fleet, body);
+  Future<VendorFleet> uploadVendorVehicleDocument(String id, String kind, List<int> bytes) => _send(
+        () => _dio.put('/vendor/vehicles/$id/documents/$kind',
+            data: Stream.fromIterable([bytes]), options: Options(contentType: 'image/jpeg', headers: {Headers.contentLengthHeader: bytes.length})),
+        _fleet,
+      );
+  String vendorVehicleDocumentUrl(String id, String kind) => '${_dio.options.baseUrl}/vendor/vehicles/$id/documents/$kind';
+  Future<VendorFleet> submitVendorVehicle(String id) => _post('/vendor/vehicles/$id/submit', _fleet);
+  Future<VendorFleet> setVendorVehicleActive(String id, bool active) => _patch('/vendor/vehicles/$id', _fleet, {'active': active});
+  Future<VendorFleet> deleteVendorVehicle(String id) => _delete('/vendor/vehicles/$id', _fleet);
+  Future<VendorFleet> addVendorDriver(Json body) => _post('/vendor/drivers', _fleet, body);
+  Future<VendorFleet> saveVendorDriverLicence(String id, Json body) => _put('/vendor/drivers/$id/licence', _fleet, body);
+  Future<VendorFleet> uploadVendorDriverLicence(String id, List<int> bytes) => _send(
+        () => _dio.put('/vendor/drivers/$id/documents/dl',
+            data: Stream.fromIterable([bytes]), options: Options(contentType: 'image/jpeg', headers: {Headers.contentLengthHeader: bytes.length})),
+        _fleet,
+      );
+  String vendorDriverLicenceUrl(String id) => '${_dio.options.baseUrl}/vendor/drivers/$id/documents/dl';
+  Future<VendorFleet> assignVendorDriver(String id, String? vehicleId) => _post('/vendor/drivers/$id/assign', _fleet, {'vehicleId': vehicleId});
+  Future<VendorFleet> removeVendorDriver(String id) => _delete('/vendor/drivers/$id', _fleet);
+
   // ── Account ──
   /// Send only what changes; null clears a field. Saving a name completes sign-up.
   Future<User> updateProfile(Map<String, Object?> changes) => _patch('/me', (d) => User.fromJson(d as Json), changes);

@@ -146,6 +146,13 @@ void main() {
     }
   });
 
+  test('partner fleet parses', () async {
+    final app = await api.vendorApplication();
+    final fleet = await api.vendorFleet();
+    if (app?.vehicle != null) expect(fleet.vehicle(app!.vehicle!.id)?.regNumber, app.vehicle!.regNumber);
+    expect(fleet.drivers, isA<List<VendorDriver>>());
+  });
+
   test('credits summary parses', () async {
     final sum = await api.credits();
     expect(sum.balance, greaterThanOrEqualTo(0));

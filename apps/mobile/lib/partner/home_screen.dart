@@ -13,6 +13,7 @@ import '../theme/tokens.dart';
 import '../widgets/logo.dart';
 import '../widgets/theme_toggle.dart';
 import '../widgets/ui.dart';
+import 'fleet_screens.dart';
 import 'partner_app.dart';
 
 class PartnerHomeScreen extends ConsumerWidget {
@@ -30,7 +31,7 @@ class PartnerHomeScreen extends ConsumerWidget {
         appBar: _bar(context, ref),
         body: ScreenList(children: [ErrorBox(errorText(e), onRetry: () => ref.invalidate(vendorProvider))]),
       ),
-      data: (a) => a == null ? const _Start() : _Hub(a),
+      data: (a) => a == null ? const _Start() : a.status == 'active' ? PartnerShell(a) : _Hub(a),
     );
   }
 }

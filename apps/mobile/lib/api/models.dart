@@ -563,6 +563,7 @@ class Settings {
   int get vendorJoiningFee => _i('vendorJoiningFee', 1000);
   int get vendorMaxVehicleAgeYears => _i('vendorMaxVehicleAgeYears', 8);
   String get vendorAuditAddress => _s('vendorAuditAddress', 'QuikFly partner hub, Chennai');
+  int get vendorExpiryWarnDays => _i('vendorExpiryWarnDays', 30);
 
   int get welcomeCredit => _i('welcomeCredit', 500);
   int get referralBonus => _i('referralBonus', 100);

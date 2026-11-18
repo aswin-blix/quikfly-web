@@ -41,8 +41,16 @@ class SectionStatus {
 }
 
 class VendorVehicle {
-  const VendorVehicle(this.id, this.type, this.fuel, this.regNumber, this.purchaseDate, this.rc, this.insurance, this.audit, this.status);
+  const VendorVehicle(this.id, this.type, this.fuel, this.regNumber, this.purchaseDate, this.rc, this.insurance, this.audit, this.status,
+      {this.reviewNote, this.blockedReason, this.docsPending = false, this.driverId});
+
+  /// pending (in the application) · draft · submitted · approved (waiting for sticker) · active · inactive · blocked · rejected
   final String id, type, fuel, regNumber, purchaseDate, status;
+  final String? reviewNote, blockedReason, driverId;
+
+  /// A renewed RC or insurance is waiting for QuikFly to check it.
+  final bool docsPending;
+  bool get live => status == 'active' || status == 'inactive' || status == 'blocked';
   final ({String ownerName, String validTill, bool hasPhoto})? rc;
   final ({String insurer, String policyNumber, String validTill, bool hasPhoto})? insurance;
   final ({String date, String slot, String result, String? note})? audit;
@@ -55,8 +63,65 @@ class VendorVehicle {
       ins == null ? null : (insurer: '${ins['insurer']}', policyNumber: '${ins['policyNumber']}', validTill: '${ins['validTill']}', hasPhoto: ins['hasPhoto'] == true),
       au == null ? null : (date: '${au['date']}', slot: '${au['slot']}', result: '${au['result']}', note: au['note'] as String?),
       '${j['status']}',
+      reviewNote: j['reviewNote'] as String?,
+      blockedReason: j['blockedReason'] as String?,
+      docsPending: j['docsPending'] == true,
+      driverId: j['driverId'] as String?,
     );
   }
+}
+
+/// A driver the partner registered (VendorDriver in packages/shared).
+class VendorDriver {
+  const VendorDriver({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.dlNumber,
+    required this.dlValidTill,
+    required this.hasDlPhoto,
+    required this.status,
+    this.policeVerifiedAt,
+    this.reviewNote,
+    this.blockedReason,
+    this.docsPending = false,
+    this.vehicleId,
+    this.self = false,
+  });
+
+  /// submitted · active · rejected · blocked
+  final String id, name, phone, dlNumber, dlValidTill, status;
+  final bool hasDlPhoto, docsPending, self;
+  final String? policeVerifiedAt, reviewNote, blockedReason, vehicleId;
+
+  factory VendorDriver.fromJson(Json j) => VendorDriver(
+        id: j['id'] as String,
+        name: '${j['name']}',
+        phone: '${j['phone']}',
+        dlNumber: '${j['dlNumber']}',
+        dlValidTill: '${j['dlValidTill']}',
+        hasDlPhoto: j['hasDlPhoto'] == true,
+        status: '${j['status']}',
+        policeVerifiedAt: j['policeVerifiedAt'] as String?,
+        reviewNote: j['reviewNote'] as String?,
+        blockedReason: j['blockedReason'] as String?,
+        docsPending: j['docsPending'] == true,
+        vehicleId: j['vehicleId'] as String?,
+        self: j['self'] == true,
+      );
+}
+
+/// GET /vendor/fleet: every vehicle and driver.
+class VendorFleet {
+  const VendorFleet(this.vehicles, this.drivers);
+  final List<VendorVehicle> vehicles;
+  final List<VendorDriver> drivers;
+  factory VendorFleet.fromJson(Json j) => VendorFleet(
+        ((j['vehicles'] as List?) ?? const []).map((x) => VendorVehicle.fromJson(x as Json)).toList(),
+        ((j['drivers'] as List?) ?? const []).map((x) => VendorDriver.fromJson(x as Json)).toList(),
+      );
+  VendorVehicle? vehicle(String? id) => vehicles.where((v) => v.id == id).firstOrNull;
+  VendorDriver? driver(String? id) => drivers.where((d) => d.id == id).firstOrNull;
 }
 
 class VendorApplication {
