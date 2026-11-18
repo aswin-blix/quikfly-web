@@ -1,4 +1,4 @@
-import { COUPON_LINE, DEPOSIT_LINE, cancelPolicyFor, refundAmount, refundPercent, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type ServiceKey } from "@quikfly/shared";
+import { COUPON_LINE, DEPOSIT_LINE, cancelPolicyFor, refundAmount, refundPercent, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { checkCoupon } from "./offers";
@@ -40,12 +40,15 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
     if (!input.rideId) throw badRequest('"rideId" is required for ride bookings.');
     const ride = await ownRide(db, userId, input.rideId);
     if (ride.quote.option.service !== input.service) throw badRequest("That ride is for a different service.");
-    return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: null, deposit: 0 };
+    return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: null, deposit: 0, seatHolds: null };
   }
   if (!input.quoteId) throw badRequest('"quoteId" is required. Get a price from POST /quotes first.');
   const q = await usableQuote(db, input.quoteId, input.service);
   const deposit = (JSON.parse(q.lines) as FareLine[]).find((l) => l.label === DEPOSIT_LINE)?.amount ?? 0;
-  return { gross: q.total, quoteId: q.id, rideId: null, startsAt: q.starts_at, deposit };
+  const req = JSON.parse(q.request) as QuoteRequest;
+  // Bus seats to hold with the booking (gender per seat; "other" when the quote didn't say).
+  const seatHolds = req.service === "bus" ? { busId: req.busId, date: req.date, seats: req.seatIds.map((seat, i) => ({ seat, gender: req.genders?.[i] ?? "other" })) } : null;
+  return { gross: q.total, quoteId: q.id, rideId: null, startsAt: q.starts_at, deposit, seatHolds };
 }
 
 /**
@@ -53,7 +56,7 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
  * applies the coupon, and takes a wallet payment; if the balance is too low none of it happens.
  */
 export async function createBooking(db: D1Database, userId: string, input: NewBooking): Promise<Booking> {
-  const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit } = await grossPrice(db, userId, input);
+  const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit, seatHolds } = await grossPrice(db, userId, input);
   const coupon = input.couponCode ? await checkCoupon(db, userId, input.couponCode, input.service, gross) : null;
   const amount = gross - (coupon?.discount ?? 0);
   // A coupon can't make the deposit larger than what was paid.
@@ -90,6 +93,14 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
       ).bind(uid("WT"), userId, -amount, `Paid · ${booking.title}`, id, createdAt, id),
     );
   }
+  // Hold the bus seats; the primary key fails the whole batch if someone took one meanwhile.
+  if (seatHolds) {
+    statements.push(db.prepare(
+      `INSERT INTO bus_seat_holds (bus_id, date, seat_id, booking_id, gender)
+       SELECT ?1, ?2, json_extract(j.value, '$.seat'), ?3, json_extract(j.value, '$.gender') FROM json_each(?4) j
+       WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?3)`,
+    ).bind(seatHolds.busId, seatHolds.date, id, JSON.stringify(seatHolds.seats)));
+  }
   // If the booking didn't go in (e.g. wallet too low), give the quote back.
   if (quoteId) statements.push(db.prepare("UPDATE quotes SET used_at = NULL WHERE id = ? AND used_at = ? AND NOT EXISTS (SELECT 1 FROM bookings WHERE id = ?)").bind(quoteId, id, id));
 
@@ -97,6 +108,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   try {
     results = await db.batch(statements);
   } catch (e) {
+    if (String(e).includes("bus_seat_holds")) throw conflict("One of those seats was just booked by someone else. Please pick another.");
     if (String(e).includes("bookings_ride_once") || String(e).includes("UNIQUE")) throw conflict("This ride is already booked.");
     throw e;
   }
@@ -138,7 +150,7 @@ export async function cancelBookingRow(db: D1Database, userId: string | null, id
   const credit = row.payment === "wallet" ? refund.amount : 0;
   const note = `${refundNote}${refund.percent < 100 ? ` (${refund.percent}%${row.deposit ? ", deposit in full" : ""})` : ""} · ${row.title}`;
   // Every statement re-checks that the booking is still active, so a race can't pay twice.
-  const [, , cancelled] = await db.batch([
+  const results = await db.batch([
     db.prepare(
       `UPDATE users SET wallet_balance = wallet_balance + ?3
        WHERE id = ?4 AND ?3 > 0 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE})`,
@@ -147,10 +159,12 @@ export async function cancelBookingRow(db: D1Database, userId: string | null, id
       `INSERT INTO wallet_transactions (id, user_id, kind, amount, note, booking_id, created_at)
        SELECT ?3, ?4, 'refund', ?5, ?6, ?1, ?7 WHERE ?5 > 0 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE})`,
     ).bind(...ids, uid("WT"), row.user_id, credit, note, new Date().toISOString()),
+    // Release any bus seats so they can be sold again.
+    db.prepare(`DELETE FROM bus_seat_holds WHERE booking_id = ?1 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE})`).bind(...ids),
     db.prepare(`UPDATE bookings SET status = 'cancelled', refund_amount = ?3 WHERE id = ?1 ${owner} AND status IN ${ACTIVE} RETURNING *`)
       .bind(...ids, refund.amount),
   ]);
-  return (cancelled.results as BookingRow[])[0] ?? null;
+  return (results[results.length - 1].results as BookingRow[])[0] ?? null;
 }
 
 export async function cancelBooking(db: D1Database, userId: string, id: string): Promise<Booking> {

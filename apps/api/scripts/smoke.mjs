@@ -63,17 +63,38 @@ const again = (await call("GET", busPath)).json;
 check("GET /buses is stable for the same search", JSON.stringify(buses) === JSON.stringify(again));
 await expect("GET /buses needs from/to/date", call("GET", "/buses?from=Chennai"), 400);
 const seatPath = (bus) => `/buses/${encodeURIComponent(bus.id)}/seats?from=Chennai&to=Bengaluru&date=2026-12-01`;
-const seats = await expect("GET /buses/:id/seats", call("GET", seatPath(buses[0])), 200, (j) => j.length === 36 && j.every((x) => x.price >= buses[0].fare));
+const seats = await expect("GET /buses/:id/seats", call("GET", seatPath(buses[0])), 200,
+  (j) => [36, 40, 48].includes(j.length) && j.every((x) => x.price >= buses[0].fare) && j.some((x) => x.price === buses[0].fare)
+    && j.every((x) => x.booked === (x.bookedGender !== null)));
+// Women-first rule: a free seat is women only exactly when its pair (cols 0-1, 2-3) is held by a woman.
+const partnerOf = (list, s) => list.find((x) => x.deck === s.deck && x.row === s.row && x.col === [1, 0, 3, 2][s.col]);
+const rulesHold = (list) => list.every((s) => s.ladies === (!s.booked && partnerOf(list, s)?.bookedGender === "female"));
+check("women-only seats sit next to a woman (and only those)", rulesHold(seats));
+const allSeats = await Promise.all(buses.map((b) => call("GET", seatPath(b)).then((r) => r.json)));
+check("each bus type has its layout", buses.every((b, i) => allSeats[i].length === (b.type.includes("2+2") ? 40 : b.type.includes("Seater / Sleeper") ? 48 : 36)
+  && (b.type.includes("2+2") ? allSeats[i].every((x) => x.deck === "lower" && !x.sleeper) : true)), buses.map((b, i) => `${b.type}:${allSeats[i].length}`).join(", "));
+check("seats left matches the seat map", buses.every((b, i) => b.seatsLeft === allSeats[i].filter((x) => !x.booked).length), buses.map((b, i) => `${b.seatsLeft}/${allSeats[i].filter((x) => !x.booked).length}`).join(" "));
+check("no bus promises live tracking or CCTV", buses.every((b) => !b.amenities.includes("Live tracking") && !b.amenities.includes("CCTV")));
 await expect("GET /buses/:id/seats needs the route", call("GET", `/buses/${encodeURIComponent(buses[0].id)}/seats?date=2026-12-01`), 400);
 await expect("GET /buses/:id/seats unknown bus is 404", call("GET", "/buses/nope/seats?from=Chennai&to=Bengaluru&date=2026-12-01"), 404);
 
 // Quotes: the API prices every booking
-const free = seats.filter((x) => !x.booked).slice(0, 2);
+const free = seats.filter((x) => !x.booked && !x.ladies).slice(0, 2);
 const busQuoteBody = { service: "bus", busId: buses[0].id, from: "Chennai", to: "Bengaluru", date: "2026-12-01", seatIds: free.map((x) => x.id) };
 const busQuote = await expect("POST /quotes (bus)", call("POST", "/quotes", busQuoteBody, false), 201,
   (j) => j.id && j.service === "bus" && j.total === j.lines.reduce((a, l) => a + l.amount, 0) && j.lines[0].amount === free[0].price + free[1].price);
 const taken = seats.find((x) => x.booked);
 if (taken) await expect("POST /quotes refuses a booked seat", call("POST", "/quotes", { ...busQuoteBody, seatIds: [taken.id] }), 409);
+await expect("POST /quotes refuses genders that don't match the seats", call("POST", "/quotes", { ...busQuoteBody, genders: ["female"] }), 400, (j) => /one entry per seat/.test(j.message));
+// A simulated women-only seat, anywhere in this search: refused for a man, fine for a woman.
+const ladiesAt = allSeats.findIndex((list) => list.some((x) => x.ladies));
+if (ladiesAt >= 0) {
+  const seat = allSeats[ladiesAt].find((x) => x.ladies);
+  const body = { ...busQuoteBody, busId: buses[ladiesAt].id, seatIds: [seat.id] };
+  await expect("women-only seat is refused without a gender", call("POST", "/quotes", body), 400, (j) => /women only/.test(j.message));
+  await expect("women-only seat is refused for a man", call("POST", "/quotes", { ...body, genders: ["male"] }), 400, (j) => /women only/.test(j.message));
+  await expect("women-only seat is fine for a woman", call("POST", "/quotes", { ...body, genders: ["female"] }), 201);
+} else console.log("SKIP  no simulated women-only seat on this route and date");
 await expect("POST /quotes refuses too many seats", call("POST", "/quotes", { ...busQuoteBody, seatIds: seats.slice(0, 7).map((x) => x.id) }), 400);
 const tourQuote = await expect("POST /quotes (tour)", call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 2, kids: 1, start: TRAVEL }), 201,
   (j) => j.lines[0].amount === tours[0].price * 2 && j.lines[1].amount === Math.round((tours[0].price * cfg.settings.tourChildPercent) / 100));
@@ -173,6 +194,31 @@ const tourToClose = (await call("POST", "/quotes", { service: "tours", tourId: t
 const toClose = (await call("POST", "/bookings", newBooking({ service: "tours", quoteId: tourToClose.id, payment: "upi" }))).json;
 await expect("customers can't complete a holiday (staff close it)", call("POST", `/bookings/${toClose.id}/complete`), 409, (j) => /staff/.test(j.message));
 await call("POST", `/bookings/${toClose.id}/cancel`);
+
+// Bus seat holds: a seat sells once, a woman's seat makes its pair women only, cancelling frees both.
+const pairSeat = seats.find((x) => x.col === 0 && !x.booked && !x.ladies && partnerOf(seats, x) && !partnerOf(seats, x).booked && !partnerOf(seats, x).ladies);
+if (pairSeat) {
+  const seatA = pairSeat, seatB = partnerOf(seats, pairSeat);
+  const q1 = (await call("POST", "/quotes", { ...busQuoteBody, seatIds: [seatB.id], genders: ["male"] })).json;
+  const q2 = (await call("POST", "/quotes", { ...busQuoteBody, seatIds: [seatB.id], genders: ["male"] })).json;
+  const left0 = (await call("GET", busPath)).json.find((b) => b.id === buses[0].id).seatsLeft;
+  const first = await expect("first booking of a seat holds it", call("POST", "/bookings", newBooking({ quoteId: q1.id })), 201);
+  check("a held seat lowers seats left", (await call("GET", busPath)).json.find((b) => b.id === buses[0].id).seatsLeft === left0 - 1);
+  await expect("a second booking of the same seat is refused", call("POST", "/bookings", newBooking({ quoteId: q2.id })), 409, (j) => /someone else/.test(j.message));
+  await expect("a held seat can't be quoted", call("POST", "/quotes", { ...busQuoteBody, seatIds: [seatB.id], genders: ["male"] }), 409);
+  await call("POST", `/bookings/${first.id}/cancel`);
+  await expect("cancelling frees the seat", call("GET", seatPath(buses[0])), 200, (j) => !j.find((x) => x.id === seatB.id).booked);
+
+  const qa = (await call("POST", "/quotes", { ...busQuoteBody, seatIds: [seatA.id], genders: ["female"] })).json;
+  const woman = await expect("a woman books one seat of a pair", call("POST", "/bookings", newBooking({ quoteId: qa.id })), 201);
+  await expect("her seat shows as booked by a woman and its pair turns women only", call("GET", seatPath(buses[0])), 200,
+    (j) => j.find((x) => x.id === seatA.id).bookedGender === "female" && j.find((x) => x.id === seatB.id).ladies === true && rulesHold(j));
+  await expect("the pair is refused for a man", call("POST", "/quotes", { ...busQuoteBody, seatIds: [seatB.id], genders: ["male"] }), 400, (j) => /women only/.test(j.message));
+  await expect("the pair is fine for a woman", call("POST", "/quotes", { ...busQuoteBody, seatIds: [seatB.id], genders: ["female"] }), 201);
+  await call("POST", `/bookings/${woman.id}/cancel`);
+  await expect("cancelling frees her seat and lifts the rule", call("GET", seatPath(buses[0])), 200,
+    (j) => !j.find((x) => x.id === seatA.id).booked && !j.find((x) => x.id === seatB.id).ladies);
+} else console.log("SKIP  no free seat pair on the first bus");
 
 await expect("unknown route", call("GET", "/nope"), 404, (j) => !!j.message);
 

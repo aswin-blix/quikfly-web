@@ -82,6 +82,8 @@ void main() {
     expect(buses, isNotEmpty);
     final seats = await api.seats(buses.first.id, 'Chennai', 'Bengaluru', date);
     expect(seats.where((s) => !s.booked), isNotEmpty);
+    // Booked seats say who holds them; women-only seats sit next to a woman.
+    expect(seats.where((s) => s.booked).every((s) => s.bookedGender != null), isTrue);
   });
 
   test('rental quotes and licence', () async {

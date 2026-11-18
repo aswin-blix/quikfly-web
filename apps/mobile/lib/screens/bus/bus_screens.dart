@@ -17,6 +17,7 @@ const dateStripDays = 7;
 const dateStripBefore = 3;
 /// Most seats one booking can hold.
 const maxSeats = 6;
+const _genderLabel = {'female': 'Female', 'male': 'Male', 'other': 'Other'};
 /// "Highly rated" filter threshold.
 const highRating = 4.3;
 
@@ -515,7 +516,7 @@ class _BusCard extends StatelessWidget {
         const SizedBox(height: 6),
         Row(children: [
           Expanded(
-            child: Text('${b.seatsLeft} seats left${b.amenities.contains('Live tracking') ? ' · Live tracking' : ''}',
+            child: Text('${b.seatsLeft} seats left${b.amenities.isNotEmpty ? ' · ${b.amenities.take(2).join(' · ')}' : ''}',
                 style: TextStyle(color: b.seatsLeft < 10 ? c.warning : c.fgMuted, fontSize: 12.5)),
           ),
           Text('from ', style: TextStyle(color: c.fgSubtle, fontSize: 12)),
@@ -547,6 +548,9 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
   List<Seat>? _seats;
   String? _err;
   final _picked = <String>[];
+
+  /// Who sits in each picked seat; women-only seats need 'female' (the API checks too).
+  final _genders = <String, String>{};
   var _deck = 'lower';
   int _boarding = 0, _dropping = 0;
   late final LiveQuote _live = LiveQuote(ref.read(apiProvider))..addListener(() => setState(() {}));
@@ -559,7 +563,10 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
 
   Map<String, Object?>? get _request => _picked.isEmpty
       ? null
-      : {'service': 'bus', 'busId': _bus.id, 'from': widget.from, 'to': widget.to, 'date': isoDate(widget.date), 'seatIds': [..._picked]};
+      : {
+          'service': 'bus', 'busId': _bus.id, 'from': widget.from, 'to': widget.to, 'date': isoDate(widget.date), 'seatIds': [..._picked],
+          if (_picked.every(_genders.containsKey)) 'genders': [for (final id in _picked) _genders[id]],
+        };
 
   @override
   void initState() {
@@ -591,9 +598,17 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
         toast(context, 'You can book up to $maxSeats seats at a time.');
       } else {
         _picked.add(s.id);
+        if (s.ladies) _genders[s.id] = 'female';
       }
     });
-    _live.update(_request);
+    _live.update(_allNamed ? _request : null);
+  }
+
+  bool get _allNamed => _picked.isNotEmpty && _picked.every(_genders.containsKey);
+
+  void _setGender(String seatId, String g) {
+    setState(() => _genders[seatId] = g);
+    _live.update(_allNamed ? _request : null);
   }
 
   Future<void> _proceed() async {
@@ -615,7 +630,7 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
               ('Seats', seats.map((s) => s.label).join(', ')),
             ],
             quote: quote,
-            travellers: [for (final s in seats) 'Seat ${s.label}'],
+            travellers: [for (final s in seats) 'Seat ${s.label} · ${_genderLabel[_genders[s.id]] ?? ''}'],
             policy: cancelPolicyText(ref.read(configProvider).value?.settings ?? const Settings({}), ServiceKey.bus),
           ));
       if (mounted) context.push('/checkout');
@@ -642,27 +657,51 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
           : seats == null
               ? const Center(child: CircularProgressIndicator())
               : ScreenList(children: [
-                  SegmentedButton<String>(
-                    showSelectedIcon: false,
-                    segments: [
-                      for (final d in const ['lower', 'upper'])
-                        ButtonSegment(
-                          value: d,
-                          label: Text('${d == 'lower' ? 'Lower' : 'Upper'} · ${_deckPrice(seats, d)}'),
-                        ),
-                    ],
-                    selected: {_deck},
-                    onSelectionChanged: (s) => setState(() => _deck = s.first),
-                  ),
-                  const SizedBox(height: 12),
+                  // Single-deck (2+2 seater) buses have no deck switch.
+                  if (seats.any((s) => s.deck == 'upper')) ...[
+                    SegmentedButton<String>(
+                      showSelectedIcon: false,
+                      segments: [
+                        for (final d in const ['lower', 'upper'])
+                          ButtonSegment(
+                            value: d,
+                            label: Text('${d == 'lower' ? 'Lower' : 'Upper'} · ${_deckPrice(seats, d)}'),
+                          ),
+                      ],
+                      selected: {_deck},
+                      onSelectionChanged: (s) => setState(() => _deck = s.first),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   _Deck(seats: seats.where((s) => s.deck == _deck).toList(), picked: _picked, onTap: _toggle, driver: _deck == 'lower'),
                   const SizedBox(height: 10),
                   Wrap(spacing: 14, runSpacing: 6, children: [
                     _legend(c.borderStrong, null, 'Available'),
                     _legend(c.accent, Brand.gold, 'Selected'),
                     _legend(c.border, c.border, 'Sold'),
-                    _legend(c.highlight, null, 'Ladies only'),
+                    _legend(c.highlight.withValues(alpha: 0.5), c.border, 'Booked by a woman'),
+                    _legend(c.highlight, null, 'Women only (next to a woman)'),
                   ]),
+                  if (chosen.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text('WHO SITS HERE?', style: TextStyle(color: c.fgMuted, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1)),
+                    const SizedBox(height: 4),
+                    Text('Seats next to a woman are for women only.', style: TextStyle(color: c.fgSubtle, fontSize: 12)),
+                    const SizedBox(height: 8),
+                    for (final s in chosen)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(children: [
+                          SizedBox(width: 44, child: Text(s.label, style: const TextStyle(fontWeight: FontWeight.w600))),
+                          Expanded(
+                            child: Wrap(spacing: 6, runSpacing: 6, children: [
+                              for (final g in s.ladies ? const ['female'] : const ['female', 'male', 'other'])
+                                ChoiceChip(label: Text(_genderLabel[g]!), selected: _genders[s.id] == g, onSelected: (_) => _setGender(s.id, g)),
+                            ]),
+                          ),
+                        ]),
+                      ),
+                  ],
                   const SizedBox(height: 20),
                   _points('Boarding point', [
                     for (var i = 0; i < _bus.boardingPoints.length && i < 3; i++) (_bus.boardingPoints[i], _bTimes[i]),
@@ -681,7 +720,7 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
                   child: Row(children: [
                     Expanded(
                       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(chosen.isEmpty ? 'Select up to $maxSeats seats' : 'Seats ${chosen.map((s) => s.label).join(', ')}',
+                        Text(chosen.isEmpty ? 'Select up to $maxSeats seats' : !_allNamed ? 'Choose who sits in each seat' : 'Seats ${chosen.map((s) => s.label).join(', ')}',
                             maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
                         if (_live.loading)
                           const Padding(padding: EdgeInsets.only(top: 4), child: SizedBox(width: 80, child: LinearProgressIndicator()))
@@ -696,7 +735,7 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
                       expand: false,
                       label: 'Proceed',
                       loading: _proceeding,
-                      onPressed: chosen.isEmpty || _live.loading ? null : _proceed,
+                      onPressed: chosen.isEmpty || !_allNamed || _live.loading ? null : _proceed,
                     ),
                   ]),
                 ),
@@ -758,6 +797,7 @@ class _Deck extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.qf;
     final rows = seats.isEmpty ? 0 : seats.map((s) => s.row).reduce((a, b) => a > b ? a : b) + 1;
+    final four = seats.any((s) => s.col == 3);
     Seat? at(int row, int col) => seats.where((s) => s.row == row && s.col == col).firstOrNull;
     return Panel(
       child: Column(children: [
@@ -777,12 +817,13 @@ class _Deck extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(children: [
-              // Two seats, the aisle, then one seat: same layout as the website (col 2 sits across the aisle).
+              // Two seats, the aisle, then one seat (two on 2+2 buses): same layout as the website.
               Expanded(child: _cell(context, at(r, 0))),
               const SizedBox(width: 8),
               Expanded(child: _cell(context, at(r, 1))),
               const SizedBox(width: 28),
               Expanded(child: _cell(context, at(r, 2))),
+              if (four) ...[const SizedBox(width: 8), Expanded(child: _cell(context, at(r, 3)))],
             ]),
           ),
       ]),
@@ -793,12 +834,13 @@ class _Deck extends StatelessWidget {
     if (s == null) return const SizedBox(height: 56);
     final c = context.qf;
     final on = picked.contains(s.id);
-    final border = s.booked ? c.border : on ? c.accent : s.ladies ? c.highlight.withValues(alpha: 0.7) : c.borderStrong;
+    final byWoman = s.booked && s.bookedGender == 'female';
+    final border = s.booked ? (byWoman ? c.highlight.withValues(alpha: 0.5) : c.border) : on ? c.accent : s.ladies ? c.highlight.withValues(alpha: 0.7) : c.borderStrong;
     final fg = s.booked ? c.fgFaint : on ? Brand.onGold : s.ladies ? c.highlight : c.fgSoft;
     return Semantics(
       button: true,
       selected: on,
-      label: 'Seat ${s.label}${s.booked ? ', sold' : s.ladies ? ', ladies only' : ''}, ${inr(s.price)}',
+      label: 'Seat ${s.label}${s.booked ? (byWoman ? ', sold, booked by a woman' : ', sold') : s.ladies ? ', women only' : ''}, ${inr(s.price)}',
       child: Material(
         color: s.booked ? c.border.withValues(alpha: 0.6) : on ? Brand.gold : Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: border)),

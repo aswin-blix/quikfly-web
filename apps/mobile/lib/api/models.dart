@@ -229,12 +229,19 @@ class Bus {
 }
 
 class Seat {
-  const Seat(this.id, this.label, this.deck, this.row, this.col, this.sleeper, this.booked, this.ladies, this.price);
+  const Seat(this.id, this.label, this.deck, this.row, this.col, this.sleeper, this.booked, this.ladies, this.price, {this.bookedGender});
   final String id, label, deck;
+
+  /// col 0 and 1 are the left pair; 2 (and 3 on 2+2 buses) sit across the aisle.
   final int row, col, price;
+
+  /// [ladies] = women only: the seat next to it is held by a woman (the API enforces it).
   final bool sleeper, booked, ladies;
+
+  /// Who holds a booked seat ('female', 'male', 'other'); null when free.
+  final String? bookedGender;
   factory Seat.fromJson(Json j) => Seat(j['id'] as String, '${j['label']}', '${j['deck']}', _int(j['row']), _int(j['col']), j['sleeper'] == true,
-      j['booked'] == true, j['ladies'] == true, _int(j['price']));
+      j['booked'] == true, j['ladies'] == true, _int(j['price']), bookedGender: j['bookedGender'] as String?);
 }
 
 class TourPackage {

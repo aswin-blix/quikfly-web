@@ -142,9 +142,12 @@ await expect("PATCH /admin/settings refuses a negative fare", call("PATCH", "/ad
 await expect("PATCH /admin/settings refuses bad surge hours", call("PATCH", "/admin/settings", { surgeHours: "25-30" }, T), 400);
 await expect("PATCH /admin/settings refuses a bad GSTIN", call("PATCH", "/admin/settings", { companyGstin: "123" }, T), 400);
 await expect("PATCH /admin/settings: lower-deck extra", call("PATCH", "/admin/settings", { busLowerDeckExtra: s0.busLowerDeckExtra + 111 }, T), 200, (j) => j.busLowerDeckExtra === s0.busLowerDeckExtra + 111);
-const bus = (await call("GET", "/buses?from=Chennai&to=Madurai&date=2026-12-05")).json[0];
-await eventually("seat prices follow the setting", () => call("GET", `/buses/${encodeURIComponent(bus.id)}/seats?from=Chennai&to=Madurai&date=2026-12-05`),
-  (r) => r.status === 200 && r.json.find((x) => x.deck === "lower").price === bus.fare + s0.busLowerDeckExtra + 111);
+// The lower-deck extra applies to 2+1 sleeper buses (seaters and seater/sleeper lower decks are plain seats).
+const sleeperBus = (await call("GET", "/buses?from=Chennai&to=Madurai&date=2026-12-05")).json.find((b) => b.sleeper && !b.type.includes("Seater"));
+if (sleeperBus) {
+  await eventually("seat prices follow the setting", () => call("GET", `/buses/${encodeURIComponent(sleeperBus.id)}/seats?from=Chennai&to=Madurai&date=2026-12-05`),
+    (r) => r.status === 200 && r.json.find((x) => x.deck === "lower").price === sleeperBus.fare + s0.busLowerDeckExtra + 111);
+} else console.log("SKIP  no 2+1 sleeper bus on the sample route");
 await expect("restore the lower-deck extra", call("PATCH", "/admin/settings", { busLowerDeckExtra: s0.busLowerDeckExtra }, T), 200);
 
 // ── Bookings ──
