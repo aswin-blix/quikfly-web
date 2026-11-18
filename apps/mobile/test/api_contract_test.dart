@@ -43,6 +43,10 @@ void main() {
     // A ride booked ahead (India time, two days out) is quoted and parsed with its pickup time.
     final ahead = DateTime.now().toUtc().add(const Duration(days: 2, minutes: 330)).toIso8601String().substring(0, 16);
     expect(await api.rideQuotes(ServiceKey.car, a.id, b.id, scheduledFor: ahead), isNotEmpty);
+    // Through a stop: the trip gets longer.
+    final stop = (await api.places('')).firstWhere((p) => p.id != a.id && p.id != b.id);
+    final via = await api.rideQuotes(ServiceKey.car, a.id, b.id, stopIds: [stop.id]);
+    expect(via.first.durationMin, greaterThan(quotes.first.durationMin));
     final ride = await api.bookRide(quotes.first.option.id, a.id, b.id, PaymentMethod.cash);
     expect(ride.otp, hasLength(4));
     final link = await api.shareRide(ride.id);

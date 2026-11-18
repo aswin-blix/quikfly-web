@@ -184,7 +184,7 @@ class Driver {
 }
 
 class Ride {
-  const Ride(this.id, this.quote, this.pickup, this.drop, this.driver, this.otp, this.payment, {this.scheduledFor});
+  const Ride(this.id, this.quote, this.pickup, this.drop, this.driver, this.otp, this.payment, {this.scheduledFor, this.stops = const []});
   final String id, otp, payment;
   final FareQuote quote;
   final Place pickup, drop;
@@ -192,9 +192,13 @@ class Ride {
 
   /// Pickup time of a ride booked ahead (local time); null for ride-now. Started from My Trips.
   final DateTime? scheduledFor;
+
+  /// Stops between pickup and drop, in order.
+  final List<Place> stops;
   factory Ride.fromJson(Json j) => Ride(j['id'] as String, FareQuote.fromJson(j['quote'] as Json), Place.fromJson(j['pickup'] as Json),
       Place.fromJson(j['drop'] as Json), Driver.fromJson(j['driver'] as Json), '${j['otp']}', '${j['payment']}',
-      scheduledFor: j['scheduledFor'] == null ? null : DateTime.tryParse('${j['scheduledFor']}')?.toLocal());
+      scheduledFor: j['scheduledFor'] == null ? null : DateTime.tryParse('${j['scheduledFor']}')?.toLocal(),
+      stops: ((j['stops'] as List?) ?? const []).map((p) => Place.fromJson(p as Json)).toList());
 }
 
 class Bus {
@@ -497,6 +501,7 @@ class Settings {
   int get rideCancelFeePercent => _i('rideCancelFeePercent', 10);
   int get rideCancelFeeCap => _i('rideCancelFeeCap', 100);
   int get rideCancelFreeMinutes => _i('rideCancelFreeMinutes', 2);
+  int get rideStopMinutes => _i('rideStopMinutes', 3);
   int get rideScheduleMinMinutes => _i('rideScheduleMinMinutes', 30);
   int get rideScheduleMaxDays => _i('rideScheduleMaxDays', 30);
   int get rideScheduleFreeCancelMinutes => _i('rideScheduleFreeCancelMinutes', 60);
@@ -591,6 +596,9 @@ abstract final class Rules {
 
   /// Scheduled rides: driver assigned, and "Start ride" open, this many minutes before pickup (RIDE_SCHEDULE).
   static const rideStartWindowMinutes = 15;
+
+  /// Stops a rider can add between pickup and drop (RIDE_MAX_STOPS).
+  static const rideMaxStops = 2;
 
   /// "tn09 2019-0001234" → "TN0920190001234"
   static String compactCode(String s) => s.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');

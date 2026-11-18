@@ -101,6 +101,8 @@ export interface SharedRide {
   startedAt: string;
   pickup: Place;
   drop: Place;
+  /** Stops between pickup and drop, in order. */
+  stops: Place[];
   distanceKm: number;
   durationMin: number;
   etaMin: number;
@@ -191,6 +193,8 @@ export interface Ride {
   payment: PaymentMethod;
   /** Pickup time of a ride booked ahead (ISO, India time); null for ride-now. The rider starts it from My Trips. */
   scheduledFor: string | null;
+  /** Stops between pickup and drop, in order (up to RIDE_MAX_STOPS). */
+  stops: Place[];
 }
 
 export interface Bus {

@@ -27,10 +27,23 @@ Pt driverStartFor(Pt pickup) => Offset(math.max(4, pickup.dx - 14), math.min(96,
 
 enum RidePhase { plan, searching, arriving, ontrip, done }
 
+/// Point on the route through [points] (pickup, stops…, drop) at t: shared out by leg length (as the website).
+Pt routeVia(List<Pt> points, double t) {
+  if (points.length < 2) return points.first;
+  final lens = [for (var i = 1; i < points.length; i++) (points[i] - points[i - 1]).distance];
+  final total = lens.fold<double>(0, (a, b) => a + b);
+  var left = t.clamp(0.0, 1.0) * (total == 0 ? 1 : total);
+  for (var i = 0; i < lens.length; i++) {
+    if (left <= lens[i] || i == lens.length - 1) return routePoint(points[i], points[i + 1], lens[i] == 0 ? 1 : math.min(1, left / lens[i]));
+    left -= lens[i];
+  }
+  return points.last;
+}
+
 /// Simulated vehicle position for a phase, t = progress through that phase.
-Pt vehiclePosition(RidePhase phase, Pt pickup, Pt drop, double t) {
+Pt vehiclePosition(RidePhase phase, Pt pickup, Pt drop, double t, [List<Pt> stops = const []]) {
   if (phase == RidePhase.done) return drop;
-  if (phase == RidePhase.ontrip) return routePoint(pickup, drop, t);
+  if (phase == RidePhase.ontrip) return routeVia([pickup, ...stops, drop], t);
   final s = driverStartFor(pickup);
   return Offset(s.dx + (pickup.dx - s.dx) * t, s.dy + (pickup.dy - s.dy) * t);
 }
@@ -43,6 +56,7 @@ class CityMap extends StatefulWidget {
     required this.places,
     this.pickup,
     this.drop,
+    this.stops = const [],
     this.vehicle,
     this.vehicleFrom,
     this.showRoute = false,
@@ -51,6 +65,7 @@ class CityMap extends StatefulWidget {
   });
   final List<Place> places;
   final Place? pickup, drop;
+  final List<Place> stops;
   final Pt? vehicle, vehicleFrom;
   final bool showRoute, searching, bike;
 
@@ -97,6 +112,7 @@ class _CityMapState extends State<CityMap> with SingleTickerProviderStateMixin {
                   places: widget.places,
                   pickup: widget.pickup,
                   drop: widget.drop,
+                  stops: widget.stops,
                   vehicle: widget.vehicle,
                   vehicleFrom: widget.vehicleFrom,
                   showRoute: widget.showRoute,
@@ -127,6 +143,7 @@ class _MapPainter extends CustomPainter {
     required this.places,
     this.pickup,
     this.drop,
+    this.stops = const [],
     this.vehicle,
     this.vehicleFrom,
     required this.showRoute,
@@ -136,6 +153,7 @@ class _MapPainter extends CustomPainter {
   final QfColors colors;
   final List<Place> places;
   final Place? pickup, drop;
+  final List<Place> stops;
   final Pt? vehicle, vehicleFrom;
   final bool showRoute, bike;
   final double? pulse;
@@ -160,6 +178,7 @@ class _MapPainter extends CustomPainter {
       if (drop != null) placePt(drop!),
       // The route's bulge, so the camera stays still while the vehicle drives along it.
       if (pickup != null && drop != null) routePoint(placePt(pickup!), placePt(drop!), 0.5),
+      for (final s in stops) placePt(s),
       ?vehicleFrom,
     ];
     var s = math.max(size.width, size.height) / 100;
@@ -226,17 +245,20 @@ class _MapPainter extends CustomPainter {
 
     // Landmarks
     for (final p in places) {
-      if (p.id == pickup?.id || p.id == drop?.id) continue;
+      if (p.id == pickup?.id || p.id == drop?.id || stops.any((s) => s.id == p.id)) continue;
       canvas.drawCircle(Offset(p.x, p.y), 0.7, Paint()..color = colors.mapLandmark.withValues(alpha: 0.6));
       _text(canvas, p.name.split(' ').first, Offset(p.x + 1.4, p.y - 1.3), 2.2, colors.mapLandmarkText.withValues(alpha: 0.75));
     }
 
     final pu = pickup, dr = drop;
     if (pu != null && dr != null && showRoute) {
-      final a = placePt(pu), b = placePt(dr), c = _control(a, b);
-      final route = Path()
-        ..moveTo(a.dx, a.dy)
-        ..quadraticBezierTo(c.dx, c.dy, b.dx, b.dy);
+      // One curved leg from each point to the next: pickup → stops → drop.
+      final pts = [placePt(pu), for (final s in stops) placePt(s), placePt(dr)];
+      final route = Path()..moveTo(pts.first.dx, pts.first.dy);
+      for (var i = 1; i < pts.length; i++) {
+        final c = _control(pts[i - 1], pts[i]);
+        route.quadraticBezierTo(c.dx, c.dy, pts[i].dx, pts[i].dy);
+      }
       canvas.drawPath(route, stroke(colors.accent.withValues(alpha: 0.25), 2.2));
       _dashed(canvas, route, stroke(colors.accent, 0.8), 2, 2);
     }
@@ -259,6 +281,14 @@ class _MapPainter extends CustomPainter {
       canvas.drawRect(r, Paint()..color = Brand.gold);
       canvas.drawRect(r, stroke(colors.mapPinOutline, 0.8));
       _label(canvas, at, dr.name, Brand.gold, pu != null && dr.y <= pu.y ? -5.5 : 5.5);
+    }
+    // Stops: numbered pins.
+    for (var i = 0; i < stops.length; i++) {
+      final at = placePt(stops[i]);
+      canvas.drawCircle(at, 2, Paint()..color = colors.accent);
+      canvas.drawCircle(at, 2, stroke(colors.mapPinOutline, 0.7));
+      _text(canvas, '${i + 1}', Offset(at.dx - 0.7, at.dy - 1.4), 2.2, Brand.onGold);
+      _label(canvas, at, stops[i].name, colors.accent, pu != null && stops[i].y >= pu.y ? 5.5 : -5.5);
     }
     if (vehicle != null) _vehicle(canvas, vehicle!);
 
@@ -321,6 +351,7 @@ class _MapPainter extends CustomPainter {
   bool shouldRepaint(_MapPainter old) =>
       old.pickup != pickup ||
       old.drop != drop ||
+      old.stops != stops ||
       old.vehicle != vehicle ||
       old.vehicleFrom != vehicleFrom ||
       old.showRoute != showRoute ||

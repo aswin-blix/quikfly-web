@@ -58,8 +58,8 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | DELETE 🔒 | `/me/contacts/:id` | remove a contact |
 | GET 🔒 | `/me/wallet` | wallet history, newest first: `welcome`, `payment`, `refund`, `referral`, `opening` |
 | GET | `/places?q=` | place autocomplete (visible catalog places) |
-| POST | `/rides/quote` | `{ service, pickupId, dropId, scheduledFor? }` → fares for each visible ride option, each with its `surge`. `scheduledFor` (local `YYYY-MM-DDTHH:mm`, India) prices a ride booked ahead at its pickup hour; it must be `rideScheduleMinMinutes`–`rideScheduleMaxDays` ahead (400 otherwise) (1 = none; never above the `surgeCap` setting, MVAG 2025) |
-| POST 🔒 | `/rides` | `{ optionId, pickupId, dropId, payment, scheduledFor? }` → ride with driver and OTP; `scheduledFor` books ahead (fare locked at booking) |
+| POST | `/rides/quote` | `{ service, pickupId, dropId, scheduledFor?, stopIds? }` → fares for each visible ride option (through up to 2 `stopIds`, in order: distance is the sum of the legs, plus `rideStopMinutes` of waiting per stop), each with its `surge`. `scheduledFor` (local `YYYY-MM-DDTHH:mm`, India) prices a ride booked ahead at its pickup hour; it must be `rideScheduleMinMinutes`–`rideScheduleMaxDays` ahead (400 otherwise) (1 = none; never above the `surgeCap` setting, MVAG 2025) |
+| POST 🔒 | `/rides` | `{ optionId, pickupId, dropId, payment, scheduledFor?, stopIds? }` → ride with driver, OTP and `stops`; `scheduledFor` books ahead (fare locked at booking) |
 | GET 🔒 | `/rides/:id` | the rider's own ride (with `scheduledFor`, null for ride-now) |
 | POST 🔒 | `/rides/:id/start` | start a scheduled ride: allowed from 15 min (`RIDE_SCHEDULE.startWindowMinutes`) before pickup (409 earlier or if cancelled); the share link counts from then |
 | POST 🔒 | `/rides/:id/cancel` | cancel a ride |

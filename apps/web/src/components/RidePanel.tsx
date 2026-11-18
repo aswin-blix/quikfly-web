@@ -3,9 +3,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useHideBottomNav } from "./BottomNav";
-import { ArrowUpDown, Clock, MapPin, Navigation, Phone, Share2, Siren, Star, Users, X } from "lucide-react";
+import { ArrowUpDown, Clock, MapPin, Navigation, Phone, Plus, Share2, Siren, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { RIDE_CANCEL_REASONS, RIDE_SCHEDULE, RIDE_SIMULATION, isNightHour, rideCancelFee } from "@quikfly/shared";
+import { RIDE_CANCEL_REASONS, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, isNightHour, rideCancelFee } from "@quikfly/shared";
 import type { FareQuote, PaymentMethod, Place, Ride, RideCancelReason, SavedPlace } from "@quikfly/shared";
 import { trackUrl } from "@/lib/account";
 import { Link } from "@/lib/nav";
@@ -41,6 +41,10 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
   const { user, requireAuth, refreshBookings, toast } = useApp();
   const [pickup, setPickup] = useState<Place | null>(null);
   const [drop, setDrop] = useState<Place | null>(null);
+  /** Stops between pickup and drop, in order (an empty picker is null). */
+  const [stops, setStops] = useState<(Place | null)[]>([]);
+  const chosenStops = stops.filter((s): s is Place => !!s);
+  const stopKey = chosenStops.map((s) => s.id).join(",");
   // Places arrive with /config: once they do, pre-fill from the link (or a sensible default).
   const placesReady = PLACES.length > 0;
   useEffect(() => {
@@ -107,13 +111,14 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
     if (!pickup || !drop || pickup.id === drop.id) { setQuotes(null); return; }
     let live = true;
     setLoadingQuotes(true);
-    api.rides.quote(service, pickup.id, drop.id, scheduledFor).then((q) => {
+    api.rides.quote(service, pickup.id, drop.id, scheduledFor, chosenStops.map((s) => s.id)).then((q) => {
       if (!live) return;
       setQuotes(q); setSelected((s) => q.find((x) => x.option.id === s)?.option.id ?? q[0].option.id);
       setLoadingQuotes(false);
     }, (e: Error) => { if (live) { setQuotes(null); setLoadingQuotes(false); toast(e.message, "err"); } });
     return () => { live = false; };
-  }, [pickup, drop, service, scheduledFor, toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickup, drop, service, scheduledFor, stopKey, toast]);
 
   // Starting a scheduled ride from My Trips: assign the driver now and run the live trip.
   const resumeKey = resume ? `${resume.rideId}:${resume.bookingId}` : "";
@@ -124,7 +129,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
       try {
         const [r, b] = await Promise.all([api.rides.start(resume.rideId), api.bookings.get(resume.bookingId)]);
         if (!live) return;
-        setPickup(r.pickup); setDrop(r.drop);
+        setPickup(r.pickup); setDrop(r.drop); setStops(r.stops ?? []);
         setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setT(0); setPhase("arriving");
         autoShareIfNight(r);
       } catch (e) { if (live) toast((e as Error).message, "err"); }
@@ -157,11 +162,11 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
   const quote = quotes?.find((q) => q.option.id === selected);
   const driverStart: Pt | null = useMemo(() => pickup ? driverStartFor(pickup) : null, [pickup]);
   const vehicle: Pt | null = pickup && drop && (phase === "arriving" || phase === "ontrip" || phase === "done")
-    ? vehiclePosition(phase, pickup, drop, t) : null;
+    ? vehiclePosition(phase, pickup, drop, t, chosenStops) : null;
 
   function reset() {
     cancelAnimationFrame(raf.current);
-    setPhase("plan"); setRide(null); setBookingId(null); setT(0); setRating(0); setCancelling(false); setReason(null); setWhen("now");
+    setPhase("plan"); setRide(null); setBookingId(null); setT(0); setRating(0); setCancelling(false); setReason(null); setWhen("now"); setStops([]);
   }
 
   const walletShort = !!user && !!quote && user.walletBalance < quote.fare;
@@ -172,13 +177,14 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
       setPhase("searching");
       let r: Ride | null = null;
       try {
-        r = await api.rides.book({ optionId: quote.option.id, pickupId: pickup.id, dropId: drop.id, payment, scheduledFor });
+        r = await api.rides.book({ optionId: quote.option.id, pickupId: pickup.id, dropId: drop.id, payment, scheduledFor, stopIds: chosenStops.map((s) => s.id) });
+        const stopLine: [string, string][] = r.stops?.length ? [["Stops", r.stops.map((s) => s.name).join(" → ")]] : [];
         // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
         const b = await api.bookings.create({
           service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, rideId: r.id, payment,
           lines: r.scheduledFor
-            ? [["Pickup time", prettyDateTime(r.scheduledFor)], ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]]
-            : [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
+            ? [["Pickup time", prettyDateTime(r.scheduledFor)], ...stopLine, ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]]
+            : [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ...stopLine, ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
         });
         if (r.scheduledFor) {
           setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setPhase("scheduled");
@@ -225,8 +231,18 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
           <>
             <div className="relative space-y-2">
               <PlacePicker icon={<span className="w-2.5 h-2.5 rounded-full bg-success" />} placeholder="Pickup location" value={pickup} onChange={setPickup} exclude={drop?.id} saved={saved} />
+              {stops.map((s, i) => (
+                <div key={i} className="flex items-center gap-2 pr-10">
+                  <div className="flex-1 min-w-0">
+                    <PlacePicker icon={<span className="w-4 h-4 rounded-full bg-gold text-on-brand text-[10px] font-bold grid place-items-center">{i + 1}</span>}
+                      placeholder={`Stop ${i + 1}`} value={s} onChange={(p) => setStops((list) => list.map((x, k) => (k === i ? p : x)))} saved={saved} />
+                  </div>
+                  <button type="button" aria-label={`Remove stop ${i + 1}`} onClick={() => setStops((list) => list.filter((_, k) => k !== i))}
+                    className="w-8 h-8 shrink-0 rounded-full border border-line grid place-items-center hover:border-danger hover:text-danger"><X size={14} /></button>
+                </div>
+              ))}
               <PlacePicker icon={<span className="w-2.5 h-2.5 bg-brand" />} placeholder="Where to?" value={drop} onChange={setDrop} exclude={pickup?.id} saved={saved} />
-              <button onClick={() => { setPickup(drop); setDrop(pickup); }} className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-smoke border border-line grid place-items-center hover:border-gold" title="Swap">
+              <button onClick={() => { setPickup(drop); setDrop(pickup); setStops((list) => [...list].reverse()); }} className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-smoke border border-line grid place-items-center hover:border-gold" title="Swap">
                 <ArrowUpDown size={14} />
               </button>
             </div>
@@ -241,6 +257,12 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
                   })}
                 </div>
               </div>
+            )}
+
+            {stops.length < RIDE_MAX_STOPS && (
+              <button type="button" onClick={() => setStops((list) => [...list, null])} className="text-sm text-gold flex items-center gap-1.5">
+                <Plus size={15} />Add a stop <span className="text-xs text-muted">({settings.rideStopMinutes} min wait included per stop)</span>
+              </button>
             )}
 
             <div>
@@ -431,7 +453,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
 
       <div className="h-[380px] lg:h-auto lg:min-h-[520px]">
         <CityMap
-          pickup={pickup} drop={drop} kind={service}
+          pickup={pickup} drop={drop} stops={chosenStops} kind={service}
           showRoute={!!drop && phase !== "arriving"}
           searching={phase === "searching"}
           vehicle={vehicle}

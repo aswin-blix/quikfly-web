@@ -1,4 +1,4 @@
-import { RIDE_SCHEDULE, RIDE_SIM, localToIso, minutesUntilStart, pick, rideQuotes, scheduleError, type FareQuote, type PaymentMethod, type Ride } from "@quikfly/shared";
+import { RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIM, localToIso, minutesUntilStart, pick, rideQuotes, scheduleError, type FareQuote, type PaymentMethod, type Place, type Ride } from "@quikfly/shared";
 import { businessHour } from "../config";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
@@ -10,8 +10,11 @@ import { getSettings } from "./settings";
  * Fares for every visible option of a service, with surge from Settings. `scheduledFor`
  * (local "YYYY-MM-DDTHH:mm", India) prices a ride booked ahead at its pickup hour.
  */
-export async function quoteRides(db: D1Database, service: "bike" | "car", pickupId: string, dropId: string, scheduledFor?: string): Promise<FareQuote[]> {
+export async function quoteRides(
+  db: D1Database, service: "bike" | "car", pickupId: string, dropId: string, scheduledFor?: string, stopIds: string[] = [],
+): Promise<FareQuote[]> {
   if (pickupId === dropId) throw badRequest("Pickup and drop must be different places.");
+  const stops = await rideStops(db, pickupId, dropId, stopIds);
   const [a, b, options, settings] = await Promise.all([
     placeById(db, pickupId), placeById(db, dropId), visible(db, "rideOption"), getSettings(db),
   ]);
@@ -20,15 +23,25 @@ export async function quoteRides(db: D1Database, service: "bike" | "car", pickup
     if (err) throw badRequest(err);
   }
   const hour = scheduledFor ? parseInt(scheduledFor.slice(11, 13), 10) : businessHour();
-  return rideQuotes(options.filter((o) => o.service === service), a, b, settings, hour);
+  return rideQuotes(options.filter((o) => o.service === service), a, b, settings, hour, stops);
+}
+
+/** Checks the stops (up to RIDE_MAX_STOPS visible places, none repeating the place before it) and loads them. */
+export async function rideStops(db: D1Database, pickupId: string, dropId: string, stopIds: string[]): Promise<Place[]> {
+  if (stopIds.length > RIDE_MAX_STOPS) throw badRequest(`Add up to ${RIDE_MAX_STOPS} stops.`);
+  const route = [pickupId, ...stopIds, dropId];
+  if (route.some((id, i) => i > 0 && id === route[i - 1])) throw badRequest("A stop can't be the same as the place before it.");
+  return Promise.all(stopIds.map((id) => placeById(db, id)));
 }
 
 export async function bookRide(
   db: D1Database, userId: string,
-  input: { optionId: string; pickupId: string; dropId: string; payment: PaymentMethod; scheduledFor?: string },
+  input: { optionId: string; pickupId: string; dropId: string; payment: PaymentMethod; scheduledFor?: string; stopIds?: string[] },
 ): Promise<Ride> {
   const option = await visibleById(db, "rideOption", input.optionId);
-  const quote = (await quoteRides(db, option.service, input.pickupId, input.dropId, input.scheduledFor)).find((q) => q.option.id === option.id)!;
+  const stopIds = input.stopIds ?? [];
+  const quote = (await quoteRides(db, option.service, input.pickupId, input.dropId, input.scheduledFor, stopIds)).find((q) => q.option.id === option.id)!;
+  const stops = await rideStops(db, input.pickupId, input.dropId, stopIds);
   const drivers = await visible(db, "driver");
   if (!drivers.length) throw badRequest("No drivers are available right now. Please try again shortly.");
 
@@ -47,6 +60,7 @@ export async function bookRide(
       plate: `${pick(RIDE_SIM.plateStates, seed >> 3)} ${pick(RIDE_SIM.plateLetters, seed >> 5)} ${1000 + (seed % 8999)}`,
     },
     scheduledFor: input.scheduledFor ? localToIso(input.scheduledFor) : null,
+    stops,
   };
   await db.prepare("INSERT INTO rides (id, user_id, status, data, created_at) VALUES (?, ?, 'confirmed', ?, ?)")
     .bind(ride.id, userId, JSON.stringify(ride), new Date().toISOString()).run();
@@ -62,7 +76,7 @@ export async function cancelRide(db: D1Database, userId: string, rideId: string)
 export async function getRide(db: D1Database, userId: string, rideId: string): Promise<Ride> {
   const row = await db.prepare("SELECT data FROM rides WHERE id = ? AND user_id = ?").bind(rideId, userId).first<{ data: string }>();
   if (!row) throw notFound("Ride not found.");
-  return { scheduledFor: null, ...JSON.parse(row.data) } as Ride;
+  return { scheduledFor: null, stops: [], ...JSON.parse(row.data) } as Ride;
 }
 
 /**
@@ -73,7 +87,7 @@ export async function startRide(db: D1Database, userId: string, rideId: string):
   const row = await db.prepare("SELECT data, status FROM rides WHERE id = ? AND user_id = ?").bind(rideId, userId).first<{ data: string; status: string }>();
   if (!row) throw notFound("Ride not found.");
   if (row.status === "cancelled") throw conflict("This ride was cancelled.");
-  const ride = { scheduledFor: null, ...JSON.parse(row.data) } as Ride;
+  const ride = { scheduledFor: null, stops: [], ...JSON.parse(row.data) } as Ride;
   if (!ride.scheduledFor) throw badRequest("Only scheduled rides are started this way.");
   const wait = minutesUntilStart(ride.scheduledFor, RIDE_SCHEDULE.startWindowMinutes);
   if (wait > 0) throw conflict(`Your driver is assigned ${RIDE_SCHEDULE.startWindowMinutes} minutes before pickup. Start the ride in ${wait} minute${wait === 1 ? "" : "s"}.`);
@@ -86,5 +100,5 @@ export async function ownRide(db: D1Database, userId: string, rideId: string): P
   const row = await db.prepare("SELECT data, status FROM rides WHERE id = ? AND user_id = ?").bind(rideId, userId).first<{ data: string; status: string }>();
   if (!row) throw notFound("Ride not found.");
   if (row.status === "cancelled") throw badRequest("This ride was cancelled.");
-  return { scheduledFor: null, ...JSON.parse(row.data) } as Ride;
+  return { scheduledFor: null, stops: [], ...JSON.parse(row.data) } as Ride;
 }

@@ -104,10 +104,16 @@ class QuikFlyApi {
   // ── Rides ──
   Future<List<Place>> places(String q) => _get('/places', _listOf(Place.fromJson), {'q': q});
   /// [scheduledFor] = local "YYYY-MM-DDTHH:mm" (India) for a ride booked ahead.
-  Future<List<FareQuote>> rideQuotes(ServiceKey service, String pickupId, String dropId, {String? scheduledFor}) => _post('/rides/quote',
-      _listOf(FareQuote.fromJson), {'service': service.name, 'pickupId': pickupId, 'dropId': dropId, 'scheduledFor': ?scheduledFor});
-  Future<Ride> bookRide(String optionId, String pickupId, String dropId, PaymentMethod payment, {String? scheduledFor}) => _post('/rides',
-      (d) => Ride.fromJson(d as Json), {'optionId': optionId, 'pickupId': pickupId, 'dropId': dropId, 'payment': payment.name, 'scheduledFor': ?scheduledFor});
+  /// [stopIds] = up to Rules.rideMaxStops places between pickup and drop, in order.
+  Future<List<FareQuote>> rideQuotes(ServiceKey service, String pickupId, String dropId, {String? scheduledFor, List<String> stopIds = const []}) =>
+      _post('/rides/quote', _listOf(FareQuote.fromJson), {
+        'service': service.name, 'pickupId': pickupId, 'dropId': dropId, 'scheduledFor': ?scheduledFor, if (stopIds.isNotEmpty) 'stopIds': stopIds,
+      });
+  Future<Ride> bookRide(String optionId, String pickupId, String dropId, PaymentMethod payment, {String? scheduledFor, List<String> stopIds = const []}) =>
+      _post('/rides', (d) => Ride.fromJson(d as Json), {
+        'optionId': optionId, 'pickupId': pickupId, 'dropId': dropId, 'payment': payment.name, 'scheduledFor': ?scheduledFor,
+        if (stopIds.isNotEmpty) 'stopIds': stopIds,
+      });
   Future<Ride> ride(String id) => _get('/rides/$id', (d) => Ride.fromJson(d as Json));
 
   /// Starts a scheduled ride near pickup time (driver assigned, live trip begins).
