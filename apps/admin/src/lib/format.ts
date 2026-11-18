@@ -1,5 +1,5 @@
 // Formatting helpers (no React). Indian number grouping and dates in India time.
-import type { BookingStatus, ServiceKey } from "@quikfly/shared";
+import type { BookingStatus, ServiceKey, VendorStatus } from "@quikfly/shared";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -39,3 +39,8 @@ export const STATUS_STYLE: Record<BookingStatus, { label: string; cls: string }>
 };
 
 export const pct = (part: number, whole: number) => (whole ? Math.round((part / whole) * 100) : 0);
+
+/** Partner application status, as the admin panel names it. */
+export const VENDOR_TAB_LABEL: Record<VendorStatus, string> = {
+  submitted: "To review", draft: "Being filled", onboarding: "Onboarding", active: "Live", rejected: "Rejected", blocked: "Blocked",
+};
