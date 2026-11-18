@@ -9,6 +9,7 @@ import {
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { documentResponse, loadVendor, parseSections, toApplication } from "../vendors";
 import { fleetOf } from "../fleet";
+import { balanceOf } from "../partner-trips";
 import { getSettings } from "../settings";
 import { notify } from "../notifications";
 import { auditStatement } from "./audit";
@@ -46,7 +47,11 @@ async function found(db: D1Database, id: string) {
 
 export async function vendorDetail(db: D1Database, id: string): Promise<AdminVendorDetail> {
   const { v, vehicle } = await found(db, id);
-  return { application: toApplication(v, vehicle), fleet: await fleetOf(db, v.id), bankAccount: v.bank_account, customerId: v.user_id };
+  const pending = await db.prepare("SELECT amount_paise FROM vendor_payouts WHERE vendor_id = ? AND status = 'requested'").bind(v.id).first<{ amount_paise: number }>();
+  return {
+    application: toApplication(v, vehicle), fleet: await fleetOf(db, v.id), bankAccount: v.bank_account, customerId: v.user_id,
+    money: { balancePaise: await balanceOf(db, v.id), pendingPayoutPaise: pending?.amount_paise ?? null },
+  };
 }
 
 export async function vendorDocument(db: D1Database, bucket: R2Bucket | undefined, id: string, kind: "photo" | "rc" | "insurance") {

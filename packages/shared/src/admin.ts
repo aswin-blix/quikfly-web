@@ -94,6 +94,8 @@ export interface AdminBookingDetail {
   refundIfCancelled: { amount: number; percent: number } | null;
   /** Audit entries for this booking (staff cancellations, completions). */
   history: AuditEntry[];
+  /** The partner vehicle running this trip, if any. */
+  partner: { vendorId: string; vendorName: string; vehicleId: string; regNumber: string; driverName: string | null } | null;
 }
 
 export const BOOKING_STATUSES = ["confirmed", "ongoing", "completed", "cancelled"] as const;

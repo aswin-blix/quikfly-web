@@ -6,6 +6,7 @@ import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
 import { jsonBody } from "../lib/validate";
 import { requireUser } from "../middleware/auth";
+import { partnerMoney, partnerSummary, partnerTrips, payWhatIsOwed, requestPayout } from "../services/partner-trips";
 import {
   addDriver, addVehicle, assignDriver, deleteVehicle, isVehicleDocument, myDriverLicencePhoto, myFleet, myVehicleDocument, removeDriver,
   saveDriverLicence, saveVehicle, setVehicleActive, submitVehicle, uploadDriverLicence, uploadVehicleDocument,
@@ -83,4 +84,13 @@ export const vendor = new Hono<AppEnv>()
     if (body.vehicleId !== null && typeof body.vehicleId !== "string") throw badRequest('"vehicleId" must be a vehicle id or null.');
     return c.json(await assignDriver(c.env.DB, c.var.user.id, c.req.param("id"), body.vehicleId as string | null));
   })
-  .delete("/drivers/:id", async (c) => c.json(await removeDriver(c.env.DB, c.env.DOCS, c.var.user.id, c.req.param("id"))));
+  .delete("/drivers/:id", async (c) => c.json(await removeDriver(c.env.DB, c.env.DOCS, c.var.user.id, c.req.param("id"))))
+
+  // ── Trips and money (amounts in paise) ──
+  // ?from=YYYY-MM-DD&to=YYYY-MM-DD (India dates; default the last 7 days)
+  .get("/trips", async (c) => c.json(await partnerTrips(c.env.DB, c.var.user.id, c.req.query("from"), c.req.query("to"))))
+  .get("/summary", async (c) => c.json(await partnerSummary(c.env.DB, c.var.user.id, c.req.query("from"), c.req.query("to"))))
+  .get("/money", async (c) => c.json(await partnerMoney(c.env.DB, c.var.user.id)))
+  .post("/payouts", async (c) => c.json(await requestPayout(c.env.DB, c.var.user.id), 201))
+  // Demo: pays what the partner owes QuikFly without collecting anything.
+  .post("/payments", async (c) => c.json(await payWhatIsOwed(c.env.DB, c.var.user.id)));

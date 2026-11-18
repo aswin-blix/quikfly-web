@@ -493,6 +493,85 @@ if (pvUp.status === 409) {
   await expect("remove a driver", call("DELETE", `/vendor/drivers/${d2}`, null, PV), 200, (j) => !j.drivers.some((d) => d.id === d2));
   await expect("fleet decisions are audited", call("GET", `/admin/audit?entity=vendor&entityId=${vid}`, null, T), 200,
     (j) => ["vendor.vehicle.approve", "vendor.vehicle.activate", "vendor.driver.approve", "vendor.vehicle.block", "vendor.vehicle.docs.approve"].every((a) => j.items.some((e) => e.action === a)));
+
+  // Trips and money (part 3): a partner cab takes rides; completing settles earnings; payouts
+  const RC = (await call("POST", "/auth/verify", { phone: "6" + String(Date.now()).slice(-9), otp: OTP })).json.token;
+  const regCar = randomReg();
+  const withCar = (await call("POST", "/vendor/vehicles", { type: "car", fuel: "cng_lpg", regNumber: regCar, purchaseDate: dayOffset(-150) }, PV)).json;
+  const car = withCar.vehicles.find((v) => v.regNumber === regCar).id;
+  await call("PUT", `/vendor/vehicles/${car}/rc`, { ownerName: "Smoke Vendor", validTill: dayOffset(900) }, PV);
+  await call("PUT", `/vendor/vehicles/${car}/insurance`, { insurer: "Smoke General", policyNumber: "CAR-778899", validTill: dayOffset(300) }, PV);
+  await call("PUT", `/vendor/vehicles/${car}/audit`, { date: dayOffset(2), slot: "morning" }, PV);
+  await upload(`/vendor/vehicles/${car}/documents/rc`, JPEG, PV);
+  await upload(`/vendor/vehicles/${car}/documents/insurance`, JPEG, PV);
+  await call("POST", `/vendor/vehicles/${car}/submit`, null, PV);
+  await call("POST", `/admin/vendors/${vid}/vehicles/${car}/review`, { decision: "approve" }, T);
+  await call("POST", `/admin/vendors/${vid}/vehicles/${car}/sticker`, null, T);
+  await expect("put the partner's own driver on the cab", call("POST", `/vendor/drivers/${d1}/assign`, { vehicleId: car }, PV), 200, (j) => j.vehicles.find((v) => v.id === car).driverId === d1);
+  const carPlate = regCar.replace(/^([A-Z]{2})(\d{2})([A-Z]+)(\d{4})$/, "$1 $2 $3 $4");
+  // Other live partner cabs may exist; each booked ride keeps its cab busy, so the next ride tries another.
+  const ridesToCancel = [];
+  async function partnerRide(payment) {
+    for (let i = 0; i < 8; i++) {
+      const r = (await call("POST", "/rides", { optionId: "mini", pickupId: places[0].id, dropId: places[1].id, payment }, RC)).json;
+      const b = (await call("POST", "/bookings", { service: "car", title: "Smoke partner ride", subtitle: "A → B", payment, lines: [], rideId: r.id }, RC)).json;
+      if (r.driver?.plate === carPlate) return { r, b };
+      ridesToCancel.push(b.id);
+    }
+    return null;
+  }
+  const upiRide = await partnerRide("upi");
+  check("a cab ride goes to the live partner cab, with its driver and plate", !!upiRide && upiRide.r.driver.name === "Smoke Vendor", JSON.stringify(upiRide?.r.driver));
+  if (upiRide) {
+    await expect("the partner sees the trip as an estimate before it's done", call("GET", "/vendor/trips", null, PV), 200,
+      (j) => j.some((t) => t.bookingId === upiRide.b.id && t.estimate && t.status === "confirmed" && t.regNumber === regCar));
+    await call("POST", `/bookings/${upiRide.b.id}/complete`, null, RC);
+    const gross = upiRide.b.amount * 100;
+    const fareX = Math.round(gross / (1 + s0.gstRides / 100));
+    const earn1 = fareX - Math.round((fareX * s0.vendorCommissionPercent) / 100) - Math.round((gross * 0.1) / 100);
+    await expect("completing settles the trip: fare less GST, commission and 0.1% TDS", call("GET", "/vendor/trips", null, PV), 200,
+      (j) => { const t = j.find((x) => x.bookingId === upiRide.b.id); return t && !t.estimate && t.earningPaise === earn1 && t.grossPaise === gross && t.gstPaise === gross - fareX; });
+    await expect("the dashboard counts it for the cab and the driver", call("GET", "/vendor/summary", null, PV), 200,
+      (j) => j.revenue.trips >= 1 && j.vehicles.some((v) => v.vehicleId === car && v.trips === 1) && j.drivers.some((d) => d.driverId === d1));
+    await expect("a bad date range is refused", call("GET", "/vendor/summary?from=2026-12-10&to=2026-12-01", null, PV), 400);
+    await expect("QuikFly owes the partner the earning", call("GET", "/vendor/money", null, PV), 200,
+      (j) => j.balancePaise === earn1 && j.entries[0].kind === "earning" && j.statements.length >= 1 && j.pendingPayout === null);
+    await expect("payouts wait for the minimum", call("POST", "/vendor/payouts", null, PV), s0.vendorMinPayout * 100 > earn1 ? 409 : 201);
+    await call("PATCH", "/admin/settings", { vendorMinPayout: 1 }, T);
+    await eventually("the lower minimum reaches the API", () => call("GET", "/config"), (r) => r.json?.settings?.vendorMinPayout === 1);
+    const req = await expect("request a payout", call("POST", "/vendor/payouts", null, PV), 201, (j) => j.pendingPayout?.amountPaise === earn1);
+    await expect("only one open request", call("POST", "/vendor/payouts", null, PV), 409);
+    await expect("staff see it with the bank account", call("GET", "/admin/vendors/payouts", null, T), 200,
+      (j) => j.some((x) => x.id === req.pendingPayout.id && x.bank?.account === "998877665544"));
+    await expect("paying needs the bank reference", call("POST", `/admin/vendors/payouts/${req.pendingPayout.id}`, { decision: "paid" }, T), 400);
+    await expect("mark it paid", call("POST", `/admin/vendors/payouts/${req.pendingPayout.id}`, { decision: "paid", reference: "UTR20261118001" }, T), 200, (j) => !j.some((x) => x.id === req.pendingPayout.id));
+    await expect("the ledger records the payout", call("GET", "/vendor/money", null, PV), 200,
+      (j) => j.balancePaise === 0 && j.entries[0].kind === "payout" && j.payouts[0].status === "paid" && j.payouts[0].reference === "UTR20261118001");
+    await expect("the partner is told it was paid", call("GET", "/me/notifications", null, PV), 200, (j) => j.items.some((n) => n.kind === "vendor.payout"));
+    await call("PATCH", "/admin/settings", { vendorMinPayout: s0.vendorMinPayout }, T);
+    const cashRide = await partnerRide("cash");
+    if (cashRide) {
+      await call("POST", `/bookings/${cashRide.b.id}/complete`, null, RC);
+      await expect("on a cash ride the partner owes QuikFly what the driver kept, less the earning", call("GET", "/vendor/money", null, PV), 200,
+        (j) => j.balancePaise < 0 && j.entries.some((e) => e.kind === "cash" && e.amountPaise === -cashRide.b.amount * 100));
+      await expect("pay what's owed (demo)", call("POST", "/vendor/payments", null, PV), 200, (j) => j.balancePaise === 0 && j.entries[0].kind === "payment");
+      await expect("nothing more to pay", call("POST", "/vendor/payments", null, PV), 409);
+    }
+  }
+  for (const id of ridesToCancel) await call("POST", `/bookings/${id}/cancel`, null, RC);
+  // Staff give a group-travel booking to a partner vehicle
+  const gv = (await call("GET", "/rentals/travel-vehicles")).json;
+  const gq = (await call("POST", "/quotes", { service: "rentals", vehicleId: gv[0].id, trip: "local", days: 1, start: TRAVEL }, RC)).json;
+  const gb = (await call("POST", "/bookings", { service: "rentals", title: "Smoke group trip", subtitle: "Chennai local", payment: "upi", lines: [], quoteId: gq.id }, RC)).json;
+  await expect("assignable vehicles include the partner cab", call("GET", "/admin/vendors/assignable-vehicles", null, T), 200, (j) => j.some((v) => v.vehicleId === car && v.driverId === d1));
+  if (upiRide) await expect("rides can't be assigned by staff", call("POST", `/admin/bookings/${upiRide.b.id}/vendor`, { vehicleId: car }, T), 409);
+  await expect("assign the group trip to the partner cab", call("POST", `/admin/bookings/${gb.id}/vendor`, { vehicleId: car }, T), 200,
+    (j) => j.partner?.vehicleId === car && j.partner.driverName === "Smoke Vendor");
+  await expect("the partner is told about the new trip", call("GET", "/me/notifications", null, PV), 200, (j) => j.items.some((n) => n.kind === "vendor.trip" && n.body.includes("Smoke group trip")));
+  await call("POST", `/admin/bookings/${gb.id}/complete`, null, T);
+  await expect("the completed group trip settles for the partner", call("GET", "/vendor/trips", null, PV), 200,
+    (j) => j.some((t) => t.bookingId === gb.id && !t.estimate && t.service === "rentals" && t.earningPaise > 0));
+  await call("POST", "/me/delete", { otp: OTP }, RC);
   await expect("vendor decisions are audited", call("GET", `/admin/audit?entity=vendor&entityId=${vid}`, null, T), 200,
     (j) => ["vendor.approve", "vendor.changes", "vendor.activate", "vendor.section.changes"].every((a) => j.items.some((e) => e.action === a)));
   // Rejection path with a second partner

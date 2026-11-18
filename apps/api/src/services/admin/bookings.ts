@@ -41,12 +41,17 @@ export async function searchBookings(db: D1Database, f: BookingFilters): Promise
 interface TxnRow { id: string; kind: WalletTransaction["kind"]; amount: number; note: string; booking_id: string | null; created_at: string }
 
 export async function bookingDetail(db: D1Database, id: string): Promise<AdminBookingDetail> {
-  const row = await db.prepare(`${SELECT} WHERE b.id = ?`).bind(id).first<AdminBookingRow & { coupon_code: string | null; discount: number }>();
+  const row = await db.prepare(`${SELECT} WHERE b.id = ?`).bind(id).first<AdminBookingRow & { coupon_code: string | null; discount: number; vendor_id: string | null; vendor_vehicle_id: string | null; vendor_driver_id: string | null }>();
   if (!row) throw notFound("Booking not found.");
   const active = row.status === "confirmed" || row.status === "ongoing";
-  const [{ results: txns }, history] = await Promise.all([
+  const [{ results: txns }, history, partner] = await Promise.all([
     db.prepare("SELECT * FROM wallet_transactions WHERE booking_id = ? ORDER BY created_at").bind(id).all<TxnRow>(),
     listAudit(db, 1, "booking", id),
+    row.vendor_vehicle_id
+      ? db.prepare(`SELECT vv.reg_number, u.name AS vendor_name, d.name AS driver_name FROM vendor_vehicles vv JOIN vendors ve ON ve.id = vv.vendor_id
+          JOIN users u ON u.id = ve.user_id LEFT JOIN vendor_drivers d ON d.id = ? WHERE vv.id = ?`).bind(row.vendor_driver_id, row.vendor_vehicle_id)
+        .first<{ reg_number: string; vendor_name: string; driver_name: string | null }>()
+      : Promise.resolve(null),
   ]);
   return {
     booking: toAdminBooking(row),
@@ -54,6 +59,9 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
     coupon: row.coupon_code ? { code: row.coupon_code, discount: row.discount } : null,
     refundIfCancelled: active ? await refundFor(db, row) : null,
     history: history.items,
+    partner: partner && row.vendor_id && row.vendor_vehicle_id
+      ? { vendorId: row.vendor_id, vendorName: partner.vendor_name, vehicleId: row.vendor_vehicle_id, regNumber: partner.reg_number, driverName: partner.driver_name }
+      : null,
   };
 }
 
