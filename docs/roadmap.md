@@ -95,6 +95,8 @@ What's there now: smoke tests ran against production, leaving test accounts **+9
 
 - 2026-11-17 **App 0.1.2 prepared** (branch `release/app-0.1.2`, `version: 0.1.2+3`, arm64 version code 2003: Flutter adds 1000 × ABI to the build number, so arm64 is 2000 + 3): ships the D5 trip-card fixes (no duplicate "Paid by", no Invoice button on cancelled bookings). Owner builds; Claude verifies and installs; GitHub Release `app-v0.1.2` after the owner's yes. **Built and verified:** arm64 22.1 MB (2003), armeabi-v7a 19.7 MB (1003), x86_64 23.7 MB (4003), all signed `CN=QuikFly`; installed over 0.1.1 on the OnePlus in place (first-install time kept). The first `adb install` returned nothing and changed nothing (likely the phone's install prompt); the retry succeeded.
 
+- 2026-11-18 **Home page: duplicate services section removed** (owner spotted it on production; branch `fix/home-duplicate-services`): the "Six ways to move. Zero app switching." carousel showed the same six services, photos and links as the "Where do you want to go today?" grid right above it. Kept the grid (all six visible at once, closest to the booking widget) and deleted `ServiceShowcase` from `HomeScreen.tsx`. Also deletes the unused `public/assets/logo.jpg` (old banner; nothing referenced it since the switch to `logo.png`). Typecheck passes; browser-checked on desktop (dark) and 390 px (light): grid flows into the stats, no horizontal scroll. Reaches users after merge + website deploy.
+
 ### After Phase 4
 
 Phase 5 (full admin: customers screen, booking notes, SOS alerts, team, CSV export) and the backlog. Paid items (SMS OTP, payment gateway, maps, Play Store) wait for the client's sign-off.

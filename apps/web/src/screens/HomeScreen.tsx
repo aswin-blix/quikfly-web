@@ -1,8 +1,8 @@
 "use client";
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import {
-  ArrowRight, BadgePercent, Download, ChevronLeft, ChevronRight, Headphones, IndianRupee, MapPin, PhoneCall, Quote, Route, ShieldCheck, Share2, Smartphone, Sparkles, Star, Timer, UserCheck, Wallet,
+  ArrowRight, BadgePercent, Download, Headphones, IndianRupee, MapPin, PhoneCall, Quote, Route, ShieldCheck, Share2, Smartphone, Sparkles, Star, Timer, UserCheck, Wallet,
 } from "lucide-react";
 import { BookingWidget } from "@/components/BookingWidget";
 import { SceneArt } from "@/components/SceneArt";
@@ -22,7 +22,6 @@ export function HomeScreen() {
     <>
       <Hero />
       <ServicesGrid />
-      <ServiceShowcase />
       <Stats />
       <Offers />
       <Popular />
@@ -116,78 +115,6 @@ function ServicesGrid() {
           </motion.div>
         ))}
       </StaggerGroup>
-    </section>
-  );
-}
-
-/* ── Service showcase: native swipe carousel with arrows + progress bar ── */
-function ServiceShowcase() {
-  const track = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ start: 0, size: 1 });
-
-  useEffect(() => {
-    const el = track.current;
-    if (!el) return;
-    const update = () => setPos({ start: el.scrollLeft / el.scrollWidth, size: Math.min(1, el.clientWidth / el.scrollWidth) });
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => { el.removeEventListener("scroll", update); ro.disconnect(); };
-  }, []);
-
-  const step = (dir: 1 | -1) => {
-    const el = track.current;
-    const card = el?.firstElementChild as HTMLElement | null;
-    if (!el || !card) return;
-    const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
-    el.scrollBy({ left: dir * (card.offsetWidth + gap), behavior: prefersReducedMotion() ? "auto" : "smooth" });
-  };
-
-  const atStart = pos.start < 0.01;
-  const atEnd = pos.start + pos.size > 0.99;
-  const arrow = "w-11 h-11 rounded-full border border-line grid place-items-center transition-colors hover:border-gold hover:text-gold disabled:opacity-30 disabled:hover:border-line disabled:hover:text-inherit disabled:cursor-not-allowed";
-
-  return (
-    <section className="max-w-7xl mx-auto px-4 py-12 sm:py-16">
-      <div className="flex items-end justify-between gap-6">
-        <SectionTitle eyebrow="One app" title="Six ways to move. Zero app switching." sub="Pick a service to see how it works. Swipe or use the arrows to see all six." />
-        <div className="hidden sm:flex gap-2 mb-10 shrink-0">
-          <button type="button" onClick={() => step(-1)} disabled={atStart} aria-label="Previous services" className={arrow}><ChevronLeft size={20} /></button>
-          <button type="button" onClick={() => step(1)} disabled={atEnd} aria-label="Next services" className={arrow}><ChevronRight size={20} /></button>
-        </div>
-      </div>
-
-      <div ref={track} role="region" aria-label="QuikFly services"
-        className="flex gap-4 sm:gap-5 overflow-x-auto snap-x snap-mandatory scroll-smooth -mx-4 px-4 scroll-px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {SERVICES.map((s, i) => (
-          <Link key={s.key} href={s.href}
-            className="group panel overflow-hidden snap-start shrink-0 flex flex-col basis-[84%] sm:basis-[calc((100%-1.25rem)/2)] lg:basis-[calc((100%-2.5rem)/3)] transition-colors hover:border-gold/50 focus-visible:border-gold">
-            <div className="on-media relative aspect-[16/10] overflow-hidden">
-              <img src={s.image} alt={s.action} loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
-              <span className="absolute top-3 left-4 text-xs font-semibold tracking-widest text-white/80">0{i + 1} / 0{SERVICES.length}</span>
-              <span className="absolute bottom-3 left-4 text-xs text-gold-pale border border-gold/40 bg-black/50 backdrop-blur rounded-full px-2.5 py-1">{s.tagline}</span>
-            </div>
-            <div className="p-5 sm:p-6 flex flex-col flex-1">
-              <div className="flex items-center gap-3">
-                <span className="w-10 h-10 rounded-xl bg-gold/10 border border-gold/25 grid place-items-center shrink-0"><s.icon className="text-gold" size={20} /></span>
-                <h3 className="font-display text-xl sm:text-2xl leading-tight">{s.action}</h3>
-              </div>
-              <p className="text-muted mt-3 text-sm leading-relaxed flex-1">{s.blurb}</p>
-              <span className="mt-5 inline-flex items-center gap-2 text-gold text-sm font-semibold">
-                Explore {s.nav} <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-              </span>
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      {pos.size < 1 && (
-        <div className="mt-6 h-1 rounded-full bg-line relative overflow-hidden" aria-hidden>
-          <span className="absolute inset-y-0 rounded-full bg-brand" style={{ left: `${pos.start * 100}%`, width: `${pos.size * 100}%` }} />
-        </div>
-      )}
     </section>
   );
 }
