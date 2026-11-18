@@ -7,7 +7,8 @@ import { Accordion, PageHeader, SectionTitle } from "@/components/ui";
 import { inr } from "@/lib/format";
 import { Link, useQuery } from "@/lib/nav";
 import { serviceByKey, SERVICES } from "@/lib/services";
-import { useConfig } from "@/components/ConfigProvider";
+import { useConfig, useSettings } from "@/components/ConfigProvider";
+import { useServiceOn } from "@/components/ServiceGate";
 
 export function RideScreen({ service }: { service: "bike" | "car" }) {
   const FAQS = useConfig()?.faqs ?? [];
@@ -16,6 +17,8 @@ export function RideScreen({ service }: { service: "bike" | "car" }) {
   const s = serviceByKey(service);
   const options = RIDE_OPTIONS.filter((o) => o.service === service);
   const other = SERVICES.find((x) => x.key === (service === "bike" ? "car" : "bike"))!;
+  const isOn = useServiceOn();
+  const settings = useSettings();
 
   return (
     <>
@@ -24,8 +27,8 @@ export function RideScreen({ service }: { service: "bike" | "car" }) {
         icon={<s.icon className="text-gold" size={36} />}>
         <div className="flex flex-wrap gap-2 mt-5 text-xs">
           {["Upfront fares", "Ride OTP", "Live trip sharing", "24×7 support"].map((t) => <span key={t} className="chip flex items-center gap-1"><BadgeCheck size={12} className="text-gold" />{t}</span>)}
-          <Link href={other.href} className="chip !border-gold/40 !text-gold">Need a {service === "bike" ? "cab" : "bike"} instead? →</Link>
-          {service === "car" && <Link href="/travel-rentals?type=outstation&pax=2" className="chip !border-gold/40 !text-gold">Going out of town? Outstation cabs →</Link>}
+          {isOn(other.key) && <Link href={other.href} className="chip !border-gold/40 !text-gold">Need a {service === "bike" ? "cab" : "bike"} instead? →</Link>}
+          {service === "car" && isOn("rentals") && settings.featureOutstation && <Link href="/travel-rentals?type=outstation&pax=2" className="chip !border-gold/40 !text-gold">Going out of town? Outstation cabs →</Link>}
         </div>
       </PageHeader>
 

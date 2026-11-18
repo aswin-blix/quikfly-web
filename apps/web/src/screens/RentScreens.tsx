@@ -21,11 +21,12 @@ const carImg = (c: RentalCar) => (["SUV", "Luxury", "MUV"].includes(c.category) 
 function useTrip() {
   const defaults = useMemo(() => defaultRentalWindow(), []);
   const q = useQuery();
+  const selfDrive = useSettings().featureSelfDrive;
   return {
     city: q.get("city") || "Chennai",
     start: q.get("start") || defaults.start,
     end: q.get("end") || defaults.end,
-    mode: (q.get("mode") as "self" | "driver") || "self",
+    mode: selfDrive ? ((q.get("mode") as "self" | "driver") || "self") : "driver",
   };
 }
 
@@ -38,6 +39,8 @@ export function RentScreen() {
   const [start, setStart] = useState(trip.start);
   const [end, setEnd] = useState(trip.end);
   const [mode, setMode] = useState<"self" | "driver">(trip.mode);
+  const selfDrive = useSettings().featureSelfDrive;
+  useEffect(() => { if (!selfDrive) setMode("driver"); }, [selfDrive]);
   const [cars, setCars] = useState<RentalCar[] | null>(null);
   const [cats, setCats] = useState<string[]>([]);
   const [trans, setTrans] = useState<"any" | "Manual" | "Automatic">("any");
@@ -58,12 +61,12 @@ export function RentScreen() {
   return (
     <>
       <PageHeader crumbs={[["Home", "/"], ["Rent a Car"]]} title="Rent a car" icon={<KeyRound className="text-gold" size={36} />}
-        sub="Self-drive freedom or a chauffeur for the day. Doorstep delivery, flexible km plans, sanitised cars.">
+        sub={`${selfDrive ? "Self-drive freedom or a chauffeur" : "A car with a chauffeur"} for the day. Doorstep delivery, flexible km plans, sanitised cars.`}>
         <div className="panel gold-border p-4 mt-8 grid md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
           <Select label="City" value={city} onChange={setCity} options={CITIES.map((c) => [c, c])} />
           <div><label className="label" htmlFor="rs">Pickup</label><input id="rs" type="datetime-local" className="field mt-1.5" value={start} onChange={(e) => setStart(e.target.value)} /></div>
           <div><label className="label" htmlFor="re">Return</label><input id="re" type="datetime-local" className="field mt-1.5" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
-          <Segmented id="rent-mode" value={mode} onChange={setMode} options={[["self", "Self-drive"], ["driver", "With driver"]]} />
+          {selfDrive ? <Segmented id="rent-mode" value={mode} onChange={setMode} options={[["self", "Self-drive"], ["driver", "With driver"]]} /> : <p className="text-sm text-muted">Cars come with a chauffeur.</p>}
           {!valid && <p className="md:col-span-4 text-sm text-danger">Return time must be after pickup.</p>}
         </div>
       </PageHeader>

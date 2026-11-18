@@ -363,7 +363,7 @@ export function ConfirmedScreen() {
         </dl>
       </motion.div>
       {(() => {
-        const offer = rideOffer(b, settings, (pid) => places.find((p) => p.id === pid)?.name);
+        const offer = settings.featureTripOffers && settings.serviceCar ? rideOffer(b, settings, (pid) => places.find((p) => p.id === pid)?.name) : null;
         if (!offer) return null;
         return (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.3 }} className="panel text-left mt-4 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
