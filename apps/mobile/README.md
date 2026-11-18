@@ -5,7 +5,7 @@ Two Android apps from one Flutter project, on the same REST API as the website (
 | App | Flavor | Package id | Entry point |
 |---|---|---|---|
 | **QuikFly** (customers, all six services) | `customer` (default) | `com.quikfly.app` | `lib/main.dart` |
-| **QuikFly Partner** (vehicle owners: registration, onboarding, then vehicles, drivers and document renewals) | `partner` | `com.quikfly.partner` | `lib/main_partner.dart`, screens in `lib/partner/` |
+| **QuikFly Partner** (vehicle owners: registration, onboarding, vehicles, drivers, renewals, trips, revenue dashboard, statements and payouts) | `partner` | `com.quikfly.partner` | `lib/main_partner.dart`, screens in `lib/partner/` |
 
 They share `lib/api`, `lib/theme`, `lib/widgets` and the login screen. `pubspec.yaml` sets `default-flavor: customer`, so plain `flutter run` / `flutter build apk` build the customer app; add `--flavor partner -t lib/main_partner.dart` for the Partner app.
 
@@ -107,6 +107,7 @@ The upload key signs every APK shared with the client. Android installs an updat
    ```bash
    flutter build apk --release --split-per-abi   # build/app/outputs/flutter-apk/app-arm64-v8a-customer-release.apk (most phones), armeabi-v7a, x86_64
    # Partner app: flutter build apk --release --split-per-abi --flavor partner -t lib/main_partner.dart  → app-arm64-v8a-partner-release.apk
+   # (publish as QuikFlyPartner-arm64.apk / QuikFlyPartner-armv7.apk; the customer app keeps QuikFly-arm64.apk / QuikFly-armv7.apk)
    ```
    Check the signature with the SDK's `apksigner` (`keytool -printcert -jarfile` prints nothing: these APKs use signature scheme v2 only):
    ```bash
