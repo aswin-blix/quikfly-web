@@ -134,6 +134,16 @@ class QuikFlyApi {
   Future<VendorFleet> assignVendorDriver(String id, String? vehicleId) => _post('/vendor/drivers/$id/assign', _fleet, {'vehicleId': vehicleId});
   Future<VendorFleet> removeVendorDriver(String id) => _delete('/vendor/drivers/$id', _fleet);
 
+  // ── Partner trips and money (dates are India YYYY-MM-DD) ──
+  Future<List<VendorTrip>> vendorTrips(String from, String to) =>
+      _get('/vendor/trips', (d) => [for (final t in d as List) VendorTrip(t as Json)], {'from': from, 'to': to});
+  Future<VendorTripSummary> vendorSummary(String from, String to) => _get('/vendor/summary', (d) => VendorTripSummary(d as Json), {'from': from, 'to': to});
+  Future<VendorMoney> vendorMoney() => _get('/vendor/money', (d) => VendorMoney(d as Json));
+  Future<VendorMoney> requestVendorPayout() => _post('/vendor/payouts', (d) => VendorMoney(d as Json));
+
+  /// Demo: settles what the partner owes QuikFly without collecting anything.
+  Future<VendorMoney> payVendorDues() => _post('/vendor/payments', (d) => VendorMoney(d as Json));
+
   // ── Account ──
   /// Send only what changes; null clears a field. Saving a name completes sign-up.
   Future<User> updateProfile(Map<String, Object?> changes) => _patch('/me', (d) => User.fromJson(d as Json), changes);

@@ -1,11 +1,11 @@
-// A live partner's app: Home (fleet at a glance and what needs attention), Vehicles, Drivers
-// and Account. Trips, earnings and payouts arrive in the next release (labelled as such).
+// A live partner's app shell: Home (revenue, cab and driver performance, fleet at a glance,
+// what needs attention), Trips, Vehicles, Drivers and Money (money_screens.dart); Account
+// opens from the app bar.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../api/api.dart';
 import '../api/models.dart';
 import '../core/format.dart';
@@ -15,6 +15,7 @@ import '../widgets/licence_panel.dart' show formatLicence;
 import '../widgets/theme_toggle.dart';
 import '../widgets/ui.dart';
 import 'home_screen.dart' show partnerSettings;
+import 'money_screens.dart';
 import 'partner_app.dart';
 
 const _vehicleStatus = {
@@ -77,7 +78,7 @@ class _PartnerShellState extends ConsumerState<PartnerShell> {
   @override
   Widget build(BuildContext context) {
     final fleet = ref.watch(fleetProvider);
-    final titles = ['QuikFly Partner', 'Vehicles', 'Drivers', 'Account'];
+    final titles = ['QuikFly Partner', 'Trips', 'Vehicles', 'Drivers', 'Money'];
     final body = fleet.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => ScreenList(children: [ErrorBox(errorText(e), onRetry: () => ref.invalidate(fleetProvider))]),
@@ -85,9 +86,10 @@ class _PartnerShellState extends ConsumerState<PartnerShell> {
           ? const Center(child: CircularProgressIndicator())
           : switch (_tab) {
               0 => _HomeTab(widget.a, f, onTab: (t) => setState(() => _tab = t)),
-              1 => _VehiclesTab(f),
-              2 => _DriversTab(f),
-              _ => _AccountTab(widget.a),
+              1 => const TripsTab(),
+              2 => _VehiclesTab(f),
+              3 => _DriversTab(f),
+              _ => const MoneyTab(),
             },
     );
     return Scaffold(
@@ -97,14 +99,16 @@ class _PartnerShellState extends ConsumerState<PartnerShell> {
           onPressed: () async {
             await context.push('/notifications');
             ref.invalidate(fleetProvider);
+            refreshMoney(ref);
           },
           icon: const Icon(Icons.notifications_none),
         ),
         const ThemeToggle(),
+        IconButton(tooltip: 'Account', onPressed: () => context.push('/account'), icon: const Icon(Icons.account_circle_outlined)),
       ]),
-      floatingActionButton: _tab == 1
+      floatingActionButton: _tab == 2
           ? FloatingActionButton.extended(onPressed: () => context.push('/vehicles/new'), icon: const Icon(Icons.add), label: const Text('Add vehicle'))
-          : _tab == 2
+          : _tab == 3
               ? FloatingActionButton.extended(onPressed: () => context.push('/drivers/new'), icon: const Icon(Icons.person_add_alt), label: const Text('Add driver'))
               : null,
       bottomNavigationBar: NavigationBar(
@@ -112,9 +116,10 @@ class _PartnerShellState extends ConsumerState<PartnerShell> {
         onDestinationSelected: (t) => setState(() => _tab = t),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.route_outlined), selectedIcon: Icon(Icons.route), label: 'Trips'),
           NavigationDestination(icon: Icon(Icons.local_taxi_outlined), selectedIcon: Icon(Icons.local_taxi), label: 'Vehicles'),
           NavigationDestination(icon: Icon(Icons.badge_outlined), selectedIcon: Icon(Icons.badge), label: 'Drivers'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Account'),
+          NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Money'),
         ],
       ),
       body: body,
@@ -170,7 +175,7 @@ class _HomeTab extends ConsumerWidget {
     final alerts = _alerts(c, f, partnerSettings(ref).vendorExpiryWarnDays);
     Widget stat(int n, String label, IconData icon, Color color) => Expanded(
           child: Panel(
-            onTap: () => onTab(1),
+            onTap: () => onTab(2),
             padding: const EdgeInsets.all(12),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Container(height: 3, width: 28, color: color),
@@ -180,7 +185,12 @@ class _HomeTab extends ConsumerWidget {
             ]),
           ),
         );
-    return ScreenList(onRefresh: () async => ref.invalidate(fleetProvider), children: [
+    return ScreenList(onRefresh: () async {
+      ref.invalidate(fleetProvider);
+      refreshMoney(ref);
+    }, children: [
+      RevenueSection(fleet: f),
+      const SizedBox(height: 16),
       Row(children: [
         stat(count['active']!, 'On duty', Icons.local_taxi_outlined, c.success),
         const SizedBox(width: 8),
@@ -211,12 +221,6 @@ class _HomeTab extends ConsumerWidget {
               ]),
             ),
           ),
-      const SizedBox(height: 12),
-      Panel(child: Row(children: [
-        Icon(Icons.insights_outlined, color: c.accent),
-        const SizedBox(width: 12),
-        Expanded(child: Text('Trips, revenue, earnings and payouts come to this screen in the next update.', style: TextStyle(color: c.fgMuted))),
-      ])),
     ]);
   }
 }
@@ -614,49 +618,5 @@ class _DriverFormScreenState extends ConsumerState<DriverFormScreen> {
         FormError(_err),
       ]),
     );
-  }
-}
-
-class _AccountTab extends ConsumerWidget {
-  const _AccountTab(this.a);
-  final VendorApplication a;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = context.qf;
-    final user = ref.watch(sessionProvider).value;
-    final settings = partnerSettings(ref);
-    return ScreenList(children: [
-      Panel(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(user?.name ?? '', style: Theme.of(context).textTheme.titleLarge),
-        Text(user?.phone ?? '', style: TextStyle(color: c.fgMuted)),
-        const SizedBox(height: 10),
-        KeyValue('City', a.city ?? '—'),
-        if (a.bank != null) KeyValue('Payouts to', '${a.bank!.ifsc} · •••• ${a.bank!.accountLast4}'),
-        if (a.stickerDoneAt != null) KeyValue('Live since', dateTime(DateTime.parse(a.stickerDoneAt!).toLocal())),
-      ])),
-      const SizedBox(height: 12),
-      Panel(
-        padding: EdgeInsets.zero,
-        child: Column(children: [
-          ListTile(leading: const Icon(Icons.notifications_none), title: const Text('Notifications'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/notifications')),
-          Divider(height: 1, color: c.border),
-          ListTile(
-            leading: const Icon(Icons.support_agent),
-            title: const Text('Call partner support'),
-            subtitle: Text(settings.companyPhone),
-            onTap: () => launchUrl(Uri(scheme: 'tel', path: settings.companyPhone.replaceAll(' ', ''))),
-          ),
-          Divider(height: 1, color: c.border),
-          ListTile(
-            leading: Icon(Icons.logout, color: c.danger),
-            title: Text('Sign out', style: TextStyle(color: c.danger)),
-            onTap: () async {
-              await ref.read(sessionProvider.notifier).signOut();
-              ref.invalidate(vendorProvider);
-            },
-          ),
-        ]),
-      ),
-    ]);
   }
 }

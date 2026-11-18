@@ -9,6 +9,7 @@ import '../state/providers.dart';
 import '../theme/theme.dart';
 import 'fleet_screens.dart';
 import 'home_screen.dart';
+import 'money_screens.dart';
 import 'onboarding_screens.dart';
 import 'section_screen.dart';
 
@@ -40,6 +41,8 @@ final partnerRouter = GoRouter(
     GoRoute(path: '/drivers/new', builder: (_, _) => const DriverFormScreen()),
     GoRoute(path: '/driver/:id', builder: (_, s) => DriverScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/driver/:id/licence', builder: (_, s) => DriverFormScreen(driverId: s.pathParameters['id'])),
+    GoRoute(path: '/trip/:id', builder: (_, s) => TripDetailScreen(trip: s.extra is VendorTrip ? s.extra as VendorTrip : null)),
+    GoRoute(path: '/account', builder: (_, _) => const PartnerAccountScreen()),
     GoRoute(path: '/onboarding/payment', builder: (_, _) => const PaymentScreen()),
     GoRoute(path: '/onboarding/agreement', builder: (_, _) => const AgreementScreen()),
     GoRoute(path: '/onboarding/sticker', builder: (_, _) => const StickerScreen()),

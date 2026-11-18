@@ -180,3 +180,113 @@ class VendorApplication {
     );
   }
 }
+
+
+// ── Trips and money (amounts in paise; see packages/shared/src/vendor.ts) ──
+
+int _p(dynamic v) => (v as num?)?.round() ?? 0;
+
+/// "₹1,234.50" from paise.
+String inrPaise(int paise) {
+  final neg = paise < 0;
+  final abs = paise.abs();
+  final rupees = abs ~/ 100;
+  final digits = rupees.toString();
+  // Indian grouping: last 3 digits, then pairs.
+  String grouped;
+  if (digits.length <= 3) {
+    grouped = digits;
+  } else {
+    final head = digits.substring(0, digits.length - 3);
+    final tail = digits.substring(digits.length - 3);
+    final parts = <String>[];
+    for (var i = head.length; i > 0; i -= 2) {
+      parts.insert(0, head.substring(i - 2 < 0 ? 0 : i - 2, i));
+    }
+    grouped = '${parts.join(',')},$tail';
+  }
+  return '${neg ? '−' : ''}₹$grouped.${(abs % 100).toString().padLeft(2, '0')}';
+}
+
+class VendorTrip {
+  const VendorTrip(this.j);
+  final Json j;
+  String get bookingId => j['bookingId'] as String;
+  String get status => '${j['status']}';
+  String get service => '${j['service']}';
+  String get title => '${j['title']}';
+  String get subtitle => '${j['subtitle'] ?? ''}';
+  DateTime get createdAt => DateTime.tryParse('${j['createdAt']}')?.toLocal() ?? DateTime.now();
+  DateTime? get startsAt => j['startsAt'] == null ? null : DateTime.tryParse('${j['startsAt']}')?.toLocal();
+  DateTime? get completedAt => j['completedAt'] == null ? null : DateTime.tryParse('${j['completedAt']}')?.toLocal();
+  String? get regNumber => j['regNumber'] as String?;
+  String? get driverName => j['driverName'] as String?;
+  String? get driverId => j['driverId'] as String?;
+  String get payment => '${j['payment']}';
+  int get gross => _p(j['grossPaise']);
+  int get discount => _p(j['discountPaise']);
+  int get gst => _p(j['gstPaise']);
+  int get fare => _p(j['farePaise']);
+  int get commission => _p(j['commissionPaise']);
+  int get tds => _p(j['tdsPaise']);
+  int get earning => _p(j['earningPaise']);
+  bool get estimate => j['estimate'] == true;
+  /// What the customer actually paid (after coupons and credits).
+  int get collected => gross - discount;
+}
+
+class VendorTripSummary {
+  const VendorTripSummary(this.j);
+  final Json j;
+  Json get _r => (j['revenue'] as Json?) ?? const {};
+  int get trips => _p(_r['trips']);
+  int get gross => _p(_r['grossPaise']);
+  int get cash => _p(_r['cashPaise']);
+  int get online => _p(_r['onlinePaise']);
+  int get discount => _p(_r['discountPaise']);
+  int get earning => _p(_r['earningPaise']);
+  List<({String id, String reg, int trips, int earning})> get vehicles => [
+        for (final v in (j['vehicles'] as List?) ?? const []) (id: '${v['vehicleId']}', reg: '${v['regNumber']}', trips: _p(v['trips']), earning: _p(v['earningPaise'])),
+      ];
+  List<({String id, String name, int trips, int earning})> get drivers => [
+        for (final d in (j['drivers'] as List?) ?? const []) (id: '${d['driverId']}', name: '${d['name']}', trips: _p(d['trips']), earning: _p(d['earningPaise'])),
+      ];
+}
+
+const ledgerLabel = {
+  'earning': 'Trip earning',
+  'cash': 'Cash your driver collected',
+  'payout': 'Paid to your bank',
+  'payment': 'You paid QuikFly',
+  'adjustment': 'Adjustment',
+};
+
+class VendorPayout {
+  const VendorPayout(this.j);
+  final Json j;
+  String get id => j['id'] as String;
+  int get amount => _p(j['amountPaise']);
+  /// requested · paid · rejected
+  String get status => '${j['status']}';
+  String? get reference => j['reference'] as String?;
+  String? get note => j['note'] as String?;
+  DateTime get requestedAt => DateTime.tryParse('${j['requestedAt']}')?.toLocal() ?? DateTime.now();
+}
+
+class VendorMoney {
+  const VendorMoney(this.j);
+  final Json j;
+  /// Positive: QuikFly owes the partner. Negative: the partner owes QuikFly.
+  int get balance => _p(j['balancePaise']);
+  int get minPayout => _p(j['minPayoutPaise']);
+  VendorPayout? get pending => j['pendingPayout'] == null ? null : VendorPayout(j['pendingPayout'] as Json);
+  List<({String month, int trips, int gross, int commission, int tds, int earning, int cash})> get statements => [
+        for (final s in (j['statements'] as List?) ?? const [])
+          (month: '${s['month']}', trips: _p(s['trips']), gross: _p(s['grossPaise']), commission: _p(s['commissionPaise']), tds: _p(s['tdsPaise']), earning: _p(s['earningPaise']), cash: _p(s['cashPaise'])),
+      ];
+  List<({String id, String kind, int amount, String note, DateTime at})> get entries => [
+        for (final e in (j['entries'] as List?) ?? const [])
+          (id: '${e['id']}', kind: '${e['kind']}', amount: _p(e['amountPaise']), note: '${e['note']}', at: DateTime.tryParse('${e['createdAt']}')?.toLocal() ?? DateTime.now()),
+      ];
+  List<VendorPayout> get payouts => [for (final p in (j['payouts'] as List?) ?? const []) VendorPayout(p as Json)];
+}
