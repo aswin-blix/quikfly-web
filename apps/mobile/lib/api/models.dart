@@ -537,6 +537,28 @@ class Settings {
   int _i(String k, int d) => (_raw[k] as num?)?.round() ?? d;
   String _s(String k, String d) => (_raw[k] as String?) ?? d;
 
+  bool _b(String k) => (_raw[k] as bool?) ?? true;
+
+  /// Service switches (packages/shared/src/switches.ts): off = hidden here and refused by the API.
+  bool serviceOn(ServiceKey s) => switch (s) {
+        ServiceKey.bike => _b('serviceBike'),
+        ServiceKey.car => _b('serviceCar'),
+        ServiceKey.bus => _b('serviceBus'),
+        ServiceKey.tours => _b('serviceTours'),
+        ServiceKey.rent => _b('serviceRent'),
+        ServiceKey.rentals => _b('serviceGroup'),
+      };
+  String get servicePausedMessage => _s('servicePausedMessage', 'This service is paused for now. Please check back soon.');
+
+  /// Feature switches.
+  bool get featureRideScheduling => _b('featureRideScheduling');
+  bool get featureMultiStop => _b('featureMultiStop');
+  bool get featureCashRides => _b('featureCashRides');
+  bool get featureOutstation => _b('featureOutstation');
+  bool get featureSelfDrive => _b('featureSelfDrive');
+  bool get featureTripOffers => _b('featureTripOffers');
+  bool get featureReferral => _b('featureReferral');
+
   /// Partner registration (QuikFly Partner app).
   int get vendorJoiningFee => _i('vendorJoiningFee', 1000);
   int get vendorMaxVehicleAgeYears => _i('vendorMaxVehicleAgeYears', 8);

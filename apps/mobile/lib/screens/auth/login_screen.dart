@@ -204,7 +204,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 decoration: const InputDecoration(labelText: 'Email (optional)', helperText: 'For tickets and invoices', hintText: 'you@example.com'),
               ),
               const SizedBox(height: 10),
-              if (!widget.showReferral)
+              if (!widget.showReferral || !(ref.watch(configProvider).value?.settings.featureReferral ?? true))
                 const SizedBox.shrink()
               else if (_showCode)
                 TextField(

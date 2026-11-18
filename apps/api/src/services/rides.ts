@@ -1,4 +1,4 @@
-import { RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIM, localToIso, minutesUntilStart, pick, rideQuotes, scheduleError, type FareQuote, type PaymentMethod, type Place, type Ride } from "@quikfly/shared";
+import { RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIM, localToIso, minutesUntilStart, pick, rideQuotes, scheduleError, switchError, type FareQuote, type PaymentMethod, type Place, type Ride } from "@quikfly/shared";
 import { businessHour } from "../config";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
@@ -14,6 +14,9 @@ export async function quoteRides(
   db: D1Database, service: "bike" | "car", pickupId: string, dropId: string, scheduledFor?: string, stopIds: string[] = [],
 ): Promise<FareQuote[]> {
   if (pickupId === dropId) throw badRequest("Pickup and drop must be different places.");
+  // Service and feature switches (Settings) come first: a paused service quotes nothing.
+  const off = switchError(await getSettings(db), { service, scheduledFor, stopCount: stopIds.length });
+  if (off) throw conflict(off);
   const stops = await rideStops(db, pickupId, dropId, stopIds);
   const [a, b, options, settings] = await Promise.all([
     placeById(db, pickupId), placeById(db, dropId), visible(db, "rideOption"), getSettings(db),
@@ -39,6 +42,8 @@ export async function bookRide(
   input: { optionId: string; pickupId: string; dropId: string; payment: PaymentMethod; scheduledFor?: string; stopIds?: string[] },
 ): Promise<Ride> {
   const option = await visibleById(db, "rideOption", input.optionId);
+  const cashOff = switchError(await getSettings(db), { service: option.service, payment: input.payment });
+  if (cashOff) throw conflict(cashOff);
   const stopIds = input.stopIds ?? [];
   const quote = (await quoteRides(db, option.service, input.pickupId, input.dropId, input.scheduledFor, stopIds)).find((q) => q.option.id === option.id)!;
   const stops = await rideStops(db, input.pickupId, input.dropId, stopIds);

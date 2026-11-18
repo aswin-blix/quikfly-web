@@ -75,6 +75,10 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   const settings = useSettings();
   /** Ride now, or book ahead for a pickup time (local "YYYY-MM-DDTHH:mm"). */
   const [when, setWhen] = useState<"now" | "later">(scheduleAt ? "later" : "now");
+  // Feature switches (admin → Settings → Features): fall back when one is turned off.
+  useEffect(() => { if (!settings.featureRideScheduling) setWhen("now"); }, [settings.featureRideScheduling]);
+  useEffect(() => { if (!settings.featureMultiStop) setStops([]); }, [settings.featureMultiStop]);
+  useEffect(() => { if (!settings.featureCashRides) setPayment((p) => (p === "cash" ? "upi" : p)); }, [settings.featureCashRides]);
   const [at, setAt] = useState(() => scheduleAt || defaultPickup(30));
   const scheduledFor = when === "later" ? at : undefined;
   const [t, setT] = useState(0);
@@ -273,13 +277,13 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
               </div>
             )}
 
-            {stops.length < RIDE_MAX_STOPS && (
+            {settings.featureMultiStop && stops.length < RIDE_MAX_STOPS && (
               <button type="button" onClick={() => setStops((list) => [...list, null])} className="text-sm text-gold flex items-center gap-1.5">
                 <Plus size={15} />Add a stop <span className="text-xs text-muted">({settings.rideStopMinutes} min wait included per stop)</span>
               </button>
             )}
 
-            <div>
+            {settings.featureRideScheduling && <div>
               <p className="label mb-2">When</p>
               <div className="flex flex-wrap items-center gap-2">
                 {([["now", "Ride now"], ["later", "Schedule"]] as const).map(([k, l]) => (
@@ -297,7 +301,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
                   Fare locked now. Your driver is assigned {RIDE_SCHEDULE.startWindowMinutes} min before pickup; free cancellation until {settings.rideScheduleFreeCancelMinutes} min before.
                 </p>
               )}
-            </div>
+            </div>}
 
             {!drop && (
               <div>
@@ -335,7 +339,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
                   </motion.button>
                 ))}
                 <div className="flex gap-2 pt-1">
-                  {RIDE_PAYMENTS.map((p) => {
+                  {RIDE_PAYMENTS.filter((p) => p !== "cash" || settings.featureCashRides).map((p) => {
                     const short = p === "wallet" && walletShort;
                     return (
                       <button key={p} data-on={payment === p} onClick={() => setPayment(p)} disabled={short}

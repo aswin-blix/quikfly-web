@@ -14,6 +14,7 @@ import { TravellersSection } from "@/components/account/TravellersSection";
 import { WalletSection } from "@/components/account/WalletSection";
 import { Empty, GoldButton } from "@/components/ui";
 import { ACCOUNT_SECTIONS, type AccountSectionId } from "@/lib/account";
+import { useSettings } from "@/components/ConfigProvider";
 import { cx, inr } from "@/lib/format";
 import { Link, qs, useQuery } from "@/lib/nav";
 
@@ -40,7 +41,8 @@ export function AccountScreen() {
   const { user, requireAuth, signOut, toast } = useApp();
   const q = useQuery();
   const raw = q.get("tab");
-  const tab = isSection(raw) ? raw : null;
+  const settings = useSettings();
+  const tab = isSection(raw) && (raw !== "refer" || settings.featureReferral) ? raw : null;
   const active: AccountSectionId = tab ?? "profile";
 
   if (!user) {
@@ -68,7 +70,7 @@ export function AccountScreen() {
             </div>
           </div>
           <nav className="panel p-2" aria-label="Account sections">
-            {ACCOUNT_SECTIONS.map((s) => {
+            {ACCOUNT_SECTIONS.filter((s) => s.id !== "refer" || settings.featureReferral).map((s) => {
               const Icon = ICONS[s.id];
               const on = active === s.id;
               return (

@@ -3,8 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../core/services.dart';
 import '../state/providers.dart';
+import '../api/models.dart' show Settings;
+import '../widgets/service_gate.dart';
 import '../theme/tokens.dart';
 
 class AppShell extends ConsumerWidget {
@@ -65,7 +66,7 @@ void showServicesSheet(BuildContext context) {
               crossAxisSpacing: 10,
               childAspectRatio: 1.9,
               children: [
-                for (final s in services)
+                for (final s in openServices(ProviderScope.containerOf(context).read(configProvider).value?.settings ?? const Settings({})))
                   Material(
                     color: c.surfaceRaised,
                     borderRadius: BorderRadius.circular(16),

@@ -122,7 +122,7 @@ export function LoginModal() {
                 <label className="label" htmlFor="se">Email <span className="normal-case tracking-normal text-subtle">(optional, for tickets and invoices)</span></label>
                 <input id="se" type="email" className="field mt-1.5" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
-              {showCode ? (
+              {!settings.featureReferral ? null : showCode ? (
                 <div>
                   <label className="label" htmlFor="sc">Referral code</label>
                   <input id="sc" className="field mt-1.5 uppercase" placeholder="e.g. QF7K2M9P" value={code} onChange={(e) => setCode(e.target.value)} />

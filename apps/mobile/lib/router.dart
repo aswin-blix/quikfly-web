@@ -11,6 +11,7 @@ import 'screens/checkout/checkout_screen.dart';
 import 'screens/checkout/confirmed_screen.dart';
 import 'screens/trips/trip_screen.dart';
 import 'screens/account/notifications_screen.dart';
+import 'widgets/service_gate.dart';
 import 'screens/checkout/invoice_screen.dart';
 import 'screens/not_found.dart';
 import 'screens/help/help_screen.dart';
@@ -45,7 +46,9 @@ final router = GoRouter(
       parentNavigatorKey: _rootKey,
       // ?ride=&booking= starts a scheduled ride (from My Trips).
       // ?to=&at=&trip= prefill a ride that joins a trip (from a booking's confirmation).
-      builder: (_, s) => RideScreen(
+      builder: (_, s) => ServiceGate(
+        service: s.pathParameters['service'] == 'bike' ? ServiceKey.bike : ServiceKey.car,
+        child: RideScreen(
         key: ValueKey('${s.pathParameters['service']}${s.uri.query}'),
         service: s.pathParameters['service'] == 'bike' ? ServiceKey.bike : ServiceKey.car,
         resumeRideId: s.uri.queryParameters['ride'],
@@ -54,23 +57,24 @@ final router = GoRouter(
         scheduleAt: s.uri.queryParameters['at'],
         tripOf: s.uri.queryParameters['trip'],
       ),
+      ),
     ),
-    GoRoute(path: '/bus', parentNavigatorKey: _rootKey, builder: (_, _) => const BusScreen()),
+    GoRoute(path: '/bus', parentNavigatorKey: _rootKey, builder: (_, _) => const ServiceGate(service: ServiceKey.bus, child: BusScreen())),
     GoRoute(
       path: '/bus/search',
       parentNavigatorKey: _rootKey,
       builder: (_, s) {
         final q = s.uri.queryParameters;
-        return BusResultsScreen(
+        return ServiceGate(service: ServiceKey.bus, child: BusResultsScreen(
           key: ValueKey(s.uri.toString()),
           from: q['from'] ?? 'Chennai',
           to: q['to'] ?? 'Bengaluru',
           date: parseIso(q['date'], DateTime.now().add(const Duration(days: 1))),
-        );
+        ));
       },
     ),
-    GoRoute(path: '/holidays', parentNavigatorKey: _rootKey, builder: (_, _) => const HolidaysScreen()),
-    GoRoute(path: '/holidays/:slug', parentNavigatorKey: _rootKey, builder: (_, s) => HolidayDetailScreen(slug: s.pathParameters['slug']!)),
+    GoRoute(path: '/holidays', parentNavigatorKey: _rootKey, builder: (_, _) => const ServiceGate(service: ServiceKey.tours, child: HolidaysScreen())),
+    GoRoute(path: '/holidays/:slug', parentNavigatorKey: _rootKey, builder: (_, s) => ServiceGate(service: ServiceKey.tours, child: HolidayDetailScreen(slug: s.pathParameters['slug']!))),
     GoRoute(path: '/checkout', parentNavigatorKey: _rootKey, builder: (_, _) => const CheckoutScreen()),
     GoRoute(
       path: '/confirmed/:id',
@@ -80,15 +84,18 @@ final router = GoRouter(
     GoRoute(path: '/invoice/:id', parentNavigatorKey: _rootKey, builder: (_, s) => InvoiceScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/trip/:id', parentNavigatorKey: _rootKey, builder: (_, s) => TripScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/notifications', parentNavigatorKey: _rootKey, builder: (_, _) => const NotificationsScreen()),
-    GoRoute(path: '/rent', parentNavigatorKey: _rootKey, builder: (_, _) => const RentScreen()),
-    GoRoute(path: '/rent/:id', parentNavigatorKey: _rootKey, builder: (_, s) => RentDetailScreen(id: s.pathParameters['id']!)),
+    GoRoute(path: '/rent', parentNavigatorKey: _rootKey, builder: (_, _) => const ServiceGate(service: ServiceKey.rent, child: RentScreen())),
+    GoRoute(path: '/rent/:id', parentNavigatorKey: _rootKey, builder: (_, s) => ServiceGate(service: ServiceKey.rent, child: RentDetailScreen(id: s.pathParameters['id']!))),
     GoRoute(
       path: '/group',
       parentNavigatorKey: _rootKey,
-      builder: (_, s) => GroupScreen(
+      builder: (_, s) => ServiceGate(
+        service: ServiceKey.rentals,
+        child: GroupScreen(
         key: ValueKey(s.uri.query),
         initialTrip: s.uri.queryParameters['type'],
         initialPax: int.tryParse(s.uri.queryParameters['pax'] ?? ''),
+      ),
       ),
     ),
     GoRoute(path: '/account/:section', parentNavigatorKey: _rootKey, builder: (_, s) => AccountSectionScreen(section: s.pathParameters['section']!)),

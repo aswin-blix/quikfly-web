@@ -8,6 +8,7 @@ import { cx, todayISO } from "@/lib/format";
 import { defaultRentalWindow } from "@/lib/rentals";
 import { qs, useNav } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
+import { useServiceOn } from "./ServiceGate";
 import type { ServiceKey, TourTheme } from "@quikfly/shared";
 import { GoldButton, Segmented } from "./ui";
 import { useConfig } from "./ConfigProvider";
@@ -16,11 +17,16 @@ type Tab = "ride" | "bus" | "tours" | "rent" | "rentals";
 const TABS: [Tab, ServiceKey, string][] = [["ride", "car", "Rides"], ["bus", "bus", "Bus"], ["tours", "tours", "Holidays"], ["rent", "rent", "Rent a Car"], ["rentals", "rentals", "Group"]];
 
 export function BookingWidget() {
-  const [tab, setTab] = useState<Tab>("ride");
+  const isOn = useServiceOn();
+  // Rides stay while either bikes or cabs are open; paused services drop out.
+  const tabs = TABS.filter(([k, sk]) => (k === "ride" ? isOn("car") || isOn("bike") : isOn(sk)));
+  const [picked, setTab] = useState<Tab>("ride");
+  const tab = tabs.some(([k]) => k === picked) ? picked : tabs[0]?.[0];
+  if (!tab) return null;
   return (
     <div className="panel gold-border p-2 shadow-[0_40px_120px_-40px_var(--accent-glow)]">
       <div className="flex overflow-x-auto scrollbar-thin gap-1 p-1" role="tablist">
-        {TABS.map(([k, sk, label]) => {
+        {tabs.map(([k, sk, label]) => {
           const s = SERVICES.find((x) => x.key === sk)!;
           return (
             <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
@@ -49,12 +55,15 @@ export function BookingWidget() {
 function RideForm() {
   const PLACES = useConfig()?.places ?? [];
   const nav = useNav();
-  const [kind, setKind] = useState<"bike" | "cab">("cab");
+  const isOn = useServiceOn();
+  const kinds = ([["bike", "Bike / Auto"], ["cab", "Cab"]] as const).filter(([k]) => isOn(k === "bike" ? "bike" : "car"));
+  const [picked, setKind] = useState<"bike" | "cab">("cab");
+  const kind = kinds.some(([k]) => k === picked) ? picked : kinds[0][0];
   const [from, setFrom] = useState("p3");
   const [to, setTo] = useState("p2");
   return (
     <div className="space-y-3">
-      <Segmented id="ride-kind" value={kind} onChange={setKind} options={[["bike", "Bike / Auto"], ["cab", "Cab"]]} />
+      {kinds.length > 1 && <Segmented id="ride-kind" value={kind} onChange={setKind} options={kinds.map(([k, l]) => [k, l] as [typeof k, string])} />}
       <div className="grid sm:grid-cols-2 gap-3">
         <Select label="Pickup" icon={<MapPin size={16} className="text-success" />} value={from} onChange={setFrom} options={PLACES.map((p) => [p.id, p.name])} />
         <Select label="Drop" icon={<Navigation size={16} className="text-gold" />} value={to} onChange={setTo} options={PLACES.filter((p) => p.id !== from).map((p) => [p.id, p.name])} />

@@ -29,6 +29,7 @@ src/styles/tokens.css       colours, fonts, radii (light + dark). Never use raw 
 
 - **Permissions:** wrap every page in `<RequireAdmin permission="...">` and hide buttons with `useSession().can(...)`. The API enforces the same `PERMISSIONS` map from `@quikfly/shared`; the UI only hides what would fail anyway.
 - **New page:** add `src/app/<name>/page.tsx`, a `NAV` entry, and the route to `LIVE_ROUTES`.
+- **Services and features:** the first two Settings groups switch services and features off (owner only). The API enforces them (`packages/shared/src/switches.ts`); a new service or feature switch needs a `switchError` rule there, a row here, and the screens that should hide it.
 - **New setting:** add it to `Settings` in `packages/shared/src/settings.ts` with a default and a rule in `SETTING_RULES`, then a row in `settings-fields.ts`. The API and the page both validate with `checkSetting`.
 - **Catalog:** the list and edit pages are generic. Each kind's fields, labels, hints and limits come from `CATALOG_DEFS` (`packages/shared/src/catalog-kinds.ts`); the form validates with `validateCatalogData` before saving and the API validates again. Add a field there, not here.
 - **CSS layers:** component classes (`.card`, `.field`, `.btn-primary`...) are in `@layer components` in `globals.css` so utilities like `w-56` or `pl-9` override them. Keep new component classes inside that layer.

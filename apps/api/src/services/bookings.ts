@@ -1,4 +1,4 @@
-import { COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, cancelPolicyFor, creditsReturned, creditsUsable, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type ServiceKey } from "@quikfly/shared";
+import { COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, cancelPolicyFor, creditsReturned, creditsUsable, switchError, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { checkCoupon } from "./offers";
@@ -62,6 +62,9 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
  * if the wallet or the credits fall short none of it happens.
  */
 export async function createBooking(db: D1Database, userId: string, input: NewBooking): Promise<Booking> {
+  // A quote or ride made before a switch went off can't be booked after it.
+  const off = switchError(await getSettings(db), { service: input.service, tripOf: input.tripOf });
+  if (off) throw conflict(off);
   const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit, seatHolds } = await grossPrice(db, userId, input);
   // Joining a trip: the other booking must be the customer's own and not cancelled.
   let tripId: string | null = null;

@@ -23,6 +23,7 @@ export function TravelRentalsScreen() {
   const destinations = useConfig()?.groupDestinations ?? [];
   const [pricing, setPricing] = useState<string | null>(null);
   const [type, setType] = useState<GroupTrip>(() => (["local", "outstation", "oneway"].includes(q.get("type") ?? "") ? q.get("type") as GroupTrip : "outstation"));
+  useEffect(() => { if (!settings.featureOutstation) setType("local"); }, [settings.featureOutstation]);
   const [dest, setDest] = useState("Pondicherry");
   const [date, setDate] = useState(q.get("date") || todayISO(2));
   const [days, setDays] = useState(2);
@@ -66,7 +67,7 @@ export function TravelRentalsScreen() {
       <PageHeader crumbs={[["Home", "/"], ["Group Travel"]]} title="Outstation cabs & group travel" icon={<Caravan className="text-gold" size={36} />}
         sub="Intercity cabs one way or round trip, and tempo travellers to 45-seat coaches for family trips, pilgrimages and outings. All with experienced drivers.">
         <div className="panel gold-border p-4 mt-8 grid md:grid-cols-[auto_1fr_1fr_auto_auto] gap-4 items-end">
-          <Segmented id="trip-type" value={type} onChange={setType} options={[["outstation", "Round trip"], ["oneway", "One way"], ["local", "Local"]]} />
+          {settings.featureOutstation && <Segmented id="trip-type" value={type} onChange={setType} options={[["outstation", "Round trip"], ["oneway", "One way"], ["local", "Local"]]} />}
           {type !== "local" ? (
             <div><label className="label" htmlFor="dst">Chennai to</label>
               <select id="dst" className="field mt-1.5" value={dest} onChange={(e) => setDest(e.target.value)}>{destinations.map((d) => <option key={d.id}>{d.name}</option>)}</select></div>

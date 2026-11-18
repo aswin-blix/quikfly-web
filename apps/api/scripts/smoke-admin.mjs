@@ -322,6 +322,44 @@ await expect("customer sees it verified", call("GET", "/auth/me", null, C), 200,
 await expect("audit records licence decisions", call("GET", `/admin/audit?entity=licence&entityId=${cMe.id}`, null, T), 200,
   (j) => j.items.some((e) => e.action === "licence.approve") && j.items.some((e) => e.action === "licence.reject" && e.detail.reason));
 await expect("unknown customer licence is 404", call("POST", "/admin/licences/UNOPE/approve", null, T), 404);
+// Service and feature switches: everything off at once, each refusal checked, then restored.
+const switches0 = (await call("GET", "/admin/settings", null, T)).json;
+const SWITCHES_OFF = {
+  serviceBus: false, servicePausedMessage: "Bus tickets are paused (smoke test).",
+  featureRideScheduling: false, featureMultiStop: false, featureCashRides: false, featureOutstation: false,
+  featureSelfDrive: false, featureTripOffers: false, featureReferral: false,
+};
+await expect("the paused message can't be blank", call("PATCH", "/admin/settings", { servicePausedMessage: " " }, T), 400);
+await expect("switch a service and every feature off", call("PATCH", "/admin/settings", SWITCHES_OFF, T), 200, (j) => j.serviceBus === false && j.featureReferral === false);
+// Always switch back, even if a check below crashes (this also runs against production).
+try {
+await eventually("switches reach the API", () => call("GET", "/config"), (r) => r.json?.settings?.serviceBus === false && r.json.settings.featureCashRides === false);
+const swVehicles = (await call("GET", "/rentals/travel-vehicles")).json;
+const swCfg = (await call("GET", "/config")).json;
+const swBuses = (await call("GET", `/buses?from=Chennai&to=Bengaluru&date=${TRAVEL}`)).json;
+await expect("a paused service quotes nothing, with the owner's message", call("POST", "/quotes", { service: "bus", from: "Chennai", to: "Bengaluru", date: TRAVEL, busId: swBuses[0]?.id ?? "x", seatIds: ["L1"] }, C), 409,
+  (j) => j.message === SWITCHES_OFF.servicePausedMessage);
+const rideBase = { optionId: "mini", pickupId: places[0].id, dropId: places[1].id };
+const ahead = new Date(Date.now() + 330 * 60_000 + 3 * 3600_000).toISOString().slice(0, 13) + ":00";
+await expect("booking rides ahead is refused when off", call("POST", "/rides", { ...rideBase, payment: "upi", scheduledFor: ahead }, C), 409, (j) => /ahead/.test(j.message));
+await expect("extra stops are refused when off", call("POST", "/rides", { ...rideBase, payment: "upi", stopIds: [places[2].id] }, C), 409, (j) => /stops/.test(j.message));
+await expect("cash rides are refused when off", call("POST", "/rides", { ...rideBase, payment: "cash" }, C), 409, (j) => /Cash/.test(j.message));
+const okRide = await expect("a plain UPI ride still books", call("POST", "/rides", { ...rideBase, payment: "upi" }, C), 201);
+await expect("self-drive is refused when off", call("POST", "/quotes", rentReq, C), 409, (j) => /Self-drive/.test(j.message));
+await expect("chauffeur rentals still quote", call("POST", "/quotes", { ...rentReq, mode: "driver" }, C), 201);
+await expect("one-way trips are refused when outstation is off", call("POST", "/quotes", { service: "rentals", vehicleId: swVehicles[0].id, trip: "oneway", destinationId: swCfg.groupDestinations[0].id, days: 1, start: TRAVEL }, C), 409, (j) => /Outstation/.test(j.message));
+await expect("local group trips still quote", call("POST", "/quotes", { service: "rentals", vehicleId: swVehicles[0].id, trip: "local", days: 1, start: TRAVEL }, C), 201);
+const anyBooking = [].concat((await call("GET", "/bookings", null, C)).json ?? []).find((b) => b.status !== "cancelled");
+if (anyBooking) {
+  await expect("joining a trip is refused when trip offers are off", call("POST", "/bookings", { service: "car", title: "Smoke", subtitle: "A → B", payment: "upi", lines: [], rideId: okRide.id, tripOf: anyBooking.id }, C), 409, (j) => /trip/.test(j.message));
+}
+await expect("referral codes are refused when off", call("POST", "/me/referral", { code: "QFZZZZZZ9" }, C), 409, (j) => /Refer/.test(j.message));
+if (okRide) await call("POST", `/rides/${okRide.id}/cancel`, null, C);
+} finally {
+const restore = Object.fromEntries(Object.keys(SWITCHES_OFF).map((k) => [k, switches0[k]]));
+await expect("restore the switches", call("PATCH", "/admin/settings", restore, T), 200, (j) => j.serviceBus === switches0.serviceBus && j.featureReferral === switches0.featureReferral);
+await eventually("restored switches reach the API", () => call("GET", "/config"), (r) => r.json?.settings?.serviceBus === switches0.serviceBus && r.json.settings.featureCashRides === switches0.featureCashRides);
+}
 await call("POST", "/me/delete", { otp: OTP }, C);
 
 // Partner (vendor) review: sections, changes, approval, onboarding, going live

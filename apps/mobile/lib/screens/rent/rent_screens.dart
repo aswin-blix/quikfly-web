@@ -107,6 +107,8 @@ class _RentScreenState extends ConsumerState<RentScreen> {
     final c = context.qf;
     final trip = ref.watch(rentTripProvider);
     final setTrip = ref.read(rentTripProvider.notifier).set;
+    final selfDrive = (ref.watch(configProvider).value?.settings ?? const Settings({})).featureSelfDrive;
+    if (!selfDrive && trip.self) Future.microtask(() => setTrip(trip.copyWith(self: false)));
     final cities = (ref.watch(configProvider).value?.cities ?? const <NamedItem>[]).map((x) => x.name).toList();
     final cars = ref.watch(carsProvider);
     final hours = rentHours(trip.start, trip.end);
@@ -128,12 +130,12 @@ class _RentScreenState extends ConsumerState<RentScreen> {
       body: ScreenList(
         onRefresh: () async => ref.invalidate(carsProvider),
         children: [
-          Text('Self-drive freedom or a chauffeur for the day. Doorstep delivery and flexible km plans.', style: TextStyle(color: c.fgMuted)),
+          Text('${selfDrive ? 'Self-drive freedom or a chauffeur' : 'A car with a chauffeur'} for the day. Doorstep delivery and flexible km plans.', style: TextStyle(color: c.fgMuted)),
           const SizedBox(height: 12),
           Panel(
             highlighted: true,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SegmentedButton<bool>(
+              if (selfDrive) SegmentedButton<bool>(
                 showSelectedIcon: false,
                 segments: const [ButtonSegment(value: true, label: Text('Self-drive')), ButtonSegment(value: false, label: Text('With driver'))],
                 selected: {trip.self},

@@ -103,7 +103,7 @@ class AccountScreen extends ConsumerWidget {
                 'rejected' => 'Not approved',
                 _ => 'Add',
               }),
-              link(Icons.card_giftcard, 'Refer & earn', '/account/refer'),
+              if (ref.watch(configProvider).value?.settings.featureReferral ?? true) link(Icons.card_giftcard, 'Refer & earn', '/account/refer'),
               link(Icons.settings_outlined, 'Account settings', '/account/settings'),
             ]),
           ],
