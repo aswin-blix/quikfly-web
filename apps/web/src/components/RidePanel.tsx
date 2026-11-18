@@ -3,9 +3,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useHideBottomNav } from "./BottomNav";
-import { ArrowUpDown, Clock, MapPin, Navigation, Phone, Plus, Share2, Siren, Star, Users, X } from "lucide-react";
+import { ArrowUpDown, Clock, Coins, MapPin, Navigation, Phone, Plus, Share2, Siren, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { RIDE_CANCEL_REASONS, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, isNightHour, rideCancelFee } from "@quikfly/shared";
+import { RIDE_CANCEL_REASONS, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, creditsEarned, creditsUsable, isNightHour, rideCancelFee } from "@quikfly/shared";
 import type { FareQuote, PaymentMethod, Place, Ride, RideCancelReason, SavedPlace } from "@quikfly/shared";
 import { trackUrl } from "@/lib/account";
 import { Link } from "@/lib/nav";
@@ -61,6 +61,8 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [selected, setSelected] = useState<string>("");
   const [payment, setPayment] = useState<PaymentMethod>("upi");
+  const [useCredits, setUseCredits] = useState(true);
+  const [creditsPaid, setCreditsPaid] = useState(0);
   const [phase, setPhase] = useState<Phase>("plan");
   // Keep the screen focused on the ride once it is booked.
   useHideBottomNav(phase !== "plan");
@@ -170,10 +172,15 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
 
   function reset() {
     cancelAnimationFrame(raf.current);
-    setPhase("plan"); setRide(null); setBookingId(null); setT(0); setRating(0); setCancelling(false); setReason(null); setWhen("now"); setStops([]);
+    setPhase("plan"); setRide(null); setBookingId(null); setCreditsPaid(0); setT(0); setRating(0); setCancelling(false); setReason(null); setWhen("now"); setStops([]);
   }
 
-  const walletShort = !!user && !!quote && user.walletBalance < quote.fare;
+  // Credits: the same rule the API applies at booking.
+  const creditsCanPay = user && quote ? creditsUsable(settings, user.creditBalance, quote.fare) : 0;
+  const creditsOff = useCredits ? creditsCanPay : 0;
+  const payable = quote ? quote.fare - creditsOff : 0;
+  const earns = quote ? creditsEarned(settings, service, payable) : 0;
+  const walletShort = !!user && !!quote && user.walletBalance < payable;
 
   function book() {
     if (!pickup || !drop || !quote) return;
@@ -185,12 +192,13 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
         const stopLine: [string, string][] = r.stops?.length ? [["Stops", r.stops.map((s) => s.name).join(" → ")]] : [];
         // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
         const b = await api.bookings.create({
-          service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, rideId: r.id, payment,
+          service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, rideId: r.id, payment, useCredits: creditsOff > 0,
           ...(tripOf ? { tripOf } : {}),
           lines: r.scheduledFor
             ? [["Pickup time", prettyDateTime(r.scheduledFor)], ...stopLine, ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]]
             : [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ...stopLine, ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
         });
+        setCreditsPaid(b.creditsUsed);
         if (r.scheduledFor) {
           setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setPhase("scheduled");
           refreshBookings();
@@ -337,7 +345,14 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
                   })}
                 </div>
                 {payment === "wallet" && walletShort && <p className="text-xs text-danger">Wallet balance {inr(user!.walletBalance)} is not enough for this ride. Pick another payment method.</p>}
-                <GoldButton className="w-full mt-2 text-base" onClick={book} disabled={payment === "wallet" && walletShort}>{when === "later" ? "Schedule" : "Book"} {quote?.option.name} · {quote && inr(quote.fare)}</GoldButton>
+                {creditsCanPay > 0 && (
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" className="accent-brand" checked={useCredits} onChange={(e) => setUseCredits(e.target.checked)} />
+                    Use {inr(creditsCanPay)} QuikFly Credits <span className="text-xs text-subtle">(balance {inr(user!.creditBalance)})</span>
+                  </label>
+                )}
+                {earns > 0 && <p className="text-xs text-muted flex items-center gap-1.5"><Coins size={13} className="text-gold shrink-0" />Earn {inr(earns)} QuikFly Credits when the ride is completed.</p>}
+                <GoldButton className="w-full mt-2 text-base" onClick={book} disabled={payment === "wallet" && walletShort}>{when === "later" ? "Schedule" : "Book"} {quote?.option.name} · {quote && inr(payable)}</GoldButton>
               </div>
             )}
           </>
@@ -404,7 +419,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
               <p className="flex gap-2"><Navigation size={16} className="text-gold shrink-0" />{ride.drop.name}</p>
             </div>
             <div className="flex items-center justify-between text-sm border-t border-line pt-3">
-              <span className="text-muted">Fare ({ride.payment.toUpperCase()})</span><span className="font-bold text-lg">{inr(ride.quote.fare)}</span>
+              <span className="text-muted">Fare ({ride.payment.toUpperCase()}){creditsPaid > 0 && <span className="block text-xs text-success">{inr(creditsPaid)} paid with credits</span>}</span><span className="font-bold text-lg">{inr(ride.quote.fare - creditsPaid)}</span>
             </div>
             <div className="flex gap-2">
               <button type="button" onClick={() => setSosOpen(true)} aria-label="SOS: safety options"
@@ -440,8 +455,11 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
         {ride && phase === "done" && (
           <div className="text-center space-y-4 py-4">
             <p className="label !text-success">You have arrived</p>
-            <p className="text-3xl font-bold">{inr(ride.quote.fare)}</p>
-            <p className="text-sm text-muted">{ride.quote.distanceKm} km · {ride.quote.durationMin} min · paid via {ride.payment.toUpperCase()}</p>
+            <p className="text-3xl font-bold">{inr(ride.quote.fare - creditsPaid)}</p>
+            <p className="text-sm text-muted">{ride.quote.distanceKm} km · {ride.quote.durationMin} min · paid via {ride.payment.toUpperCase()}{creditsPaid > 0 ? ` + ${inr(creditsPaid)} credits` : ""}</p>
+            {creditsEarned(settings, service, ride.quote.fare - creditsPaid) > 0 && (
+              <p className="text-sm text-gold flex items-center justify-center gap-1.5"><Coins size={15} />{inr(creditsEarned(settings, service, ride.quote.fare - creditsPaid))} QuikFly Credits earned</p>
+            )}
             <p className="text-sm">Rate your ride with {ride.driver.name}</p>
             <div className="flex justify-center gap-1">
               {[1, 2, 3, 4, 5].map((n) => (

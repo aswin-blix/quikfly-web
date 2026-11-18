@@ -6,7 +6,7 @@ import {
 } from "@quikfly/shared";
 import type { QuikflyApi } from "./contract";
 import {
-  KEYS, MOCK_LICENCE_REVIEW_SECONDS, MOCK_OTP, NEW_USER_WALLET, currentUser, drop, fail, load, patchUser, resetAccount, save, saveUser, uid, wait, walletEntry,
+  KEYS, MOCK_LICENCE_REVIEW_SECONDS, MOCK_OTP, NEW_USER_WALLET, creditSummary, currentUser, drop, fail, load, patchUser, resetAccount, save, saveUser, uid, wait, walletEntry,
 } from "./mock-store";
 
 const checkOtp = (otp: string) => otp === MOCK_OTP || fail(`Invalid OTP. Use ${MOCK_OTP} in demo mode.`);
@@ -17,7 +17,7 @@ const tenDigits = (phone: string) => {
 
 function newUser(phone: string): User {
   return {
-    id: uid("U"), name: "Guest", phone, walletBalance: 0, email: null, gender: null, dob: null, profileComplete: false,
+    id: uid("U"), name: "Guest", phone, walletBalance: 0, creditBalance: 0, email: null, gender: null, dob: null, profileComplete: false,
     referralCode: "QF" + Math.random().toString(36).slice(2, 8).toUpperCase(), referred: false,
     licence: { status: "none", number: null, expiry: null, note: null }, gst: null, autoShareNightRides: false,
   };
@@ -100,6 +100,7 @@ export const mockAccount: QuikflyApi["account"] = {
     return patchUser({ licence: { status: "pending", number, expiry, note: null } });
   },
   async walletHistory() { await wait(250); return load(KEYS.wallet, []); },
+  async credits() { await wait(250); return creditSummary(); },
 };
 
 /** A small capped list stored under one key. */

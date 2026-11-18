@@ -1,5 +1,5 @@
 // Browser-side "database" for the mock API (demo mode). One account per browser.
-import type { EmergencyContact, Ride, SavedPlace, Traveller, User, WalletTransaction, WalletTxnKind } from "@quikfly/shared";
+import type { CreditEntry, CreditKind, CreditSummary, EmergencyContact, Ride, SavedPlace, Traveller, User, WalletTransaction, WalletTxnKind } from "@quikfly/shared";
 
 /** Login code accepted by the mock API. */
 export const MOCK_OTP = "1234";
@@ -19,6 +19,7 @@ export const KEYS = {
   travellers: "quikfly.mockTravellers",
   contacts: "quikfly.mockContacts",
   wallet: "quikfly.mockWallet",
+  credits: "quikfly.mockCredits",
   rides: "quikfly.mockRides",
   bookings: "quikfly.bookings",
 } as const;
@@ -38,7 +39,7 @@ export const fail = (message: string): never => { throw new Error(message); };
 export function currentUser(): User {
   const u = load<User | null>(KEYS.user, null);
   if (!u || load<string | null>(KEYS.deletedAt, null)) fail("Please sign in to continue.");
-  return u!;
+  return { ...u!, creditBalance: creditBalance() };
 }
 export const saveUser = (u: User) => save(KEYS.user, u);
 export function patchUser(patch: Partial<User>): User {
@@ -53,6 +54,40 @@ export function walletEntry(kind: WalletTxnKind, amount: number, note: string, b
   saveUser({ ...u, walletBalance: u.walletBalance + amount });
   const list = load<WalletTransaction[]>(KEYS.wallet, []);
   save(KEYS.wallet, [{ id: uid("WT"), kind, amount, note, bookingId, createdAt: new Date().toISOString() }, ...list]);
+}
+
+/** Unused, unexpired credits, soonest expiry first (the order the API spends them in). */
+function liveCredits(list = load<CreditEntry[]>(KEYS.credits, [])) {
+  const now = Date.now();
+  return list.filter((e) => e.remaining > 0 && e.expiresAt && Date.parse(e.expiresAt) > now)
+    .sort((a, b) => a.expiresAt!.localeCompare(b.expiresAt!));
+}
+export const creditBalance = () => liveCredits().reduce((s, e) => s + e.remaining, 0);
+
+/** Adds a credits entry like the API: credits in carry an expiry; "spent" takes from the soonest-expiring. */
+export function creditEntry(kind: CreditKind, amount: number, note: string, bookingId: string | null, expiresAt: string | null = null) {
+  const list = load<CreditEntry[]>(KEYS.credits, []);
+  if (kind === "spent") {
+    let left = -amount;
+    for (const e of liveCredits(list)) {
+      if (left <= 0) break;
+      const take = Math.min(e.remaining, left);
+      e.remaining -= take;
+      left -= take;
+    }
+  }
+  const positive = amount > 0;
+  save(KEYS.credits, [{ id: uid("CR"), kind, amount, note, bookingId, createdAt: new Date().toISOString(), expiresAt: positive ? expiresAt : null, remaining: positive ? amount : 0 }, ...list]);
+}
+
+export function creditSummary(): CreditSummary {
+  const live = liveCredits();
+  const first = live[0];
+  return {
+    balance: live.reduce((s, e) => s + e.remaining, 0),
+    nextExpiry: first ? { amount: live.filter((e) => e.expiresAt === first.expiresAt).reduce((s, e) => s + e.remaining, 0), expiresAt: first.expiresAt! } : null,
+    items: load<CreditEntry[]>(KEYS.credits, []).slice(0, 100),
+  };
 }
 
 export type MockLists = { places: SavedPlace[]; travellers: Traveller[]; contacts: EmergencyContact[] };

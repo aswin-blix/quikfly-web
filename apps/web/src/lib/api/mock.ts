@@ -4,12 +4,14 @@
 // Storage helpers: ./mock-store.ts. Account endpoints: ./mock-account.ts.
 import type { QuikflyApi } from "./contract";
 import {
-  BUS_OPERATORS, CATALOG_SEED, DEFAULT_SETTINGS, DEPOSIT_LINE, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
+  BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
-import { KEYS, currentUser, fail, load, save, uid, wait, walletEntry, type MockRide } from "./mock-store";
+import { KEYS, creditBalance, creditEntry, currentUser, fail, load, save, uid, wait, walletEntry, type MockRide } from "./mock-store";
+
+const creditExpiry = () => new Date(Date.now() + settings.creditsExpiryDays * 86_400_000).toISOString();
 
 export { MOCK_OTP } from "./mock-store";
 
@@ -256,7 +258,7 @@ export const mockApi: QuikflyApi = {
       await wait(900);
       const total = gross(input);
       const c = input.couponCode ? coupon(input.couponCode, input.service, total) : null;
-      const amount = total - (c?.discount ?? 0);
+      const afterCoupon = total - (c?.discount ?? 0);
       // Joining a trip: the other booking must exist and not be cancelled (like the API).
       let tripId: string | null = null;
       if (input.tripOf) {
@@ -265,21 +267,26 @@ export const mockApi: QuikflyApi = {
         tripId = anchor.tripId ?? anchor.id;
       }
       const quoted = input.quoteId ? quotesStore()[input.quoteId] : undefined;
-      const deposit = Math.min(quoted?.lines.find((l) => l.label === DEPOSIT_LINE)?.amount ?? 0, amount);
+      const quotedDeposit = quoted?.lines.find((l) => l.label === DEPOSIT_LINE)?.amount ?? 0;
+      const creditsUsed = input.useCredits ? creditsUsable(settings, creditBalance(), afterCoupon, Math.min(quotedDeposit, afterCoupon)) : 0;
+      const amount = afterCoupon - creditsUsed;
+      const deposit = Math.min(quotedDeposit, amount);
       const lines: [string, string][] = [
-        ...input.lines.filter(([k]) => k !== "Coupon"),
+        ...input.lines.filter(([k]) => k !== "Coupon" && k !== CREDITS_LINE),
         ...(c ? [["Coupon", `${c.code} (−₹${c.discount.toLocaleString("en-IN")})`] as [string, string]] : []),
+        ...(creditsUsed ? [[CREDITS_LINE, `−₹${creditsUsed.toLocaleString("en-IN")}`] as [string, string]] : []),
       ];
       const b: Booking = {
         id: uid("QF"), service: input.service, title: input.title, subtitle: input.subtitle, payment: input.payment,
         amount, lines, status: "confirmed", createdAt: new Date().toISOString(),
         startsAt: quoted?.startsAt || (input.rideId ? ridesStore()[input.rideId]?.ride.scheduledFor : null) || null, refundAmount: null, deposit, cancelReason: null, cancelFee: 0,
-        rideId: input.rideId ?? null, tripId,
+        rideId: input.rideId ?? null, tripId, creditsUsed,
       };
       if (input.payment === "wallet") {
         if (currentUser().walletBalance < amount) fail("Not enough wallet balance. Choose another payment method.");
         walletEntry("payment", -amount, `Paid · ${input.title}`, b.id);
       }
+      if (creditsUsed) creditEntry("spent", -creditsUsed, `Used · ${input.title}`, b.id);
       if (input.quoteId) {
         const qs = quotesStore();
         qs[input.quoteId] = { ...qs[input.quoteId], used: true };
@@ -306,6 +313,8 @@ export const mockApi: QuikflyApi = {
       mockNotify({ kind: "booking.cancelled", title: `Cancelled · ${b.title}`, bookingId: b.id,
         body: refund ? (b.payment === "wallet" ? `₹${refund.toLocaleString("en-IN")} is back in your QuikFly wallet.` : `Refund due: ₹${refund.toLocaleString("en-IN")}.`) : "No refund under the cancellation policy." });
       if (b.payment === "wallet" && refund > 0) walletEntry("refund", refund, `Refund${percent < 100 ? ` (${percent}%)` : ""} · ${b.title}`, b.id);
+      const creditsBack = creditsReturned(b.creditsUsed ?? 0, percent);
+      if (creditsBack) creditEntry("returned", creditsBack, `Returned · ${b.title}`, b.id, creditExpiry());
       return b;
     },
     // Like the API: customers complete rides only; staff close everything else.
@@ -313,7 +322,13 @@ export const mockApi: QuikflyApi = {
       await wait(200);
       const b = bookingsStore().find((x) => x.id === id) ?? fail("Booking not found.");
       if (b.service !== "bike" && b.service !== "car" && (b.status === "confirmed" || b.status === "ongoing")) fail("QuikFly staff close this booking once the trip is over.");
-      return finishBooking(id, "completed");
+      const done = finishBooking(id, "completed");
+      const earn = creditsEarned(settings, done.service, done.amount, done.deposit ?? 0);
+      if (earn) {
+        creditEntry("earned", earn, `Earned · ${done.title}`, done.id, creditExpiry());
+        mockNotify({ kind: "credits.earned", title: `You earned ₹${earn.toLocaleString("en-IN")} QuikFly Credits`, body: `For ${done.title}. Use them on your next booking within ${settings.creditsExpiryDays} days.`, bookingId: done.id });
+      }
+      return done;
     },
   },
 };

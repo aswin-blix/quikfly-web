@@ -63,6 +63,7 @@ export const httpApi: QuikflyApi = {
     applyReferral: (code) => req("POST", "/me/referral", { code }),
     submitLicence: (number, expiry) => req("PUT", "/me/licence", { number, expiry }),
     walletHistory: () => req("GET", "/me/wallet"),
+    credits: () => req("GET", "/me/credits"),
   },
   savedPlaces: {
     list: () => req("GET", "/me/places"),
