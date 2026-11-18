@@ -129,6 +129,23 @@ void main() {
     expect(await api.markNotificationsRead(), 0);
   });
 
+  test('partner application parses (QuikFly Partner app)', () async {
+    final before = await api.vendorApplication();
+    final app = before ?? await api.startVendorApplication();
+    expect(app.sections.keys, containsAll(vendorSections));
+    if (app.editable) {
+      final reg = 'TN${10 + Random().nextInt(89)}QF${1000 + Random().nextInt(8999)}';
+      final now = DateTime.now();
+      final saved = await api.saveVendorSection('vehicle', {
+        'city': config.cities.first.name, 'type': 'tempo', 'fuel': 'petrol_diesel', 'regNumber': reg,
+        'purchaseDate': '${now.year - 1}-01-15',
+      });
+      expect(saved.vehicle?.regNumber, reg);
+      expect(saved.sections['vehicle']?.state, 'filled');
+      expect(VendorRules.regNumber.hasMatch(reg), isTrue);
+    }
+  });
+
   test('credits summary parses', () async {
     final sum = await api.credits();
     expect(sum.balance, greaterThanOrEqualTo(0));

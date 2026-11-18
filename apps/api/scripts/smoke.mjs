@@ -20,6 +20,15 @@ async function call(method, path, body, auth = true) {
   return { status: res.status, json: await res.json().catch(() => null) };
 }
 
+// Partner (vendor) test helpers: a raw image upload and dates relative to today.
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, ...new Array(256).fill(7)]);
+async function upload(path, bytes, bearer) {
+  const res = await fetch(BASE + path, { method: "PUT", headers: { "Content-Type": "image/jpeg", Authorization: `Bearer ${bearer}` }, body: bytes });
+  return { status: res.status, json: await res.json().catch(() => null) };
+}
+const dayOffset = (days) => new Date(Date.now() + 330 * 60_000 + days * 86_400_000).toISOString().slice(0, 10);
+const randomReg = () => `TN${String(10 + Math.floor(Math.random() * 89))}QF${String(1000 + Math.floor(Math.random() * 8999))}`;
+
 function check(name, ok, detail = "") {
   if (!ok) failed++;
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : `  -> ${detail}`}`);
@@ -432,6 +441,61 @@ await expect("marking read needs a list of ids", call("POST", "/me/notifications
 const someId = (await call("GET", "/me/notifications")).json.items[0].id;
 await expect("mark one notification read", call("POST", "/me/notifications/read", { ids: [someId] }), 200, (j) => typeof j.unread === "number");
 await expect("mark all notifications read", call("POST", "/me/notifications/read", {}), 200, (j) => j.unread === 0);
+
+// Partner registration (QuikFly Partner app), with a fresh account
+const vPhone = "8" + String(Date.now()).slice(-9);
+const V = (await call("POST", "/auth/verify", { phone: vPhone, otp: OTP })).json?.token ?? "";
+await call("PATCH", "/me", { name: "Smoke Partner" }, V);
+await expect("GET /vendor needs sign-in", call("GET", "/vendor", null, false), 401);
+await expect("no partner application yet", call("GET", "/vendor", null, V), 200, (j) => j.application === null);
+await expect("saving before starting is 404", call("PUT", "/vendor/sections/bank", { holder: "A", account: "1", ifsc: "X" }, V), 404);
+await expect("POST /vendor starts an application", call("POST", "/vendor", null, V), 201,
+  (j) => j.status === "draft" && Object.values(j.sections).every((s) => s.state === "pending") && j.vehicle === null);
+await expect("starting again keeps the same application", call("POST", "/vendor", null, V), 201, (j) => j.status === "draft");
+await expect("RC needs the vehicle first", call("PUT", "/vendor/sections/rc", { ownerName: "Smoke Partner", validTill: dayOffset(365) }, V), 409);
+await expect("bad registration number is refused", call("PUT", "/vendor/sections/vehicle", { city: "Chennai", type: "car", fuel: "petrol_diesel", regNumber: "12345", purchaseDate: dayOffset(-700) }, V), 400);
+await expect("too old a vehicle is refused", call("PUT", "/vendor/sections/vehicle", { city: "Chennai", type: "car", fuel: "petrol_diesel", regNumber: randomReg(), purchaseDate: dayOffset(-365 * 12) }, V), 400, (j) => /older than/.test(j.message));
+await expect("unknown city is refused", call("PUT", "/vendor/sections/vehicle", { city: "Atlantis", type: "car", fuel: "petrol_diesel", regNumber: randomReg(), purchaseDate: dayOffset(-700) }, V), 400);
+const vReg = randomReg();
+await expect("save city and vehicle (spaces in the number are fine)", call("PUT", "/vendor/sections/vehicle", { city: "Chennai", type: "car", fuel: "cng_lpg", regNumber: vReg.replace(/^(..)(..)/, "$1 $2 "), purchaseDate: dayOffset(-700) }, V), 200,
+  (j) => j.city === "Chennai" && j.vehicle.regNumber === vReg && j.vehicle.fuel === "cng_lpg" && j.sections.vehicle.state === "filled");
+await expect("bad IFSC is refused", call("PUT", "/vendor/sections/bank", { holder: "Smoke Partner", account: "123456789012", ifsc: "SBIN123" }, V), 400);
+await expect("save bank details (shown masked)", call("PUT", "/vendor/sections/bank", { holder: "Smoke Partner", account: "1234 5678 9012", ifsc: "sbin0001234" }, V), 200,
+  (j) => j.bank.accountLast4 === "9012" && j.bank.ifsc === "SBIN0001234" && !JSON.stringify(j).includes("123456789012"));
+await expect("an expired RC is refused", call("PUT", "/vendor/sections/rc", { ownerName: "Smoke Partner", validTill: dayOffset(-1) }, V), 400);
+await expect("RC details without the photo stay pending", call("PUT", "/vendor/sections/rc", { ownerName: "Smoke Partner", validTill: dayOffset(365) }, V), 200, (j) => j.sections.rc.state === "pending");
+await expect("save insurance", call("PUT", "/vendor/sections/insurance", { insurer: "Smoke General", policyNumber: "pol/2026-001", validTill: dayOffset(200) }, V), 200, (j) => j.vehicle.insurance.policyNumber === "POL/2026-001");
+await expect("audit too far ahead is refused", call("PUT", "/vendor/sections/audit", { date: dayOffset(60), slot: "morning" }, V), 400);
+await expect("book the vehicle audit", call("PUT", "/vendor/sections/audit", { date: dayOffset(3), slot: "afternoon" }, V), 200, (j) => j.vehicle.audit.result === "booked" && j.sections.audit.state === "filled");
+await expect("can't send with sections missing", call("POST", "/vendor/submit", null, V), 400);
+const up = await upload("/vendor/documents/photo", JPEG, V);
+if (up.status === 409) {
+  console.log("SKIP  document uploads (R2 not switched on for this API)");
+} else {
+  check("upload a profile photo", up.status === 200 && up.json.hasPhoto && up.json.sections.photo.state === "filled", `${up.status} ${JSON.stringify(up.json)?.slice(0, 160)}`);
+  const fake = await upload("/vendor/documents/rc", new TextEncoder().encode("not a picture at all"), V);
+  check("a non-image upload is refused", fake.status === 400, String(fake.status));
+  const rcUp = await upload("/vendor/documents/rc", JPEG, V);
+  check("RC photo completes the RC section", rcUp.status === 200 && rcUp.json.sections.rc.state === "filled", String(rcUp.status));
+  const insUp = await upload("/vendor/documents/insurance", JPEG, V);
+  check("insurance photo completes insurance", insUp.status === 200 && insUp.json.sections.insurance.state === "filled", String(insUp.status));
+  const got = await fetch(BASE + "/vendor/documents/photo", { headers: { Authorization: `Bearer ${V}` } });
+  check("the partner can open their own photo", got.status === 200 && got.headers.get("content-type") === "image/jpeg" && (await got.arrayBuffer()).byteLength === JPEG.length, String(got.status));
+  const other = await fetch(BASE + "/vendor/documents/photo", { headers: { Authorization: `Bearer ${token}` } });
+  check("someone without an application can't open documents", other.status === 404, String(other.status));
+  await expect("send the application", call("POST", "/vendor/submit", null, V), 200, (j) => j.status === "submitted" && !!j.submittedAt);
+  await expect("sections are locked while under review", call("PUT", "/vendor/sections/bank", { holder: "Someone Else", account: "123456789012", ifsc: "SBIN0001234" }, V), 409);
+  await expect("reset is refused once sent", call("POST", "/vendor/reset", null, V), 409);
+}
+await expect("onboarding waits for approval", call("POST", "/vendor/onboarding/payment", null, V), 409);
+const vPhone2 = "8" + String(Date.now() + 7).slice(-9);
+const V2 = (await call("POST", "/auth/verify", { phone: vPhone2, otp: OTP })).json?.token ?? "";
+await call("POST", "/vendor", null, V2);
+await expect("the same vehicle can't be registered twice", call("PUT", "/vendor/sections/vehicle", { city: "Chennai", type: "car", fuel: "petrol_diesel", regNumber: vReg, purchaseDate: dayOffset(-700) }, V2), 409);
+await call("PUT", "/vendor/sections/vehicle", { city: "Chennai", type: "auto", fuel: "cng_lpg", regNumber: randomReg(), purchaseDate: dayOffset(-300) }, V2);
+await expect("reset clears a draft", call("POST", "/vendor/reset", null, V2), 200, (j) => j.vehicle === null && j.city === null && j.sections.vehicle.state === "pending");
+await call("POST", "/me/delete", { otp: OTP }, V);
+await call("POST", "/me/delete", { otp: OTP }, V2);
 // Push devices (Firebase tokens from the app)
 await expect("register a push device", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "android" }), 201, (j) => j.registered === true);
 await expect("a push device needs a known platform", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "fridge" }), 400);

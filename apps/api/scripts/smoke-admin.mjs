@@ -23,6 +23,14 @@ async function call(method, path, body, token = "") {
   });
   return { status: res.status, json: await res.json().catch(() => null) };
 }
+// Partner (vendor) test helpers: a raw image upload and dates relative to today.
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, ...new Array(256).fill(7)]);
+async function upload(path, bytes, bearer) {
+  const res = await fetch(BASE + path, { method: "PUT", headers: { "Content-Type": "image/jpeg", Authorization: `Bearer ${bearer}` }, body: bytes });
+  return { status: res.status, json: await res.json().catch(() => null) };
+}
+const dayOffset = (days) => new Date(Date.now() + 330 * 60_000 + days * 86_400_000).toISOString().slice(0, 10);
+const randomReg = () => `TN${String(10 + Math.floor(Math.random() * 89))}QF${String(1000 + Math.floor(Math.random() * 8999))}`;
 async function expect(name, promise, status, test = () => true) {
   const r = await promise;
   check(name, r.status === status && test(r.json), `${r.status} ${JSON.stringify(r.json)?.slice(0, 200)}`);
@@ -354,6 +362,70 @@ await eventually("restored switches reach the API", () => call("GET", "/config")
 }
 await call("POST", "/me/delete", { otp: OTP }, C);
 
+// Partner (vendor) review: sections, changes, approval, onboarding, going live
+const PV = (await call("POST", "/auth/verify", { phone: "7" + String(Date.now()).slice(-9), otp: OTP })).json.token;
+await call("PATCH", "/me", { name: "Smoke Vendor" }, PV);
+await call("POST", "/vendor", null, PV);
+const pvReg = randomReg();
+await call("PUT", "/vendor/sections/vehicle", { city: "Chennai", type: "tempo", fuel: "petrol_diesel", regNumber: pvReg, purchaseDate: dayOffset(-500) }, PV);
+await call("PUT", "/vendor/sections/bank", { holder: "Smoke Vendor", account: "998877665544", ifsc: "HDFC0001234" }, PV);
+await call("PUT", "/vendor/sections/rc", { ownerName: "Smoke Vendor", validTill: dayOffset(400) }, PV);
+await call("PUT", "/vendor/sections/insurance", { insurer: "Smoke General", policyNumber: "TT-55667788", validTill: dayOffset(300) }, PV);
+await call("PUT", "/vendor/sections/audit", { date: dayOffset(2), slot: "morning" }, PV);
+const pvUp = await upload("/vendor/documents/photo", JPEG, PV);
+if (pvUp.status === 409) {
+  console.log("SKIP  partner review (R2 not switched on for this API)");
+} else {
+  await upload("/vendor/documents/rc", JPEG, PV);
+  await upload("/vendor/documents/insurance", JPEG, PV);
+  const sent = await expect("partner sends the application", call("POST", "/vendor/submit", null, PV), 200, (j) => j.status === "submitted");
+  const vid = sent?.id;
+  await expect("GET /admin/vendors lists it (oldest first)", call("GET", "/admin/vendors", null, T), 200, (j) => j.some((x) => x.id === vid && x.vehicle.regNumber === pvReg && x.open === 6));
+  await expect("bad status filter is refused", call("GET", "/admin/vendors?status=nope", null, T), 400);
+  await expect("staff see the full bank account", call("GET", `/admin/vendors/${vid}`, null, T), 200, (j) => j.bankAccount === "998877665544" && j.application.bank.accountLast4 === "5544");
+  const doc = await fetch(BASE + `/admin/vendors/${vid}/documents/rc`, { headers: { Authorization: `Bearer ${T}` } });
+  check("staff can open the RC photo", doc.status === 200 && doc.headers.get("content-type") === "image/jpeg", String(doc.status));
+  await expect("sending a section back needs a note", call("POST", `/admin/vendors/${vid}/sections/rc`, { decision: "changes" }, T), 400);
+  await expect("approve can't happen with open sections", call("POST", `/admin/vendors/${vid}/review`, { decision: "approve" }, T), 409);
+  for (const s of ["vehicle", "photo", "bank", "insurance", "audit"]) await call("POST", `/admin/vendors/${vid}/sections/${s}`, { decision: "approve" }, T);
+  await expect("send the RC back with a note", call("POST", `/admin/vendors/${vid}/sections/rc`, { decision: "changes", note: "RC photo is blurry, please retake" }, T), 200,
+    (j) => j.application.sections.rc.state === "changes" && j.application.sections.audit.state === "approved" && j.application.vehicle.audit.result === "passed");
+  await expect("return the application for changes", call("POST", `/admin/vendors/${vid}/review`, { decision: "changes" }, T), 200, (j) => j.application.status === "draft");
+  await expect("the partner is told what to fix", call("GET", "/me/notifications", null, PV), 200, (j) => j.items.some((n) => n.kind === "vendor.changes" && /registration certificate/.test(n.body)));
+  await expect("the partner sees the staff note", call("GET", "/vendor", null, PV), 200, (j) => j.application.sections.rc.note === "RC photo is blurry, please retake");
+  await upload("/vendor/documents/rc", JPEG, PV);
+  await expect("partner resends", call("POST", "/vendor/submit", null, PV), 200, (j) => j.status === "submitted" && j.sections.rc.state === "filled" && j.sections.bank.state === "approved");
+  await call("POST", `/admin/vendors/${vid}/sections/rc`, { decision: "approve" }, T);
+  await expect("approve the application", call("POST", `/admin/vendors/${vid}/review`, { decision: "approve" }, T), 200,
+    (j) => j.application.status === "onboarding" && j.application.onboarding.fee === s0.vendorJoiningFee);
+  await expect("agreement waits for the joining fee", call("POST", "/vendor/onboarding/agreement", { name: "Smoke Vendor", accept: true }, PV), s0.vendorJoiningFee ? 409 : 200);
+  await expect("pay the joining fee (demo)", call("POST", "/vendor/onboarding/payment", null, PV), 200, (j) => !!j.onboarding.paidAt);
+  await expect("sticker waits for the agreement", call("POST", "/vendor/onboarding/sticker", null, PV), 409);
+  await expect("the agreement needs the tick", call("POST", "/vendor/onboarding/agreement", { name: "Smoke Vendor" }, PV), 400);
+  await expect("accept the agreement", call("POST", "/vendor/onboarding/agreement", { name: "Smoke Vendor", accept: true }, PV), 200, (j) => !!j.onboarding.agreementAt);
+  await expect("ask for sticker and paint", call("POST", "/vendor/onboarding/sticker", null, PV), 200, (j) => !!j.onboarding.stickerRequestedAt);
+  await expect("staff mark sticker done: partner goes live", call("POST", `/admin/vendors/${vid}/sticker`, null, T), 200,
+    (j) => j.application.status === "active" && j.application.vehicle.status === "active");
+  await expect("the partner is told they're live", call("GET", "/me/notifications", null, PV), 200, (j) => j.items.some((n) => n.kind === "vendor.active"));
+  await expect("vendor decisions are audited", call("GET", `/admin/audit?entity=vendor&entityId=${vid}`, null, T), 200,
+    (j) => ["vendor.approve", "vendor.changes", "vendor.activate", "vendor.section.changes"].every((a) => j.items.some((e) => e.action === a)));
+  // Rejection path with a second partner
+  const RV = (await call("POST", "/auth/verify", { phone: "7" + String(Date.now() + 3).slice(-9), otp: OTP })).json.token;
+  await call("POST", "/vendor", null, RV);
+  await call("PUT", "/vendor/sections/vehicle", { city: "Chennai", type: "bus", fuel: "petrol_diesel", regNumber: randomReg(), purchaseDate: dayOffset(-200) }, RV);
+  await call("PUT", "/vendor/sections/bank", { holder: "Reject Me", account: "112233445566", ifsc: "ICIC0001234" }, RV);
+  await call("PUT", "/vendor/sections/rc", { ownerName: "Reject Me", validTill: dayOffset(400) }, RV);
+  await call("PUT", "/vendor/sections/insurance", { insurer: "Smoke General", policyNumber: "BB-11223344", validTill: dayOffset(300) }, RV);
+  await call("PUT", "/vendor/sections/audit", { date: dayOffset(2), slot: "morning" }, RV);
+  for (const k of ["photo", "rc", "insurance"]) await upload(`/vendor/documents/${k}`, JPEG, RV);
+  const rv = (await call("POST", "/vendor/submit", null, RV)).json;
+  await expect("rejecting needs a reason", call("POST", `/admin/vendors/${rv.id}/review`, { decision: "reject" }, T), 400);
+  await expect("reject an application", call("POST", `/admin/vendors/${rv.id}/review`, { decision: "reject", note: "Permit not valid for this route (smoke)" }, T), 200, (j) => j.application.status === "rejected");
+  await expect("the partner sees why", call("GET", "/vendor", null, RV), 200, (j) => j.application.status === "rejected" && /Permit/.test(j.application.note));
+  await call("POST", "/me/delete", { otp: OTP }, RV);
+}
+await call("POST", "/me/delete", { otp: OTP }, PV);
+
 if (LOCAL) {
   // Roles
   const content = await expect("login: content role", login(CONTENT), 200, (j) => j.admin.role === "content");
@@ -365,6 +437,7 @@ if (LOCAL) {
   await expect("content can't reset the catalog", call("POST", "/admin/catalog/reset", null, content.token), 403);
   await expect("content can't see bookings", call("GET", "/admin/bookings", null, content.token), 403);
   await expect("content can't review licences", call("GET", "/admin/licences", null, content.token), 403);
+  await expect("content can't review partners", call("GET", "/admin/vendors", null, content.token), 403);
 
   // Reset brings back the seed (local only: it would wipe real edits in production)
   const extra = (await call("POST", "/admin/catalog/city", { data: { name: "Smoke City" } }, T)).json;

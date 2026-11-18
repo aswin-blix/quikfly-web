@@ -17,6 +17,7 @@ export const PERMISSIONS = {
   "bookings.view": ["owner", "operations"],
   "bookings.manage": ["owner", "operations"],
   "licences.review": ["owner", "operations"],
+  "vendors.review": ["owner", "operations"],
   "catalog.edit": ["owner", "operations", "content"],
   "offers.edit": ["owner", "operations", "content"],
   "settings.edit": ["owner"],

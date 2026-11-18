@@ -31,6 +31,23 @@ android {
         versionName = flutter.versionName
     }
 
+    // Two apps from one project: the customer app (default, lib/main.dart) and QuikFly Partner
+    // for vehicle owners (lib/main_partner.dart). pubspec.yaml sets the default flavor, so
+    // `flutter run` / `flutter build apk` keep building the customer app.
+    flavorDimensions += "app"
+    productFlavors {
+        create("customer") {
+            dimension = "app"
+            applicationId = "com.quikfly.app"
+            manifestPlaceholders["appLabel"] = "QuikFly"
+        }
+        create("partner") {
+            dimension = "app"
+            applicationId = "com.quikfly.partner"
+            manifestPlaceholders["appLabel"] = "QuikFly Partner"
+        }
+    }
+
     // Release signing: android/key.properties (git-ignored) holds storeFile and keyAlias. The password
     // comes from the QUIKFLY_KEYSTORE_PASSWORD environment variable, so it is never written to disk
     // (a storePassword line in key.properties also works). See apps/mobile/README.md.

@@ -8,3 +8,4 @@ export * from "./pricing";
 export * from "./cancellation";
 export * from "./credits";
 export * from "./switches";
+export * from "./vendor";

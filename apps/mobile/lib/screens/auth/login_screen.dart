@@ -22,7 +22,10 @@ Future<bool> ensureSignedIn(BuildContext context, WidgetRef ref) async {
 enum _Step { phone, otp, profile }
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.showReferral = true});
+
+  /// The QuikFly Partner app hides the customer referral code.
+  final bool showReferral;
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
@@ -201,7 +204,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 decoration: const InputDecoration(labelText: 'Email (optional)', helperText: 'For tickets and invoices', hintText: 'you@example.com'),
               ),
               const SizedBox(height: 10),
-              if (!(ref.watch(configProvider).value?.settings.featureReferral ?? true))
+              if (!widget.showReferral || !(ref.watch(configProvider).value?.settings.featureReferral ?? true))
                 const SizedBox.shrink()
               else if (_showCode)
                 TextField(

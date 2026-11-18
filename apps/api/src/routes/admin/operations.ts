@@ -1,6 +1,6 @@
-// Operations endpoints for staff: /v1/admin/bookings and /v1/admin/licences.
+// Operations endpoints for staff: /v1/admin/bookings, /v1/admin/licences and /v1/admin/vendors.
 import { Hono } from "hono";
-import { ADMIN_RULES, BOOKING_STATUSES, LICENCE_QUEUE_STATUSES, PATTERNS, type BookingFilters } from "@quikfly/shared";
+import { ADMIN_RULES, BOOKING_STATUSES, LICENCE_QUEUE_STATUSES, PATTERNS, VENDOR_DOCUMENTS, VENDOR_SECTIONS, VENDOR_STATUSES, type BookingFilters } from "@quikfly/shared";
 import { SERVICE_KEYS } from "../../config";
 import type { AppEnv } from "../../env";
 import { badRequest } from "../../lib/errors";
@@ -8,6 +8,7 @@ import { jsonBody, text } from "../../lib/validate";
 import { requireAdmin } from "../../middleware/admin";
 import { adminCancel, adminComplete, bookingDetail, searchBookings } from "../../services/admin/bookings";
 import { licenceQueue, reviewLicence } from "../../services/admin/licences";
+import { finishReview, markSticker, reviewSection, vendorDetail, vendorDocument, vendorQueue } from "../../services/admin/vendors";
 
 const pick = <T extends string>(v: string | undefined, allowed: readonly T[], name: string): T | undefined => {
   if (!v) return undefined;
@@ -55,3 +56,28 @@ export const adminLicences = new Hono<AppEnv>()
     await reviewLicence(c.env.DB, c.var.admin.id, c.req.param("userId"), "reject", reason(await jsonBody(c)));
     return c.json({ status: "rejected" });
   });
+
+// Partner (vendor) applications from the QuikFly Partner app.
+const note = (body: Record<string, unknown>) => (typeof body.note === "string" && body.note.trim() ? text(body, "note", 3, ADMIN_RULES.reasonMax) : undefined);
+export const adminVendors = new Hono<AppEnv>()
+  // ?status=submitted (default) | draft | onboarding | active | rejected | blocked
+  .get("/", requireAdmin("vendors.review"), async (c) =>
+    c.json(await vendorQueue(c.env.DB, pick(c.req.query("status"), VENDOR_STATUSES, "status") ?? "submitted")))
+  .get("/:id", requireAdmin("vendors.review"), async (c) => c.json(await vendorDetail(c.env.DB, c.req.param("id"))))
+  .get("/:id/documents/:kind", requireAdmin("vendors.review"), async (c) =>
+    vendorDocument(c.env.DB, c.env.DOCS, c.req.param("id"), pick(c.req.param("kind"), VENDOR_DOCUMENTS, "kind")!))
+  // { decision: "approve" | "changes", note? } — a note is required to send a section back.
+  .post("/:id/sections/:section", requireAdmin("vendors.review"), async (c) => {
+    const body = await jsonBody(c);
+    const decision = pick(String(body.decision ?? ""), ["approve", "changes"] as const, "decision");
+    if (!decision) throw badRequest('"decision" is required.');
+    return c.json(await reviewSection(c.env.DB, c.var.admin.id, c.req.param("id"), pick(c.req.param("section"), VENDOR_SECTIONS, "section")!, decision, note(body)));
+  })
+  // { decision: "approve" | "changes" | "reject", note? } — a note is required to reject.
+  .post("/:id/review", requireAdmin("vendors.review"), async (c) => {
+    const body = await jsonBody(c);
+    const decision = pick(String(body.decision ?? ""), ["approve", "changes", "reject"] as const, "decision");
+    if (!decision) throw badRequest('"decision" is required.');
+    return c.json(await finishReview(c.env.DB, c.var.admin.id, c.req.param("id"), decision, note(body)));
+  })
+  .post("/:id/sticker", requireAdmin("vendors.review"), async (c) => c.json(await markSticker(c.env.DB, c.var.admin.id, c.req.param("id"))));

@@ -2,7 +2,7 @@
 // Endpoints are listed in apps/api/README.md (Admin section).
 import type {
   AdminBooking, AdminBookingDetail, AdminLoginResult, AdminStats, AdminUser, AuditEntry, BookingFilters, CatalogItem, CatalogKind, LicenceQueueStatus,
-  LicenceReview, Page, Settings,
+  LicenceReview, Page, Settings, AdminVendorDetail, VendorDocument, VendorSection, VendorStatus, VendorSummary,
 } from "@quikfly/shared";
 
 export interface CatalogKindSummary { kind: CatalogKind; total: number; visible: number; canEdit: boolean }
@@ -78,6 +78,22 @@ export const adminApi = {
     get: (id: string) => req<AdminBookingDetail>("GET", `/admin/bookings/${encodeURIComponent(id)}`),
     cancel: (id: string, reason: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/cancel`, { reason }),
     complete: (id: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/complete`),
+  },
+  vendors: {
+    list: (status: VendorStatus) => req<VendorSummary[]>("GET", `/admin/vendors${qs({ status })}`),
+    get: (id: string) => req<AdminVendorDetail>("GET", `/admin/vendors/${encodeURIComponent(id)}`),
+    section: (id: string, section: VendorSection, decision: "approve" | "changes", note?: string) =>
+      req<AdminVendorDetail>("POST", `/admin/vendors/${encodeURIComponent(id)}/sections/${section}`, { decision, note }),
+    review: (id: string, decision: "approve" | "changes" | "reject", note?: string) =>
+      req<AdminVendorDetail>("POST", `/admin/vendors/${encodeURIComponent(id)}/review`, { decision, note }),
+    sticker: (id: string) => req<AdminVendorDetail>("POST", `/admin/vendors/${encodeURIComponent(id)}/sticker`),
+    /** A document photo as an object URL (the image needs the staff token, so it can't be a plain <img src>). */
+    async document(id: string, kind: VendorDocument): Promise<string> {
+      const token = getToken();
+      const res = await fetch(`${BASE}/admin/vendors/${encodeURIComponent(id)}/documents/${kind}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new ApiError(res.status, ((await res.json().catch(() => ({}))) as { message?: string }).message || "Couldn't load the photo.");
+      return URL.createObjectURL(await res.blob());
+    },
   },
   licences: {
     list: (status: LicenceQueueStatus) => req<LicenceReview[]>("GET", `/admin/licences${qs({ status })}`),

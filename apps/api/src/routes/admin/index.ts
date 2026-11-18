@@ -13,7 +13,7 @@ import { adminLogin, endAdminSession } from "../../services/admin/auth";
 import { dashboardStats } from "../../services/admin/stats";
 import { getSettings, updateSettings } from "../../services/settings";
 import { adminCatalog } from "./catalog";
-import { adminBookings, adminLicences } from "./operations";
+import { adminBookings, adminLicences, adminVendors } from "./operations";
 
 /** Positive page number from `?page=`, default 1. */
 const pageParam = (v: string | undefined) => Math.max(1, parseInt(v ?? "1", 10) || 1);
@@ -67,4 +67,5 @@ export const admin = new Hono<AppEnv>()
 
   .route("/catalog", adminCatalog)
   .route("/bookings", adminBookings)
-  .route("/licences", adminLicences);
+  .route("/licences", adminLicences)
+  .route("/vendors", adminVendors);

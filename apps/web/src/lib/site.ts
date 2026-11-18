@@ -25,3 +25,11 @@ export const ANDROID_APP = {
   size: "about 22 MB",
   minAndroid: "Android 7.0+",
 } as const;
+
+/**
+ * The QuikFly Partner app for vehicle owners (Android, GitHub Releases). Null until its first
+ * release; the /partner page shows "coming soon" meanwhile.
+ */
+export const PARTNER_APP: { downloadUrl: string | null } = {
+  downloadUrl: null,
+};

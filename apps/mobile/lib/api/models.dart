@@ -559,6 +559,11 @@ class Settings {
   bool get featureTripOffers => _b('featureTripOffers');
   bool get featureReferral => _b('featureReferral');
 
+  /// Partner registration (QuikFly Partner app).
+  int get vendorJoiningFee => _i('vendorJoiningFee', 1000);
+  int get vendorMaxVehicleAgeYears => _i('vendorMaxVehicleAgeYears', 8);
+  String get vendorAuditAddress => _s('vendorAuditAddress', 'QuikFly partner hub, Chennai');
+
   int get welcomeCredit => _i('welcomeCredit', 500);
   int get referralBonus => _i('referralBonus', 100);
   int get rentDeposit => _i('rentDeposit', 2000);

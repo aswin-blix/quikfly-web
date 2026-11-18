@@ -48,8 +48,19 @@ The in-app inbox works without any setup. Phone push needs a Firebase project, w
 
 The cron (`* * * * *`) is free on Workers (5 triggers per account on the free plan; this uses one). It only sends notifications less than an hour old, so turning push on doesn't flood old ones. Cron runs show in the Cloudflare dashboard → Workers → quikfly-api → Logs.
 
+## Partner document storage (R2)
+
+Partner document photos (profile, RC, insurance) are stored in a private R2 bucket. R2's free tier is 10 GB-month, 1M writes and 10M reads a month, with free egress; Cloudflare may ask for a card on the account to switch R2 on (the owner does this in the dashboard).
+
+1. Owner: Cloudflare dashboard → R2 → enable.
+2. Once: `cd apps/api && npx wrangler r2 bucket create quikfly-docs` (the binding `DOCS` in `wrangler.jsonc` points at it). **Deploying the API fails until the bucket exists.**
+3. Locally, `wrangler dev` simulates the bucket; nothing to set up.
+
+Photos are only served to the partner who uploaded them and to staff with `vendors.review`, never cached.
+
 ## Android app (apps/mobile)
 
+- Two apps from one project: the customer app (default flavor) and **QuikFly Partner** (`--flavor partner -t lib/main_partner.dart`, package `com.quikfly.partner`). Release APK names now include the flavor (`app-arm64-v8a-customer-release.apk`); copy them to the same stable asset names as before.
 - Builds against the production API by default; `--dart-define=API_URL=...` points it elsewhere (see `apps/mobile/README.md`).
 - Signed release: upload key at `%USERPROFILE%\keys\quikfly-upload.jks`, alias `quikfly`, certificate SHA-256 `C7:84:CE:F5:50:DC:5F:A5:FC:64:C5:5A:2E:C6:EE:C8:99:81:FD:2D:75:0A:FF:9A:49:6C:9B:40:17:03:3A:AE` (owner keeps the file and the password, backed up), `apps/mobile/android/key.properties` (git-ignored) with path + alias, password in `QUIKFLY_KEYSTORE_PASSWORD`. Steps in `apps/mobile/README.md` → Release.
 - Distribution: GitHub Releases on the public repo (tags `app-v<version>`). Latest APK, no login: https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk (older phones: `QuikFly-armv7.apk`). Releases: `app-v0.1.0` and `app-v0.1.1` (new photos, latest), both 2026-11-17. A new release with the same asset names automatically becomes what the website's download button serves.

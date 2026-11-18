@@ -23,7 +23,7 @@ The customer website for all six QuikFly services. All data and every price come
 | `/account?tab=wallet` | Wallet balance and history, plus QuikFly Credits: balance, next expiry, earn rates per service and credits history | Uber One |
 | `/notifications` | Inbox: booking confirmed, cancellations and refunds, deposit returned, licence decisions, ride reminders; opening it marks all read. The header bell shows the unread count (checked every minute while the tab is visible) | Uber / Ola |
 | `/bookings` | My trips: Upcoming / Past / Cancelled, expandable details, cancel (shows the refund the service's cancellation policy gives before confirming; policies come from settings via `cancelPolicyText` in `@quikfly/shared`) | — |
-| `/offers`, `/partner`, `/help` | Coupons, driver/fleet partner signup, help centre FAQ | — |
+| `/offers`, `/partner`, `/help` | Coupons; how vehicle owners join (steps, vehicles, documents from settings) with a link to the QuikFly Partner app (coming soon until released: `PARTNER_APP` in `lib/site.ts`); help centre FAQ | Red Taxi Vendor |
 
 Demo login OTP: **1234**. Demo coupons are listed on `/offers`.
 
