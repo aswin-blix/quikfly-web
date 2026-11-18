@@ -225,7 +225,6 @@ export interface TourPackage {
   themes: TourTheme[];
   hotelStars: number;
   meals: string;
-  cancellation: string;
   title: string;
   location: string;
   days: number;
@@ -276,9 +275,13 @@ export interface Booking {
   amount: number;
   status: BookingStatus;
   createdAt: string;
-  /** Wallet payments are deducted when booked and refunded when cancelled. */
+  /** Wallet payments are deducted when booked and refunded when cancelled, per the service's cancellation policy. */
   payment: PaymentMethod;
   lines: [string, string][];
+  /** When the trip starts (ISO), from the quote; null for rides and bookings made before policies existed. */
+  startsAt: string | null;
+  /** What the cancellation policy gave back (₹), once cancelled; null while active. */
+  refundAmount: number | null;
 }
 
 /** A coupon. The API checks it at booking; the website only shows it. */
@@ -334,14 +337,15 @@ export const RENT_PROTECTION = ["standard", "peace"] as const;
 /** What to price. Rides are quoted by POST /rides/quote instead. */
 export type QuoteRequest =
   | { service: "bus"; busId: string; from: string; to: string; date: string; seatIds: string[] }
-  | { service: "tours"; tourId: string; adults: number; kids: number }
+  /** `start` is the travel date (YYYY-MM-DD); the cancellation policy counts down to it. */
+  | { service: "tours"; tourId: string; adults: number; kids: number; start: string }
   | {
       service: "rent"; carId: string; mode: "self" | "driver";
       /** Local date-times "YYYY-MM-DDTHH:mm". */
       start: string; end: string;
       kmPlan: (typeof RENT_KM_PLANS)[number]; protection: (typeof RENT_PROTECTION)[number]; doorstep: boolean;
     }
-  | { service: "rentals"; vehicleId: string; trip: "local" | "outstation"; destinationId?: string; days: number };
+  | { service: "rentals"; vehicleId: string; trip: "local" | "outstation"; destinationId?: string; days: number; start: string };
 
 /** Result of checking a coupon against a quote. */
 export interface CouponCheck {

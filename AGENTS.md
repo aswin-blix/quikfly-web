@@ -34,6 +34,7 @@ apps/mobile/      Flutter Android app (Phase 3; v0.1.0 released on GitHub Releas
 packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation patterns, limits),
                   catalog.ts (SEED data only) + catalog-kinds.ts (12 kinds, fields, validation), settings.ts
                   (runtime Settings, defaults, rules), pricing.ts (all price maths + bus/ride simulation),
+                  cancellation.ts (refund tiers per service: the API applies them, the apps preview them),
                   admin.ts (roles, PERMISSIONS, admin shapes)
 ```
 

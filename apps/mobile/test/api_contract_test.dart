@@ -54,7 +54,8 @@ void main() {
   test('catalog and quotes parse', () async {
     final tours = await api.tours();
     expect(tours, isNotEmpty);
-    final q = await api.quote({'service': 'tours', 'tourId': tours.first.id, 'adults': 2, 'kids': 0});
+    final travel = DateTime.now().add(const Duration(days: 30)).toIso8601String().substring(0, 10);
+    final q = await api.quote({'service': 'tours', 'tourId': tours.first.id, 'adults': 2, 'kids': 0, 'start': travel});
     expect(q.total, greaterThan(0));
     expect(q.lines, isNotEmpty);
     final tour = await api.tour(tours.first.slug);
@@ -71,7 +72,9 @@ void main() {
         service: ServiceKey.tours, title: 'Contract test tour', subtitle: tour.location, payment: PaymentMethod.upi, lines: const [], quoteId: q.id, couponCode: code);
     expect(booking.amount, expected);
     expect((await api.booking(booking.id)).id, booking.id);
-    await api.cancelBooking(booking.id);
+    expect(booking.startsAt, isNotNull);
+    final cancelled = await api.cancelBooking(booking.id);
+    expect(cancelled.refundAmount, isNotNull);
     expect((await api.cars()), isNotEmpty);
     expect((await api.travelVehicles()), isNotEmpty);
     final date = DateTime.now().add(const Duration(days: 2)).toIso8601String().substring(0, 10);
@@ -92,9 +95,9 @@ void main() {
     expect(rent.service, ServiceKey.rent);
     expect(rent.lines.length, greaterThanOrEqualTo(2));
     final vehicles = await api.travelVehicles();
-    final group = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'outstation', 'destinationId': config.groupDestinations.first.id, 'days': 2});
+    final group = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'outstation', 'destinationId': config.groupDestinations.first.id, 'days': 2, 'start': fmt(start).substring(0, 10)});
     expect(group.total, greaterThan(0));
-    final local = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'local', 'days': 1});
+    final local = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'local', 'days': 1, 'start': fmt(start).substring(0, 10)});
     expect(local.total, vehicles.first.localPackage);
     final u = await api.submitLicence('TN0920190001234', fmt(DateTime.now().add(const Duration(days: 400))).substring(0, 10));
     expect(u.licence.status, anyOf(LicenceStatus.pending, LicenceStatus.verified));

@@ -149,7 +149,6 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
       { key: "highlights", label: "Highlights", type: "list", maxLength: 80, hint: "One per line" },
       { key: "includes", label: "Includes", type: "list", maxLength: 60, hint: "One per line" },
       { key: "itinerary", label: "Itinerary", type: "list", maxLength: 160, hint: "One line per day" },
-      { key: "cancellation", label: "Cancellation policy", type: "longtext", maxLength: 400 },
     ],
     title: (d) => String(d.title), detail: (d) => `${d.location} · ${d.days}D/${d.nights}N · ${inr(d.price)}`,
   },

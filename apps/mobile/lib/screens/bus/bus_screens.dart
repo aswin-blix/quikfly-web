@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
+import '../../core/cancellation.dart';
 import '../../core/format.dart';
 import '../../state/checkout.dart';
 import '../../state/providers.dart';
@@ -615,7 +616,7 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
             ],
             quote: quote,
             travellers: [for (final s in seats) 'Seat ${s.label}'],
-            policy: 'Free cancellation up to 12 hours before departure. 50% refund until 4 hours before departure.',
+            policy: cancelPolicyText(ref.read(configProvider).value?.settings ?? const Settings({}), ServiceKey.bus),
           ));
       if (mounted) context.push('/checkout');
     } catch (e) {

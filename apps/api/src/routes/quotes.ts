@@ -24,7 +24,10 @@ function parseQuoteRequest(body: Record<string, unknown>): QuoteRequest {
       };
     }
     case "tours":
-      return { service, tourId: str(body, "tourId", 40), adults: int(body, "adults", 1, 50), kids: int(body, "kids", 0, 50) };
+      return {
+        service, tourId: str(body, "tourId", 40), adults: int(body, "adults", 1, 50), kids: int(body, "kids", 0, 50),
+        start: matches(str(body, "start", 10), PATTERNS.isoDate, '"start" must be YYYY-MM-DD.'),
+      };
     case "rent":
       return {
         service, carId: str(body, "carId", 40), mode: oneOf(body, "mode", ["self", "driver"] as const),
@@ -36,6 +39,7 @@ function parseQuoteRequest(body: Record<string, unknown>): QuoteRequest {
       return {
         service, vehicleId: str(body, "vehicleId", 40), trip: oneOf(body, "trip", ["local", "outstation"] as const),
         destinationId: optStr(body, "destinationId", 40), days: int(body, "days", 1, 60),
+        start: matches(str(body, "start", 10), PATTERNS.isoDate, '"start" must be YYYY-MM-DD.'),
       };
   }
 }

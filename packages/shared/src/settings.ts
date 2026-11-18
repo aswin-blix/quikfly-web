@@ -2,6 +2,7 @@
 // `settings` table and falls back to these defaults; GET /config hands them to the website
 // and the app. To add one: a key + default here, a rule in SETTING_RULES, a row in
 // apps/admin/src/lib/settings-fields.ts. The API validates against SETTING_RULES.
+import { CANCEL_POLICY_HINT, CANCEL_POLICY_PATTERN, checkCancelPolicy } from "./cancellation";
 import type { ServiceKey } from "./types";
 
 export interface Settings {
@@ -46,6 +47,16 @@ export interface Settings {
   /** Kilometres included per day in the group-travel local package. */
   groupLocalKmPerDay: number;
 
+  /**
+   * Refund tiers per service, as "notice:percent" pairs with the longest notice first,
+   * e.g. "15d:100, 7d:50" = full refund 15+ days before, half 7+ days before, nothing later.
+   * Empty = full refund any time. Rides have none (they start at once). See cancellation.ts.
+   */
+  cancelPolicyBus: string;
+  cancelPolicyTours: string;
+  cancelPolicyRent: string;
+  cancelPolicyGroup: string;
+
   /** Seller details printed on invoices. */
   companyName: string;
   companyAddress: string;
@@ -78,6 +89,10 @@ export const DEFAULT_SETTINGS: Settings = {
   rentDoorstepFee: 299,
   rentDeposit: 2000,
   groupLocalKmPerDay: 80,
+  cancelPolicyBus: "12h:100, 4h:50",
+  cancelPolicyTours: "15d:100, 7d:50",
+  cancelPolicyRent: "24h:100",
+  cancelPolicyGroup: "48h:100",
   companyName: "QuikFly Mobility Pvt. Ltd.",
   companyAddress: "Chennai, Tamil Nadu, India",
   companyGstin: "33AAACQ0000A1Z5",
@@ -94,6 +109,7 @@ type Rule =
 const money = (max: number): Rule => ({ type: "number", min: 0, max, integer: true });
 const percent: Rule = { type: "number", min: 0, max: 100, integer: true };
 const SURGE_HOURS = /^\s*$|^\s*\d{1,2}\s*-\s*\d{1,2}(\s*,\s*\d{1,2}\s*-\s*\d{1,2})*\s*$/;
+const cancelPolicy: Rule = { type: "text", max: 80, pattern: CANCEL_POLICY_PATTERN, hint: CANCEL_POLICY_HINT };
 
 /** Allowed values per setting. The API refuses anything else. */
 export const SETTING_RULES: Record<keyof Settings, Rule> = {
@@ -118,6 +134,10 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   rentDoorstepFee: money(5000),
   rentDeposit: money(50000),
   groupLocalKmPerDay: { type: "number", min: 10, max: 500, integer: true },
+  cancelPolicyBus: cancelPolicy,
+  cancelPolicyTours: cancelPolicy,
+  cancelPolicyRent: cancelPolicy,
+  cancelPolicyGroup: cancelPolicy,
   companyName: { type: "text", min: 2, max: 120 },
   companyAddress: { type: "text", min: 2, max: 240 },
   companyGstin: { type: "text", max: 15, pattern: /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, hint: "A 15-character GSTIN, e.g. 33ABCDE1234F1Z5." },
@@ -142,6 +162,7 @@ export function checkSetting(key: string, value: unknown): string | null {
   if (rule.min && value.trim().length < rule.min) return `"${key}" is too short.`;
   if (rule.pattern && !rule.pattern.test(value)) return rule.hint ?? `"${key}" isn't in the right format.`;
   if (key === "surgeHours" && parseSurgeHours(value).some(([a, b]) => a > 23 || b > 23 || a > b)) return "Surge hours must be 0–23 with the start before the end.";
+  if (key.startsWith("cancelPolicy")) return checkCancelPolicy(value);
   return null;
 }
 

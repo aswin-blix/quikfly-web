@@ -12,7 +12,7 @@ import { api } from "@/lib/api";
 import { cx, inr, prettyDateTime } from "@/lib/format";
 import { defaultRentalWindow } from "@/lib/rentals";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
-import { RENT_PLANS, RENT_PROTECTION_LABEL, priceRent, rentHours, sumLines, type RentalCar } from "@quikfly/shared";
+import { RENT_PLANS, RENT_PROTECTION_LABEL, cancelPolicyText, priceRent, rentHours, sumLines, type RentalCar } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { serviceByKey } from "@/lib/services";
 
@@ -154,7 +154,7 @@ export function RentDetailScreen({ id }: { id: string }) {
       service: "rent", title: `${car!.name} · ${self ? "Self-drive" : "With driver"}`, subtitle: `${trip.city} · ${car!.category}`, image: carImg(car!),
       summary: [["Pickup", prettyDateTime(trip.start)], ["Return", prettyDateTime(trip.end)], ["Delivery", delivery === "doorstep" ? "Doorstep" : `Self pickup · ${trip.city} hub`], ...(self ? [["Plan", `${plan.label} · ${protectionLabel}`] as [string, string]] : [])],
       quote, travellers: ["Primary driver"], needsLicence: self,
-      policy: "Free cancellation up to 24 hours before pickup. Deposit refunded within 48 hours of return.",
+      policy: cancelPolicyText(settings, "rent"),
     });
     nav.push("/checkout");
   }
@@ -224,7 +224,7 @@ export function RentDetailScreen({ id }: { id: string }) {
               <span className="text-sm text-muted">Total</span><TweenNumber value={total} format={inr} className="text-2xl font-bold text-gold" />
             </div>
             <GoldButton className="w-full" loading={pricing} onClick={book}>Continue to book</GoldButton>
-            <p className="text-[11px] text-subtle text-center">Free cancellation up to 24 hrs before pickup</p>
+            <p className="text-[11px] text-subtle text-center">{cancelPolicyText(settings, "rent")}</p>
           </motion.div>
         </aside>
       </div>

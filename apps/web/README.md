@@ -19,7 +19,7 @@ The customer website for all six QuikFly services. All data and every price come
 | `/travel-rentals` | Tempo traveller → 45-seat coach, local or outstation fare estimate, side-by-side compare | Savaari / group-travel operators |
 | `/checkout` | Shared checkout for every service: traveller and contact details with validation, coupons, payment methods, fare breakdown | redBus / MakeMyTrip |
 | `/booking-confirmed` | Animated confirmation and booking summary | — |
-| `/bookings` | My trips: Upcoming / Past / Cancelled, expandable details, cancel | — |
+| `/bookings` | My trips: Upcoming / Past / Cancelled, expandable details, cancel (shows the refund the service's cancellation policy gives before confirming; policies come from settings via `cancelPolicyText` in `@quikfly/shared`) | — |
 | `/offers`, `/partner`, `/help` | Coupons, driver/fleet partner signup, help centre FAQ | — |
 
 Demo login OTP: **1234**. Demo coupons are listed on `/offers`.

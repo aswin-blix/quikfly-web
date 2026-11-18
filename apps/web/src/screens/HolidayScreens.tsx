@@ -11,7 +11,7 @@ import { api } from "@/lib/api";
 import { cx, inr, prettyDate, todayISO } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, useNav, useQuery } from "@/lib/nav";
-import { childPrice, type TourPackage, type TourTheme } from "@quikfly/shared";
+import { cancelPolicyText, childPrice, type TourPackage, type TourTheme } from "@quikfly/shared";
 import { useTours } from "@/components/catalog-hooks";
 
 const THEMES: [TourTheme | "all", string][] = [["all", "All"], ["beach", "Beaches"], ["hills", "Hill stations"], ["international", "International"], ["weekend", "Weekend"], ["heritage", "Heritage"]];
@@ -144,7 +144,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
     setPricing(true);
     let quote;
     try {
-      quote = await api.quotes.create({ service: "tours", tourId: tour!.id, adults, kids });
+      quote = await api.quotes.create({ service: "tours", tourId: tour!.id, adults, kids, start: date });
     } catch (e) {
       toast((e as Error).message, "err");
       setPricing(false);
@@ -155,7 +155,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
       summary: [["Start date", prettyDate(date)], ["Travellers", `${adults} adult${adults > 1 ? "s" : ""}${kids ? `, ${kids} child${kids > 1 ? "ren" : ""}` : ""}`], ["Hotels", `${tour!.hotelStars}★ · ${tour!.meals}`], ["Includes", tour!.includes.join(", ")]],
       quote,
       travellers: [...Array(adults).fill(0).map((_, i) => `Adult ${i + 1}`), ...Array(kids).fill(0).map((_, i) => `Child ${i + 1}`)],
-      policy: tour!.cancellation,
+      policy: cancelPolicyText(settings, "tours"),
     });
     nav.push("/checkout");
   }
@@ -205,14 +205,14 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
               {tab === "inclusions" && (
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="panel p-5"><p className="font-semibold mb-3">Included</p><ul className="space-y-2 text-sm">{[...tour.includes, ...tour.highlights].map((x) => <li key={x} className="flex gap-2"><Check size={16} className="text-success shrink-0" />{x}</li>)}</ul></div>
-                  <div className="panel p-5"><p className="font-semibold mb-3">Not included</p><ul className="space-y-2 text-sm text-muted">{["Personal expenses", "Entry tickets unless mentioned", "Lunch", "Travel insurance (add at checkout)"].map((x) => <li key={x}>• {x}</li>)}</ul></div>
+                  <div className="panel p-5"><p className="font-semibold mb-3">Not included</p><ul className="space-y-2 text-sm text-muted">{["Personal expenses", "Entry tickets unless mentioned", "Lunch", "Travel insurance"].map((x) => <li key={x}>• {x}</li>)}</ul></div>
                 </div>
               )}
               {tab === "policies" && (
                 <div className="panel p-5 space-y-4 text-sm">
-                  <div><p className="font-semibold flex items-center gap-2"><ShieldCheck size={16} className="text-success" />Cancellation</p><p className="text-muted mt-1">{tour.cancellation}</p></div>
-                  <div><p className="font-semibold">Payment</p><p className="text-muted mt-1">Pay in full now, or 25% to block and the balance 15 days before travel.</p></div>
-                  <div><p className="font-semibold">Customisation</p><p className="text-muted mt-1">A travel expert calls within 2 hours of booking to tailor hotels and activities.</p></div>
+                  <div><p className="font-semibold flex items-center gap-2"><ShieldCheck size={16} className="text-success" />Cancellation</p><p className="text-muted mt-1">{cancelPolicyText(settings, "tours")} Counted from midnight on the start date; wallet refunds are instant.</p></div>
+                  <div><p className="font-semibold">Payment</p><p className="text-muted mt-1">Pay in full at booking, from your QuikFly wallet or the payment methods at checkout.</p></div>
+                  <div><p className="font-semibold">Price</p><p className="text-muted mt-1">Per person, twin sharing, including GST ({settings.gstTours}%). Children (5–11) pay {settings.tourChildPercent}% of the adult price.</p></div>
                 </div>
               )}
             </motion.div>
@@ -230,7 +230,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
               <TweenNumber value={subtotal + taxes} format={inr} className="text-2xl font-bold" />
             </div>
             <GoldButton className="w-full" loading={pricing} onClick={book}>Book now</GoldButton>
-            <p className="text-[11px] text-subtle text-center">No payment today in demo · Free expert call</p>
+            <p className="text-[11px] text-subtle text-center">Demo: no payment is taken</p>
           </motion.div>
         </aside>
       </div>

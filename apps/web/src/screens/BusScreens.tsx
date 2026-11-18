@@ -11,7 +11,7 @@ import { Accordion, Empty, GoldButton, PageHeader, SectionTitle, Segmented, Spin
 import { api } from "@/lib/api";
 import { cx, inr, prettyDate, shiftISO, todayISO } from "@/lib/format";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
-import type { Bus, Seat } from "@quikfly/shared";
+import { cancelPolicyText, type Bus, type Seat } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { serviceByKey } from "@/lib/services";
 
@@ -257,7 +257,8 @@ export function BusResultsScreen() {
 
 function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: string; date: string }) {
   const { setDraft, toast } = useApp();
-  const lowerExtra = useSettings().busLowerDeckExtra;
+  const settings = useSettings();
+  const lowerExtra = settings.busLowerDeckExtra;
   const [pricing, setPricing] = useState(false);
   const nav = useNav();
   const [seats, setSeats] = useState<Seat[] | null>(null);
@@ -289,7 +290,7 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
       summary: [["Date", prettyDate(date)], ["Departure", `${bTimes[boarding]} from ${bus.boardingPoints[boarding]}`], ["Arrival", `${dTimes[dropping]} at ${drops[dropping]}`], ["Seats", chosen.map((s) => s.label).join(", ")]],
       quote,
       travellers: chosen.map((s) => `Seat ${s.label}`),
-      policy: "Free cancellation up to 12 hours before departure. 50% refund until 4 hours before departure.",
+      policy: cancelPolicyText(settings, "bus"),
     });
     nav.push("/checkout");
   }

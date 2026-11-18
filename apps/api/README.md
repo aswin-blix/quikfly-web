@@ -70,12 +70,12 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | GET | `/rentals/cars?city=` | self-drive / chauffeur cars |
 | GET | `/rentals/cars/:id` | one car |
 | GET | `/rentals/travel-vehicles` | group vehicles |
-| POST | `/quotes` | prices a booking: `{ service: "bus", busId, from, to, date, seatIds }`, `{ service: "tours", tourId, adults, kids }`, `{ service: "rent", carId, mode, start, end, kmPlan, protection, doorstep }` or `{ service: "rentals", vehicleId, trip, destinationId?, days }` → `{ id, service, lines, total, expiresAt }`. Valid 30 min, usable once |
+| POST | `/quotes` | prices a booking: `{ service: "bus", busId, from, to, date, seatIds }`, `{ service: "tours", tourId, adults, kids, start }`, `{ service: "rent", carId, mode, start, end, kmPlan, protection, doorstep }` or `{ service: "rentals", vehicleId, trip, destinationId?, days, start }` (`start` = YYYY-MM-DD) → `{ id, service, lines, total, expiresAt }`. Valid 30 min, usable once. The quote also records when the trip starts, which the booking copies for its cancellation policy |
 | POST 🔒 | `/offers/check` | `{ code, quoteId }` or `{ code, rideId }` → `{ code, discount, total }`; 400 says why a code can't be used (other service, expired, below minimum, per-customer limit, unknown) |
-| GET 🔒 | `/bookings` | the signed-in user's bookings, newest first |
+| GET 🔒 | `/bookings` | the signed-in user's bookings, newest first. Each has `startsAt` (from the quote; null for rides and older bookings) and `refundAmount` (set when cancelled) |
 | POST 🔒 | `/bookings` | `{ service, title, subtitle, payment, lines, quoteId \| rideId, couponCode? }` → booking. **The API sets the amount** from the quote (bus, tours, rent, rentals) or the ride (bike, car), minus the coupon; any `amount` sent is ignored. A quote or ride books once (409 after). `payment: "wallet"` is deducted in the same transaction and refused (400) if the balance is too low, which also gives the quote back |
 | GET 🔒 | `/bookings/:id` | one booking (for invoices) |
-| POST 🔒 | `/bookings/:id/cancel` | cancel; refunds a wallet payment; 409 if already cancelled or completed |
+| POST 🔒 | `/bookings/:id/cancel` | cancel; refunds the share the service's cancellation policy allows for the notice given (settings `cancelPolicyBus/Tours/Rent/Group`; rides and bookings without `startsAt` get it all), to the wallet if paid from it, in the same transaction; `refundAmount` records it; 409 if already cancelled or completed |
 | POST 🔒 | `/bookings/:id/complete` | mark a finished trip (called by the website when a simulated ride ends; the driver app will own this) |
 
 ### Admin (`/admin/*`, staff only)
@@ -98,8 +98,8 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | DELETE 🛡 | `/admin/catalog/:kind/:id` | remove an item (bookings keep their own copy of what was bought) |
 | POST 🛡 | `/admin/catalog/reset` | replace the whole catalog with the seed (demo reset) `[settings.edit]` |
 | GET 🛡 | `/admin/bookings?q=&status=&service=&from=&to=&page=` | all customers' bookings, newest first, 25 per page; `q` matches booking id, title, customer name or phone; dates are India time `[bookings.view]` |
-| GET 🛡 | `/admin/bookings/:id` | `{ booking (with customer), wallet entries, coupon, history (staff actions) }` `[bookings.view]` |
-| POST 🛡 | `/admin/bookings/:id/cancel` | `{ reason }` (5–300 chars) → cancels an active booking; a wallet payment is refunded to the customer's wallet in the same transaction; 409 if already finished `[bookings.manage]` |
+| GET 🛡 | `/admin/bookings/:id` | `{ booking (with customer), wallet entries, coupon, refundIfCancelled ({ amount, percent } while active), history (staff actions) }` `[bookings.view]` |
+| POST 🛡 | `/admin/bookings/:id/cancel` | `{ reason }` (5–300 chars) → cancels an active booking; the policy's share of a wallet payment is refunded to the customer's wallet in the same transaction; 409 if already finished `[bookings.manage]` |
 | POST 🛡 | `/admin/bookings/:id/complete` | marks an active booking completed `[bookings.manage]` |
 | GET 🛡 | `/admin/licences?status=` | licence queue: `pending` (default, oldest first), `rejected` or `verified` `[licences.review]` |
 | POST 🛡 | `/admin/licences/:userId/approve` | pending → verified `[licences.review]` |
@@ -112,7 +112,7 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | `DEMO_OTP` | Fixed login code while there is no SMS provider. Every number signs in with it. |
 | `ALLOWED_ORIGINS` | Comma-separated website origins allowed by CORS, or `*`. |
 
-Business settings that staff change at runtime (fares, surge, bus fares, GST rates, bonuses, rental fees, company details, licence auto-approve) live in the `settings` table, read through `services/settings.ts`; keys, defaults and allowed values are in `packages/shared/src/settings.ts`. The catalog lives in `catalog_items` (`services/catalog.ts`), filled from the seed in `packages/shared/src/catalog.ts` on first use. Both are cached for 30 seconds per Worker isolate, so an admin edit can take up to 30 s to show everywhere. Prices are computed by `packages/shared/src/pricing.ts` (`services/quotes.ts`, `services/rides.ts`).
+Business settings that staff change at runtime (fares, surge, bus fares, GST rates, bonuses, rental fees, cancellation policies, company details, licence auto-approve) live in the `settings` table, read through `services/settings.ts`; keys, defaults and allowed values are in `packages/shared/src/settings.ts`. The catalog lives in `catalog_items` (`services/catalog.ts`), filled from the seed in `packages/shared/src/catalog.ts` on first use. Both are cached for 30 seconds per Worker isolate, so an admin edit can take up to 30 s to show everywhere. Prices are computed by `packages/shared/src/pricing.ts` (`services/quotes.ts`, `services/rides.ts`).
 
 Sessions are random bearer tokens; only their SHA-256 hash is stored, and they expire after `SESSION_TTL_DAYS` (`src/config.ts`). Admin sessions work the same way (`admin_sessions`, 12 hours). Admin passwords are PBKDF2-SHA256 hashes (`lib/password.ts`).
 

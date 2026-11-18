@@ -244,7 +244,6 @@ class TourPackage {
     required this.themes,
     required this.hotelStars,
     required this.meals,
-    required this.cancellation,
     required this.title,
     required this.location,
     required this.days,
@@ -257,7 +256,7 @@ class TourPackage {
     required this.itinerary,
     required this.hue,
   });
-  final String id, slug, meals, cancellation, title, location;
+  final String id, slug, meals, title, location;
   final List<String> themes, highlights, includes, itinerary;
   final int hotelStars, days, nights, price;
   final double rating, hue;
@@ -268,7 +267,6 @@ class TourPackage {
         themes: _strings(j['themes']),
         hotelStars: _int(j['hotelStars']),
         meals: '${j['meals'] ?? ''}',
-        cancellation: '${j['cancellation'] ?? ''}',
         title: '${j['title']}',
         location: '${j['location']}',
         days: _int(j['days']),
@@ -328,13 +326,20 @@ class TravelVehicle {
 }
 
 class Booking {
-  const Booking(this.id, this.service, this.title, this.subtitle, this.amount, this.status, this.createdAt, this.payment, this.lines);
+  const Booking(this.id, this.service, this.title, this.subtitle, this.amount, this.status, this.createdAt, this.payment, this.lines,
+      {this.startsAt, this.refundAmount});
   final String id, title, subtitle, payment;
   final ServiceKey service;
   final int amount;
   final BookingStatus status;
   final DateTime createdAt;
   final List<(String, String)> lines;
+
+  /// When the trip starts (from the quote); null for rides and older bookings.
+  final DateTime? startsAt;
+
+  /// What the cancellation policy refunded, once cancelled.
+  final int? refundAmount;
   factory Booking.fromJson(Json j) => Booking(
         j['id'] as String,
         ServiceKey.parse('${j['service']}'),
@@ -345,6 +350,8 @@ class Booking {
         DateTime.tryParse('${j['createdAt']}')?.toLocal() ?? DateTime.now(),
         '${j['payment']}',
         ((j['lines'] as List?) ?? const []).map((l) => ('${(l as List)[0]}', '${l[1]}')).toList(),
+        startsAt: j['startsAt'] == null ? null : DateTime.tryParse('${j['startsAt']}')?.toLocal(),
+        refundAmount: j['refundAmount'] == null ? null : _int(j['refundAmount']),
       );
 }
 
@@ -457,6 +464,15 @@ class Settings {
   int get rentProtectionPeacePerDay => _i('rentProtectionPeacePerDay', 399);
   int get rentUnlimitedKmExtraPercent => _i('rentUnlimitedKmExtraPercent', 25);
   String get safetyLine => _s('safetyLine', '1800 123 4567');
+
+  /// Refund tiers per service ("15d:100, 7d:50"); see core/cancellation.dart. Rides have none.
+  String cancelPolicy(ServiceKey s) => switch (s) {
+        ServiceKey.bus => _s('cancelPolicyBus', '12h:100, 4h:50'),
+        ServiceKey.tours => _s('cancelPolicyTours', '15d:100, 7d:50'),
+        ServiceKey.rent => _s('cancelPolicyRent', '24h:100'),
+        ServiceKey.rentals => _s('cancelPolicyGroup', '48h:100'),
+        ServiceKey.bike || ServiceKey.car => '',
+      };
   String get companyName => _s('companyName', 'QuikFly Mobility Pvt. Ltd.');
   String get companyAddress => _s('companyAddress', 'Chennai, Tamil Nadu, India');
   String get companyGstin => _s('companyGstin', '');

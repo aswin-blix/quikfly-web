@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../api/models.dart';
+import '../../core/cancellation.dart';
 import '../../core/format.dart';
 import '../../state/catalog.dart';
 import '../../state/checkout.dart';
@@ -315,7 +316,7 @@ class _RentDetailScreenState extends ConsumerState<RentDetailScreen> {
             quote: quote,
             travellers: const ['Primary driver'],
             needsLicence: t.self,
-            policy: 'Free cancellation up to 24 hours before pickup. Deposit refunded within 48 hours of return.',
+            policy: cancelPolicyText(ref.read(configProvider).value?.settings ?? const Settings({}), ServiceKey.rent),
           ));
       if (mounted) context.push('/checkout');
     } catch (e) {
@@ -459,7 +460,7 @@ class _RentDetailScreenState extends ConsumerState<RentDetailScreen> {
             const SizedBox(height: 12),
             GoldButton(label: 'Continue to book', loading: _booking, onPressed: !t.valid || _live.loading || _live.quote == null ? null : () => _book(car, t)),
             const SizedBox(height: 6),
-            Text('Free cancellation up to 24 hrs before pickup', textAlign: TextAlign.center, style: TextStyle(color: c.fgSubtle, fontSize: 11.5)),
+            Text(cancelPolicyText(ref.watch(configProvider).value?.settings ?? const Settings({}), ServiceKey.rent), textAlign: TextAlign.center, style: TextStyle(color: c.fgSubtle, fontSize: 11.5)),
           ]),
         ),
       ]),
