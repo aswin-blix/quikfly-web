@@ -89,6 +89,8 @@ export interface AdminBookingDetail {
   /** Wallet entries linked to this booking (payment, refund). */
   wallet: WalletTransaction[];
   coupon: { code: string; discount: number } | null;
+  /** What cancelling now would refund under the service's cancellation policy (₹ and %); null once finished. */
+  refundIfCancelled: { amount: number; percent: number } | null;
   /** Audit entries for this booking (staff cancellations, completions). */
   history: AuditEntry[];
 }

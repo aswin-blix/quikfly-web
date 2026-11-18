@@ -1,8 +1,9 @@
-// My Trips: Upcoming / Past / Cancelled, expandable details, cancel (wallet payments are refunded).
+// My Trips: Upcoming / Past / Cancelled, expandable details, cancel (wallet payments are refunded per the cancellation policy).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
+import '../../core/cancellation.dart';
 import '../../core/format.dart';
 import '../../core/services.dart';
 import '../../state/catalog.dart';
@@ -111,18 +112,26 @@ class _BookingCardState extends ConsumerState<BookingCard> {
 
   Future<void> _cancel() async {
     final b = widget.booking;
+    final (percent, refund) = refundPreview(ref.read(configProvider).value?.settings ?? const Settings({}), b);
     final ok = await confirm(context,
         title: 'Cancel this booking?',
-        message: b.payment == 'wallet' ? '${inr(b.amount)} goes back to your QuikFly wallet at once.' : 'This booking will be cancelled.',
+        message: refund == 0
+            ? "It's too close to the start for a refund under the cancellation policy."
+            : b.payment != 'wallet'
+                ? '${inr(refund)}${percent < 100 ? ' ($percent%)' : ''} is due back under the cancellation policy.'
+                : '${inr(refund)}${percent < 100 ? ' ($percent%)' : ''} goes back to your QuikFly wallet at once.',
         yes: 'Cancel booking',
         danger: true);
     if (!ok || !mounted) return;
     setState(() => _busy = true);
     try {
-      await ref.read(apiProvider).cancelBooking(b.id);
+      final done = await ref.read(apiProvider).cancelBooking(b.id);
       ref.invalidate(bookingsProvider);
       await ref.read(sessionProvider.notifier).refresh();
-      if (mounted) toast(context, b.payment == 'wallet' ? 'Cancelled. ${inr(b.amount)} refunded to your wallet.' : 'Booking cancelled.');
+      final back = done.refundAmount ?? 0;
+      if (mounted) {
+        toast(context, back == 0 ? 'Cancelled. No refund under the cancellation policy.' : b.payment != 'wallet' ? 'Cancelled. Refund due: ${inr(back)}.' : 'Cancelled. ${inr(back)} refunded to your wallet.');
+      }
     } catch (e) {
       if (mounted) toast(context, errorText(e));
     }
@@ -185,6 +194,15 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               const SizedBox(height: 6),
               KeyValue('Booking ID', b.id),
               for (final l in b.lines) KeyValue(l.$1, l.$2),
+              if (b.startsAt != null) KeyValue('Starts', dateTime(b.startsAt!)),
+              if (b.deposit > 0 && b.status != BookingStatus.cancelled)
+                KeyValue(
+                    'Refundable deposit',
+                    b.status == BookingStatus.completed
+                        ? '${inr(b.deposit)} ${b.payment == 'wallet' ? 'returned to wallet' : 'due back'}'
+                        : '${inr(b.deposit)} (back after return)'),
+              if (b.status == BookingStatus.cancelled && b.refundAmount != null)
+                KeyValue(b.payment == 'wallet' ? 'Refunded to wallet' : 'Refund due', b.refundAmount! > 0 ? inr(b.refundAmount!) : 'Nothing (cancelled too late)'),
               // Bookings usually carry their own "Paid via" / "Payment" line; add one only when they don't.
               if (!b.lines.any((l) => _paymentLines.contains(l.$1))) KeyValue('Paid by', paymentLabel(b.payment)),
               const SizedBox(height: 10),

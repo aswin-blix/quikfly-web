@@ -10,7 +10,7 @@ import { useTravelVehicles } from "@/components/catalog-hooks";
 import { api } from "@/lib/api";
 import { cx, inr, prettyDate, todayISO } from "@/lib/format";
 import { useNav, useQuery } from "@/lib/nav";
-import { groupBillKm, priceGroup, sumLines, type TravelVehicle } from "@quikfly/shared";
+import { cancelPolicyText, groupBillKm, priceGroup, sumLines, type TravelVehicle } from "@quikfly/shared";
 import { serviceByKey } from "@/lib/services";
 
 const vehicleImg = (v: TravelVehicle) => (v.seats <= 7 ? serviceByKey("rent").image : v.seats >= 26 ? serviceByKey("bus").image : serviceByKey("rentals").image);
@@ -40,7 +40,7 @@ export function TravelRentalsScreen() {
     setPricing(v.id);
     let quote;
     try {
-      quote = await api.quotes.create({ service: "rentals", vehicleId: v.id, trip: type, destinationId: type === "outstation" ? destination?.id : undefined, days });
+      quote = await api.quotes.create({ service: "rentals", vehicleId: v.id, trip: type, destinationId: type === "outstation" ? destination?.id : undefined, days, start: date });
     } catch (e) {
       toast((e as Error).message, "err");
       setPricing(null);
@@ -51,7 +51,7 @@ export function TravelRentalsScreen() {
       summary: [["Trip", type === "local" ? `Local · 8 hr / ${settings.groupLocalKmPerDay} km per day` : `Round trip to ${dest}`], ["Start", prettyDate(date)], ["Days", String(days)], ["Passengers", String(pax)], ["Billable distance", `${billKm(v)} km`]],
       quote,
       travellers: ["Lead traveller"],
-      policy: "Free cancellation up to 48 hours before trip start. Tolls, parking & state permits paid on actuals.",
+      policy: `${cancelPolicyText(settings, "rentals")} Tolls, parking & state permits paid on actuals.`,
     });
     nav.push("/checkout");
   }
@@ -124,7 +124,7 @@ export function TravelRentalsScreen() {
       <section className="max-w-7xl mx-auto px-4 pt-20">
         <SectionTitle eyebrow="Why group travel with us" title="Everyone arrives together, happy" />
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[[ShieldCheck, "Experienced drivers", "10+ years on highways, verified & courteous."], [Route, "Transparent billing", "Per-km pricing with minimums shown upfront."], [Fuel, "Fuel included", "Fuel included in per-km rate; no surprise top-ups."], [Check, "Clean & checked", "Every vehicle inspected and cleaned before pickup."]].map(([I, t, d], i) => {
+          {[[ShieldCheck, "Verified drivers", "Every driver's licence and background checked before they drive for us."], [Route, "Transparent billing", "Per-km pricing with minimums shown upfront."], [Fuel, "Fuel included", "Fuel included in per-km rate; no surprise top-ups."], [Check, "Clean & checked", "Every vehicle inspected and cleaned before pickup."]].map(([I, t, d], i) => {
             const Icon = I as typeof Route;
             return <Reveal key={t as string} delay={i * 0.08}><div className="panel p-6 h-full"><Icon className="text-gold" /><p className="font-semibold mt-4">{t as string}</p><p className="text-sm text-muted mt-1">{d as string}</p></div></Reveal>;
           })}

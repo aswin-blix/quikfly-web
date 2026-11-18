@@ -2,7 +2,7 @@
 // cancel (with wallet refund) or complete. Each action is audited.
 import { ADMIN_RULES, type AdminBookingDetail, type BookingFilters, type Page, type WalletTransaction } from "@quikfly/shared";
 import { conflict, notFound } from "../../lib/errors";
-import { ACTIVE, cancelBookingRow } from "../bookings";
+import { cancelBookingRow, completeBookingRow, refundFor } from "../bookings";
 import { audit, listAudit } from "./audit";
 import { LOCAL_DATE, toAdminBooking, type AdminBookingRow } from "./stats";
 
@@ -42,6 +42,7 @@ interface TxnRow { id: string; kind: WalletTransaction["kind"]; amount: number; 
 export async function bookingDetail(db: D1Database, id: string): Promise<AdminBookingDetail> {
   const row = await db.prepare(`${SELECT} WHERE b.id = ?`).bind(id).first<AdminBookingRow & { coupon_code: string | null; discount: number }>();
   if (!row) throw notFound("Booking not found.");
+  const active = row.status === "confirmed" || row.status === "ongoing";
   const [{ results: txns }, history] = await Promise.all([
     db.prepare("SELECT * FROM wallet_transactions WHERE booking_id = ? ORDER BY created_at").bind(id).all<TxnRow>(),
     listAudit(db, 1, "booking", id),
@@ -50,6 +51,7 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
     booking: toAdminBooking(row),
     wallet: txns.map((t) => ({ id: t.id, kind: t.kind, amount: t.amount, note: t.note, bookingId: t.booking_id, createdAt: t.created_at })),
     coupon: row.coupon_code ? { code: row.coupon_code, discount: row.discount } : null,
+    refundIfCancelled: active ? await refundFor(db, row) : null,
     history: history.items,
   };
 }
@@ -65,13 +67,14 @@ export async function adminCancel(db: D1Database, adminId: string, id: string, r
   await assertActive(db, id);
   const row = await cancelBookingRow(db, null, id, "Refund by QuikFly");
   if (!row) await assertActive(db, id); // lost a race: explain the new status
-  await audit(db, { adminId, action: "booking.cancel", entity: "booking", entityId: id, detail: { reason, amount: row!.amount, payment: row!.payment, refundedToWallet: row!.payment === "wallet" } });
+  await audit(db, { adminId, action: "booking.cancel", entity: "booking", entityId: id, detail: { reason, amount: row!.amount, payment: row!.payment, refund: row!.refund_amount, refundedToWallet: row!.payment === "wallet" && (row!.refund_amount ?? 0) > 0 } });
   return bookingDetail(db, id);
 }
 
+/** Closes a booking; a self-drive deposit paid from the wallet goes back to the customer. */
 export async function adminComplete(db: D1Database, adminId: string, id: string) {
-  const done = await db.prepare(`UPDATE bookings SET status = 'completed' WHERE id = ? AND status IN ${ACTIVE} RETURNING id`).bind(id).first();
+  const done = await completeBookingRow(db, id);
   if (!done) await assertActive(db, id); // throws: not found, or already finished
-  await audit(db, { adminId, action: "booking.complete", entity: "booking", entityId: id });
+  await audit(db, { adminId, action: "booking.complete", entity: "booking", entityId: id, detail: done!.deposit ? { depositReturned: done!.deposit, toWallet: done!.payment === "wallet" } : undefined });
   return bookingDetail(db, id);
 }

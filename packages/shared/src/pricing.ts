@@ -47,11 +47,21 @@ export const BOOKING_LIMITS = {
   groupMaxDays: 15,
 };
 
-/** Self-drive plan labels (prices come from Settings). */
-export const RENT_PLANS = {
-  limited: { label: "140 km/day", sub: "₹12/km beyond limit" },
-  unlimited: { label: "Unlimited km", sub: "Drive as much as you like" },
-} as const;
+/** Self-drive km plans; their numbers come from Settings (see rentPlanLabel). */
+export const RENT_PLANS = { limited: {}, unlimited: {} } as const;
+
+/** "140 km/day" + "₹12/km beyond the limit", from Settings. */
+export function rentPlanLabel(plan: keyof typeof RENT_PLANS, settings: Settings): { label: string; sub: string } {
+  return plan === "limited"
+    ? { label: `${settings.rentLimitedKmPerDay} km/day`, sub: `${inr(settings.rentExtraKmRate)}/km beyond the limit` }
+    : { label: "Unlimited km", sub: "Drive as much as you like" };
+}
+
+/** Chauffeur night charge applies to each night the booking runs inside this window (local hours). */
+export const DRIVER_NIGHT_WINDOW = { fromHour: 22, toHour: 6 };
+
+/** Price line label for the refundable self-drive deposit. The API finds the deposit by it. */
+export const DEPOSIT_LINE = "Refundable security deposit";
 export const RENT_PROTECTION_LABEL = { standard: "Standard", peace: "Peace of mind" } as const;
 
 /** How long a price quote stays valid. */
@@ -186,17 +196,39 @@ export interface RentChoice {
 export function priceRent(car: RentalCar, c: RentChoice, settings: Settings): FareLine[] {
   const self = c.mode === "self";
   const hours = rentHours(c.start, c.end);
+  const nights = self ? 0 : driverNights(c.start, c.end);
   const days = Math.max(1, Math.ceil(hours / 24));
   const mult = self && c.kmPlan === "unlimited" ? 1 + settings.rentUnlimitedKmExtraPercent / 100 : 1;
   const protectionPerDay = c.protection === "peace" ? settings.rentProtectionPeacePerDay : settings.rentProtectionStandardPerDay;
   return [
-    { label: `Rental (${hours} hrs${self ? `, ${RENT_PLANS[c.kmPlan].label}` : ""})`, amount: Math.round(car.pricePerHour * hours * mult) },
+    { label: `Rental (${hours} hrs${self ? `, ${rentPlanLabel(c.kmPlan, settings).label}` : ""})`, amount: Math.round(car.pricePerHour * hours * mult) },
     ...(self
       ? [{ label: `${RENT_PROTECTION_LABEL[c.protection]} protection`, amount: protectionPerDay * days }]
       : [{ label: `Driver (${days} day${days > 1 ? "s" : ""})`, amount: car.driverPerDay * days }]),
+    ...(!self && nights && settings.rentDriverNightCharge
+      ? [{ label: `Driver night charge (${nights} night${nights > 1 ? "s" : ""})`, amount: nights * settings.rentDriverNightCharge }]
+      : []),
     ...(c.doorstep ? [{ label: "Doorstep delivery & pickup", amount: settings.rentDoorstepFee }] : []),
-    ...(self && settings.rentDeposit ? [{ label: "Refundable security deposit", amount: settings.rentDeposit }] : []),
+    ...(self && settings.rentDeposit ? [{ label: DEPOSIT_LINE, amount: settings.rentDeposit }] : []),
   ];
+}
+
+/**
+ * Nights a booking runs into the driver night window (10 PM–6 AM): one per window it
+ * overlaps. Local date-times "YYYY-MM-DDTHH:mm" are compared as plain clock times.
+ */
+export function driverNights(start: string, end: string): number {
+  const s = Date.parse(`${start}:00Z`), e = Date.parse(`${end}:00Z`);
+  if (!(e > s)) return 0;
+  const { fromHour, toHour } = DRIVER_NIGHT_WINDOW;
+  const day = 86_400_000;
+  // Windows start at fromHour on each calendar day, from the day before pickup to the return day.
+  let n = 0;
+  for (let d = Math.floor(s / day) * day - day; d <= e; d += day) {
+    const ws = d + fromHour * 3_600_000, we = d + day + toHour * 3_600_000;
+    if (s < we && e > ws) n++;
+  }
+  return n;
 }
 
 /* ───────────── Group travel ───────────── */

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
+import '../../core/cancellation.dart';
 import '../../core/format.dart';
 import '../../state/catalog.dart';
 import '../../state/checkout.dart';
@@ -53,6 +54,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
         'trip': _outstation ? 'outstation' : 'local',
         if (_outstation) 'destinationId': _destId,
         'days': _days,
+        'start': isoDate(_date),
       };
 
   /// Re-price every vehicle on show after the inputs settle.
@@ -99,7 +101,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
             ],
             quote: quote,
             travellers: const ['Lead traveller'],
-            policy: 'Free cancellation up to 48 hours before trip start. Tolls, parking and state permits paid on actuals.',
+            policy: '${cancelPolicyText(ref.read(configProvider).value?.settings ?? const Settings({}), ServiceKey.rentals)} Tolls, parking and state permits paid on actuals.',
           ));
       if (mounted) context.push('/checkout');
     } catch (e) {

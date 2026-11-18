@@ -10,7 +10,8 @@ import { cx, inr, prettyDateTime } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
-import { formatLicence, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
+import { cancelPolicyFor, formatLicence, refundAmount, refundPercent, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
+import { useSettings } from "@/components/ConfigProvider";
 import { LicenceBadge, LicenceForm, licenceMessage, useLicencePolling } from "@/components/account/LicenceSection";
 import { GSTIN_LINE } from "@/lib/invoice";
 
@@ -353,6 +354,7 @@ const STATUS_STYLE: Record<BookingStatus, string> = {
 
 export function BookingsScreen() {
   const { bookings, refreshBookings, toast, user, requireAuth } = useApp();
+  const settings = useSettings();
   const [tab, setTab] = useState<"upcoming" | "past" | "cancelled">("upcoming");
   const [open, setOpen] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -361,11 +363,25 @@ export function BookingsScreen() {
   const match: Record<typeof tab, BookingStatus[]> = { upcoming: ["confirmed", "ongoing"], past: ["completed"], cancelled: ["cancelled"] };
   const list = bookings.filter((b) => match[tab].includes(b.status));
 
+  /** What cancelling now gives back under the service's policy (the API applies the same rule). */
+  function preview(b: Booking) {
+    const percent = refundPercent(cancelPolicyFor(settings, b.service), b.startsAt);
+    return { percent, refund: refundAmount(b.amount, percent, b.deposit ?? 0) };
+  }
+  function confirmText(b: Booking) {
+    const { percent, refund } = preview(b);
+    if (refund === 0) return "Cancel? It's too close to the start for a refund.";
+    if (b.payment !== "wallet") return `Cancel? ${inr(refund)}${percent < 100 ? ` (${percent}%)` : ""} is due back under the cancellation policy.`;
+    return `Cancel and get ${inr(refund)}${percent < 100 ? ` (${percent}%)` : ""} back in your wallet?`;
+  }
+
   async function cancel(b: Booking) {
     setBusy(true);
     try {
-      await api.bookings.cancel(b.id);
-      toast(b.payment === "wallet" ? `Booking cancelled. ${inr(b.amount)} refunded to your wallet.` : "Booking cancelled. Refund initiated.");
+      const done = await api.bookings.cancel(b.id);
+      toast(done.payment === "wallet"
+        ? done.refundAmount ? `Booking cancelled. ${inr(done.refundAmount)} refunded to your wallet.` : "Booking cancelled. No refund under the cancellation policy."
+        : done.refundAmount ? `Booking cancelled. Refund due: ${inr(done.refundAmount)}.` : "Booking cancelled.");
     } catch (e) {
       toast((e as Error).message, "err");
     }
@@ -420,13 +436,16 @@ export function BookingsScreen() {
                         <div className="px-4 pb-4 border-t border-line pt-4">
                           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                             {b.lines.map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-subtle">{k}</dt><dd className="text-right">{v}</dd></div>)}
+                            {b.startsAt && <div className="flex justify-between gap-3"><dt className="text-subtle">Starts</dt><dd className="text-right">{prettyDateTime(b.startsAt)}</dd></div>}
+                            {b.deposit > 0 && b.status !== "cancelled" && <div className="flex justify-between gap-3"><dt className="text-subtle">Refundable deposit</dt><dd className="text-right">{b.status === "completed" ? `${inr(b.deposit)} ${b.payment === "wallet" ? "returned to wallet" : "due back"}` : `${inr(b.deposit)} (back after return)`}</dd></div>}
+                            {b.status === "cancelled" && b.refundAmount !== null && <div className="flex justify-between gap-3"><dt className="text-subtle">{b.payment === "wallet" ? "Refunded to wallet" : "Refund due"}</dt><dd className="text-right">{b.refundAmount ? inr(b.refundAmount) : "Nothing (cancelled too late)"}</dd></div>}
                           </dl>
                           {b.status !== "cancelled" && (
                             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
                               <Link href={`/invoice${qs({ id: b.id })}`} className="text-sm text-gold flex items-center gap-1.5"><FileText size={15} />Invoice</Link>
                               {b.status === "confirmed" && (confirming === b.id ? (
                                 <>
-                                  <span className="text-sm text-soft">Cancel this booking?</span>
+                                  <span className="text-sm text-soft">{confirmText(b)}</span>
                                   <button disabled={busy} onClick={() => cancel(b)} className="text-sm px-3 py-1.5 rounded-lg bg-danger/15 text-danger hover:bg-danger/25">{busy ? "Cancelling…" : "Yes, cancel"}</button>
                                   <button onClick={() => setConfirming(null)} className="text-sm text-muted">Keep it</button>
                                 </>

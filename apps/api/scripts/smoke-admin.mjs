@@ -29,6 +29,7 @@ async function expect(name, promise, status, test = () => true) {
   return r.json;
 }
 const login = (a) => call("POST", "/admin/auth/login", a);
+const TRAVEL = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10);
 
 /** Retries for up to 35 s: other Worker isolates may serve cached catalog/settings for 30 s. */
 async function eventually(name, make, test) {
@@ -119,7 +120,7 @@ await expect("a duplicate tour slug is refused", call("POST", "/admin/catalog/to
 await expect("nights can't exceed days", call("POST", "/admin/catalog/tour", { data: { ...tours[0].data, slug: "smoke-trip", days: 2, nights: 5 } }, T), 400);
 const trip = await expect("create a tour", call("POST", "/admin/catalog/tour", { data: { ...tours[0].data, slug: "smoke-trip", title: "Smoke Trip", price: 999 } }, T), 201, (j) => j.data.slug === "smoke-trip");
 await eventually("new tour is served by GET /tours/:slug", () => call("GET", "/tours/smoke-trip"), (r) => r.status === 200 && r.json.price === 999);
-await expect("new tour can be quoted", call("POST", "/quotes", { service: "tours", tourId: trip.id, adults: 1, kids: 0 }), 201, (j) => j.lines[0].amount === 999);
+await expect("new tour can be quoted", call("POST", "/quotes", { service: "tours", tourId: trip.id, adults: 1, kids: 0, start: TRAVEL }), 201, (j) => j.lines[0].amount === 999);
 await call("DELETE", `/admin/catalog/tour/${trip.id}`, null, T);
 
 // Offers created in admin work as coupons at once; hidden ones stop
@@ -127,7 +128,7 @@ const cust2 = (await call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: 
 const offer = await expect("create an offer", call("POST", "/admin/catalog/offer", { data: {
   code: "smoke25", title: "Smoke 25", description: "Test", service: "all", percent: 25, maxDiscount: 100, minAmount: 0, validUntil: "", perUserLimit: "", hue: 10,
 } }, T), 201, (j) => j.data.code === "SMOKE25" && j.data.validUntil === null && j.data.perUserLimit === null);
-const quote = (await call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 1, kids: 0 })).json;
+const quote = (await call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 1, kids: 0, start: TRAVEL })).json;
 await eventually("new coupon works", () => call("POST", "/offers/check", { code: "SMOKE25", quoteId: quote.id }, cust2), (r) => r.status === 200 && r.json.discount === 100);
 await call("PUT", `/admin/catalog/offer/${offer.id}`, { data: { ...offer.data, validUntil: "2020-01-01" } }, T);
 await eventually("expired coupon is refused", () => call("POST", "/offers/check", { code: "SMOKE25", quoteId: quote.id }, cust2), (r) => r.status === 400 && /expired/.test(r.json.message));
@@ -174,6 +175,61 @@ const bookB = (await call("POST", "/bookings", { service: "car", title: "Smoke a
 await expect("staff mark complete", call("POST", `/admin/bookings/${bookB.id}/complete`, null, T), 200, (j) => j.booking.status === "completed" && j.history[0]?.action === "booking.complete");
 await expect("completing again is refused", call("POST", `/admin/bookings/${bookB.id}/complete`, null, T), 409);
 await expect("unknown booking is 404", call("GET", "/admin/bookings/QFNOPE", null, T), 404);
+
+// ── Cancellation policies reach refunds ──
+await expect("a policy that refunds more on shorter notice is refused", call("PATCH", "/admin/settings", { cancelPolicyTours: "2d:50, 1d:100" }, T), 400, (j) => /Shorter notice/.test(j.message));
+await expect("a malformed policy is refused", call("PATCH", "/admin/settings", { cancelPolicyTours: "50%" }, T), 400);
+const policy0 = s0.cancelPolicyTours;
+// Any start inside 999 days but more than an hour away gets 50% under this policy.
+await expect("PATCH a holiday policy", call("PATCH", "/admin/settings", { cancelPolicyTours: "999d:100, 1h:50" }, T), 200, (j) => j.cancelPolicyTours === "999d:100, 1h:50");
+const cheap = (await call("POST", "/admin/catalog/tour", { data: { ...tours[0].data, slug: "smoke-cheap", title: "Smoke Cheap Trip", price: 40 } }, T)).json;
+const C2 = (await call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: OTP })).json.token;
+await eventually("policy and cheap tour reach the API", () => call("GET", "/config"), (r) => r.json?.settings?.cancelPolicyTours === "999d:100, 1h:50");
+const tq = (await call("POST", "/quotes", { service: "tours", tourId: cheap.id, adults: 1, kids: 0, start: TRAVEL })).json;
+const walletBefore = (await call("GET", "/auth/me", null, C2)).json.walletBalance;
+const halfBooking = await expect("wallet holiday booking", call("POST", "/bookings", { service: "tours", title: "Smoke Cheap Trip", subtitle: "Policy test", payment: "wallet", lines: [], quoteId: tq.id }, C2), 201, (j) => j.startsAt?.startsWith(TRAVEL));
+await expect("admin sees what a cancel would refund", call("GET", `/admin/bookings/${halfBooking.id}`, null, T), 200,
+  (j) => j.refundIfCancelled?.percent === 50 && j.refundIfCancelled.amount === Math.round(halfBooking.amount / 2));
+await expect("customer cancel refunds half under the policy", call("POST", `/bookings/${halfBooking.id}/cancel`, null, C2), 200,
+  (j) => j.status === "cancelled" && j.refundAmount === Math.round(halfBooking.amount / 2));
+check("wallet got back only the policy's share", (await call("GET", "/auth/me", null, C2)).json.walletBalance === walletBefore - halfBooking.amount + Math.round(halfBooking.amount / 2));
+await expect("finished booking has no refund preview", call("GET", `/admin/bookings/${halfBooking.id}`, null, T), 200,
+  (j) => j.refundIfCancelled === null && j.wallet.some((w) => w.kind === "refund" && w.amount === Math.round(halfBooking.amount / 2) && /50%/.test(w.note)));
+await call("DELETE", `/admin/catalog/tour/${cheap.id}`, null, T);
+await expect("restore the holiday policy", call("PATCH", "/admin/settings", { cancelPolicyTours: policy0 }, T), 200, (j) => j.cancelPolicyTours === policy0);
+
+// ── Self-drive deposit: always back on cancel; back on staff completion ──
+await expect("documents list must not be empty", call("PATCH", "/admin/settings", { rentDocuments: "ab" }, T), 400);
+const rentPolicy0 = s0.cancelPolicyRent;
+await expect("PATCH a no-refund rent policy", call("PATCH", "/admin/settings", { cancelPolicyRent: "999d:0" }, T), 200, (j) => j.cancelPolicyRent === "999d:0");
+await eventually("rent policy reaches the API", () => call("GET", "/config"), (r) => r.json?.settings?.cancelPolicyRent === "999d:0");
+const carList = (await call("GET", "/rentals/cars?city=Chennai")).json;
+const rentReq = { service: "rent", carId: carList[0].id, mode: "self", start: `${TRAVEL}T10:00`, end: `${TRAVEL}T16:00`, kmPlan: "limited", protection: "standard", doorstep: false };
+const rentBook = async (payment) => {
+  const q = (await call("POST", "/quotes", rentReq)).json;
+  return (await call("POST", "/bookings", { service: "rent", title: "Smoke self-drive", subtitle: "Deposit test", payment, lines: [], quoteId: q.id }, C2)).json;
+};
+const r1 = await rentBook("upi");
+check("self-drive booking records its deposit", r1?.deposit === s0.rentDeposit && r1.amount > r1.deposit, JSON.stringify(r1)?.slice(0, 200));
+await expect("cancel under a 0% policy still returns the deposit", call("POST", `/bookings/${r1.id}/cancel`, null, C2), 200,
+  (j) => j.status === "cancelled" && j.refundAmount === r1.deposit);
+const r2 = await rentBook("upi");
+await expect("admin preview includes the deposit", call("GET", `/admin/bookings/${r2.id}`, null, T), 200, (j) => j.refundIfCancelled?.amount === r2.deposit && j.refundIfCancelled.percent === 0);
+await expect("customer can't complete a rental", call("POST", `/bookings/${r2.id}/complete`, null, C2), 409);
+await expect("staff completion records the deposit as due back", call("POST", `/admin/bookings/${r2.id}/complete`, null, T), 200,
+  (j) => j.booking.status === "completed" && j.booking.refundAmount === r2.deposit && j.history[0]?.detail?.depositReturned === r2.deposit && j.history[0].detail.toWallet === false && j.wallet.length === 0);
+// Wallet path, when the test customer can afford a self-drive booking.
+const balance0 = (await call("GET", "/auth/me", null, C2)).json.walletBalance;
+const rq = (await call("POST", "/quotes", rentReq)).json;
+if (balance0 >= rq.total) {
+  const r3 = (await call("POST", "/bookings", { service: "rent", title: "Smoke self-drive", subtitle: "Wallet deposit", payment: "wallet", lines: [], quoteId: rq.id }, C2)).json;
+  await expect("staff completion returns a wallet deposit", call("POST", `/admin/bookings/${r3.id}/complete`, null, T), 200,
+    (j) => j.wallet.some((w) => w.kind === "refund" && w.amount === r3.deposit && /Deposit returned/.test(w.note)));
+  check("deposit reached the wallet", (await call("GET", "/auth/me", null, C2)).json.walletBalance === balance0 - r3.amount + r3.deposit);
+} else {
+  console.log(`SKIP  wallet deposit return (test wallet ₹${balance0} < ₹${rq.total})`);
+}
+await expect("restore the rent policy", call("PATCH", "/admin/settings", { cancelPolicyRent: rentPolicy0 }, T), 200, (j) => j.cancelPolicyRent === rentPolicy0);
 
 // ── Licence reviews ── (the customer's licence is pending from the settings test above)
 await expect("GET /admin/licences lists pending first", call("GET", "/admin/licences", null, T), 200, (j) => j.some((l) => l.customer.id === cMe.id && l.status === "pending" && l.number));

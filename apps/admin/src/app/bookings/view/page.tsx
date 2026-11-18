@@ -24,14 +24,14 @@ function Detail({ id }: { id: string }) {
 
   const act = async (fn: () => Promise<AdminBookingDetail>, done: string) => {
     setBusy(true); setActionError("");
-    try { setData(await fn()); setDialog(null); setNotice(done); }
+    try { setData(await fn()); setDialog(null); if (done) setNotice(done); }
     catch (e) { setActionError(e instanceof Error ? e.message : "Couldn't update the booking."); }
     finally { setBusy(false); }
   };
 
   if (error) return <ErrorBox message={error} onRetry={reload} />;
   if (!data) return <div className="card p-6 grid gap-3">{[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-10" />)}</div>;
-  const { booking: b, wallet, coupon, history } = data;
+  const { booking: b, wallet, coupon, history, refundIfCancelled: refund } = data;
   const active = b.status === "confirmed" || b.status === "ongoing";
   const manage = active && can("bookings.manage");
 
@@ -107,16 +107,27 @@ function Detail({ id }: { id: string }) {
         open={dialog === "cancel"} title="Cancel this booking?" confirmLabel="Cancel booking" busy={busy} error={actionError}
         label="Reason (kept in the audit log)" placeholder="e.g. Driver unavailable; customer asked by phone"
         intro={b.payment === "wallet"
-          ? <>{inr(b.amount)} goes back to {b.customer.name}&apos;s QuikFly wallet at once.</>
+          ? refund && refund.amount > 0
+            ? <>{inr(refund.amount)}{refund.percent < 100 ? ` (${refund.percent}% under the cancellation policy)` : ""} goes back to {b.customer.name}&apos;s QuikFly wallet at once.</>
+            : <>It&apos;s too close to the start for a refund under the cancellation policy, so nothing goes back to the wallet.</>
           : <>This was paid by {b.payment.toUpperCase()}. No payment gateway is connected yet, so refund it outside QuikFly if money was taken.</>}
         onCancel={() => setDialog(null)}
-        onConfirm={(reason) => act(() => adminApi.bookings.cancel(b.id, reason), b.payment === "wallet" ? `Cancelled. ${inr(b.amount)} refunded to the wallet.` : "Cancelled.")}
+        onConfirm={(reason) => act(async () => {
+          const d = await adminApi.bookings.cancel(b.id, reason);
+          const back = d.booking.refundAmount ?? 0;
+          setNotice(b.payment === "wallet" ? (back ? `Cancelled. ${inr(back)} refunded to the wallet.` : "Cancelled. No refund under the policy.") : "Cancelled.");
+          return d;
+        }, "")}
       />
       <ConfirmDialog
         open={dialog === "complete"} title="Mark as completed?" confirmLabel="Mark completed" busy={busy}
-        onCancel={() => setDialog(null)} onConfirm={() => act(() => adminApi.bookings.complete(b.id), "Marked completed.")}
+        onCancel={() => setDialog(null)}
+        onConfirm={() => act(() => adminApi.bookings.complete(b.id), b.deposit > 0 && b.payment === "wallet" ? `Marked completed. ${inr(b.deposit)} deposit returned to the wallet.` : "Marked completed.")}
       >
         Use this when the trip or stay has happened. Completed bookings can&apos;t be cancelled.
+        {b.deposit > 0 && (b.payment === "wallet"
+          ? <> Check the car first: the {inr(b.deposit)} deposit goes back to {b.customer.name}&apos;s wallet at once.</>
+          : <> Check the car first: the {inr(b.deposit)} deposit was paid by {b.payment.toUpperCase()}, so return it outside QuikFly.</>)}
         {actionError && <p className="text-sm text-danger mt-2" role="alert">{actionError}</p>}
       </ConfirmDialog>
     </>

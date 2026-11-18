@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
+import '../../core/cancellation.dart';
 import '../../core/format.dart';
 import '../../state/catalog.dart';
 import '../../state/checkout.dart';
@@ -211,8 +212,9 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
   int _tab = 0;
   late final LiveQuote _live = LiveQuote(ref.read(apiProvider))..addListener(() => setState(() {}));
   bool _booking = false;
+  Settings get _settings => ref.read(configProvider).value?.settings ?? const Settings({});
 
-  Map<String, Object?> _request(TourPackage t) => {'service': 'tours', 'tourId': t.id, 'adults': _adults, 'kids': _kids};
+  Map<String, Object?> _request(TourPackage t) => {'service': 'tours', 'tourId': t.id, 'adults': _adults, 'kids': _kids, 'start': isoDate(_date)};
 
   @override
   void dispose() {
@@ -236,7 +238,7 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
             ],
             quote: quote,
             travellers: [for (var i = 1; i <= _adults; i++) 'Adult $i', for (var i = 1; i <= _kids; i++) 'Child $i'],
-            policy: t.cancellation,
+            policy: cancelPolicyText(_settings, ServiceKey.tours),
           ));
       if (mounted) context.push('/checkout');
     } catch (e) {
@@ -368,7 +370,7 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
                     const SizedBox(height: 12),
                     GoldButton(label: 'Book now', loading: _booking, onPressed: _live.loading ? null : () => _book(t)),
                     const SizedBox(height: 6),
-                    Text('Demo: no payment is taken · Free expert call after booking',
+                    Text('Demo: no payment is taken',
                         textAlign: TextAlign.center, style: TextStyle(color: c.fgSubtle, fontSize: 11.5)),
                   ]),
                 ),
@@ -464,9 +466,9 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
             );
         return Panel(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            p('Cancellation', t.cancellation, Icons.verified_user_outlined),
-            p('Payment', 'Pay in full now, or 25% to block and the balance 15 days before travel.'),
-            p('Customisation', 'A travel expert calls within 2 hours of booking to tailor hotels and activities.'),
+            p('Cancellation', '${cancelPolicyText(_settings, ServiceKey.tours)} Counted from midnight on the start date; wallet refunds are instant.', Icons.verified_user_outlined),
+            p('Payment', 'Pay in full at booking, from your QuikFly wallet or the payment methods at checkout.'),
+            p('Price', 'Per person, twin sharing, including GST (${_settings.gstRate(ServiceKey.tours)}%). Children (5–11) pay ${_settings.tourChildPercent}% of the adult price.'),
           ]),
         );
     }

@@ -4,8 +4,8 @@
 // Storage helpers: ./mock-store.ts. Account endpoints: ./mock-account.ts.
 import type { QuikflyApi } from "./contract";
 import {
-  BUS_OPERATORS, CATALOG_SEED, DEFAULT_SETTINGS, QUOTE_TTL_MINUTES, RIDE_SIM, couponDiscount, generateBuses, generateSeats, pick,
-  priceBus, priceGroup, priceRent, priceTour, rideQuotes, sumLines,
+  BUS_OPERATORS, CATALOG_SEED, DEFAULT_SETTINGS, DEPOSIT_LINE, QUOTE_TTL_MINUTES, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
+  priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideQuotes, sumLines,
   type AppConfig, type Booking, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
@@ -20,15 +20,15 @@ const QUOTES_KEY = "quikfly.mockQuotes";
 const bookingsStore = () => load<Booking[]>(KEYS.bookings, []);
 const saveBookings = (list: Booking[]) => save(KEYS.bookings, list);
 const ridesStore = () => load<Record<string, MockRide>>(KEYS.rides, {});
-type StoredQuote = PriceQuote & { used?: boolean };
+type StoredQuote = PriceQuote & { used?: boolean; startsAt?: string };
 const quotesStore = () => load<Record<string, StoredQuote>>(QUOTES_KEY, {});
 
 /** Updates an active booking; refuses ones already cancelled or completed (409 on the API). */
-function finishBooking(id: string, status: "cancelled" | "completed") {
+function finishBooking(id: string, status: "cancelled" | "completed", patch: Partial<Booking> = {}) {
   const list = bookingsStore();
   const b = list.find((x) => x.id === id) ?? fail("Booking not found.");
   if (b.status !== "confirmed" && b.status !== "ongoing") fail(`This booking is already ${b.status}.`);
-  b.status = status;
+  Object.assign(b, patch, { status });
   saveBookings(list);
   return b;
 }
@@ -178,7 +178,8 @@ export const mockApi: QuikflyApi = {
       await wait(350);
       const lines = priceLines(r);
       const q: PriceQuote = { id: uid("QT"), service: r.service, lines, total: sumLines(lines), expiresAt: new Date(Date.now() + QUOTE_TTL_MINUTES * 60_000).toISOString() };
-      save(QUOTES_KEY, { ...quotesStore(), [q.id]: q });
+      const startsAt = quoteStartsAt(r, r.service === "bus" ? busFor(r.from, r.to, r.date, r.busId).depart : undefined);
+      save(QUOTES_KEY, { ...quotesStore(), [q.id]: { ...q, startsAt } });
       return q;
     },
   },
@@ -204,6 +205,8 @@ export const mockApi: QuikflyApi = {
       const total = gross(input);
       const c = input.couponCode ? coupon(input.couponCode, input.service, total) : null;
       const amount = total - (c?.discount ?? 0);
+      const quoted = input.quoteId ? quotesStore()[input.quoteId] : undefined;
+      const deposit = Math.min(quoted?.lines.find((l) => l.label === DEPOSIT_LINE)?.amount ?? 0, amount);
       const lines: [string, string][] = [
         ...input.lines.filter(([k]) => k !== "Coupon"),
         ...(c ? [["Coupon", `${c.code} (−₹${c.discount.toLocaleString("en-IN")})`] as [string, string]] : []),
@@ -211,6 +214,7 @@ export const mockApi: QuikflyApi = {
       const b: Booking = {
         id: uid("QF"), service: input.service, title: input.title, subtitle: input.subtitle, payment: input.payment,
         amount, lines, status: "confirmed", createdAt: new Date().toISOString(),
+        startsAt: quoted?.startsAt || null, refundAmount: null, deposit,
       };
       if (input.payment === "wallet") {
         if (currentUser().walletBalance < amount) fail("Not enough wallet balance. Choose another payment method.");
@@ -224,12 +228,22 @@ export const mockApi: QuikflyApi = {
       saveBookings([b, ...bookingsStore()]);
       return b;
     },
+    // Refunds what the service's cancellation policy allows for the notice given, like the API.
     async cancel(id) {
       await wait(500);
-      const b = finishBooking(id, "cancelled");
-      if (b.payment === "wallet") walletEntry("refund", b.amount, `Refund · ${b.title}`, b.id);
+      const current = bookingsStore().find((x) => x.id === id) ?? fail("Booking not found.");
+      const percent = refundPercent(cancelPolicyFor(settings, current.service), current.startsAt);
+      const refund = refundAmount(current.amount, percent, current.deposit ?? 0);
+      const b = finishBooking(id, "cancelled", { refundAmount: refund });
+      if (b.payment === "wallet" && refund > 0) walletEntry("refund", refund, `Refund${percent < 100 ? ` (${percent}%)` : ""} · ${b.title}`, b.id);
       return b;
     },
-    async complete(id) { await wait(200); return finishBooking(id, "completed"); },
+    // Like the API: customers complete rides only; staff close everything else.
+    async complete(id) {
+      await wait(200);
+      const b = bookingsStore().find((x) => x.id === id) ?? fail("Booking not found.");
+      if (b.service !== "bike" && b.service !== "car" && (b.status === "confirmed" || b.status === "ongoing")) fail("QuikFly staff close this booking once the trip is over.");
+      return finishBooking(id, "completed");
+    },
   },
 };
