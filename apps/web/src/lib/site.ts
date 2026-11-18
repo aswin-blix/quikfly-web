@@ -27,9 +27,11 @@ export const ANDROID_APP = {
 } as const;
 
 /**
- * The QuikFly Partner app for vehicle owners (Android, GitHub Releases). Null until its first
- * release; the /partner page shows "coming soon" meanwhile.
+ * The QuikFly Partner app for vehicle owners (Android, GitHub Releases; first release app-v0.1.6).
+ * Set downloadUrl to null to make the /partner page show "coming soon" instead.
  */
-export const PARTNER_APP: { downloadUrl: string | null } = {
-  downloadUrl: null,
+export const PARTNER_APP: { downloadUrl: string | null; releaseUrl: string } = {
+  downloadUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFlyPartner-arm64.apk",
+  /** Release page: install steps, the file for older (32-bit) phones, checksums. */
+  releaseUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest",
 };

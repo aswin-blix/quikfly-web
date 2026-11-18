@@ -106,7 +106,10 @@ export function PartnerScreen() {
             </ul>
             <div className="mt-8">
               {PARTNER_APP.downloadUrl ? (
-                <a href={PARTNER_APP.downloadUrl} className="btn-gold rounded-xl px-5 py-3 inline-flex items-center gap-2"><Download size={18} />Get the QuikFly Partner app (Android)</a>
+                <>
+                  <a href={PARTNER_APP.downloadUrl} className="btn-gold rounded-xl px-5 py-3 inline-flex items-center gap-2"><Download size={18} />Get the QuikFly Partner app (Android)</a>
+                  <p className="text-sm text-muted mt-3">Android 7.0+. Older phone or need install steps? <a className="text-gold" href={PARTNER_APP.releaseUrl} target="_blank" rel="noopener noreferrer">See the release page</a>.</p>
+                </>
               ) : (
                 <>
                   <p className="font-semibold">The QuikFly Partner app is coming soon</p>
