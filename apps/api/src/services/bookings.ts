@@ -11,13 +11,13 @@ export interface BookingRow {
   status: BookingStatus; payment: PaymentMethod; lines: string; created_at: string;
   quote_id: string | null; ride_id: string | null; coupon_code: string | null; discount: number;
   starts_at: string | null; refund_amount: number | null; deposit: number;
-  cancel_reason: string | null; cancel_fee: number;
+  cancel_reason: string | null; cancel_fee: number; trip_id: string | null;
 }
 export const toBooking = (r: BookingRow): Booking => ({
   id: r.id, service: r.service, title: r.title, subtitle: r.subtitle, amount: r.amount,
   status: r.status, payment: r.payment, createdAt: r.created_at, lines: JSON.parse(r.lines),
   startsAt: r.starts_at ?? null, refundAmount: r.refund_amount ?? null, deposit: r.deposit ?? 0,
-  cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0, rideId: r.ride_id ?? null,
+  cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0, rideId: r.ride_id ?? null, tripId: r.trip_id ?? null,
 });
 
 /** Statuses a booking can still be cancelled or completed from. */
@@ -59,6 +59,15 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
  */
 export async function createBooking(db: D1Database, userId: string, input: NewBooking): Promise<Booking> {
   const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit, seatHolds } = await grossPrice(db, userId, input);
+  // Joining a trip: the other booking must be the customer's own and not cancelled.
+  let tripId: string | null = null;
+  if (input.tripOf) {
+    const anchor = await db.prepare("SELECT id, status, trip_id FROM bookings WHERE id = ? AND user_id = ?").bind(input.tripOf, userId)
+      .first<{ id: string; status: BookingStatus; trip_id: string | null }>();
+    if (!anchor) throw notFound("The booking to add this to wasn't found.");
+    if (anchor.status === "cancelled") throw conflict("That booking was cancelled, so this can't join its trip.");
+    tripId = anchor.trip_id ?? anchor.id;
+  }
   const coupon = input.couponCode ? await checkCoupon(db, userId, input.couponCode, input.service, gross) : null;
   const amount = gross - (coupon?.discount ?? 0);
   // A coupon can't make the deposit larger than what was paid.
@@ -70,7 +79,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
     ...input.lines.filter(([k]) => k !== COUPON_LINE),
     ...(coupon ? [[COUPON_LINE, `${coupon.code} (−₹${coupon.discount.toLocaleString("en-IN")})`] as [string, string]] : []),
   ];
-  const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0, rideId };
+  const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0, rideId, tripId };
   const wallet = input.payment === "wallet";
 
   const conditions: string[] = [];
@@ -82,10 +91,10 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   // Claim the quote with this booking's id, so only one booking can use it.
   if (quoteId) statements.push(db.prepare("UPDATE quotes SET used_at = ? WHERE id = ? AND used_at IS NULL").bind(id, quoteId));
   statements.push(db.prepare(
-    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit)
-     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
+    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit, trip_id)
+     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
   ).bind(id, userId, booking.service, booking.title, booking.subtitle, amount, booking.payment, JSON.stringify(lines), createdAt,
-    quoteId, rideId, coupon?.code ?? null, coupon?.discount ?? 0, startsAt, deposit, ...condParams));
+    quoteId, rideId, coupon?.code ?? null, coupon?.discount ?? 0, startsAt, deposit, tripId, ...condParams));
   if (wallet) {
     statements.push(
       db.prepare("UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ? AND EXISTS (SELECT 1 FROM bookings WHERE id = ?)").bind(amount, userId, id),
@@ -102,6 +111,11 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
        SELECT ?1, ?2, json_extract(j.value, '$.seat'), ?3, json_extract(j.value, '$.gender') FROM json_each(?4) j
        WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?3)`,
     ).bind(seatHolds.busId, seatHolds.date, id, JSON.stringify(seatHolds.seats)));
+  }
+  // The booking the trip started from joins it too (only if this booking went in).
+  if (input.tripOf) {
+    statements.push(db.prepare("UPDATE bookings SET trip_id = COALESCE(trip_id, id) WHERE id = ? AND user_id = ? AND EXISTS (SELECT 1 FROM bookings WHERE id = ?)")
+      .bind(input.tripOf, userId, id));
   }
   // If the booking didn't go in (e.g. wallet too low), give the quote back.
   if (quoteId) statements.push(db.prepare("UPDATE quotes SET used_at = NULL WHERE id = ? AND used_at = ? AND NOT EXISTS (SELECT 1 FROM bookings WHERE id = ?)").bind(quoteId, id, id));

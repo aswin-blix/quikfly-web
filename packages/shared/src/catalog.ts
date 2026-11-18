@@ -6,6 +6,16 @@ import type {
   BusOperator, City, DriverProfile, Faq, GroupDestination, Offer, Place, PopularRoute, RentalCar, RideOption, TourPackage, TravelVehicle,
 } from "./types";
 
+/**
+ * Bus boarding points (as the timetable names them) that are also places on the ride map,
+ * so a bus booking can offer a ride to its boarding point. Demo city: Chennai.
+ */
+export const BOARDING_POINT_PLACES: Record<string, string> = {
+  "Chennai – Main Bus Stand": "p14",
+  "Chennai – City Center": "p1",
+  "Chennai – Bypass": "p11",
+};
+
 export const PLACES: Place[] = [
   { id: "p1", name: "Chennai Central", area: "Park Town", x: 62, y: 30 },
   { id: "p2", name: "Chennai Airport (MAA)", area: "Meenambakkam", x: 30, y: 82 },

@@ -236,6 +236,13 @@ export const mockApi: QuikflyApi = {
       const total = gross(input);
       const c = input.couponCode ? coupon(input.couponCode, input.service, total) : null;
       const amount = total - (c?.discount ?? 0);
+      // Joining a trip: the other booking must exist and not be cancelled (like the API).
+      let tripId: string | null = null;
+      if (input.tripOf) {
+        const anchor = bookingsStore().find((x) => x.id === input.tripOf) ?? fail("The booking to add this to wasn't found.");
+        if (anchor.status === "cancelled") fail("That booking was cancelled, so this can't join its trip.");
+        tripId = anchor.tripId ?? anchor.id;
+      }
       const quoted = input.quoteId ? quotesStore()[input.quoteId] : undefined;
       const deposit = Math.min(quoted?.lines.find((l) => l.label === DEPOSIT_LINE)?.amount ?? 0, amount);
       const lines: [string, string][] = [
@@ -246,7 +253,7 @@ export const mockApi: QuikflyApi = {
         id: uid("QF"), service: input.service, title: input.title, subtitle: input.subtitle, payment: input.payment,
         amount, lines, status: "confirmed", createdAt: new Date().toISOString(),
         startsAt: quoted?.startsAt || (input.rideId ? ridesStore()[input.rideId]?.ride.scheduledFor : null) || null, refundAmount: null, deposit, cancelReason: null, cancelFee: 0,
-        rideId: input.rideId ?? null,
+        rideId: input.rideId ?? null, tripId,
       };
       if (input.payment === "wallet") {
         if (currentUser().walletBalance < amount) fail("Not enough wallet balance. Choose another payment method.");
@@ -261,7 +268,7 @@ export const mockApi: QuikflyApi = {
       if (req?.service === "bus") {
         save(HOLDS_KEY, [...holdsStore(), ...req.seatIds.map((seatId, i) => ({ seatId, gender: req.genders?.[i] ?? "other" as const, busId: req.busId, date: req.date, bookingId: b.id }))]);
       }
-      saveBookings([b, ...bookingsStore()]);
+      saveBookings([b, ...bookingsStore().map((x) => (x.id === input.tripOf && !x.tripId ? { ...x, tripId } : x))]);
       return b;
     },
     // Refunds what the service's cancellation policy allows for the notice given, like the API.

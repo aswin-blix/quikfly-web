@@ -6,6 +6,7 @@ import '../../api/models.dart';
 import '../../core/cancellation.dart';
 import '../../core/format.dart';
 import '../../core/services.dart';
+import '../../core/trips.dart';
 import '../../state/catalog.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
@@ -54,8 +55,21 @@ class TripsScreen extends ConsumerWidget {
               await ref.read(bookingsProvider.future);
             }
 
+            int tripSize(String id) => all.where((x) => x.tripId == id).length;
+            bool inTrip(Booking b) => b.tripId != null && tripSize(b.tripId!) > 1;
+
             Widget tab(bool Function(Booking) test, String empty) {
               final list = all.where(test).toList();
+              // A trip's bookings stay together (in time order) where its first booking appears.
+              final ordered = <Booking>[];
+              for (var i = 0; i < list.length; i++) {
+                final b = list[i];
+                if (!inTrip(b)) {
+                  ordered.add(b);
+                } else if (list.indexWhere((x) => x.tripId == b.tripId) == i) {
+                  ordered.addAll(list.where((x) => x.tripId == b.tripId).toList()..sort((x, y) => bookingWhen(x).compareTo(bookingWhen(y))));
+                }
+              }
               return ScreenList(onRefresh: refresh, children: [
                 if (list.isEmpty)
                   EmptyState(
@@ -64,7 +78,22 @@ class TripsScreen extends ConsumerWidget {
                     action: OutlinedButton(onPressed: () => context.go('/'), child: const Text('Book something')),
                   )
                 else
-                  for (final b in list) Padding(padding: const EdgeInsets.only(bottom: 12), child: BookingCard(b)),
+                  for (var i = 0; i < ordered.length; i++) ...[
+                    if (inTrip(ordered[i]) && (i == 0 || ordered[i - 1].tripId != ordered[i].tripId))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(children: [
+                          Icon(Icons.route, size: 18, color: context.qf.accent),
+                          const SizedBox(width: 6),
+                          Expanded(child: Text('Trip · ${tripSize(ordered[i].tripId!)} bookings', style: const TextStyle(fontWeight: FontWeight.w700))),
+                          TextButton(onPressed: () => context.push('/trip/${ordered[i].tripId}'), child: const Text('Trip summary')),
+                        ]),
+                      ),
+                    Padding(
+                      padding: EdgeInsets.only(bottom: 12, left: inTrip(ordered[i]) ? 12 : 0),
+                      child: BookingCard(ordered[i]),
+                    ),
+                  ],
               ]);
             }
 

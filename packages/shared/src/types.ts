@@ -303,6 +303,8 @@ export interface Booking {
   refundAmount: number | null;
   /** The ride behind a bike/car booking (to start a scheduled ride); null for other services. */
   rideId: string | null;
+  /** Bookings that belong together share a trip id (the id of the booking the trip started from); null when alone. */
+  tripId: string | null;
   /** Why the rider cancelled (a RIDE_CANCEL_REASONS key), when given. */
   cancelReason: string | null;
   /** Ride cancellation fee kept (wallet) or owed (cash/UPI, not collected in the preview); 0 when none. */
@@ -408,6 +410,8 @@ export interface NewBooking {
   /** For bike and car rides (the ride carries its fare). */
   rideId?: string;
   couponCode?: string;
+  /** Join the trip of this booking (e.g. a cab to the boarding point of a bus booking). */
+  tripOf?: string;
 }
 
 /** What the generic /checkout page needs; created by any service page. */
