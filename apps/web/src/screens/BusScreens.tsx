@@ -2,7 +2,7 @@
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeftRight, ArrowRight, BusFront, ChevronLeft, ChevronRight, Moon, Navigation, RotateCcw, Search, SlidersHorizontal, Star, Sun, Sunrise, Sunset, Ticket, Users, Wifi,
+  ArrowLeftRight, ArrowRight, BusFront, ChevronLeft, ChevronRight, Moon, Navigation, RotateCcw, Search, SlidersHorizontal, Star, Sun, Sunrise, Sunset, Ticket, Users,
 } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { Select } from "@/components/BookingWidget";
@@ -11,7 +11,7 @@ import { Accordion, Empty, GoldButton, PageHeader, SectionTitle, Segmented, Spin
 import { api } from "@/lib/api";
 import { cx, inr, prettyDate, shiftISO, todayISO } from "@/lib/format";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
-import { cancelPolicyText, type Bus, type Seat } from "@quikfly/shared";
+import { GENDERS, cancelPolicyText, type Bus, type Gender, type Seat } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { serviceByKey } from "@/lib/services";
 
@@ -24,7 +24,7 @@ export function BusScreen() {
   return (
     <>
       <PageHeader crumbs={[["Home", "/"], ["Bus"]]} title="Bus tickets" icon={<BusFront className="text-gold" size={36} />}
-        sub="2,500+ operators, live seat maps, women-only seats and instant refunds.">
+        sub="Live seat maps, women-first seating and instant wallet refunds.">
         <div className="mt-8"><BusSearchBar /></div>
       </PageHeader>
 
@@ -48,7 +48,7 @@ export function BusScreen() {
       <section className="max-w-7xl mx-auto px-4 pt-20">
         <SectionTitle eyebrow="Why QuikFly bus" title="Every detail before you pay" />
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[[Ticket, "Choose your seat", "Live seat layout with lower/upper berth prices."], [Navigation, "Exact boarding points", "Landmarks and timings for every pickup point."], [Users, "Women-only seats", "Seats reserved for women travellers, clearly marked."], [RotateCcw, "Instant refunds", "Cancel online, refund to wallet instantly."]].map(([I, t, d], i) => {
+          {[[Ticket, "Choose your seat", "Live seat layout with lower/upper berth prices."], [Navigation, "Exact boarding points", "Landmarks and timings for every pickup point."], [Users, "Women-first seating", "Once a woman books, the seat beside her is for women only."], [RotateCcw, "Instant refunds", "Cancel online, refund to wallet instantly."]].map(([I, t, d], i) => {
             const Icon = I as typeof Ticket;
             return <Reveal key={t as string} delay={i * 0.08}><div className="panel p-6 h-full"><Icon className="text-gold" /><p className="font-semibold mt-4">{t as string}</p><p className="text-sm text-muted mt-1">{d as string}</p></div></Reveal>;
           })}
@@ -223,7 +223,7 @@ export function BusResultsScreen() {
                         <p className="text-xs text-muted">{b.type}</p>
                         <div className="mt-2 flex items-center gap-2 text-xs">
                           <span className="inline-flex items-center gap-1 bg-success/15 text-success px-2 py-0.5 rounded"><Star size={11} className="fill-current" />{b.rating}</span>
-                          {b.amenities.includes("Live tracking") && <span className="text-subtle flex items-center gap-1"><Wifi size={11} />Live tracking</span>}
+                          {b.amenities.length > 0 && <span className="text-subtle truncate">{b.amenities.slice(0, 3).join(" · ")}</span>}
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -258,11 +258,12 @@ export function BusResultsScreen() {
 function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: string; date: string }) {
   const { setDraft, toast } = useApp();
   const settings = useSettings();
-  const lowerExtra = settings.busLowerDeckExtra;
   const [pricing, setPricing] = useState(false);
   const nav = useNav();
   const [seats, setSeats] = useState<Seat[] | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
+  /** Who sits in each picked seat; women-only seats need "female" (the API checks too). */
+  const [genders, setGenders] = useState<Record<string, Gender>>({});
   const [priceFilter, setPriceFilter] = useState<"all" | "lower" | "upper">("all");
   const [boarding, setBoarding] = useState(0);
   const [dropping, setDropping] = useState(0);
@@ -270,6 +271,16 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
 
   const chosen = (seats ?? []).filter((s) => picked.includes(s.id));
   const total = chosen.reduce((a, s) => a + s.price, 0);
+  const decks = (["lower", "upper"] as const).filter((d) => (seats ?? []).some((s) => s.deck === d));
+  const deckPrice = (d: "lower" | "upper") => Math.min(...(seats ?? []).filter((s) => s.deck === d).map((s) => s.price));
+  const allNamed = chosen.every((s) => genders[s.id]);
+
+  function toggle(s: Seat) {
+    if (picked.includes(s.id)) { setPicked((p) => p.filter((x) => x !== s.id)); return; }
+    if (picked.length >= 6) { toast("You can book up to 6 seats at a time.", "err"); return; }
+    setPicked((p) => [...p, s.id]);
+    if (s.ladies) setGenders((g) => ({ ...g, [s.id]: "female" }));
+  }
   const drops = [`${to} – Main Bus Stand`, `${to} – Ring Road`, `${to} – City Center`];
   const bTimes = [bus.depart, addMin(bus.depart, 20), addMin(bus.depart, 45)];
   const dTimes = drops.map((_, i) => addMin(bus.arrive, i * 15));
@@ -279,7 +290,7 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
     setPricing(true);
     let quote;
     try {
-      quote = await api.quotes.create({ service: "bus", busId: bus.id, from, to, date, seatIds: chosen.map((s) => s.id) });
+      quote = await api.quotes.create({ service: "bus", busId: bus.id, from, to, date, seatIds: chosen.map((s) => s.id), genders: chosen.map((s) => genders[s.id]) });
     } catch (e) {
       toast((e as Error).message, "err");
       setPricing(false);
@@ -289,7 +300,7 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
       service: "bus", title: `${from} → ${to}`, subtitle: `${bus.operator} · ${bus.type}`, image: serviceByKey("bus").image,
       summary: [["Date", prettyDate(date)], ["Departure", `${bTimes[boarding]} from ${bus.boardingPoints[boarding]}`], ["Arrival", `${dTimes[dropping]} at ${drops[dropping]}`], ["Seats", chosen.map((s) => s.label).join(", ")]],
       quote,
-      travellers: chosen.map((s) => `Seat ${s.label}`),
+      travellers: chosen.map((s) => `Seat ${s.label} · ${GENDER_LABEL[genders[s.id]]}`),
       policy: cancelPolicyText(settings, "bus"),
     });
     nav.push("/checkout");
@@ -299,39 +310,50 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
   return (
     <div className="p-5 grid xl:grid-cols-[1fr_300px] gap-6 bg-ink/40">
       <div>
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <span className="label mr-1">Seat price</span>
-          {([["all", "All"], ["lower", inr(bus.fare + lowerExtra)], ["upper", inr(bus.fare)]] as const).map(([k, l]) => (
-            <button key={k} data-on={priceFilter === k} onClick={() => setPriceFilter(k)} className="chip !text-xs">{l}</button>
-          ))}
-        </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          {(["lower", "upper"] as const).map((deck) => (
-            <div key={deck} className={cx("rounded-2xl border border-line p-4 transition-opacity", priceFilter !== "all" && priceFilter !== deck && "opacity-30")}>
-              <div className="flex justify-between items-center mb-3"><p className="label">{deck} deck · {inr(bus.fare + (deck === "lower" ? lowerExtra : 0))}</p>{deck === "lower" && <span className="text-[10px] text-subtle border border-line rounded px-1.5">Driver</span>}</div>
-              <div className="grid grid-cols-[1fr_1fr_14px_1fr] gap-2">
-                {seats.filter((s) => s.deck === deck).map((s) => {
-                  const on = picked.includes(s.id);
-                  return (
-                    <motion.button key={s.id} disabled={s.booked} whileTap={{ scale: 0.9 }} animate={on ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-                      onClick={() => setPicked((p) => (on ? p.filter((x) => x !== s.id) : p.length >= 6 ? p : [...p, s.id]))}
-                      style={{ gridColumn: s.col === 2 ? 4 : s.col + 1 }} aria-label={`Seat ${s.label}${s.booked ? " sold" : ""}`} aria-pressed={on}
-                      className={cx("h-14 rounded-lg border text-[10px] flex flex-col items-center justify-end pb-1 transition-colors",
-                        s.booked ? "bg-line/60 border-line text-faint cursor-not-allowed"
-                          : on ? "bg-brand border-gold text-on-brand font-bold"
-                          : s.ladies ? "border-highlight/60 text-highlight hover:bg-highlight/10"
-                          : "border-line-strong hover:border-gold text-soft")}>
-                      <span className={cx("w-6 h-1 rounded mb-auto mt-1.5", on ? "bg-black/40" : "bg-current opacity-40")} />
-                      {s.booked ? "Sold" : s.label}
-                    </motion.button>
-                  );
-                })}
+        {decks.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="label mr-1">Seat price</span>
+            {([["all", "All"], ...decks.map((d) => [d, inr(deckPrice(d))] as const)] as const).map(([k, l]) => (
+              <button key={k} data-on={priceFilter === k} onClick={() => setPriceFilter(k as typeof priceFilter)} className="chip !text-xs">{l}</button>
+            ))}
+          </div>
+        )}
+        <div className={cx("grid gap-4", decks.length > 1 && "sm:grid-cols-2")}>
+          {decks.map((deck) => {
+            const deckSeats = seats.filter((s) => s.deck === deck);
+            const four = deckSeats.some((s) => s.col === 3);
+            return (
+              <div key={deck} className={cx("rounded-2xl border border-line p-4 transition-opacity", decks.length === 1 && "max-w-md", priceFilter !== "all" && priceFilter !== deck && "opacity-30")}>
+                <div className="flex justify-between items-center mb-3">
+                  <p className="label">{decks.length > 1 ? `${deck} deck` : "Seats"} · {inr(deckPrice(deck))}{deckSeats[0]?.sleeper ? " · sleeper" : " · seater"}</p>
+                  {deck === "lower" && <span className="text-[10px] text-subtle border border-line rounded px-1.5">Driver</span>}
+                </div>
+                <div className={cx("grid gap-2", four ? "grid-cols-[1fr_1fr_14px_1fr_1fr]" : "grid-cols-[1fr_1fr_14px_1fr]")}>
+                  {deckSeats.map((s) => {
+                    const on = picked.includes(s.id);
+                    const byWoman = s.booked && s.bookedGender === "female";
+                    return (
+                      <motion.button key={s.id} disabled={s.booked} whileTap={{ scale: 0.9 }} animate={on ? { scale: [1, 1.08, 1] } : { scale: 1 }}
+                        onClick={() => toggle(s)}
+                        style={{ gridColumn: s.col < 2 ? s.col + 1 : s.col + 2 }}
+                        aria-label={`Seat ${s.label}${s.booked ? (byWoman ? ", sold, booked by a woman" : ", sold") : s.ladies ? ", women only" : ""}, ${inr(s.price)}`} aria-pressed={on}
+                        className={cx("rounded-lg border text-[10px] flex flex-col items-center justify-end pb-1 transition-colors", s.sleeper ? "h-16" : "h-11",
+                          s.booked ? cx("bg-line/60 text-faint cursor-not-allowed", byWoman ? "border-highlight/50" : "border-line")
+                            : on ? "bg-brand border-gold text-on-brand font-bold"
+                            : s.ladies ? "border-highlight/60 text-highlight hover:bg-highlight/10"
+                            : "border-line-strong hover:border-gold text-soft")}>
+                        <span className={cx("w-6 h-1 rounded mb-auto mt-1.5", on ? "bg-black/40" : "bg-current opacity-40")} />
+                        {s.booked ? "Sold" : s.label}
+                      </motion.button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="flex flex-wrap gap-4 text-xs text-muted mt-3">
-          {[["border-line-strong", "Available"], ["bg-brand border-gold", "Selected"], ["bg-line border-line", "Sold"], ["border-highlight/60", "Ladies only"]].map(([c, t]) => (
+          {[["border-line-strong", "Available"], ["bg-brand border-gold", "Selected"], ["bg-line border-line", "Sold"], ["bg-line border-highlight/50", "Booked by a woman"], ["border-highlight/60", "Women only (next to a woman)"]].map(([c, t]) => (
             <span key={t} className="flex items-center gap-1.5"><span className={cx("w-4 h-4 rounded border", c)} />{t}</span>
           ))}
         </div>
@@ -341,9 +363,26 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
         <PointList title="Dropping point" items={drops.map((p, i) => [p, dTimes[i]])} value={dropping} onChange={setDropping} />
         <div className="rounded-2xl bg-coal border border-line p-4 text-sm space-y-2">
           <div className="flex justify-between"><span className="text-muted">Seats</span><span>{chosen.map((s) => s.label).join(", ") || "—"}</span></div>
+          {chosen.length > 0 && (
+            <div className="border-t border-line pt-2 space-y-2" role="group" aria-label="Who sits in each seat">
+              <p className="text-xs text-muted">Who sits here? Seats next to a woman are for women only.</p>
+              {chosen.map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-2">
+                  <span className="text-xs w-10 shrink-0">{s.label}</span>
+                  <div className="flex gap-1.5 flex-wrap justify-end">
+                    {(s.ladies ? (["female"] as const) : GENDERS).map((g) => (
+                      <button key={g} type="button" data-on={genders[s.id] === g} aria-pressed={genders[s.id] === g}
+                        onClick={() => setGenders((x) => ({ ...x, [s.id]: g }))} className="chip !text-[11px] !py-1 !px-2.5">{GENDER_LABEL[g]}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex justify-between font-bold text-lg"><span>Amount</span><span className="text-gold">{inr(total)}</span></div>
-          <GoldButton className="w-full" disabled={!chosen.length} loading={pricing} onClick={proceed}>Proceed to book <ArrowRight size={16} /></GoldButton>
+          <GoldButton className="w-full" disabled={!chosen.length || !allNamed} loading={pricing} onClick={proceed}>Proceed to book <ArrowRight size={16} /></GoldButton>
           {!chosen.length && <p className="text-[11px] text-subtle text-center">Select up to 6 seats</p>}
+          {chosen.length > 0 && !allNamed && <p className="text-[11px] text-subtle text-center">Choose who sits in each seat</p>}
         </div>
       </div>
     </div>
@@ -365,6 +404,8 @@ function PointList({ title, items, value, onChange }: { title: string; items: [s
     </div>
   );
 }
+
+const GENDER_LABEL: Record<Gender, string> = { female: "Female", male: "Male", other: "Other" };
 
 function addMin(hhmm: string, m: number) {
   const [h, mm] = hhmm.split(":").map(Number);

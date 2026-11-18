@@ -1,12 +1,12 @@
 // Server-side prices for bus, holiday, self-drive and group bookings. The website shows
 // a quote's lines; POST /bookings charges its total. Rides are priced by services/rides.ts.
 import {
-  BOOKING_LIMITS, QUOTE_TTL_MINUTES, generateSeats, priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, rentHours, sumLines,
-  type FareLine, type PriceQuote, type QuoteRequest, type ServiceKey,
+  BOOKING_LIMITS, QUOTE_TTL_MINUTES, generateSeats, priceBus, seatRuleError, priceGroup, priceRent, priceTour, quoteStartsAt, rentHours, sumLines,
+  type FareLine, type PriceQuote, type QuoteRequest, type Seat, type ServiceKey,
 } from "@quikfly/shared";
 import { badRequest, conflict } from "../lib/errors";
 import { uid } from "../lib/random";
-import { findBus } from "./buses";
+import { findBus, seatHolds } from "./buses";
 import { visibleById } from "./catalog";
 import { getSettings } from "./settings";
 
@@ -17,11 +17,14 @@ async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLi
     case "bus": {
       if (!req.seatIds.length || req.seatIds.length > BOOKING_LIMITS.busSeats) throw badRequest(`Choose 1 to ${BOOKING_LIMITS.busSeats} seats.`);
       if (new Set(req.seatIds).size !== req.seatIds.length) throw badRequest("A seat is listed twice.");
+      if (req.genders && req.genders.length !== req.seatIds.length) throw badRequest('"genders" must have one entry per seat.');
       const bus = await findBus(db, req.from, req.to, req.date, req.busId);
-      const seats = generateSeats(bus, req.date, settings);
+      const seats = generateSeats(bus, req.date, settings, await seatHolds(db, req.busId, req.date));
       const chosen = req.seatIds.map((id) => seats.find((s) => s.id === id) ?? null);
       if (chosen.some((s) => !s)) throw badRequest("One of those seats doesn't exist on this bus.");
       if (chosen.some((s) => s!.booked)) throw conflict("One of those seats was just booked. Please pick another.");
+      const ruleError = seatRuleError(chosen as Seat[], req.genders ?? []);
+      if (ruleError) throw badRequest(ruleError);
       return { lines: priceBus(chosen as NonNullable<(typeof chosen)[number]>[], settings), startsAt: quoteStartsAt(req, bus.depart) };
     }
     case "tours": {
@@ -53,11 +56,11 @@ export async function createQuote(db: D1Database, req: QuoteRequest): Promise<Pr
   return quote;
 }
 
-interface QuoteRow { id: string; service: ServiceKey; total: number; expires_at: number; used_at: string | null; starts_at: string | null; lines: string }
+interface QuoteRow { id: string; service: ServiceKey; total: number; expires_at: number; used_at: string | null; starts_at: string | null; lines: string; request: string }
 
 /** A quote that can still be booked: right service, not expired, not used. */
 export async function usableQuote(db: D1Database, id: string, service: ServiceKey) {
-  const q = await db.prepare("SELECT id, service, total, expires_at, used_at, starts_at, lines FROM quotes WHERE id = ?").bind(id).first<QuoteRow>();
+  const q = await db.prepare("SELECT id, service, total, expires_at, used_at, starts_at, lines, request FROM quotes WHERE id = ?").bind(id).first<QuoteRow>();
   if (!q || q.service !== service) throw badRequest("That price isn't valid. Please go back and check the price again.");
   if (q.used_at) throw conflict("This price was already used for a booking.");
   if (q.expires_at < Date.now()) throw conflict(`Prices are held for ${QUOTE_TTL_MINUTES} minutes and this one has expired. Please check the price again.`);

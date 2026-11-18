@@ -5,8 +5,8 @@
 import type { QuikflyApi } from "./contract";
 import {
   BUS_OPERATORS, CATALOG_SEED, DEFAULT_SETTINGS, DEPOSIT_LINE, QUOTE_TTL_MINUTES, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
-  priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideQuotes, sumLines,
-  type AppConfig, type Booking, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
+  priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideQuotes, seatRuleError, sumLines,
+  type AppConfig, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
 import { KEYS, currentUser, fail, load, save, uid, wait, walletEntry, type MockRide } from "./mock-store";
@@ -16,11 +16,15 @@ export { MOCK_OTP } from "./mock-store";
 const settings = DEFAULT_SETTINGS;
 const seed = CATALOG_SEED;
 const QUOTES_KEY = "quikfly.mockQuotes";
+const HOLDS_KEY = "quikfly.mockSeatHolds";
+type StoredHold = SeatHold & { busId: string; date: string; bookingId: string };
+const holdsStore = () => load<StoredHold[]>(HOLDS_KEY, []);
+const holdsFor = (busId: string, date: string) => holdsStore().filter((h) => h.busId === busId && h.date === date);
 
 const bookingsStore = () => load<Booking[]>(KEYS.bookings, []);
 const saveBookings = (list: Booking[]) => save(KEYS.bookings, list);
 const ridesStore = () => load<Record<string, MockRide>>(KEYS.rides, {});
-type StoredQuote = PriceQuote & { used?: boolean; startsAt?: string };
+type StoredQuote = PriceQuote & { used?: boolean; startsAt?: string; request?: QuoteRequest };
 const quotesStore = () => load<Record<string, StoredQuote>>(QUOTES_KEY, {});
 
 /** Updates an active booking; refuses ones already cancelled or completed (409 on the API). */
@@ -41,8 +45,12 @@ const busFor = (from: string, to: string, date: string, id: string) =>
 function priceLines(r: QuoteRequest): FareLine[] {
   switch (r.service) {
     case "bus": {
-      const seats = generateSeats(busFor(r.from, r.to, r.date, r.busId), r.date, settings);
-      return priceBus(r.seatIds.map((id) => seats.find((s) => s.id === id) ?? fail("Unknown seat.")), settings);
+      const seats = generateSeats(busFor(r.from, r.to, r.date, r.busId), r.date, settings, holdsFor(r.busId, r.date));
+      const chosen = r.seatIds.map((id) => seats.find((s) => s.id === id) ?? fail("Unknown seat."));
+      if (chosen.some((s) => s.booked)) fail("One of those seats was just booked. Please pick another.");
+      const ruleError = seatRuleError(chosen, r.genders ?? []);
+      if (ruleError) fail(ruleError);
+      return priceBus(chosen, settings);
     }
     case "tours": return priceTour(byId(seed.tour, r.tourId, "holiday"), r.adults, r.kids, settings);
     case "rent": return priceRent(byId(seed.rentalCar, r.carId, "car"), r, settings);
@@ -154,11 +162,11 @@ export const mockApi: QuikflyApi = {
   buses: {
     async search(from, to, date) {
       await wait(800);
-      return generateBuses(BUS_OPERATORS.map((o) => o.name), settings, from, to, date);
+      return generateBuses(BUS_OPERATORS.map((o) => o.name), settings, from, to, date).map((b) => ({ ...b, seatsLeft: Math.max(0, b.seatsLeft - holdsFor(b.id, date).length) }));
     },
     async seats(bus, date) {
       await wait(500);
-      return generateSeats(busFor(bus.from, bus.to, date, bus.id), date, settings);
+      return generateSeats(busFor(bus.from, bus.to, date, bus.id), date, settings, holdsFor(bus.id, date));
     },
   },
 
@@ -179,7 +187,7 @@ export const mockApi: QuikflyApi = {
       const lines = priceLines(r);
       const q: PriceQuote = { id: uid("QT"), service: r.service, lines, total: sumLines(lines), expiresAt: new Date(Date.now() + QUOTE_TTL_MINUTES * 60_000).toISOString() };
       const startsAt = quoteStartsAt(r, r.service === "bus" ? busFor(r.from, r.to, r.date, r.busId).depart : undefined);
-      save(QUOTES_KEY, { ...quotesStore(), [q.id]: { ...q, startsAt } });
+      save(QUOTES_KEY, { ...quotesStore(), [q.id]: { ...q, startsAt, request: r } });
       return q;
     },
   },
@@ -225,6 +233,10 @@ export const mockApi: QuikflyApi = {
         qs[input.quoteId] = { ...qs[input.quoteId], used: true };
         save(QUOTES_KEY, qs);
       }
+      const req = quoted?.request;
+      if (req?.service === "bus") {
+        save(HOLDS_KEY, [...holdsStore(), ...req.seatIds.map((seatId, i) => ({ seatId, gender: req.genders?.[i] ?? "other" as const, busId: req.busId, date: req.date, bookingId: b.id }))]);
+      }
       saveBookings([b, ...bookingsStore()]);
       return b;
     },
@@ -235,6 +247,7 @@ export const mockApi: QuikflyApi = {
       const percent = refundPercent(cancelPolicyFor(settings, current.service), current.startsAt);
       const refund = refundAmount(current.amount, percent, current.deposit ?? 0);
       const b = finishBooking(id, "cancelled", { refundAmount: refund });
+      save(HOLDS_KEY, holdsStore().filter((h) => h.bookingId !== id));
       if (b.payment === "wallet" && refund > 0) walletEntry("refund", refund, `Refund${percent < 100 ? ` (${percent}%)` : ""} · ${b.title}`, b.id);
       return b;
     },

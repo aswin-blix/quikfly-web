@@ -208,13 +208,24 @@ export interface Bus {
 export interface Seat {
   id: string;
   label: string;
+  /** Single-deck buses use "lower" for every seat. */
   deck: "lower" | "upper";
   row: number;
+  /** 0 and 1 are the pair on the left; 2 (and 3 on 2+2 buses) sit across the aisle. */
   col: number;
   sleeper: boolean;
   booked: boolean;
+  /** Who holds a booked seat (for the "booked by a woman" marker); null when free. */
+  bookedGender: Gender | null;
+  /** Women only: the seat next to it (same pair) is held by a woman. The API refuses anyone else. */
   ladies: boolean;
   price: number;
+}
+
+/** A seat held by a real booking (stored by the API; generated seats are simulated). */
+export interface SeatHold {
+  seatId: string;
+  gender: Gender;
 }
 
 export type TourTheme = "beach" | "hills" | "international" | "weekend" | "heritage";
@@ -338,7 +349,8 @@ export const RENT_PROTECTION = ["standard", "peace"] as const;
 
 /** What to price. Rides are quoted by POST /rides/quote instead. */
 export type QuoteRequest =
-  | { service: "bus"; busId: string; from: string; to: string; date: string; seatIds: string[] }
+  /** `genders` lines up with `seatIds` (who sits where); women-only seats need "female". */
+  | { service: "bus"; busId: string; from: string; to: string; date: string; seatIds: string[]; genders?: Gender[] }
   /** `start` is the travel date (YYYY-MM-DD); the cancellation policy counts down to it. */
   | { service: "tours"; tourId: string; adults: number; kids: number; start: string }
   | {

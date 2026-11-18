@@ -1,7 +1,7 @@
 // POST /quotes prices a bus, holiday, self-drive or group booking. POST /offers/check
 // tries a coupon against a quote or a ride. Bookings then refer to the quote by id.
 import { Hono } from "hono";
-import { PATTERNS, RENT_KM_PLANS, RENT_PROTECTION, type QuoteRequest } from "@quikfly/shared";
+import { GENDERS, PATTERNS, RENT_KM_PLANS, RENT_PROTECTION, type Gender, type QuoteRequest } from "@quikfly/shared";
 import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
 import { bool, int, jsonBody, matches, oneOf, optStr, str } from "../lib/validate";
@@ -18,9 +18,14 @@ function parseQuoteRequest(body: Record<string, unknown>): QuoteRequest {
     case "bus": {
       const seatIds = body.seatIds;
       if (!Array.isArray(seatIds) || seatIds.some((s) => typeof s !== "string" || s.length > 10)) throw badRequest('"seatIds" must be a list of seat ids.');
+      const genders = body.genders;
+      if (genders !== undefined && (!Array.isArray(genders) || genders.some((g) => !GENDERS.includes(g as Gender)))) {
+        throw badRequest(`"genders" must be a list of: ${GENDERS.join(", ")}.`);
+      }
       return {
         service, busId: str(body, "busId", 120), from: str(body, "from", 60), to: str(body, "to", 60),
         date: matches(str(body, "date", 10), PATTERNS.isoDate, '"date" must be YYYY-MM-DD.'), seatIds,
+        ...(genders ? { genders: genders as Gender[] } : {}),
       };
     }
     case "tours":

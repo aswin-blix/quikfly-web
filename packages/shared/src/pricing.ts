@@ -4,7 +4,7 @@
 // except through its arguments.
 import { gstRate, parseSurgeHours, type Settings } from "./settings";
 import type {
-  Bus, FareLine, FareQuote, Offer, Place, RentalCar, RideOption, Seat, ServiceKey, TourPackage, TravelVehicle,
+  Bus, FareLine, FareQuote, Gender, Offer, Place, RentalCar, RideOption, Seat, SeatHold, ServiceKey, TourPackage, TravelVehicle,
 } from "./types";
 
 /** Ride simulation: map distance → km, speeds, number plates. */
@@ -22,21 +22,25 @@ export const RIDE_SIM = {
 export const BUS_SIM = {
   resultsPerSearch: 7,
   firstDepartureHour: 16,
+  /** Each bus type has its seat layout and the amenities it comes with (no live tracking or CCTV: nothing backs them yet). */
   types: [
-    { type: "A/C Sleeper (2+1)", ac: true, sleeper: true },
-    { type: "A/C Seater / Sleeper (2+1)", ac: true, sleeper: true },
-    { type: "Volvo Multi-Axle A/C Seater (2+2)", ac: true, sleeper: false },
-    { type: "Non A/C Seater (2+2)", ac: false, sleeper: false },
-    { type: "Bharat Benz A/C Sleeper (2+1)", ac: true, sleeper: true },
+    { type: "A/C Sleeper (2+1)", ac: true, sleeper: true, layout: "sleeper", amenities: ["Water bottle", "Blanket", "Charging point", "Reading light"] },
+    { type: "A/C Seater / Sleeper (2+1)", ac: true, sleeper: true, layout: "seaterSleeper", amenities: ["Water bottle", "Blanket", "Charging point"] },
+    { type: "Volvo Multi-Axle A/C Seater (2+2)", ac: true, sleeper: false, layout: "seater", amenities: ["Water bottle", "Charging point", "Reclining seats"] },
+    { type: "Non A/C Seater (2+2)", ac: false, sleeper: false, layout: "seater", amenities: ["Reclining seats"] },
+    { type: "Bharat Benz A/C Sleeper (2+1)", ac: true, sleeper: true, layout: "sleeper", amenities: ["Water bottle", "Blanket", "Pillow", "Charging point", "Reading light"] },
   ],
-  amenities: ["Water bottle", "Charging point", "Blanket", "Reading light", "Live tracking", "CCTV"],
   /** Up to this much is added per bus so fares vary (₹). */
   randomExtra: 400,
-  seatRowsPerDeck: 6,
-  seatColsPerRow: 3,
+  /** Rows per deck: sleeper berths, and seater rows (seater/sleeper lower deck, 2+2 buses). */
+  sleeperRows: 6,
+  seaterRows: 10,
   bookedChance: 0.38,
-  ladiesChance: 0.08,
+  /** Share of simulated booked seats held by women (redBus Pink Report 2026: 33% of travellers). */
+  womenShare: 0.33,
 };
+
+export type BusLayout = "sleeper" | "seaterSleeper" | "seater";
 
 /** Limits on what one booking may contain. */
 export const BOOKING_LIMITS = {
@@ -115,45 +119,88 @@ export function generateBuses(operators: string[], settings: Settings, from: str
     const dh = BUS_SIM.firstDepartureHour + i + Math.floor(rnd() * 2);
     const dm = [0, 15, 30, 45][Math.floor(rnd() * 4)];
     const dur = hours + Math.floor(rnd() * 3);
-    const base = (t.ac ? settings.busFareAc : settings.busFareNonAc) + (t.sleeper ? settings.busSleeperExtra : 0)
+    // `fare` is the cheapest seat: on seater/sleeper buses that's a seat, and the berths add the sleeper extra.
+    const base = (t.ac ? settings.busFareAc : settings.busFareNonAc) + (t.layout === "sleeper" ? settings.busSleeperExtra : 0)
       + Math.floor(rnd() * BUS_SIM.randomExtra);
+    const { layout: _layout, ...kind } = t;
     return {
       id: `bus${i}-${from}-${to}`.replace(/\s/g, ""),
       operator: i === 0 || ops.length === 1 ? ops[0] : ops[1 + Math.floor(rnd() * (ops.length - 1))],
-      ...t,
+      ...kind,
+      amenities: [...t.amenities],
       depart: hhmm(dh, dm),
       arrive: hhmm(dh + dur, (dm + 30) % 60),
       duration: `${dur}h 30m`,
       fare: Math.round(base / 10) * 10,
-      seatsLeft: 4 + Math.floor(rnd() * 28),
+      seatsLeft: 0, // counted from the seat map below
       rating: Math.round((3.8 + rnd() * 1.1) * 10) / 10,
-      amenities: BUS_SIM.amenities.filter(() => rnd() > 0.35),
       boardingPoints: [`${from} – Main Bus Stand`, `${from} – Bypass`, `${from} – City Center`],
     };
   });
+  // Seats left = free seats on the generated map; the API also subtracts seats held by real bookings.
+  for (const bus of list) bus.seatsLeft = generateSeats(bus, date, settings).filter((s) => !s.booked).length;
   return list.sort((x, y) => x.depart.localeCompare(y.depart));
 }
 
-/** 2+1 sleeper layout on two decks: columns 0 and 1 are the double side, column 2 the single. */
-export function generateSeats(bus: Bus, date: string, settings: Settings): Seat[] {
+/** The seat layout of a generated bus, from its type. */
+export const busLayout = (bus: Pick<Bus, "type">): BusLayout =>
+  BUS_SIM.types.find((t) => t.type === bus.type)?.layout as BusLayout ?? "sleeper";
+
+/** The seat sharing a pair with this one (cols 0↔1, and 2↔3 on 2+2 buses); null for a single seat. */
+export function seatPartner(seats: Seat[], seat: Seat): Seat | null {
+  const twin = seat.col === 0 ? 1 : seat.col === 1 ? 0 : seat.col === 2 ? 3 : 2;
+  return seats.find((x) => x.deck === seat.deck && x.row === seat.row && x.col === twin) ?? null;
+}
+
+/**
+ * The seat map of a bus on a date. Simulated bookings come from a seed (same bus and date →
+ * same map); `holds` are real bookings stored by the API and always show as booked. Women-
+ * first rule: a free seat whose pair is held by a woman is women only (`ladies`).
+ */
+export function generateSeats(bus: Bus, date: string, settings: Settings, holds: SeatHold[] = []): Seat[] {
   const rnd = seeded(bus.id + date);
+  const layout = busLayout(bus);
   const seats: Seat[] = [];
-  for (const deck of ["lower", "upper"] as const) {
-    const prefix = deck === "lower" ? "L" : "U";
-    for (let row = 0; row < BUS_SIM.seatRowsPerDeck; row++) {
-      for (let col = 0; col < BUS_SIM.seatColsPerRow; col++) {
+  const deck = (name: "lower" | "upper", rows: number, cols: number, sleeper: boolean, price: number) => {
+    const prefix = layout === "seater" ? "S" : name === "lower" ? "L" : "U";
+    let n = 0;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        n++;
+        const booked = rnd() < BUS_SIM.bookedChance;
+        const woman = rnd() < BUS_SIM.womenShare;
         seats.push({
-          id: `${prefix}${seats.length + 1}`,
-          label: `${prefix}${row * BUS_SIM.seatColsPerRow + col + 1}`,
-          deck, row, col, sleeper: true,
-          booked: rnd() < BUS_SIM.bookedChance,
-          ladies: rnd() < BUS_SIM.ladiesChance,
-          price: bus.fare + (deck === "lower" ? settings.busLowerDeckExtra : 0),
+          id: `${prefix}${n}`, label: `${prefix}${n}`, deck: name, row, col, sleeper,
+          booked, bookedGender: booked ? (woman ? "female" : "male") : null, ladies: false, price,
         });
       }
     }
+  };
+  if (layout === "sleeper") {
+    deck("lower", BUS_SIM.sleeperRows, 3, true, bus.fare + settings.busLowerDeckExtra);
+    deck("upper", BUS_SIM.sleeperRows, 3, true, bus.fare);
+  } else if (layout === "seaterSleeper") {
+    // Lower deck seats are the fare; upper berths add the sleeper extra.
+    deck("lower", BUS_SIM.seaterRows, 3, false, bus.fare);
+    deck("upper", BUS_SIM.sleeperRows, 3, true, bus.fare + settings.busSleeperExtra);
+  } else {
+    deck("lower", BUS_SIM.seaterRows, 4, false, bus.fare);
   }
+  for (const h of holds) {
+    const seat = seats.find((x) => x.id === h.seatId);
+    if (seat) { seat.booked = true; seat.bookedGender = h.gender; }
+  }
+  for (const seat of seats) seat.ladies = !seat.booked && seatPartner(seats, seat)?.bookedGender === "female";
   return seats;
+}
+
+/**
+ * Why these travellers can't take these seats, or null when they can. `genders` lines up
+ * with `chosen`; a missing gender counts as not female.
+ */
+export function seatRuleError(chosen: Seat[], genders: (Gender | undefined)[]): string | null {
+  const i = chosen.findIndex((seat, k) => seat.ladies && genders[k] !== "female");
+  return i === -1 ? null : `Seat ${chosen[i].label} is next to a woman traveller, so it's for women only. Pick another seat or mark the traveller as female.`;
 }
 
 /** GST line added on top of a subtotal, e.g. "GST (5%)". */
