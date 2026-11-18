@@ -2,7 +2,7 @@
 // Endpoints are listed in apps/api/README.md (Admin section).
 import type {
   AdminBooking, AdminBookingDetail, AdminLoginResult, AdminStats, AdminUser, AuditEntry, BookingFilters, CatalogItem, CatalogKind, LicenceQueueStatus,
-  LicenceReview, Page, Settings, AdminVendorDetail, FleetReviewItem, VehicleDocument, VendorDocument, VendorSection, VendorStatus, VendorSummary,
+  LicenceReview, Page, Settings, AdminVendorDetail, AdminPayout, AssignableVehicle, FleetReviewItem, VehicleDocument, VendorDocument, VendorSection, VendorStatus, VendorSummary,
 } from "@quikfly/shared";
 
 export interface CatalogKindSummary { kind: CatalogKind; total: number; visible: number; canEdit: boolean }
@@ -86,6 +86,7 @@ export const adminApi = {
     get: (id: string) => req<AdminBookingDetail>("GET", `/admin/bookings/${encodeURIComponent(id)}`),
     cancel: (id: string, reason: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/cancel`, { reason }),
     complete: (id: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/complete`),
+    assignVendor: (id: string, vehicleId: string | null) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/vendor`, { vehicleId }),
   },
   vendors: {
     list: (status: VendorStatus) => req<VendorSummary[]>("GET", `/admin/vendors${qs({ status })}`),
@@ -100,6 +101,11 @@ export const adminApi = {
     vehicleDocument: (id: string, vehicleId: string, kind: VehicleDocument) => photo(`/admin/vendors/${encodeURIComponent(id)}/vehicles/${encodeURIComponent(vehicleId)}/documents/${kind}`),
     driverLicence: (id: string, driverId: string) => photo(`/admin/vendors/${encodeURIComponent(id)}/drivers/${encodeURIComponent(driverId)}/documents/dl`),
     fleetQueue: () => req<FleetReviewItem[]>("GET", "/admin/vendors/fleet-queue"),
+    payouts: (status: AdminPayout["status"]) => req<AdminPayout[]>("GET", `/admin/vendors/payouts${qs({ status })}`),
+    /** Paid (with the bank reference) or rejected (with a reason); returns the open requests. */
+    decidePayout: (id: string, decision: "paid" | "rejected", body: { reference?: string; note?: string }) =>
+      req<AdminPayout[]>("POST", `/admin/vendors/payouts/${encodeURIComponent(id)}`, { decision, ...body }),
+    assignable: () => req<AssignableVehicle[]>("GET", "/admin/vendors/assignable-vehicles"),
     vehicle: (id: string, vehicleId: string, action: "review" | "sticker" | "docs" | "block", body?: Record<string, unknown>) =>
       req<AdminVendorDetail>("POST", `/admin/vendors/${encodeURIComponent(id)}/vehicles/${encodeURIComponent(vehicleId)}/${action}`, body),
     driver: (id: string, driverId: string, action: "review" | "docs" | "block", body: Record<string, unknown>) =>

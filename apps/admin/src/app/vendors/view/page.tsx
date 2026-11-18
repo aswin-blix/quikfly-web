@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { BadgeCheck, CheckCircle2, ChevronLeft, RotateCcw, Undo2, XCircle } from "lucide-react";
 import {
-  AUDIT_SLOT_LABEL, FUEL_LABEL, VENDOR_SECTION_LABEL, VENDOR_SECTIONS, VENDOR_VEHICLE_LABEL, formatRegNumber, vehicleAgeYears,
+  AUDIT_SLOT_LABEL, FUEL_LABEL, inrPaise, VENDOR_SECTION_LABEL, VENDOR_SECTIONS, VENDOR_VEHICLE_LABEL, formatRegNumber, vehicleAgeYears,
   type AdminVendorDetail, type SectionState, type VendorDocument, type VendorSection,
 } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -164,6 +164,15 @@ function Detail({ id }: { id: string }) {
           </section>
         )}
 
+        {a.status === "active" && (
+          <section className="card p-5 lg:col-span-2" aria-labelledby="money">
+            <h2 id="money" className="font-semibold text-strong mb-2">Money</h2>
+            <dl className="grid gap-1.5 text-sm max-w-xl">
+              <Row k={data.money.balancePaise >= 0 ? "QuikFly owes the partner" : "The partner owes QuikFly"} v={inrPaise(Math.abs(data.money.balancePaise))} />
+              <Row k="Payout request" v={data.money.pendingPayoutPaise === null ? "None open" : `${inrPaise(data.money.pendingPayoutPaise)} waiting (Partners → Payouts)`} />
+            </dl>
+          </section>
+        )}
         {a.status === "active" && <VendorFleet detail={data} onChange={setData} />}
       </div>
 
