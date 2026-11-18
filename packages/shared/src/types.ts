@@ -272,6 +272,10 @@ export interface RentalCar {
   features: string[];
 }
 
+/** Group / outstation trips: a local package, a round trip from Chennai, or one way (drop only). */
+export const GROUP_TRIPS = ["local", "outstation", "oneway"] as const;
+export type GroupTrip = (typeof GROUP_TRIPS)[number];
+
 export interface TravelVehicle {
   id: string;
   name: string;
@@ -375,7 +379,7 @@ export type QuoteRequest =
       start: string; end: string;
       kmPlan: (typeof RENT_KM_PLANS)[number]; protection: (typeof RENT_PROTECTION)[number]; doorstep: boolean;
     }
-  | { service: "rentals"; vehicleId: string; trip: "local" | "outstation"; destinationId?: string; days: number; start: string };
+  | { service: "rentals"; vehicleId: string; trip: GroupTrip; destinationId?: string; days: number; start: string };
 
 /** Result of checking a coupon against a quote. */
 export interface CouponCheck {

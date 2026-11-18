@@ -25,6 +25,7 @@ export function RideScreen({ service }: { service: "bike" | "car" }) {
         <div className="flex flex-wrap gap-2 mt-5 text-xs">
           {["Upfront fares", "Ride OTP", "Live trip sharing", "24×7 support"].map((t) => <span key={t} className="chip flex items-center gap-1"><BadgeCheck size={12} className="text-gold" />{t}</span>)}
           <Link href={other.href} className="chip !border-gold/40 !text-gold">Need a {service === "bike" ? "cab" : "bike"} instead? →</Link>
+          {service === "car" && <Link href="/travel-rentals?type=outstation&pax=2" className="chip !border-gold/40 !text-gold">Going out of town? Outstation cabs →</Link>}
         </div>
       </PageHeader>
 

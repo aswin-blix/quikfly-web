@@ -62,6 +62,8 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "rentDocuments", type: "text", label: "Self-drive documents", help: 'Shown on the car page; separate items with ";".' },
       { key: "rentRoadsideAssistance", type: "toggle", label: "Roadside assistance contract", help: "Turn on only when a 24×7 roadside-assistance service is in place. Off: cars show the support number for breakdowns." },
       { key: "groupLocalKmPerDay", type: "number", unit: "km", label: "Group local km per day", help: "Kilometres included in the local group package." },
+      { key: "groupOneWaySurchargePercent", type: "number", unit: "%", label: "One-way surcharge", help: "One-way outstation trips cost this much more per km (the vehicle returns empty)." },
+      { key: "groupDriverNightAllowance", type: "number", unit: "₹", label: "Driver night allowance", help: "Per night of a multi-day round trip. 0 = none." },
     ],
   },
   {

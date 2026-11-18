@@ -20,19 +20,34 @@ import '../../core/services.dart';
 /// Longest group booking and most vehicles compared at once.
 const groupMaxDays = 15, groupMaxPassengers = 45, compareMax = 3;
 
-String vehicleImage(TravelVehicle v) => v.seats <= 7 ? serviceOf(ServiceKey.rent).image : v.seats >= 26 ? serviceOf(ServiceKey.bus).image : serviceOf(ServiceKey.rentals).image;
+String vehicleImage(TravelVehicle v) => v.seats <= 4
+    ? serviceOf(ServiceKey.car).image
+    : v.seats <= 7
+        ? serviceOf(ServiceKey.rent).image
+        : v.seats >= 26
+            ? serviceOf(ServiceKey.bus).image
+            : serviceOf(ServiceKey.rentals).image;
 
 class GroupScreen extends ConsumerStatefulWidget {
-  const GroupScreen({super.key});
+  const GroupScreen({super.key, this.initialTrip, this.initialPax});
+
+  /// From a link (e.g. the cab screen's "Outstation cabs"): 'outstation', 'oneway' or 'local', and passengers.
+  final String? initialTrip;
+  final int? initialPax;
   @override
   ConsumerState<GroupScreen> createState() => _GroupScreenState();
 }
 
 class _GroupScreenState extends ConsumerState<GroupScreen> {
-  bool _outstation = true;
+  /// 'outstation' (round trip), 'oneway' or 'local'.
+  late String _trip = const ['outstation', 'oneway', 'local'].contains(widget.initialTrip) ? widget.initialTrip! : 'outstation';
+  bool get _outstation => _trip != 'local';
+  bool get _oneWay => _trip == 'oneway';
   String? _destId;
   DateTime _date = DateTime.now().add(const Duration(days: 2));
-  int _days = 2, _pax = 10;
+  int _days = 2;
+  late int _pax = widget.initialPax ?? 10;
+  int get _billDays => _oneWay ? 1 : _days;
   final _compare = <String>[];
   final _quotes = <String, PriceQuote>{};
   String? _quoteErr;
@@ -51,15 +66,15 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
   Map<String, Object?> _request(TravelVehicle v) => {
         'service': 'rentals',
         'vehicleId': v.id,
-        'trip': _outstation ? 'outstation' : 'local',
+        'trip': _trip,
         if (_outstation) 'destinationId': _destId,
-        'days': _days,
+        'days': _billDays,
         'start': isoDate(_date),
       };
 
   /// Re-price every vehicle on show after the inputs settle.
   void _requote(List<TravelVehicle> fits) {
-    final key = '$_outstation|$_destId|$_days|${fits.map((v) => v.id).join(',')}';
+    final key = '$_trip|$_destId|$_billDays|${fits.map((v) => v.id).join(',')}';
     if (key == _lastKey || (_outstation && _destId == null)) return;
     _lastKey = key;
     _debounce?.cancel();
@@ -91,12 +106,12 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
       ref.read(checkoutProvider.notifier).set(CheckoutDraft(
             service: ServiceKey.rentals,
             title: v.name,
-            subtitle: _outstation ? 'Chennai ⇄ $destName round trip' : 'Chennai local · $_days day(s)',
+            subtitle: _oneWay ? 'Chennai → $destName one way' : _outstation ? 'Chennai ⇄ $destName round trip' : 'Chennai local · $_days day(s)',
             image: vehicleImage(v),
             summary: [
-              ('Trip', _outstation ? 'Round trip to $destName' : 'Local · 8 hr / $localKm km per day'),
+              ('Trip', _oneWay ? 'One way to $destName' : _outstation ? 'Round trip to $destName' : 'Local · 8 hr / $localKm km per day'),
               ('Start', shortDate(_date)),
-              ('Days', '$_days'),
+              ('Days', '$_billDays'),
               ('Passengers', '$_pax'),
             ],
             quote: quote,
@@ -125,16 +140,20 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
       body: ScreenList(
         onRefresh: () async => ref.invalidate(travelVehiclesProvider),
         children: [
-          Text('Family trips, pilgrimages, weddings and corporate outings. Tempo travellers to 45-seat coaches.', style: TextStyle(color: c.fgMuted)),
+          Text('Intercity cabs one way or round trip, and tempo travellers to 45-seat coaches for family trips and outings.', style: TextStyle(color: c.fgMuted)),
           const SizedBox(height: 12),
           Panel(
             highlighted: true,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SegmentedButton<bool>(
+              SegmentedButton<String>(
                 showSelectedIcon: false,
-                segments: const [ButtonSegment(value: true, label: Text('Outstation')), ButtonSegment(value: false, label: Text('Local'))],
-                selected: {_outstation},
-                onSelectionChanged: (s) => setState(() => _outstation = s.first),
+                segments: const [
+                  ButtonSegment(value: 'outstation', label: Text('Round trip')),
+                  ButtonSegment(value: 'oneway', label: Text('One way')),
+                  ButtonSegment(value: 'local', label: Text('Local')),
+                ],
+                selected: {_trip},
+                onSelectionChanged: (s) => setState(() => _trip = s.first),
               ),
               const SizedBox(height: 12),
               if (_outstation)
@@ -149,7 +168,10 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
               const SizedBox(height: 10),
               DateField(label: 'Start date', date: _date, first: DateTime.now(), onChanged: (d) => setState(() => _date = d)),
               const SizedBox(height: 6),
-              Counter(label: 'Days', value: _days, min: 1, max: groupMaxDays, onChanged: (v) => setState(() => _days = v)),
+              if (_oneWay)
+                InputDecorator(decoration: const InputDecoration(labelText: 'Days'), child: const Text('1 (drop)'))
+              else
+                Counter(label: 'Days', value: _days, min: 1, max: groupMaxDays, onChanged: (v) => setState(() => _days = v)),
               Counter(label: 'Passengers', value: _pax, min: 1, max: groupMaxPassengers, onChanged: (v) => setState(() => _pax = v)),
             ]),
           ),
@@ -158,13 +180,14 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
             loading: () => const [Skeleton(height: 220), SizedBox(height: 12), Skeleton(height: 220)],
             error: (e, _) => [ErrorBox(errorText(e), onRetry: () => ref.invalidate(travelVehiclesProvider))],
             data: (all) {
-              final fits = all.where((v) => v.seats >= _pax).toList();
+              // Smallest vehicle that fits first (cheapest for the group), whatever the catalog order.
+              final fits = all.where((v) => v.seats >= _pax).toList()..sort((a, b) => a.seats.compareTo(b.seats));
               WidgetsBinding.instance.addPostFrameCallback((_) => _requote(fits));
               final comparing = all.where((v) => _compare.contains(v.id)).toList();
               return [
                 Text(
                   '${fits.length} vehicle${fits.length == 1 ? '' : 's'} seat $_pax+'
-                  '${_outstation && dest != null ? ' · about ${dest.km * 2} km round trip' : ''} · tolls and permits extra · tick up to $compareMax to compare',
+                  '${dest != null && _trip == 'outstation' ? ' · about ${dest.km * 2} km round trip' : ''}${dest != null && _oneWay ? ' · about ${dest.km} km one way (+${ref.watch(configProvider).value?.settings.groupOneWaySurchargePercent ?? 15}% per km)' : ''} · tolls and permits extra · tick up to $compareMax to compare',
                   style: TextStyle(color: c.fgMuted, fontSize: 12.5),
                 ),
                 if (_quoteErr != null) Padding(padding: const EdgeInsets.only(top: 8), child: ErrorBox(_quoteErr!)),

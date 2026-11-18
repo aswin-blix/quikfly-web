@@ -80,7 +80,15 @@ final router = GoRouter(
     GoRoute(path: '/trip/:id', parentNavigatorKey: _rootKey, builder: (_, s) => TripScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/rent', parentNavigatorKey: _rootKey, builder: (_, _) => const RentScreen()),
     GoRoute(path: '/rent/:id', parentNavigatorKey: _rootKey, builder: (_, s) => RentDetailScreen(id: s.pathParameters['id']!)),
-    GoRoute(path: '/group', parentNavigatorKey: _rootKey, builder: (_, _) => const GroupScreen()),
+    GoRoute(
+      path: '/group',
+      parentNavigatorKey: _rootKey,
+      builder: (_, s) => GroupScreen(
+        key: ValueKey(s.uri.query),
+        initialTrip: s.uri.queryParameters['type'],
+        initialPax: int.tryParse(s.uri.queryParameters['pax'] ?? ''),
+      ),
+    ),
     GoRoute(path: '/account/:section', parentNavigatorKey: _rootKey, builder: (_, s) => AccountSectionScreen(section: s.pathParameters['section']!)),
   ],
   errorBuilder: (_, _) => const NotFoundScreen(),

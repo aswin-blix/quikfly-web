@@ -4,7 +4,7 @@
 // except through its arguments.
 import { effectiveSurge, gstRate, parseSurgeHours, type Settings } from "./settings";
 import type {
-  Bus, FareLine, FareQuote, Gender, Offer, Place, RentalCar, RideOption, Seat, SeatHold, ServiceKey, TourPackage, TravelVehicle,
+  Bus, FareLine, FareQuote, Gender, GroupTrip, Offer, Place, RentalCar, RideOption, Seat, SeatHold, ServiceKey, TourPackage, TravelVehicle,
 } from "./types";
 
 /** Ride simulation: map distance → km, speeds, number plates. */
@@ -287,16 +287,32 @@ export function driverNights(start: string, end: string): number {
 /* ───────────── Group travel ───────────── */
 
 /** Kilometres billed: the local allowance, or the round trip with each day's minimum. */
-export function groupBillKm(v: TravelVehicle, trip: "local" | "outstation", oneWayKm: number, days: number, settings: Settings) {
-  return trip === "local" ? settings.groupLocalKmPerDay * days : Math.max(oneWayKm * 2, v.minKmPerDay * days);
+/** Days a trip is billed for: one way is always a single day. */
+export const groupDays = (trip: GroupTrip, days: number) => (trip === "oneway" ? 1 : days);
+
+/**
+ * Kilometres billed: the local allowance; a round trip's distance or each day's minimum;
+ * or one way's distance, at least one day's minimum.
+ */
+export function groupBillKm(v: TravelVehicle, trip: GroupTrip, oneWayKm: number, days: number, settings: Settings) {
+  if (trip === "local") return settings.groupLocalKmPerDay * days;
+  if (trip === "oneway") return Math.max(oneWayKm, v.minKmPerDay);
+  return Math.max(oneWayKm * 2, v.minKmPerDay * days);
 }
 
-export function priceGroup(v: TravelVehicle, trip: "local" | "outstation", oneWayKm: number, days: number, settings: Settings): FareLine[] {
+export function priceGroup(v: TravelVehicle, trip: GroupTrip, oneWayKm: number, days: number, settings: Settings): FareLine[] {
   if (trip === "local") return [{ label: `Local package × ${days}`, amount: v.localPackage * days }];
-  const km = groupBillKm(v, trip, oneWayKm, days, settings);
+  const d = groupDays(trip, days);
+  const km = groupBillKm(v, trip, oneWayKm, d, settings);
+  const rate = trip === "oneway" ? v.perKm * (1 + settings.groupOneWaySurchargePercent / 100) : v.perKm;
+  // A multi-day round trip pays the driver's night allowance for each night away.
+  const nights = trip === "outstation" ? d - 1 : 0;
   return [
-    { label: `${km} km × ${inr(v.perKm)}`, amount: Math.round(km * v.perKm) },
-    { label: `Driver bata × ${days}`, amount: v.driverBataPerDay * days },
+    { label: `${km} km × ${inr(Math.round(rate * 100) / 100)}${trip === "oneway" ? " (one way)" : ""}`, amount: Math.round(km * rate) },
+    { label: `Driver bata × ${d}`, amount: v.driverBataPerDay * d },
+    ...(nights > 0 && settings.groupDriverNightAllowance
+      ? [{ label: `Driver night allowance × ${nights}`, amount: nights * settings.groupDriverNightAllowance }]
+      : []),
   ];
 }
 

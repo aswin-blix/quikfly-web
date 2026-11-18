@@ -495,6 +495,8 @@ class Settings {
   int get rentDeposit => _i('rentDeposit', 2000);
   int get tourChildPercent => _i('tourChildPercent', 60);
   int get groupLocalKmPerDay => _i('groupLocalKmPerDay', 80);
+  int get groupOneWaySurchargePercent => _i('groupOneWaySurchargePercent', 15);
+  int get groupDriverNightAllowance => _i('groupDriverNightAllowance', 250);
   int get rentDoorstepFee => _i('rentDoorstepFee', 299);
   int get rentProtectionStandardPerDay => _i('rentProtectionStandardPerDay', 199);
   int get rentProtectionPeacePerDay => _i('rentProtectionPeacePerDay', 399);

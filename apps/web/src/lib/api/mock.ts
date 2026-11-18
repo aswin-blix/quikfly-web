@@ -55,7 +55,7 @@ function priceLines(r: QuoteRequest): FareLine[] {
     case "tours": return priceTour(byId(seed.tour, r.tourId, "holiday"), r.adults, r.kids, settings);
     case "rent": return priceRent(byId(seed.rentalCar, r.carId, "car"), r, settings);
     case "rentals": {
-      const km = r.trip === "outstation" ? byId(seed.groupDestination, r.destinationId ?? "", "destination").km : 0;
+      const km = r.trip === "local" ? 0 : byId(seed.groupDestination, r.destinationId ?? "", "destination").km;
       return priceGroup(byId(seed.travelVehicle, r.vehicleId, "vehicle"), r.trip, km, r.days, settings);
     }
   }

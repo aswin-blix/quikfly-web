@@ -111,6 +111,22 @@ await expect("POST /quotes (group travel)", call("POST", "/quotes", { service: "
   (j) => j.lines[0].label.includes("km") && j.total > 0);
 await expect("POST /quotes (tour) needs a start date", call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 1, kids: 0 }), 400, (j) => /start/.test(j.message));
 await expect("POST /quotes (group) needs a start date", call("POST", "/quotes", { service: "rentals", vehicleId: vehicles[0].id, trip: "local", days: 1 }), 400, (j) => /start/.test(j.message));
+// Outstation cabs: one way and multi-day round trips through the group engine.
+const sedan = vehicles.find((v) => v.seats <= 4);
+check("an outstation sedan is in the vehicle list", !!sedan, vehicles.map((v) => `${v.name}:${v.seats}`).join(", "));
+if (sedan) {
+  const near = cfg.groupDestinations.find((d) => d.km < sedan.minKmPerDay) ?? cfg.groupDestinations[0];
+  const rate = sedan.perKm * (1 + cfg.settings.groupOneWaySurchargePercent / 100);
+  const oneKm = Math.max(near.km, sedan.minKmPerDay);
+  await expect("POST /quotes (one way: minimum km, surcharge, one day)", call("POST", "/quotes", { service: "rentals", vehicleId: sedan.id, trip: "oneway", destinationId: near.id, days: 3, start: TRAVEL }), 201,
+    (j) => j.lines[0].amount === Math.round(oneKm * rate) && /one way/.test(j.lines[0].label) && j.lines[1].amount === sedan.driverBataPerDay && j.lines.length === 2);
+  const far = cfg.groupDestinations.reduce((x, y) => (y.km > x.km ? y : x));
+  await expect("POST /quotes (3-day round trip pays 2 night allowances)", call("POST", "/quotes", { service: "rentals", vehicleId: sedan.id, trip: "outstation", destinationId: far.id, days: 3, start: TRAVEL }), 201,
+    (j) => j.lines[0].amount === Math.round(Math.max(far.km * 2, sedan.minKmPerDay * 3) * sedan.perKm)
+      && (cfg.settings.groupDriverNightAllowance === 0 || j.lines.some((l) => l.label === "Driver night allowance × 2" && l.amount === 2 * cfg.settings.groupDriverNightAllowance)));
+  await expect("one way needs a destination", call("POST", "/quotes", { service: "rentals", vehicleId: sedan.id, trip: "oneway", days: 1, start: TRAVEL }), 400);
+}
+await expect("an unknown trip type is refused", call("POST", "/quotes", { service: "rentals", vehicleId: vehicles[0].id, trip: "cruise", days: 1, start: TRAVEL }), 400);
 await expect("POST /quotes refuses an unknown item", call("POST", "/quotes", { service: "tours", tourId: "nope", adults: 1, kids: 0, start: TRAVEL }), 400);
 await expect("POST /quotes refuses rides", call("POST", "/quotes", { service: "car" }), 400);
 
