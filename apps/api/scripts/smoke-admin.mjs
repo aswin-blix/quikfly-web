@@ -189,15 +189,24 @@ const cheap = (await call("POST", "/admin/catalog/tour", { data: { ...tours[0].d
 const C2 = (await call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: OTP })).json.token;
 await eventually("policy and cheap tour reach the API", () => call("GET", "/config"), (r) => r.json?.settings?.cancelPolicyTours === "999d:100, 1h:50");
 const tq = (await call("POST", "/quotes", { service: "tours", tourId: cheap.id, adults: 1, kids: 0, start: TRAVEL })).json;
-const walletBefore = (await call("GET", "/auth/me", null, C2)).json.walletBalance;
-const halfBooking = await expect("wallet holiday booking", call("POST", "/bookings", { service: "tours", title: "Smoke Cheap Trip", subtitle: "Policy test", payment: "wallet", lines: [], quoteId: tq.id }, C2), 201, (j) => j.startsAt?.startsWith(TRAVEL));
+// A partial refund costs the payer money, so locally a fresh customer pays from their welcome credit;
+// against production the shared test customer pays by UPI and only the refund amount is checked.
+const P = LOCAL ? (await call("POST", "/auth/verify", { phone: `90001${String(Date.now()).slice(-5)}`, otp: OTP })).json.token : C2;
+const payBy = LOCAL ? "wallet" : "upi";
+const walletBefore = (await call("GET", "/auth/me", null, P)).json.walletBalance;
+const halfBooking = await expect("holiday booking under a 50% policy", call("POST", "/bookings", { service: "tours", title: "Smoke Cheap Trip", subtitle: "Policy test", payment: payBy, lines: [], quoteId: tq.id }, P), 201, (j) => j.startsAt?.startsWith(TRAVEL));
 await expect("admin sees what a cancel would refund", call("GET", `/admin/bookings/${halfBooking.id}`, null, T), 200,
   (j) => j.refundIfCancelled?.percent === 50 && j.refundIfCancelled.amount === Math.round(halfBooking.amount / 2));
-await expect("customer cancel refunds half under the policy", call("POST", `/bookings/${halfBooking.id}/cancel`, null, C2), 200,
+await expect("customer cancel refunds half under the policy", call("POST", `/bookings/${halfBooking.id}/cancel`, null, P), 200,
   (j) => j.status === "cancelled" && j.refundAmount === Math.round(halfBooking.amount / 2));
-check("wallet got back only the policy's share", (await call("GET", "/auth/me", null, C2)).json.walletBalance === walletBefore - halfBooking.amount + Math.round(halfBooking.amount / 2));
-await expect("finished booking has no refund preview", call("GET", `/admin/bookings/${halfBooking.id}`, null, T), 200,
-  (j) => j.refundIfCancelled === null && j.wallet.some((w) => w.kind === "refund" && w.amount === Math.round(halfBooking.amount / 2) && /50%/.test(w.note)));
+if (LOCAL) {
+  check("wallet got back only the policy's share", (await call("GET", "/auth/me", null, P)).json.walletBalance === walletBefore - halfBooking.amount + Math.round(halfBooking.amount / 2));
+  await expect("finished booking has no refund preview", call("GET", `/admin/bookings/${halfBooking.id}`, null, T), 200,
+    (j) => j.refundIfCancelled === null && j.wallet.some((w) => w.kind === "refund" && w.amount === Math.round(halfBooking.amount / 2) && /50%/.test(w.note)));
+  await call("POST", "/me/delete", { otp: OTP }, P);
+} else {
+  await expect("finished booking has no refund preview", call("GET", `/admin/bookings/${halfBooking.id}`, null, T), 200, (j) => j.refundIfCancelled === null && j.wallet.length === 0);
+}
 await call("DELETE", `/admin/catalog/tour/${cheap.id}`, null, T);
 await expect("restore the holiday policy", call("PATCH", "/admin/settings", { cancelPolicyTours: policy0 }, T), 200, (j) => j.cancelPolicyTours === policy0);
 
@@ -233,6 +242,34 @@ if (balance0 >= rq.total) {
   console.log(`SKIP  wallet deposit return (test wallet ₹${balance0} < ₹${rq.total})`);
 }
 await expect("restore the rent policy", call("PATCH", "/admin/settings", { cancelPolicyRent: rentPolicy0 }, T), 200, (j) => j.cancelPolicyRent === rentPolicy0);
+
+// ── Ride rules (MVAG 2025): surge cap and the rider cancellation fee ──
+await expect("a surge cap above 3× is refused", call("PATCH", "/admin/settings", { surgeCap: 5 }, T), 400);
+await expect("surge ×3 with a ×1.5 cap, all day", call("PATCH", "/admin/settings", { surgeMultiplier: 3, surgeCap: 1.5, surgeHours: "0-23" }, T), 200, (j) => j.surgeCap === 1.5);
+await eventually("quotes apply the cap, not the multiplier", () => call("POST", "/rides/quote", { service: "car", pickupId: places[0].id, dropId: places[1].id }),
+  (r) => r.status === 200 && r.json.every((q) => q.surge === 1.5));
+await expect("fee from the first minute: 10%, capped at ₹100", call("PATCH", "/admin/settings", { rideCancelFreeMinutes: 0, rideCancelFeePercent: 10, rideCancelFeeCap: 100 }, T), 200);
+await eventually("fee settings reach the API", () => call("GET", "/config"), (r) => r.json?.settings?.rideCancelFreeMinutes === 0);
+const cashRide = async () => {
+  const r = (await call("POST", "/rides", { optionId: "mini", pickupId: places[0].id, dropId: places[1].id, payment: "cash" }, C2)).json;
+  return (await call("POST", "/bookings", { service: "car", title: "Smoke fee ride", subtitle: "A → B", payment: "cash", lines: [], rideId: r.id }, C2)).json;
+};
+const f1 = await cashRide();
+const fee1 = Math.min(Math.round(f1.amount * 0.1), 100);
+await expect("rider cancel without a reason pays the fee", call("POST", `/bookings/${f1.id}/cancel`, {}, C2), 200,
+  (j) => j.cancelFee === fee1 && j.refundAmount === f1.amount - fee1 && j.cancelReason === null);
+const f2 = await cashRide();
+await expect("a non-driver reason still pays the fee", call("POST", `/bookings/${f2.id}/cancel`, { reason: "plans_changed" }, C2), 200, (j) => j.cancelFee > 0 && j.cancelReason === "plans_changed");
+const f3 = await cashRide();
+await expect("a driver-side reason waives the fee", call("POST", `/bookings/${f3.id}/cancel`, { reason: "driver_asked" }, C2), 200, (j) => j.cancelFee === 0 && j.refundAmount === f3.amount);
+const f4 = await cashRide();
+await expect("staff cancels never charge the rider", call("POST", `/admin/bookings/${f4.id}/cancel`, { reason: "Driver unavailable (smoke)" }, T), 200,
+  (j) => j.booking.cancelFee === 0 && j.booking.refundAmount === f4.amount);
+await expect("admin sees the rider's reason and fee", call("GET", `/admin/bookings/${f2.id}`, null, T), 200, (j) => j.booking.cancelReason === "plans_changed" && j.booking.cancelFee > 0);
+await expect("restore ride settings", call("PATCH", "/admin/settings", {
+  surgeMultiplier: s0.surgeMultiplier, surgeCap: s0.surgeCap, surgeHours: s0.surgeHours,
+  rideCancelFreeMinutes: s0.rideCancelFreeMinutes, rideCancelFeePercent: s0.rideCancelFeePercent, rideCancelFeeCap: s0.rideCancelFeeCap,
+}, T), 200, (j) => j.surgeMultiplier === s0.surgeMultiplier && j.rideCancelFreeMinutes === s0.rideCancelFreeMinutes);
 
 // ── Licence reviews ── (the customer's licence is pending from the settings test above)
 await expect("GET /admin/licences lists pending first", call("GET", "/admin/licences", null, T), 200, (j) => j.some((l) => l.customer.id === cMe.id && l.status === "pending" && l.number));

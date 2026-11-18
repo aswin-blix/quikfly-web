@@ -55,6 +55,24 @@ String describeCancelPolicy(List<CancelTier> tiers, String event) {
   return '${parts.join('; ')}; no refund after that.';
 }
 
+/// Why a rider cancels (RIDE_CANCEL_REASONS in packages/shared/src/rules.ts): key, label, waives the fee.
+const rideCancelReasons = [
+  ('driver_late', 'Driver is taking too long', true),
+  ('driver_not_moving', "Driver isn't coming towards me", true),
+  ('driver_asked', 'Driver asked me to cancel', true),
+  ('wrong_address', 'I entered the wrong pickup or drop', false),
+  ('plans_changed', 'My plans changed', false),
+  ('other_ride', 'I found another ride', false),
+];
+
+/// Ride cancellation fee (MVAG 2025): free within the window after booking or with a valid reason; else % of the fare, capped.
+int rideCancelFee(Settings s, int fare, String? reason, DateTime bookedAt, {DateTime? now}) {
+  if (rideCancelReasons.any((r) => r.$1 == reason && r.$3)) return 0;
+  if ((now ?? DateTime.now()).difference(bookedAt).inSeconds / 60 < s.rideCancelFreeMinutes) return 0;
+  final fee = (fare * s.rideCancelFeePercent / 100).round();
+  return [fee, s.rideCancelFeeCap, fare].reduce((a, b) => a < b ? a : b);
+}
+
 /// What the countdown runs to, per service, for policy text.
 const cancelEvent = {
   ServiceKey.bike: 'pickup',
@@ -71,6 +89,10 @@ String cancelPolicyText(Settings settings, ServiceKey service) =>
 
 /// The refund a booking gets if cancelled now: (percent, rupees).
 (int, int) refundPreview(Settings settings, Booking b) {
+  if (b.service == ServiceKey.bike || b.service == ServiceKey.car) {
+    // From My Trips there's no reason, so the fee applies after the free minutes.
+    return (100, b.amount - rideCancelFee(settings, b.amount, null, b.createdAt));
+  }
   final percent = refundPercent(parseCancelPolicy(settings.cancelPolicy(b.service)), b.startsAt);
   return (percent, refundAmount(b.amount, percent, b.deposit));
 }

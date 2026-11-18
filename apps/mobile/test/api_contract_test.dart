@@ -39,6 +39,7 @@ void main() {
     final a = config.places[0], b = config.places[1];
     final quotes = await api.rideQuotes(ServiceKey.car, a.id, b.id);
     expect(quotes, isNotEmpty);
+    expect(quotes.every((q) => q.surge >= 1 && q.surge <= config.settings.surgeCap), isTrue);
     final ride = await api.bookRide(quotes.first.option.id, a.id, b.id, PaymentMethod.cash);
     expect(ride.otp, hasLength(4));
     final link = await api.shareRide(ride.id);

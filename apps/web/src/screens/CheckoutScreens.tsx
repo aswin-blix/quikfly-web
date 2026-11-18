@@ -10,7 +10,7 @@ import { cx, inr, prettyDateTime } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
-import { cancelPolicyFor, formatLicence, refundAmount, refundPercent, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
+import { cancelPolicyFor, formatLicence, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
 import { useSettings } from "@/components/ConfigProvider";
 import { LicenceBadge, LicenceForm, licenceMessage, useLicencePolling } from "@/components/account/LicenceSection";
 import { GSTIN_LINE } from "@/lib/invoice";
@@ -365,11 +365,17 @@ export function BookingsScreen() {
 
   /** What cancelling now gives back under the service's policy (the API applies the same rule). */
   function preview(b: Booking) {
+    if (b.service === "bike" || b.service === "car") {
+      // No reason from My Trips, so the fee applies after the free minutes.
+      const fee = rideCancelFee(settings, b.amount, null, b.createdAt);
+      return { percent: 100, refund: b.amount - fee, fee };
+    }
     const percent = refundPercent(cancelPolicyFor(settings, b.service), b.startsAt);
-    return { percent, refund: refundAmount(b.amount, percent, b.deposit ?? 0) };
+    return { percent, refund: refundAmount(b.amount, percent, b.deposit ?? 0), fee: 0 };
   }
   function confirmText(b: Booking) {
-    const { percent, refund } = preview(b);
+    const { percent, refund, fee } = preview(b);
+    if (fee > 0) return `Cancel? A ${inr(fee)} cancellation fee applies${b.payment === "wallet" ? `; ${inr(refund)} comes back to your wallet.` : " (demo: not collected)."}`;
     if (refund === 0) return "Cancel? It's too close to the start for a refund.";
     if (b.payment !== "wallet") return `Cancel? ${inr(refund)}${percent < 100 ? ` (${percent}%)` : ""} is due back under the cancellation policy.`;
     return `Cancel and get ${inr(refund)}${percent < 100 ? ` (${percent}%)` : ""} back in your wallet?`;
@@ -438,6 +444,7 @@ export function BookingsScreen() {
                             {b.lines.map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-subtle">{k}</dt><dd className="text-right">{v}</dd></div>)}
                             {b.startsAt && <div className="flex justify-between gap-3"><dt className="text-subtle">Starts</dt><dd className="text-right">{prettyDateTime(b.startsAt)}</dd></div>}
                             {b.deposit > 0 && b.status !== "cancelled" && <div className="flex justify-between gap-3"><dt className="text-subtle">Refundable deposit</dt><dd className="text-right">{b.status === "completed" ? `${inr(b.deposit)} ${b.payment === "wallet" ? "returned to wallet" : "due back"}` : `${inr(b.deposit)} (back after return)`}</dd></div>}
+                            {b.status === "cancelled" && b.cancelFee > 0 && <div className="flex justify-between gap-3"><dt className="text-subtle">Cancellation fee</dt><dd className="text-right">{inr(b.cancelFee)}{b.payment === "wallet" ? " (kept)" : " (demo: not collected)"}</dd></div>}
                             {b.status === "cancelled" && b.refundAmount !== null && <div className="flex justify-between gap-3"><dt className="text-subtle">{b.payment === "wallet" ? "Refunded to wallet" : "Refund due"}</dt><dd className="text-right">{b.refundAmount ? inr(b.refundAmount) : "Nothing (cancelled too late)"}</dd></div>}
                           </dl>
                           {b.status !== "cancelled" && (

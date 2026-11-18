@@ -58,7 +58,7 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | DELETE 🔒 | `/me/contacts/:id` | remove a contact |
 | GET 🔒 | `/me/wallet` | wallet history, newest first: `welcome`, `payment`, `refund`, `referral`, `opening` |
 | GET | `/places?q=` | place autocomplete (visible catalog places) |
-| POST | `/rides/quote` | `{ service, pickupId, dropId }` → fares for each visible ride option; surge from settings |
+| POST | `/rides/quote` | `{ service, pickupId, dropId }` → fares for each visible ride option, each with its `surge` (1 = none; never above the `surgeCap` setting, MVAG 2025) |
 | POST 🔒 | `/rides` | `{ optionId, pickupId, dropId, payment }` → ride with driver and OTP |
 | POST 🔒 | `/rides/:id/cancel` | cancel a ride |
 | POST 🔒 | `/rides/:id/share` | `{ token, expiresAt }`: a 24-hour link to follow the ride (same link if one is live) |
@@ -75,7 +75,7 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | GET 🔒 | `/bookings` | the signed-in user's bookings, newest first. Each has `startsAt` (from the quote; null for rides and older bookings), `deposit` (refundable self-drive deposit inside `amount`, else 0) and `refundAmount` (set when cancelled, or the deposit when staff complete a rental) |
 | POST 🔒 | `/bookings` | `{ service, title, subtitle, payment, lines, quoteId \| rideId, couponCode? }` → booking. Bus seats are held in `bus_seat_holds` in the same transaction (409 if someone took one meanwhile) and released on cancel. **The API sets the amount** from the quote (bus, tours, rent, rentals) or the ride (bike, car), minus the coupon; any `amount` sent is ignored. A quote or ride books once (409 after). `payment: "wallet"` is deducted in the same transaction and refused (400) if the balance is too low, which also gives the quote back |
 | GET 🔒 | `/bookings/:id` | one booking (for invoices) |
-| POST 🔒 | `/bookings/:id/cancel` | cancel; refunds the share the service's cancellation policy allows for the notice given (settings `cancelPolicyBus/Tours/Rent/Group`; rides and bookings without `startsAt` get it all; a `deposit` always comes back in full), to the wallet if paid from it, in the same transaction; `refundAmount` records it; 409 if already cancelled or completed |
+| POST 🔒 | `/bookings/:id/cancel` | optional `{ reason }` (a `RIDE_CANCEL_REASONS` key, else 400). Rides: a rider cancelling after the free minutes without a valid (driver-side) reason pays the cancellation fee (% of the fare, capped; settings), kept from a wallet refund or recorded as owed; `cancelReason` and `cancelFee` are stored. Others: cancel; refunds the share the service's cancellation policy allows for the notice given (settings `cancelPolicyBus/Tours/Rent/Group`; rides and bookings without `startsAt` get it all; a `deposit` always comes back in full), to the wallet if paid from it, in the same transaction; `refundAmount` records it; 409 if already cancelled or completed |
 | POST 🔒 | `/bookings/:id/complete` | mark a finished **ride** (called by the website and app when a simulated ride ends; the driver app will own this). Other services: 409, staff close them |
 
 ### Admin (`/admin/*`, staff only)
@@ -112,7 +112,7 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | `DEMO_OTP` | Fixed login code while there is no SMS provider. Every number signs in with it. |
 | `ALLOWED_ORIGINS` | Comma-separated website origins allowed by CORS, or `*`. |
 
-Business settings that staff change at runtime (fares, surge, bus fares, GST rates, bonuses, rental fees and km plan, chauffeur night charge, self-drive documents, roadside-assistance toggle, deposit-return window, cancellation policies, company details, licence auto-approve) live in the `settings` table, read through `services/settings.ts`; keys, defaults and allowed values are in `packages/shared/src/settings.ts`. The catalog lives in `catalog_items` (`services/catalog.ts`), filled from the seed in `packages/shared/src/catalog.ts` on first use. Both are cached for 30 seconds per Worker isolate, so an admin edit can take up to 30 s to show everywhere. Prices are computed by `packages/shared/src/pricing.ts` (`services/quotes.ts`, `services/rides.ts`).
+Business settings that staff change at runtime (fares, surge and its cap, rider cancellation fee, bus fares, GST rates, bonuses, rental fees and km plan, chauffeur night charge, self-drive documents, roadside-assistance toggle, deposit-return window, cancellation policies, company details, licence auto-approve) live in the `settings` table, read through `services/settings.ts`; keys, defaults and allowed values are in `packages/shared/src/settings.ts`. The catalog lives in `catalog_items` (`services/catalog.ts`), filled from the seed in `packages/shared/src/catalog.ts` on first use. Both are cached for 30 seconds per Worker isolate, so an admin edit can take up to 30 s to show everywhere. Prices are computed by `packages/shared/src/pricing.ts` (`services/quotes.ts`, `services/rides.ts`).
 
 Sessions are random bearer tokens; only their SHA-256 hash is stored, and they expire after `SESSION_TTL_DAYS` (`src/config.ts`). Admin sessions work the same way (`admin_sessions`, 12 hours). Admin passwords are PBKDF2-SHA256 hashes (`lib/password.ts`).
 

@@ -3,7 +3,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, ChevronLeft, XCircle } from "lucide-react";
-import { COUPON_LINE, type AdminBookingDetail } from "@quikfly/shared";
+import { COUPON_LINE, type AdminBookingDetail, RIDE_CANCEL_REASONS } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ReasonDialog } from "@/components/ReasonDialog";
 import { Badge, Button, ErrorBox, PageHeader } from "@/components/ui";
@@ -62,6 +62,8 @@ function Detail({ id }: { id: string }) {
           </dl>
           <div className="border-t border-line mt-4 pt-4 grid gap-1 text-sm">
             {coupon && <Row k="Coupon" v={`${coupon.code} (−${inr(coupon.discount)})`} />}
+            {b.cancelReason && <Row k="Rider's reason" v={RIDE_CANCEL_REASONS.find((r) => r.key === b.cancelReason)?.label ?? b.cancelReason} />}
+            {b.cancelFee > 0 && <Row k="Cancellation fee" v={`${inr(b.cancelFee)}${b.payment === "wallet" ? " (kept from the wallet refund)" : " (owed; not collected)"}`} />}
             <div className="flex justify-between items-baseline gap-3"><span className="text-muted">Paid</span><span className="text-xl font-semibold text-strong tabular-nums">{inr(b.amount)} <span className="text-xs text-subtle font-normal uppercase">{b.payment}</span></span></div>
           </div>
         </section>

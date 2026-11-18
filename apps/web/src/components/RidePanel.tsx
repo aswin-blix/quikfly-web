@@ -5,8 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useHideBottomNav } from "./BottomNav";
 import { ArrowUpDown, Clock, MapPin, Navigation, Phone, Share2, Siren, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { RIDE_SIMULATION, isNightHour } from "@quikfly/shared";
-import type { FareQuote, PaymentMethod, Place, Ride, SavedPlace } from "@quikfly/shared";
+import { RIDE_CANCEL_REASONS, RIDE_SIMULATION, isNightHour, rideCancelFee } from "@quikfly/shared";
+import type { FareQuote, PaymentMethod, Place, Ride, RideCancelReason, SavedPlace } from "@quikfly/shared";
 import { trackUrl } from "@/lib/account";
 import { cx, inr } from "@/lib/format";
 import { PLACE_ICON } from "./account/PlacesSection";
@@ -14,7 +14,7 @@ import { useApp } from "./AppProvider";
 import { CityMap, driverStartFor, vehiclePosition, type Pt } from "./CityMap";
 import { SafetySheet } from "./SafetySheet";
 import { GoldButton, Spinner } from "./ui";
-import { useConfig } from "@/components/ConfigProvider";
+import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { serviceByKey } from "@/lib/services";
 
 type Phase = "plan" | "searching" | "arriving" | "ontrip" | "done";
@@ -46,6 +46,11 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
   useHideBottomNav(phase !== "plan");
   const [ride, setRide] = useState<Ride | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
+  const [bookedAt, setBookedAt] = useState<string>("");
+  /** Cancel flow: the reason picker is open, and the reason chosen (MVAG 2025 reason list). */
+  const [cancelling, setCancelling] = useState(false);
+  const [reason, setReason] = useState<RideCancelReason | null>(null);
+  const settings = useSettings();
   const [t, setT] = useState(0);
   const [rating, setRating] = useState(0);
   const [saved, setSaved] = useState<SavedPlace[]>([]);
@@ -122,7 +127,7 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
 
   function reset() {
     cancelAnimationFrame(raf.current);
-    setPhase("plan"); setRide(null); setBookingId(null); setT(0); setRating(0);
+    setPhase("plan"); setRide(null); setBookingId(null); setT(0); setRating(0); setCancelling(false); setReason(null);
   }
 
   const walletShort = !!user && !!quote && user.walletBalance < quote.fare;
@@ -138,7 +143,7 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
           service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, rideId: r.id, payment,
           lines: [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
         });
-        setRide(r); setBookingId(b.id); setT(0); setPhase("arriving");
+        setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setT(0); setPhase("arriving");
         refreshBookings();
         autoShareIfNight(r);
       } catch (e) {
@@ -150,12 +155,17 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
     });
   }
 
+  /** Fee the rider would pay if they cancel now with the chosen reason (the API applies the same rule). */
+  const feeNow = ride && bookedAt ? rideCancelFee(settings, ride.quote.fare, reason, bookedAt) : 0;
+
   async function cancelRide() {
     cancelAnimationFrame(raf.current);
     try {
       if (ride) await api.rides.cancel(ride.id);
-      if (bookingId) await api.bookings.cancel(bookingId);
-      toast("Ride cancelled. No charges applied.");
+      const done = bookingId ? await api.bookings.cancel(bookingId, reason ?? undefined) : null;
+      toast(!done?.cancelFee ? "Ride cancelled. No charges applied."
+        : done.payment === "wallet" ? `Ride cancelled. ${inr(done.cancelFee)} cancellation fee kept; ${inr(done.refundAmount ?? 0)} back in your wallet.`
+        : `Ride cancelled. Cancellation fee ${inr(done.cancelFee)} (demo: not collected).`);
     } catch (e) { toast((e as Error).message, "err"); }
     refreshBookings(); reset();
   }
@@ -207,6 +217,11 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
             {quotes && !loadingQuotes && (
               <div className="space-y-2">
                 <p className="label">Choose a ride · {quotes[0].distanceKm} km · ~{quotes[0].durationMin} min</p>
+                {quotes[0].surge > 1 && (
+                  <p className="text-xs text-warning border border-warning/30 bg-warning/10 rounded-lg px-3 py-2" role="note">
+                    Busy hours: these fares include a ×{quotes[0].surge} surge (never more than ×{settings.surgeCap}). Surge hours today: {settings.surgeHours}.
+                  </p>
+                )}
                 {quotes.map((q, i) => (
                   <motion.button initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} whileTap={{ scale: 0.98 }} key={q.option.id} onClick={() => setSelected(q.option.id)}
                     className={cx("w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all",
@@ -291,8 +306,29 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
               <button type="button" onClick={() => setSosOpen(true)} aria-label="SOS: safety options"
                 className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-danger text-on-brand text-sm font-bold hover:opacity-90"><Siren size={16} />SOS</button>
               <button type="button" onClick={() => shareTrip()} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-line text-sm hover:border-line-strong"><Share2 size={16} className="text-success" />Share trip</button>
-              {phase === "arriving" && <button onClick={cancelRide} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-danger/30 text-danger text-sm hover:bg-danger/10"><X size={16} />Cancel</button>}
+              {phase === "arriving" && !cancelling && <button onClick={() => setCancelling(true)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-danger/30 text-danger text-sm hover:bg-danger/10"><X size={16} />Cancel</button>}
             </div>
+            {phase === "arriving" && cancelling && (
+              <div className="rounded-2xl border border-danger/30 p-4 space-y-3" role="group" aria-label="Why are you cancelling?">
+                <p className="font-semibold text-sm">Why are you cancelling?</p>
+                <div className="space-y-1.5">
+                  {RIDE_CANCEL_REASONS.map((r) => (
+                    <label key={r.key} className={cx("flex items-center gap-2.5 text-sm rounded-lg border px-3 py-2 cursor-pointer", reason === r.key ? "border-gold bg-gold/[0.07]" : "border-line hover:border-line-strong")}>
+                      <input type="radio" name="cancel-reason" className="accent-[var(--accent)]" checked={reason === r.key} onChange={() => setReason(r.key)} />{r.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted">
+                  {!reason ? `Free ${settings.rideCancelFreeMinutes > 0 ? `within ${settings.rideCancelFreeMinutes} min of booking or ` : ""}if the driver is at fault; otherwise ${settings.rideCancelFeePercent}% of the fare (up to ${inr(settings.rideCancelFeeCap)}).`
+                    : feeNow === 0 ? "No cancellation fee."
+                    : `Cancellation fee: ${inr(feeNow)}${ride!.payment === "wallet" ? ", kept from your wallet refund." : " (demo: not collected)."}`}
+                </p>
+                <div className="flex gap-2">
+                  <button type="button" disabled={!reason} onClick={cancelRide} className="flex-1 py-2.5 rounded-xl bg-danger/15 text-danger text-sm font-semibold hover:bg-danger/25 disabled:opacity-40">Cancel ride</button>
+                  <button type="button" onClick={() => { setCancelling(false); setReason(null); }} className="flex-1 py-2.5 rounded-xl border border-line text-sm">Keep my ride</button>
+                </div>
+              </div>
+            )}
             <SafetySheet open={sosOpen} onClose={() => setSosOpen(false)} onShare={() => shareTrip()} />
           </div>
         )}

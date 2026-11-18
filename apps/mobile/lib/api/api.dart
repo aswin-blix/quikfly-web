@@ -150,6 +150,8 @@ class QuikFlyApi {
         'rideId': ?rideId,
         'couponCode': ?couponCode,
       });
-  Future<Booking> cancelBooking(String id) => _post('/bookings/$id/cancel', (d) => Booking.fromJson(d as Json));
+  /// [reason] is a ride cancel reason key; a valid one waives the ride cancellation fee.
+  Future<Booking> cancelBooking(String id, {String? reason}) =>
+      _post('/bookings/$id/cancel', (d) => Booking.fromJson(d as Json), {'reason': ?reason});
   Future<Booking> completeBooking(String id) => _post('/bookings/$id/complete', (d) => Booking.fromJson(d as Json));
 }

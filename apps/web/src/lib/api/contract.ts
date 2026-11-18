@@ -3,6 +3,7 @@ import type {
   ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
   WalletTransaction,
 } from "@quikfly/shared";
+import type { RideCancelReason } from "@quikfly/shared";
 
 /**
  * The single contract between the UI and the backend.
@@ -122,8 +123,8 @@ export interface QuikflyApi {
      * the amount. A wallet payment is deducted here and fails if the balance is too low.
      */
     create(input: NewBooking): Promise<Booking>;
-    /** POST /bookings/:id/cancel: refunds a wallet payment. */
-    cancel(id: string): Promise<Booking>;
+    /** POST /bookings/:id/cancel { reason? }: refunds per the policy; rides may keep the cancellation fee without a valid reason. */
+    cancel(id: string, reason?: RideCancelReason): Promise<Booking>;
     /** POST /bookings/:id/complete: marks a finished trip (stand-in for the driver app). */
     complete(id: string): Promise<Booking>;
   };

@@ -14,6 +14,21 @@ export const LIMITS = {
 };
 
 export const DELETION_GRACE_DAYS = 30;
+
+/**
+ * Why a rider cancels (Motor Vehicle Aggregator Guidelines 2025: apps list the reasons, and a
+ * cancellation fee applies only without a valid one). `waivesFee` marks the valid ones.
+ */
+export const RIDE_CANCEL_REASONS = [
+  { key: "driver_late", label: "Driver is taking too long", waivesFee: true },
+  { key: "driver_not_moving", label: "Driver isn't coming towards me", waivesFee: true },
+  { key: "driver_asked", label: "Driver asked me to cancel", waivesFee: true },
+  { key: "wrong_address", label: "I entered the wrong pickup or drop", waivesFee: false },
+  { key: "plans_changed", label: "My plans changed", waivesFee: false },
+  { key: "other_ride", label: "I found another ride", waivesFee: false },
+] as const;
+export type RideCancelReason = (typeof RIDE_CANCEL_REASONS)[number]["key"];
+export const RIDE_CANCEL_REASON_KEYS = RIDE_CANCEL_REASONS.map((r) => r.key) as RideCancelReason[];
 export const SHARE_LINK_HOURS = 24;
 /** Local hours [from, to) counted as night for auto-sharing rides. */
 export const NIGHT_HOURS: [number, number] = [22, 6];

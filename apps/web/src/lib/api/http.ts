@@ -106,7 +106,7 @@ export const httpApi: QuikflyApi = {
     list: () => req("GET", "/bookings"),
     get: (id) => req("GET", `/bookings/${encodeURIComponent(id)}`),
     create: (input) => req("POST", "/bookings", input),
-    cancel: (id) => req("POST", `/bookings/${id}/cancel`),
+    cancel: (id, reason) => req("POST", `/bookings/${id}/cancel`, reason ? { reason } : undefined),
     complete: (id) => req("POST", `/bookings/${id}/complete`),
   },
 };

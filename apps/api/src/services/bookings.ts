@@ -1,4 +1,4 @@
-import { COUPON_LINE, DEPOSIT_LINE, cancelPolicyFor, refundAmount, refundPercent, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type ServiceKey } from "@quikfly/shared";
+import { COUPON_LINE, DEPOSIT_LINE, cancelPolicyFor, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { checkCoupon } from "./offers";
@@ -11,11 +11,13 @@ export interface BookingRow {
   status: BookingStatus; payment: PaymentMethod; lines: string; created_at: string;
   quote_id: string | null; ride_id: string | null; coupon_code: string | null; discount: number;
   starts_at: string | null; refund_amount: number | null; deposit: number;
+  cancel_reason: string | null; cancel_fee: number;
 }
 export const toBooking = (r: BookingRow): Booking => ({
   id: r.id, service: r.service, title: r.title, subtitle: r.subtitle, amount: r.amount,
   status: r.status, payment: r.payment, createdAt: r.created_at, lines: JSON.parse(r.lines),
   startsAt: r.starts_at ?? null, refundAmount: r.refund_amount ?? null, deposit: r.deposit ?? 0,
+  cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0,
 });
 
 /** Statuses a booking can still be cancelled or completed from. */
@@ -68,7 +70,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
     ...input.lines.filter(([k]) => k !== COUPON_LINE),
     ...(coupon ? [[COUPON_LINE, `${coupon.code} (−₹${coupon.discount.toLocaleString("en-IN")})`] as [string, string]] : []),
   ];
-  const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit };
+  const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0 };
   const wallet = input.payment === "wallet";
 
   const conditions: string[] = [];
@@ -129,9 +131,22 @@ async function notActive(db: D1Database, userId: string, id: string): Promise<ne
 }
 
 /** What cancelling a booking now gives back, per its service's policy and start time. */
-export async function refundFor(db: D1Database, row: Pick<BookingRow, "service" | "starts_at" | "amount" | "deposit">) {
-  const percent = refundPercent(cancelPolicyFor(await getSettings(db), row.service), row.starts_at);
-  return { percent, amount: refundAmount(row.amount, percent, row.deposit ?? 0) };
+/**
+ * What cancelling a booking now gives back. Bus, holidays and rentals follow their policy
+ * and start time; a rider who cancels a ride without a valid reason pays the MVAG
+ * cancellation fee (`rider` set). Staff cancels never charge a fee.
+ */
+export async function refundFor(
+  db: D1Database, row: Pick<BookingRow, "service" | "starts_at" | "amount" | "deposit" | "created_at">,
+  rider?: { reason: string | null },
+) {
+  const settings = await getSettings(db);
+  if (row.service === "bike" || row.service === "car") {
+    const fee = rider ? rideCancelFee(settings, row.amount, rider.reason, row.created_at) : 0;
+    return { percent: 100, amount: row.amount - fee, fee };
+  }
+  const percent = refundPercent(cancelPolicyFor(settings, row.service), row.starts_at);
+  return { percent, amount: refundAmount(row.amount, percent, row.deposit ?? 0), fee: 0 };
 }
 
 /**
@@ -140,15 +155,17 @@ export async function refundFor(db: D1Database, row: Pick<BookingRow, "service" 
  * policy or no start time). `userId` null = any customer's booking (admin); the refund
  * goes to the booking's owner. Returns null when the booking isn't active (or isn't theirs).
  */
-export async function cancelBookingRow(db: D1Database, userId: string | null, id: string, refundNote = "Refund"): Promise<BookingRow | null> {
+export async function cancelBookingRow(db: D1Database, userId: string | null, id: string, refundNote = "Refund", reason: string | null = null): Promise<BookingRow | null> {
   // ?1 = booking id, ?2 = owner, or null for staff (any customer's booking)
   const owner = "AND (?2 IS NULL OR user_id = ?2)";
   const ids = [id, userId];
   const row = await db.prepare(`SELECT * FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE}`).bind(...ids).first<BookingRow>();
   if (!row) return null;
-  const refund = await refundFor(db, row);
+  // A customer cancelling a ride may owe the cancellation fee; staff never charge one.
+  const refund = await refundFor(db, row, userId === null ? undefined : { reason });
   const credit = row.payment === "wallet" ? refund.amount : 0;
-  const note = `${refundNote}${refund.percent < 100 ? ` (${refund.percent}%${row.deposit ? ", deposit in full" : ""})` : ""} · ${row.title}`;
+  const detail = refund.fee ? ` (less ₹${refund.fee} cancellation fee)` : refund.percent < 100 ? ` (${refund.percent}%${row.deposit ? ", deposit in full" : ""})` : "";
+  const note = `${refundNote}${detail} · ${row.title}`;
   // Every statement re-checks that the booking is still active, so a race can't pay twice.
   const results = await db.batch([
     db.prepare(
@@ -161,14 +178,14 @@ export async function cancelBookingRow(db: D1Database, userId: string | null, id
     ).bind(...ids, uid("WT"), row.user_id, credit, note, new Date().toISOString()),
     // Release any bus seats so they can be sold again.
     db.prepare(`DELETE FROM bus_seat_holds WHERE booking_id = ?1 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE})`).bind(...ids),
-    db.prepare(`UPDATE bookings SET status = 'cancelled', refund_amount = ?3 WHERE id = ?1 ${owner} AND status IN ${ACTIVE} RETURNING *`)
-      .bind(...ids, refund.amount),
+    db.prepare(`UPDATE bookings SET status = 'cancelled', refund_amount = ?3, cancel_reason = ?4, cancel_fee = ?5 WHERE id = ?1 ${owner} AND status IN ${ACTIVE} RETURNING *`)
+      .bind(...ids, refund.amount, reason, refund.fee),
   ]);
   return (results[results.length - 1].results as BookingRow[])[0] ?? null;
 }
 
-export async function cancelBooking(db: D1Database, userId: string, id: string): Promise<Booking> {
-  const row = await cancelBookingRow(db, userId, id);
+export async function cancelBooking(db: D1Database, userId: string, id: string, reason: string | null = null): Promise<Booking> {
+  const row = await cancelBookingRow(db, userId, id, "Refund", reason);
   return row ? toBooking(row) : notActive(db, userId, id);
 }
 

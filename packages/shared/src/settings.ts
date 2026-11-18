@@ -18,6 +18,14 @@ export interface Settings {
   surgeMultiplier: number;
   /** Surge windows in India time, inclusive hours: "8-10, 17-20". Empty = never. */
   surgeHours: string;
+  /** Surge never goes above this (MVAG 2025: 2× the base fare; some states ask for less). */
+  surgeCap: number;
+
+  /** Rider cancellation fee without a valid reason: % of the fare, capped (MVAG 2025: 10%, ₹100). */
+  rideCancelFeePercent: number;
+  rideCancelFeeCap: number;
+  /** Cancelling within this many minutes of booking is always free. */
+  rideCancelFreeMinutes: number;
 
   /** Bus base fares (₹ per seat) before the generator's per-bus variation. */
   busFareAc: number;
@@ -84,6 +92,10 @@ export const DEFAULT_SETTINGS: Settings = {
   referralBonus: 100,
   surgeMultiplier: 1.2,
   surgeHours: "8-10, 17-20",
+  surgeCap: 2,
+  rideCancelFeePercent: 10,
+  rideCancelFeeCap: 100,
+  rideCancelFreeMinutes: 2,
   busFareAc: 650,
   busFareNonAc: 420,
   busSleeperExtra: 250,
@@ -135,6 +147,10 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   referralBonus: money(5000),
   surgeMultiplier: { type: "number", min: 1, max: 3 },
   surgeHours: { type: "text", max: 60, pattern: SURGE_HOURS, hint: 'Hour ranges like "8-10, 17-20" (0–23), or empty for no surge.' },
+  surgeCap: { type: "number", min: 1, max: 3 },
+  rideCancelFeePercent: percent,
+  rideCancelFeeCap: money(1000),
+  rideCancelFreeMinutes: { type: "number", min: 0, max: 30, integer: true },
   busFareAc: money(10000),
   busFareNonAc: money(10000),
   busSleeperExtra: money(5000),
@@ -188,6 +204,9 @@ export function checkSetting(key: string, value: unknown): string | null {
   if (key.startsWith("cancelPolicy")) return checkCancelPolicy(value);
   return null;
 }
+
+/** The surge actually applied: the multiplier, never above the cap. */
+export const effectiveSurge = (settings: Settings) => Math.max(1, Math.min(settings.surgeMultiplier, settings.surgeCap));
 
 /** "8-10, 17-20" → [[8,10],[17,20]] */
 export function parseSurgeHours(s: string): [number, number][] {

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { PAYMENT_METHODS } from "@quikfly/shared";
+import { PAYMENT_METHODS, RIDE_CANCEL_REASON_KEYS } from "@quikfly/shared";
 import { MAX_BOOKING_LINES, SERVICE_KEYS } from "../config";
 import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
@@ -33,5 +33,10 @@ export const bookings = new Hono<AppEnv>()
     return c.json(booking, 201);
   })
   .get("/:id", async (c) => c.json(await getBooking(c.env.DB, c.var.user.id, c.req.param("id"))))
-  .post("/:id/cancel", async (c) => c.json(await cancelBooking(c.env.DB, c.var.user.id, c.req.param("id"))))
+  // Optional body { reason } (a RIDE_CANCEL_REASONS key): a valid reason waives the ride cancellation fee.
+  .post("/:id/cancel", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    const reason = body && body.reason !== undefined ? oneOf(body, "reason", RIDE_CANCEL_REASON_KEYS) : null;
+    return c.json(await cancelBooking(c.env.DB, c.var.user.id, c.req.param("id"), reason));
+  })
   .post("/:id/complete", async (c) => c.json(await completeBooking(c.env.DB, c.var.user.id, c.req.param("id"))));

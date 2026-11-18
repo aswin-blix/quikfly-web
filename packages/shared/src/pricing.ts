@@ -2,7 +2,7 @@
 // to quote and to charge. The website's offline demo (mock API) runs the same code so demo
 // prices match. Inputs are catalog items and Settings; nothing here reads a database or clock
 // except through its arguments.
-import { gstRate, parseSurgeHours, type Settings } from "./settings";
+import { effectiveSurge, gstRate, parseSurgeHours, type Settings } from "./settings";
 import type {
   Bus, FareLine, FareQuote, Gender, Offer, Place, RentalCar, RideOption, Seat, SeatHold, ServiceKey, TourPackage, TravelVehicle,
 } from "./types";
@@ -89,9 +89,9 @@ export const pick = <T,>(arr: readonly T[], seed: number) => arr[Math.abs(seed) 
 
 /* ───────────── Rides ───────────── */
 
-/** Surge multiplier at an hour of the day (India time). */
+/** Surge multiplier at an hour of the day (India time), never above the cap. */
 export function surgeAt(settings: Settings, hour: number) {
-  return parseSurgeHours(settings.surgeHours).some(([from, to]) => hour >= from && hour <= to) ? settings.surgeMultiplier : 1;
+  return parseSurgeHours(settings.surgeHours).some(([from, to]) => hour >= from && hour <= to) ? effectiveSurge(settings) : 1;
 }
 
 /** Fares for every option of one service between two places. `hour` is the India-time hour. */
@@ -101,7 +101,7 @@ export function rideQuotes(options: RideOption[], a: Place, b: Place, settings: 
   return options.map((option, i) => {
     const durationMin = Math.round((distanceKm / RIDE_SIM.speedKmh[option.service]) * 60) + RIDE_SIM.pickupBufferMin;
     const fare = Math.round((option.baseFare + option.perKm * distanceKm + option.perMin * durationMin) * surge);
-    return { option, fare, distanceKm, durationMin, etaMin: 2 + ((i * 3 + Math.round(distanceKm)) % 6) };
+    return { option, fare, distanceKm, durationMin, etaMin: 2 + ((i * 3 + Math.round(distanceKm)) % 6), surge };
   });
 }
 
