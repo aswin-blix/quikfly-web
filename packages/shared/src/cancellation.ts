@@ -3,6 +3,7 @@
 // like "15d:100, 7d:50" (≥ 15 days before → 100 %, ≥ 7 days → 50 %, later → nothing).
 // The API applies it inside the refund transaction; the website and the app use the same
 // functions to show the policy and the refund before the customer confirms.
+import { RIDE_CANCEL_REASONS } from "./rules";
 import type { Settings } from "./settings";
 import type { QuoteRequest, ServiceKey } from "./types";
 
@@ -78,6 +79,16 @@ export function refundPercent(tiers: CancelTier[], startsAt: string | null, now 
 export function refundAmount(amount: number, percent: number, deposit = 0): number {
   const held = Math.min(Math.max(deposit, 0), amount);
   return held + Math.round(((amount - held) * percent) / 100);
+}
+
+/**
+ * Rider cancellation fee (MVAG 2025): nothing within the free minutes after booking or with
+ * a valid reason; otherwise the % of the fare, capped. Rides only; staff cancels never pay.
+ */
+export function rideCancelFee(settings: Settings, fare: number, reason: string | null | undefined, bookedAt: string, now = Date.now()): number {
+  if (RIDE_CANCEL_REASONS.find((r) => r.key === reason)?.waivesFee) return 0;
+  if ((now - Date.parse(bookedAt)) / 60_000 < settings.rideCancelFreeMinutes) return 0;
+  return Math.min(Math.round((fare * settings.rideCancelFeePercent) / 100), settings.rideCancelFeeCap, fare);
 }
 
 /** "15 days", "24 hours", "4 hours". */

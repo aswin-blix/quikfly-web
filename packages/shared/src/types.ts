@@ -168,6 +168,8 @@ export interface FareQuote {
   distanceKm: number;
   durationMin: number;
   etaMin: number;
+  /** Surge in this fare (1 = none). Shown to the rider before booking (MVAG 2025). */
+  surge: number;
 }
 
 export interface Driver {
@@ -293,6 +295,10 @@ export interface Booking {
   startsAt: string | null;
   /** What came back (₹): the policy's share when cancelled, the deposit when a rental is completed; null while active. */
   refundAmount: number | null;
+  /** Why the rider cancelled (a RIDE_CANCEL_REASONS key), when given. */
+  cancelReason: string | null;
+  /** Ride cancellation fee kept (wallet) or owed (cash/UPI, not collected in the preview); 0 when none. */
+  cancelFee: number;
   /** Refundable deposit inside `amount` (₹, self-drive only; 0 otherwise). Returned in full on cancel, and on completion once staff confirm the return. */
   deposit: number;
 }

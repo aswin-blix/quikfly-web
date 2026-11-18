@@ -117,7 +117,7 @@ await expect("POST /quotes refuses rides", call("POST", "/quotes", { service: "c
 // Rides
 const [a, b] = places;
 const quotes = await expect("POST /rides/quote", call("POST", "/rides/quote", { service: "car", pickupId: a.id, dropId: b.id }), 200,
-  (j) => j.length === 4 && j.every((q) => q.fare > 0 && q.option.service === "car"));
+  (j) => j.length === 4 && j.every((q) => q.fare > 0 && q.option.service === "car" && q.surge >= 1 && q.surge <= cfg.settings.surgeCap));
 await expect("POST /rides/quote rejects an unknown place", call("POST", "/rides/quote", { service: "car", pickupId: "nope", dropId: b.id }), 400);
 const rideInput = { optionId: quotes[0].option.id, pickupId: a.id, dropId: b.id, payment: "cash" };
 await expect("POST /rides needs sign-in", call("POST", "/rides", rideInput, false), 401);
@@ -160,7 +160,9 @@ if (start >= walletRide.quote.fare) {
     (j) => j.payment === "wallet" && j.amount === walletRide.quote.fare);
   check("wallet booking deducts the fare", (await balance()) === start - walletRide.quote.fare);
   await expect("a ride is booked only once", call("POST", "/bookings", newBooking({ service: "car", rideId: walletRide.id })), 409);
-  await expect("cancel wallet booking (rides have no policy: full refund)", call("POST", `/bookings/${paid.id}/cancel`), 200, (j) => j.status === "cancelled" && j.startsAt === null && j.refundAmount === paid.amount);
+  await expect("cancelling with an unknown reason is refused", call("POST", `/bookings/${paid.id}/cancel`, { reason: "bored" }), 400);
+  await expect("cancel wallet ride with a valid reason: no fee, full refund", call("POST", `/bookings/${paid.id}/cancel`, { reason: "driver_late" }), 200,
+    (j) => j.status === "cancelled" && j.startsAt === null && j.refundAmount === paid.amount && j.cancelFee === 0 && j.cancelReason === "driver_late");
   check("cancelling refunds the wallet", (await balance()) === start);
 } else {
   check("smoke user can afford one ride from the wallet", false, `balance is ${start}, fare ${walletRide.quote.fare}`);

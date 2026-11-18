@@ -163,12 +163,15 @@ class RideOption {
 }
 
 class FareQuote {
-  const FareQuote(this.option, this.fare, this.distanceKm, this.durationMin, this.etaMin);
+  const FareQuote(this.option, this.fare, this.distanceKm, this.durationMin, this.etaMin, {this.surge = 1});
   final RideOption option;
   final int fare, durationMin, etaMin;
-  final double distanceKm;
-  factory FareQuote.fromJson(Json j) =>
-      FareQuote(RideOption.fromJson(j['option'] as Json), _int(j['fare']), _num(j['distanceKm']), _int(j['durationMin']), _int(j['etaMin']));
+
+  /// Surge in this fare (1 = none), shown before booking (MVAG 2025).
+  final double distanceKm, surge;
+  factory FareQuote.fromJson(Json j) => FareQuote(
+      RideOption.fromJson(j['option'] as Json), _int(j['fare']), _num(j['distanceKm']), _int(j['durationMin']), _int(j['etaMin']),
+      surge: j['surge'] == null ? 1 : _num(j['surge']));
 }
 
 class Driver {
@@ -334,7 +337,7 @@ class TravelVehicle {
 
 class Booking {
   const Booking(this.id, this.service, this.title, this.subtitle, this.amount, this.status, this.createdAt, this.payment, this.lines,
-      {this.startsAt, this.refundAmount, this.deposit = 0});
+      {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0});
   final String id, title, subtitle, payment;
   final ServiceKey service;
   final int amount;
@@ -347,6 +350,10 @@ class Booking {
 
   /// What came back: the policy's share when cancelled, the deposit when a rental is completed.
   final int? refundAmount;
+
+  /// Why the rider cancelled (a ride cancel reason key), and the cancellation fee kept or owed.
+  final String? cancelReason;
+  final int cancelFee;
 
   /// Refundable deposit inside [amount] (self-drive; 0 otherwise). Always back on cancel; back on completion after staff check the car.
   final int deposit;
@@ -363,6 +370,8 @@ class Booking {
         startsAt: j['startsAt'] == null ? null : DateTime.tryParse('${j['startsAt']}')?.toLocal(),
         refundAmount: j['refundAmount'] == null ? null : _int(j['refundAmount']),
         deposit: j['deposit'] == null ? 0 : _int(j['deposit']),
+        cancelReason: j['cancelReason'] as String?,
+        cancelFee: j['cancelFee'] == null ? 0 : _int(j['cancelFee']),
       );
 }
 
@@ -475,6 +484,11 @@ class Settings {
   int get rentProtectionPeacePerDay => _i('rentProtectionPeacePerDay', 399);
   int get rentUnlimitedKmExtraPercent => _i('rentUnlimitedKmExtraPercent', 25);
   int get rentDepositRefundHours => _i('rentDepositRefundHours', 48);
+  double get surgeCap => (_raw['surgeCap'] as num?)?.toDouble() ?? 2;
+  String get surgeHours => _s('surgeHours', '8-10, 17-20');
+  int get rideCancelFeePercent => _i('rideCancelFeePercent', 10);
+  int get rideCancelFeeCap => _i('rideCancelFeeCap', 100);
+  int get rideCancelFreeMinutes => _i('rideCancelFreeMinutes', 2);
   int get rentLimitedKmPerDay => _i('rentLimitedKmPerDay', 140);
   int get rentExtraKmRate => _i('rentExtraKmRate', 12);
   int get rentDriverNightCharge => _i('rentDriverNightCharge', 250);

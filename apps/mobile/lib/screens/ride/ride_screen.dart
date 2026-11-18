@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../api/models.dart';
+import '../../core/cancellation.dart';
 import '../../core/env.dart';
 import '../../core/format.dart';
 import '../../core/services.dart';
@@ -38,6 +39,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   var _phase = RidePhase.plan;
   Ride? _ride;
   String? _bookingId;
+  DateTime? _bookedAt;
   int _rating = 0;
   late final _clock = AnimationController(vsync: this)..addListener(() => setState(() {}));
   int _quoteRequest = 0;
@@ -139,6 +141,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       if (!mounted) return;
       _ride = r;
       _bookingId = booking.id;
+      _bookedAt = booking.createdAt;
       _startPhase(RidePhase.arriving);
       ref.invalidate(bookingsProvider);
       ref.read(sessionProvider.notifier).refresh();
@@ -152,9 +155,61 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     }
   }
 
+  /// Asks why (MVAG 2025 reason list) and shows the cancellation fee before confirming. Null = keep the ride.
+  Future<String?> _askReason() {
+    final settings = ref.read(configProvider).value?.settings ?? const Settings({});
+    final fare = _ride?.quote.fare ?? 0;
+    final wallet = _ride?.payment == 'wallet';
+    String? picked;
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSheet) {
+        final c = ctx.qf;
+        final fee = picked == null ? null : rideCancelFee(settings, fare, picked, _bookedAt ?? DateTime.now());
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(Brand.gutter, 0, Brand.gutter, 16),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const Text('Why are you cancelling?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+              const SizedBox(height: 8),
+              RadioGroup<String>(
+                groupValue: picked,
+                onChanged: (v) => setSheet(() => picked = v),
+                child: Column(children: [for (final r in rideCancelReasons) RadioListTile<String>(value: r.$1, dense: true, title: Text(r.$2))]),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                fee == null
+                    ? 'Free ${settings.rideCancelFreeMinutes > 0 ? 'within ${settings.rideCancelFreeMinutes} min of booking or ' : ''}if the driver is at fault; otherwise ${settings.rideCancelFeePercent}% of the fare (up to ${inr(settings.rideCancelFeeCap)}).'
+                    : fee == 0
+                        ? 'No cancellation fee.'
+                        : 'Cancellation fee: ${inr(fee)}${wallet ? ', kept from your wallet refund.' : ' (demo: not collected).'}',
+                style: TextStyle(color: c.fgMuted, fontSize: 12.5),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Keep my ride'))),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(backgroundColor: c.danger, foregroundColor: Colors.white),
+                    onPressed: picked == null ? null : () => Navigator.pop(ctx, picked),
+                    child: const Text('Cancel ride'),
+                  ),
+                ),
+              ]),
+            ]),
+          ),
+        );
+      }),
+    );
+  }
+
   Future<void> _cancel() async {
-    final ok = await confirm(context, title: 'Cancel this ride?', message: 'No charges apply while the driver is on the way.', yes: 'Cancel ride', danger: true);
-    if (!ok || !mounted) return;
+    final reason = await _askReason();
+    if (reason == null || !mounted) return;
     // The dialog may have stayed open until the trip started; cancelling is only for the wait.
     if (_phase != RidePhase.arriving) {
       toast(context, 'Your trip has already started, so it can no longer be cancelled.');
@@ -164,8 +219,17 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     final api = ref.read(apiProvider);
     try {
       if (_ride != null) await api.cancelRide(_ride!.id);
-      if (_bookingId != null) await api.cancelBooking(_bookingId!);
-      if (mounted) toast(context, 'Ride cancelled. No charges applied.');
+      final done = _bookingId == null ? null : await api.cancelBooking(_bookingId!, reason: reason);
+      final fee = done?.cancelFee ?? 0;
+      if (mounted) {
+        toast(
+            context,
+            fee == 0
+                ? 'Ride cancelled. No charges applied.'
+                : done!.payment == 'wallet'
+                    ? 'Ride cancelled. ${inr(fee)} cancellation fee kept; ${inr(done.refundAmount ?? 0)} back in your wallet.'
+                    : 'Ride cancelled. Cancellation fee ${inr(fee)} (demo: not collected).');
+      }
     } catch (e) {
       if (mounted) toast(context, errorText(e));
     }
@@ -377,6 +441,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       if (_quotes != null && !_loadingQuotes && _quotes!.isNotEmpty) ...[
         const SizedBox(height: 16),
         _label('Choose a ride · ${_quotes!.first.distanceKm} km · ~${_quotes!.first.durationMin} min'),
+        if (_quotes!.first.surge > 1) _surgeNote(_quotes!.first.surge),
         for (final q in _quotes!)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -433,6 +498,31 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
 
   String _rideImage(RideOption o) =>
       _bike ? serviceOf(ServiceKey.bike).image : (o.id == 'prime' || o.id == 'suv' ? serviceOf(ServiceKey.rent).image : serviceOf(ServiceKey.car).image);
+
+  /// MVAG 2025: show the surge before booking.
+
+  Widget _surgeNote(double surge) {
+
+    final c = context.qf;
+
+    final s = ref.watch(configProvider).value?.settings ?? const Settings({});
+
+    return Container(
+
+      margin: const EdgeInsets.only(bottom: 8),
+
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+
+      decoration: BoxDecoration(color: c.warning.withValues(alpha: 0.1), border: Border.all(color: c.warning.withValues(alpha: 0.3)), borderRadius: BorderRadius.circular(10)),
+
+      child: Text('Busy hours: these fares include a ×${surge.toStringAsFixed(surge % 1 == 0 ? 0 : 1)} surge (never more than ×${s.surgeCap.toStringAsFixed(s.surgeCap % 1 == 0 ? 0 : 1)}). Surge hours: ${s.surgeHours}.',
+
+          style: TextStyle(color: c.warning, fontSize: 12.5)),
+
+    );
+
+  }
+
 
   Widget _label(String s) => Padding(
         padding: const EdgeInsets.only(bottom: 8),

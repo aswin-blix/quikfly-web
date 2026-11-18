@@ -5,7 +5,7 @@
 import type { QuikflyApi } from "./contract";
 import {
   BUS_OPERATORS, CATALOG_SEED, DEFAULT_SETTINGS, DEPOSIT_LINE, QUOTE_TTL_MINUTES, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
-  priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideQuotes, seatRuleError, sumLines,
+  priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
   type AppConfig, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
@@ -222,7 +222,7 @@ export const mockApi: QuikflyApi = {
       const b: Booking = {
         id: uid("QF"), service: input.service, title: input.title, subtitle: input.subtitle, payment: input.payment,
         amount, lines, status: "confirmed", createdAt: new Date().toISOString(),
-        startsAt: quoted?.startsAt || null, refundAmount: null, deposit,
+        startsAt: quoted?.startsAt || null, refundAmount: null, deposit, cancelReason: null, cancelFee: 0,
       };
       if (input.payment === "wallet") {
         if (currentUser().walletBalance < amount) fail("Not enough wallet balance. Choose another payment method.");
@@ -241,12 +241,14 @@ export const mockApi: QuikflyApi = {
       return b;
     },
     // Refunds what the service's cancellation policy allows for the notice given, like the API.
-    async cancel(id) {
+    async cancel(id, reason) {
       await wait(500);
       const current = bookingsStore().find((x) => x.id === id) ?? fail("Booking not found.");
-      const percent = refundPercent(cancelPolicyFor(settings, current.service), current.startsAt);
-      const refund = refundAmount(current.amount, percent, current.deposit ?? 0);
-      const b = finishBooking(id, "cancelled", { refundAmount: refund });
+      const ride = current.service === "bike" || current.service === "car";
+      const fee = ride ? rideCancelFee(settings, current.amount, reason, current.createdAt) : 0;
+      const percent = ride ? 100 : refundPercent(cancelPolicyFor(settings, current.service), current.startsAt);
+      const refund = ride ? current.amount - fee : refundAmount(current.amount, percent, current.deposit ?? 0);
+      const b = finishBooking(id, "cancelled", { refundAmount: refund, cancelReason: reason ?? null, cancelFee: fee });
       save(HOLDS_KEY, holdsStore().filter((h) => h.bookingId !== id));
       if (b.payment === "wallet" && refund > 0) walletEntry("refund", refund, `Refund${percent < 100 ? ` (${percent}%)` : ""} · ${b.title}`, b.id);
       return b;

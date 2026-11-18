@@ -25,6 +25,10 @@ export const SETTING_GROUPS: SettingGroup[] = [
     fields: [
       { key: "surgeMultiplier", type: "number", unit: "×", step: 0.05, label: "Surge multiplier", help: "1 means no surge. 1.2 adds 20% during surge hours." },
       { key: "surgeHours", type: "text", label: "Surge hours", help: 'India time, inclusive hour ranges like "8-10, 17-20". Empty means no surge.' },
+      { key: "surgeCap", type: "number", unit: "×", step: 0.1, label: "Surge cap", help: "Surge never goes above this, whatever the multiplier says. The 2025 aggregator guidelines allow up to 2×; some states ask for less (Maharashtra draft: 1.5×)." },
+      { key: "rideCancelFeePercent", type: "number", unit: "%", label: "Rider cancellation fee", help: "Charged when a rider cancels without a valid reason (guidelines: 10% of the fare)." },
+      { key: "rideCancelFeeCap", type: "number", unit: "₹", label: "Cancellation fee cap", help: "The fee never exceeds this (guidelines: ₹100)." },
+      { key: "rideCancelFreeMinutes", type: "number", unit: "min", label: "Free cancellation window", help: "Cancelling within this many minutes of booking is always free." },
     ],
   },
   {
