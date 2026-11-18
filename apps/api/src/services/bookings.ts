@@ -17,7 +17,7 @@ export const toBooking = (r: BookingRow): Booking => ({
   id: r.id, service: r.service, title: r.title, subtitle: r.subtitle, amount: r.amount,
   status: r.status, payment: r.payment, createdAt: r.created_at, lines: JSON.parse(r.lines),
   startsAt: r.starts_at ?? null, refundAmount: r.refund_amount ?? null, deposit: r.deposit ?? 0,
-  cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0,
+  cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0, rideId: r.ride_id ?? null,
 });
 
 /** Statuses a booking can still be cancelled or completed from. */
@@ -42,7 +42,7 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
     if (!input.rideId) throw badRequest('"rideId" is required for ride bookings.');
     const ride = await ownRide(db, userId, input.rideId);
     if (ride.quote.option.service !== input.service) throw badRequest("That ride is for a different service.");
-    return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: null, deposit: 0, seatHolds: null };
+    return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: ride.scheduledFor ?? null, deposit: 0, seatHolds: null };
   }
   if (!input.quoteId) throw badRequest('"quoteId" is required. Get a price from POST /quotes first.');
   const q = await usableQuote(db, input.quoteId, input.service);
@@ -70,7 +70,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
     ...input.lines.filter(([k]) => k !== COUPON_LINE),
     ...(coupon ? [[COUPON_LINE, `${coupon.code} (−₹${coupon.discount.toLocaleString("en-IN")})`] as [string, string]] : []),
   ];
-  const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0 };
+  const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0, rideId };
   const wallet = input.payment === "wallet";
 
   const conditions: string[] = [];
@@ -142,7 +142,7 @@ export async function refundFor(
 ) {
   const settings = await getSettings(db);
   if (row.service === "bike" || row.service === "car") {
-    const fee = rider ? rideCancelFee(settings, row.amount, rider.reason, row.created_at) : 0;
+    const fee = rider ? rideCancelFee(settings, row.amount, rider.reason, row.created_at, Date.now(), row.starts_at) : 0;
     return { percent: 100, amount: row.amount - fee, fee };
   }
   const percent = refundPercent(cancelPolicyFor(settings, row.service), row.starts_at);

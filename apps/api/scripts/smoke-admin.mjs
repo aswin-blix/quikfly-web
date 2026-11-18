@@ -266,6 +266,17 @@ const f4 = await cashRide();
 await expect("staff cancels never charge the rider", call("POST", `/admin/bookings/${f4.id}/cancel`, { reason: "Driver unavailable (smoke)" }, T), 200,
   (j) => j.booking.cancelFee === 0 && j.booking.refundAmount === f4.amount);
 await expect("admin sees the rider's reason and fee", call("GET", `/admin/bookings/${f2.id}`, null, T), 200, (j) => j.booking.cancelReason === "plans_changed" && j.booking.cancelFee > 0);
+// Scheduled ride near pickup: starts inside the window, and cancelling inside the free-cancel window pays the fee.
+await expect("schedule 5+ minutes ahead (for the test)", call("PATCH", "/admin/settings", { rideScheduleMinMinutes: 5, rideScheduleFreeCancelMinutes: 60 }, T), 200);
+await eventually("schedule settings reach the API", () => call("GET", "/config"), (r) => r.json?.settings?.rideScheduleMinMinutes === 5);
+const soon = new Date(Date.now() + (330 + 10) * 60_000).toISOString().slice(0, 16);
+const soonRide = (await call("POST", "/rides", { optionId: "mini", pickupId: places[0].id, dropId: places[1].id, payment: "cash", scheduledFor: soon }, C2)).json;
+check("ride scheduled 10 minutes ahead", !!soonRide?.scheduledFor, JSON.stringify(soonRide)?.slice(0, 160));
+const soonBooking = (await call("POST", "/bookings", { service: "car", title: "Smoke soon", subtitle: "A → B", payment: "cash", lines: [], rideId: soonRide.id }, C2)).json;
+await expect("inside the window the ride starts", call("POST", `/rides/${soonRide.id}/start`, null, C2), 200, (j) => j.id === soonRide.id);
+await expect("cancelling within the free-cancel window pays the fee", call("POST", `/bookings/${soonBooking.id}/cancel`, {}, C2), 200,
+  (j) => j.cancelFee === Math.min(Math.round(soonBooking.amount * 0.1), 100));
+await expect("restore schedule settings", call("PATCH", "/admin/settings", { rideScheduleMinMinutes: s0.rideScheduleMinMinutes, rideScheduleFreeCancelMinutes: s0.rideScheduleFreeCancelMinutes }, T), 200);
 await expect("restore ride settings", call("PATCH", "/admin/settings", {
   surgeMultiplier: s0.surgeMultiplier, surgeCap: s0.surgeCap, surgeHours: s0.surgeHours,
   rideCancelFreeMinutes: s0.rideCancelFreeMinutes, rideCancelFeePercent: s0.rideCancelFeePercent, rideCancelFeeCap: s0.rideCancelFeeCap,

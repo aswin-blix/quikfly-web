@@ -194,7 +194,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               const SizedBox(height: 6),
               KeyValue('Booking ID', b.id),
               for (final l in b.lines) KeyValue(l.$1, l.$2),
-              if (b.startsAt != null) KeyValue('Starts', dateTime(b.startsAt!)),
+              if (b.startsAt != null && !b.lines.any((l) => l.$1 == 'Pickup time')) KeyValue('Starts', dateTime(b.startsAt!)),
               if (b.deposit > 0 && b.status != BookingStatus.cancelled)
                 KeyValue(
                     'Refundable deposit',
@@ -208,6 +208,14 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               // Bookings usually carry their own "Paid via" / "Payment" line; add one only when they don't.
               if (!b.lines.any((l) => _paymentLines.contains(l.$1))) KeyValue('Paid by', paymentLabel(b.payment)),
               const SizedBox(height: 10),
+              // A ride booked ahead starts from here once the driver is assigned.
+              if (b.status == BookingStatus.confirmed && b.rideId != null && b.startsAt != null && (b.service == ServiceKey.bike || b.service == ServiceKey.car))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: b.startsAt!.subtract(const Duration(minutes: Rules.rideStartWindowMinutes)).isAfter(DateTime.now())
+                      ? Text('Driver assigned ${Rules.rideStartWindowMinutes} min before pickup; start the ride here then.', style: TextStyle(color: c.fgMuted, fontSize: 12.5))
+                      : GoldButton(label: 'Start ride', onPressed: () => context.push('/ride/${b.service == ServiceKey.bike ? 'bike' : 'car'}?ride=${b.rideId}&booking=${b.id}')),
+                ),
               // Cancelled bookings have no invoice and nothing left to cancel.
               if (b.status != BookingStatus.cancelled)
                 Row(children: [

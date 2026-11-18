@@ -74,10 +74,14 @@ export interface QuikflyApi {
     search(q: string): Promise<Place[]>;
   };
   rides: {
-    /** POST /rides/quote */
-    quote(service: "bike" | "car", pickupId: string, dropId: string): Promise<FareQuote[]>;
+    /** POST /rides/quote; `scheduledFor` ("YYYY-MM-DDTHH:mm", India) prices a ride booked ahead. */
+    quote(service: "bike" | "car", pickupId: string, dropId: string, scheduledFor?: string): Promise<FareQuote[]>;
     /** POST /rides */
-    book(input: { optionId: string; pickupId: string; dropId: string; payment: PaymentMethod }): Promise<Ride>;
+    book(input: { optionId: string; pickupId: string; dropId: string; payment: PaymentMethod; scheduledFor?: string }): Promise<Ride>;
+    /** GET /rides/:id (the rider's own ride) */
+    get(rideId: string): Promise<Ride>;
+    /** POST /rides/:id/start: starts a scheduled ride near pickup time. */
+    start(rideId: string): Promise<Ride>;
     /** POST /rides/:id/cancel */
     cancel(rideId: string): Promise<void>;
     /** POST /rides/:id/share: a public link to follow the ride. */

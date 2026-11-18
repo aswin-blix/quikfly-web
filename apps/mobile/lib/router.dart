@@ -41,7 +41,13 @@ final router = GoRouter(
     GoRoute(
       path: '/ride/:service',
       parentNavigatorKey: _rootKey,
-      builder: (_, s) => RideScreen(key: ValueKey(s.pathParameters['service']), service: s.pathParameters['service'] == 'bike' ? ServiceKey.bike : ServiceKey.car),
+      // ?ride=&booking= starts a scheduled ride (from My Trips).
+      builder: (_, s) => RideScreen(
+        key: ValueKey('${s.pathParameters['service']}${s.uri.queryParameters['ride'] ?? ''}'),
+        service: s.pathParameters['service'] == 'bike' ? ServiceKey.bike : ServiceKey.car,
+        resumeRideId: s.uri.queryParameters['ride'],
+        resumeBookingId: s.uri.queryParameters['booking'],
+      ),
     ),
     GoRoute(path: '/bus', parentNavigatorKey: _rootKey, builder: (_, _) => const BusScreen()),
     GoRoute(

@@ -27,6 +27,12 @@ export interface Settings {
   /** Cancelling within this many minutes of booking is always free. */
   rideCancelFreeMinutes: number;
 
+  /** Scheduled rides: how soon (minutes) and how far ahead (days) a pickup can be booked. */
+  rideScheduleMinMinutes: number;
+  rideScheduleMaxDays: number;
+  /** Cancelling a scheduled ride is free until this many minutes before pickup. */
+  rideScheduleFreeCancelMinutes: number;
+
   /** Bus base fares (₹ per seat) before the generator's per-bus variation. */
   busFareAc: number;
   busFareNonAc: number;
@@ -96,6 +102,9 @@ export const DEFAULT_SETTINGS: Settings = {
   rideCancelFeePercent: 10,
   rideCancelFeeCap: 100,
   rideCancelFreeMinutes: 2,
+  rideScheduleMinMinutes: 30,
+  rideScheduleMaxDays: 30,
+  rideScheduleFreeCancelMinutes: 60,
   busFareAc: 650,
   busFareNonAc: 420,
   busSleeperExtra: 250,
@@ -151,6 +160,9 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   rideCancelFeePercent: percent,
   rideCancelFeeCap: money(1000),
   rideCancelFreeMinutes: { type: "number", min: 0, max: 30, integer: true },
+  rideScheduleMinMinutes: { type: "number", min: 5, max: 240, integer: true },
+  rideScheduleMaxDays: { type: "number", min: 1, max: 90, integer: true },
+  rideScheduleFreeCancelMinutes: { type: "number", min: 0, max: 1440, integer: true },
   busFareAc: money(10000),
   busFareNonAc: money(10000),
   busSleeperExtra: money(5000),

@@ -184,13 +184,17 @@ class Driver {
 }
 
 class Ride {
-  const Ride(this.id, this.quote, this.pickup, this.drop, this.driver, this.otp, this.payment);
+  const Ride(this.id, this.quote, this.pickup, this.drop, this.driver, this.otp, this.payment, {this.scheduledFor});
   final String id, otp, payment;
   final FareQuote quote;
   final Place pickup, drop;
   final Driver driver;
+
+  /// Pickup time of a ride booked ahead (local time); null for ride-now. Started from My Trips.
+  final DateTime? scheduledFor;
   factory Ride.fromJson(Json j) => Ride(j['id'] as String, FareQuote.fromJson(j['quote'] as Json), Place.fromJson(j['pickup'] as Json),
-      Place.fromJson(j['drop'] as Json), Driver.fromJson(j['driver'] as Json), '${j['otp']}', '${j['payment']}');
+      Place.fromJson(j['drop'] as Json), Driver.fromJson(j['driver'] as Json), '${j['otp']}', '${j['payment']}',
+      scheduledFor: j['scheduledFor'] == null ? null : DateTime.tryParse('${j['scheduledFor']}')?.toLocal());
 }
 
 class Bus {
@@ -337,7 +341,7 @@ class TravelVehicle {
 
 class Booking {
   const Booking(this.id, this.service, this.title, this.subtitle, this.amount, this.status, this.createdAt, this.payment, this.lines,
-      {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0});
+      {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0, this.rideId});
   final String id, title, subtitle, payment;
   final ServiceKey service;
   final int amount;
@@ -350,6 +354,9 @@ class Booking {
 
   /// What came back: the policy's share when cancelled, the deposit when a rental is completed.
   final int? refundAmount;
+
+  /// The ride behind a bike/car booking (to start a scheduled ride).
+  final String? rideId;
 
   /// Why the rider cancelled (a ride cancel reason key), and the cancellation fee kept or owed.
   final String? cancelReason;
@@ -372,6 +379,7 @@ class Booking {
         deposit: j['deposit'] == null ? 0 : _int(j['deposit']),
         cancelReason: j['cancelReason'] as String?,
         cancelFee: j['cancelFee'] == null ? 0 : _int(j['cancelFee']),
+        rideId: j['rideId'] as String?,
       );
 }
 
@@ -489,6 +497,9 @@ class Settings {
   int get rideCancelFeePercent => _i('rideCancelFeePercent', 10);
   int get rideCancelFeeCap => _i('rideCancelFeeCap', 100);
   int get rideCancelFreeMinutes => _i('rideCancelFreeMinutes', 2);
+  int get rideScheduleMinMinutes => _i('rideScheduleMinMinutes', 30);
+  int get rideScheduleMaxDays => _i('rideScheduleMaxDays', 30);
+  int get rideScheduleFreeCancelMinutes => _i('rideScheduleFreeCancelMinutes', 60);
   int get rentLimitedKmPerDay => _i('rentLimitedKmPerDay', 140);
   int get rentExtraKmRate => _i('rentExtraKmRate', 12);
   int get rentDriverNightCharge => _i('rentDriverNightCharge', 250);
@@ -577,6 +588,9 @@ abstract final class Rules {
   /// Simulated ride timings (RIDE_SIMULATION).
   static const rideArrive = Duration(milliseconds: 9000);
   static const rideTrip = Duration(milliseconds: 12000);
+
+  /// Scheduled rides: driver assigned, and "Start ride" open, this many minutes before pickup (RIDE_SCHEDULE).
+  static const rideStartWindowMinutes = 15;
 
   /// "tn09 2019-0001234" → "TN0920190001234"
   static String compactCode(String s) => s.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');
