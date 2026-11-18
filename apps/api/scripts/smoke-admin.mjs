@@ -172,6 +172,8 @@ await expect("staff cancel refunds the wallet", call("POST", `/admin/bookings/${
   (j) => j.booking.status === "cancelled" && j.wallet.some((w) => w.kind === "refund" && w.amount === bookA.amount) && j.history[0]?.action === "booking.cancel" && j.history[0].detail.reason.includes("smoke"));
 check("refund reached the customer's wallet", (await call("GET", "/auth/me", null, C)).json.walletBalance === afterPay + bookA.amount);
 await expect("cancelling again is refused", call("POST", `/admin/bookings/${bookA.id}/cancel`, { reason: "Again please" }, T), 409);
+await expect("the customer is notified of a staff cancel, with the reason", call("GET", "/me/notifications", null, C), 200,
+  (j) => j.items.some((n) => n.kind === "booking.cancelled_by_staff" && n.bookingId === bookA.id && /Driver unavailable/.test(n.body)));
 await expect("customer sees the cancellation", call("GET", `/bookings/${bookA.id}`, null, C), 200, (j) => j.status === "cancelled");
 const rideB = (await call("POST", "/rides", { optionId: "mini", pickupId: places[0].id, dropId: places[1].id, payment: "cash" }, C)).json;
 const bookB = (await call("POST", "/bookings", { service: "car", title: "Smoke admin ride 2", subtitle: "A → B", payment: "cash", lines: [], rideId: rideB.id }, C)).json;
@@ -273,6 +275,12 @@ const soon = new Date(Date.now() + (330 + 10) * 60_000).toISOString().slice(0, 1
 const soonRide = (await call("POST", "/rides", { optionId: "mini", pickupId: places[0].id, dropId: places[1].id, payment: "cash", scheduledFor: soon }, C2)).json;
 check("ride scheduled 10 minutes ahead", !!soonRide?.scheduledFor, JSON.stringify(soonRide)?.slice(0, 160));
 const soonBooking = (await call("POST", "/bookings", { service: "car", title: "Smoke soon", subtitle: "A → B", payment: "cash", lines: [], rideId: soonRide.id }, C2)).json;
+if (LOCAL) {
+  // Run the cron once (wrangler dev --test-scheduled): a ride 10 minutes out gets its reminder.
+  await fetch(BASE.replace(/\/v1$/, "") + "/__scheduled?cron=*+*+*+*+*").catch(() => null);
+  await expect("the cron writes the scheduled-ride reminder", call("GET", "/me/notifications", null, C2), 200,
+    (j) => j.items.some((n) => n.kind === "ride.reminder" && n.bookingId === soonBooking.id));
+}
 await expect("inside the window the ride starts", call("POST", `/rides/${soonRide.id}/start`, null, C2), 200, (j) => j.id === soonRide.id);
 await expect("cancelling within the free-cancel window pays the fee", call("POST", `/bookings/${soonBooking.id}/cancel`, {}, C2), 200,
   (j) => j.cancelFee === Math.min(Math.round(soonBooking.amount * 0.1), 100));
@@ -291,6 +299,8 @@ await expect("rejected list shows it", call("GET", "/admin/licences?status=rejec
 await expect("a reviewed licence can't be reviewed again", call("POST", `/admin/licences/${cMe.id}/approve`, null, T), 409);
 await expect("customer resubmits", call("PUT", "/me/licence", licence, C), 200, (j) => j.licence.status === "pending" && j.licence.note === null);
 await expect("approve a licence", call("POST", `/admin/licences/${cMe.id}/approve`, null, T), 200, (j) => j.status === "verified");
+await expect("licence decisions are notified (rejected, then verified)", call("GET", "/me/notifications", null, C), 200,
+  (j) => j.items.some((n) => n.kind === "licence.rejected" && /blurry/.test(n.body)) && j.items.some((n) => n.kind === "licence.approved"));
 await expect("customer sees it verified", call("GET", "/auth/me", null, C), 200, (j) => j.licence.status === "verified");
 await expect("audit records licence decisions", call("GET", `/admin/audit?entity=licence&entityId=${cMe.id}`, null, T), 200,
   (j) => j.items.some((e) => e.action === "licence.approve") && j.items.some((e) => e.action === "licence.reject" && e.detail.reason));

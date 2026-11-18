@@ -13,6 +13,8 @@ import { config, rentals, tours } from "./routes/catalog";
 import { offers, quotes } from "./routes/quotes";
 import { places } from "./routes/places";
 import { rides } from "./routes/rides";
+import { runScheduled } from "./scheduled";
+import type { Env } from "./env";
 
 const app = new Hono<AppEnv>();
 
@@ -53,4 +55,8 @@ app.onError((err, c) => {
   return c.json({ message: "Something went wrong. Please try again." }, 500);
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  // Cron (every minute): ride reminders and push delivery.
+  scheduled: (_event: ScheduledController, env: Env, ctx: ExecutionContext) => ctx.waitUntil(runScheduled(env)),
+} satisfies ExportedHandler<Env>;

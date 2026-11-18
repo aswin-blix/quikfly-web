@@ -10,6 +10,7 @@ import 'screens/bus/bus_screens.dart';
 import 'screens/checkout/checkout_screen.dart';
 import 'screens/checkout/confirmed_screen.dart';
 import 'screens/trips/trip_screen.dart';
+import 'screens/account/notifications_screen.dart';
 import 'screens/checkout/invoice_screen.dart';
 import 'screens/not_found.dart';
 import 'screens/help/help_screen.dart';
@@ -78,6 +79,7 @@ final router = GoRouter(
     ),
     GoRoute(path: '/invoice/:id', parentNavigatorKey: _rootKey, builder: (_, s) => InvoiceScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/trip/:id', parentNavigatorKey: _rootKey, builder: (_, s) => TripScreen(id: s.pathParameters['id']!)),
+    GoRoute(path: '/notifications', parentNavigatorKey: _rootKey, builder: (_, _) => const NotificationsScreen()),
     GoRoute(path: '/rent', parentNavigatorKey: _rootKey, builder: (_, _) => const RentScreen()),
     GoRoute(path: '/rent/:id', parentNavigatorKey: _rootKey, builder: (_, s) => RentDetailScreen(id: s.pathParameters['id']!)),
     GoRoute(

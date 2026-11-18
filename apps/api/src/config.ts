@@ -19,3 +19,12 @@ export const businessDate = (now = Date.now()) => new Date(now + BUSINESS_UTC_OF
 
 export const SERVICE_KEYS = ["bike", "car", "bus", "tours", "rent", "rentals"] as const;
 export const MAX_BOOKING_LINES = 30;
+
+/** Notification inbox: how many recent notifications GET /me/notifications returns. */
+export const NOTIFICATIONS_PAGE = 50;
+/** Push (cron): notifications older than this aren't pushed (e.g. when push was switched on later). */
+export const PUSH_MAX_AGE_MINUTES = 60;
+/** Push (cron): at most this many sends per minute. */
+export const PUSH_BATCH = 40;
+/** Firebase Cloud Messaging endpoints for the service-account sign-in. */
+export const FCM = { tokenUrl: "https://oauth2.googleapis.com/token", scope: "https://www.googleapis.com/auth/firebase.messaging" };

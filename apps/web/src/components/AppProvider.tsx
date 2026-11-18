@@ -17,6 +17,9 @@ interface Ctx {
   closeLogin: (signedIn: boolean) => void;
   bookings: Booking[];
   refreshBookings: () => Promise<void>;
+  /** Unread notifications (the bell's badge). */
+  unread: number;
+  refreshNotifications: () => Promise<void>;
   draft: CheckoutDraft | null;
   setDraft: (d: CheckoutDraft | null) => void;
   toast: (text: string, tone?: Toast["tone"]) => void;
@@ -31,12 +34,15 @@ export const useApp = () => {
 };
 
 const USER_KEY = "quikfly.user";
+/** How often the bell re-checks for notifications while the page is visible. */
+const NOTIFICATIONS_POLL_MS = 60_000;
 const DRAFT_KEY = "quikfly.checkout";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [unread, setUnread] = useState(0);
   const [draft, setDraftState] = useState<CheckoutDraft | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const pending = useRef<(() => void) | null>(null);
@@ -94,6 +100,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [signedIn, setUser]);
   useEffect(() => { refreshBookings(); }, [refreshBookings]);
 
+  const refreshNotifications = useCallback(async () => {
+    if (!signedIn) return setUnread(0);
+    try { setUnread((await api.notifications.list()).unread); } catch { /* keep the last count */ }
+  }, [signedIn]);
+  // Check on sign-in, after bookings change, and every minute while the tab is visible.
+  useEffect(() => { refreshNotifications(); }, [refreshNotifications, bookings]);
+  useEffect(() => {
+    const t = setInterval(() => { if (document.visibilityState === "visible") refreshNotifications(); }, NOTIFICATIONS_POLL_MS);
+    return () => clearInterval(t);
+  }, [refreshNotifications]);
+
   const requireAuth = useCallback((fn: () => void) => {
     if (user) return fn();
     pending.current = fn;
@@ -116,7 +133,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppCtx.Provider value={{
       user, setUser, signOut, requireAuth, loginOpen, closeLogin,
-      bookings, refreshBookings, draft, setDraft, toast, toasts,
+      bookings, refreshBookings, unread, refreshNotifications, draft, setDraft, toast, toasts,
     }}>
       <ConfigProvider>{children}</ConfigProvider>
     </AppCtx.Provider>

@@ -17,6 +17,7 @@ import {
   addContact, addTraveller, listContacts, listPlaces, listTravellers, removeContact, removePlace, removeTraveller, savePlace,
 } from "../services/saved";
 import { listTransactions } from "../services/wallet";
+import { listNotifications, markRead, registerDevice, removeDevice } from "../services/notifications";
 
 type Json = Record<string, unknown>;
 const NAME = [LIMITS.nameMin, LIMITS.nameMax] as const;
@@ -122,4 +123,21 @@ export const me = new Hono<AppEnv>()
   })
   .delete("/contacts/:id", async (c) => c.json(await removeContact(c.env.DB, c.var.user.id, c.req.param("id"))))
 
-  .get("/wallet", async (c) => c.json(await listTransactions(c.env.DB, c.var.user.id)));
+  .get("/wallet", async (c) => c.json(await listTransactions(c.env.DB, c.var.user.id)))
+
+  // Notification inbox
+  .get("/notifications", async (c) => c.json(await listNotifications(c.env.DB, c.var.user.id)))
+  // { ids: [...] } marks those read; {} or { all: true } marks everything read.
+  .post("/notifications/read", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const ids = body.ids;
+    if (ids !== undefined && (!Array.isArray(ids) || ids.length > 100 || ids.some((x) => typeof x !== "string"))) throw badRequest('"ids" must be a list of notification ids.');
+    return c.json(await markRead(c.env.DB, c.var.user.id, (ids as string[] | undefined) ?? null));
+  })
+
+  // Push devices (Firebase tokens from the app)
+  .post("/push-devices", async (c) => {
+    const body = await jsonBody(c);
+    return c.json(await registerDevice(c.env.DB, c.var.user.id, str(body, "token", 400), oneOf(body, "platform", ["android", "ios", "web"] as const)), 201);
+  })
+  .delete("/push-devices/:token", async (c) => c.json(await removeDevice(c.env.DB, c.var.user.id, c.req.param("token"))));

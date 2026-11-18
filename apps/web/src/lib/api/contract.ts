@@ -1,7 +1,7 @@
 import type {
   AppConfig, AuthResult, Booking, Bus, CouponCheck, EmergencyContact, FareQuote, Gender, NewBooking, PaymentMethod, Place, PriceQuote,
   ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
-  WalletTransaction,
+  WalletTransaction, AppNotification,
 } from "@quikfly/shared";
 import type { RideCancelReason } from "@quikfly/shared";
 
@@ -116,6 +116,12 @@ export interface QuikflyApi {
   offers: {
     /** POST /offers/check: what a coupon takes off a quote or a ride (rejects with the reason). */
     check(code: string, ref: { quoteId: string } | { rideId: string }): Promise<CouponCheck>;
+  };
+  notifications: {
+    /** GET /me/notifications: the newest notifications and the unread count. */
+    list(): Promise<{ items: AppNotification[]; unread: number }>;
+    /** POST /me/notifications/read: these ids, or all when none are given. */
+    markRead(ids?: string[]): Promise<{ unread: number }>;
   };
   bookings: {
     /** GET /bookings */

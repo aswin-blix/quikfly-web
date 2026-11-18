@@ -56,6 +56,10 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | DELETE 🔒 | `/me/travellers/:id` | remove a traveller |
 | GET / POST 🔒 | `/me/contacts` | emergency contacts (max 3); POST `{ name, phone, relation? }` |
 | DELETE 🔒 | `/me/contacts/:id` | remove a contact |
+| GET 🔒 | `/me/notifications` | `{ items, unread }`: the newest 50 (`NOTIFICATIONS_PAGE`); kinds `booking.confirmed`, `booking.cancelled`, `booking.cancelled_by_staff`, `booking.deposit_returned`, `licence.approved`, `licence.rejected`, `ride.reminder` |
+| POST 🔒 | `/me/notifications/read` | `{ ids? }` (up to 100; none = all) → `{ unread }` |
+| POST 🔒 | `/me/push-devices` | `{ token, platform: android\|ios\|web }`: registers a Firebase token for push (201) |
+| DELETE 🔒 | `/me/push-devices/:token` | forget a device (on sign-out) |
 | GET 🔒 | `/me/wallet` | wallet history, newest first: `welcome`, `payment`, `refund`, `referral`, `opening` |
 | GET | `/places?q=` | place autocomplete (visible catalog places) |
 | POST | `/rides/quote` | `{ service, pickupId, dropId, scheduledFor?, stopIds? }` → fares for each visible ride option (through up to 2 `stopIds`, in order: distance is the sum of the legs, plus `rideStopMinutes` of waiting per stop), each with its `surge`. `scheduledFor` (local `YYYY-MM-DDTHH:mm`, India) prices a ride booked ahead at its pickup hour; it must be `rideScheduleMinMinutes`–`rideScheduleMaxDays` ahead (400 otherwise) (1 = none; never above the `surgeCap` setting, MVAG 2025) |
@@ -113,6 +117,9 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 |---|---|
 | `DEMO_OTP` | Fixed login code while there is no SMS provider. Every number signs in with it. |
 | `ALLOWED_ORIGINS` | Comma-separated website origins allowed by CORS, or `*`. |
+| `FCM_SERVICE_ACCOUNT` | **Secret**, optional: the Firebase service-account JSON. Unset = no push (the inbox still works). Set it with `npx wrangler secret put FCM_SERVICE_ACCOUNT`, never in `vars`. |
+
+**Notifications.** Events write rows to `notifications` (`services/notifications.ts`, one per user/kind/ref, so retries don't duplicate). A cron trigger (`triggers.crons`, every minute, `src/scheduled.ts`) adds `ride.reminder` rows when a scheduled ride's start window opens and, when `FCM_SERVICE_ACCOUNT` is set, sends rows not yet pushed (newer than `PUSH_MAX_AGE_MINUTES`, `PUSH_BATCH` per run) to each of the user's devices through FCM HTTP v1 (`services/push.ts`); dead tokens are removed. Locally, `wrangler dev --test-scheduled` and `GET /__scheduled?cron=*+*+*+*+*` run the cron once.
 
 Business settings that staff change at runtime (fares, surge and its cap, rider cancellation fee, bus fares, GST rates, bonuses, rental fees and km plan, chauffeur night charge, self-drive documents, roadside-assistance toggle, deposit-return window, cancellation policies, company details, licence auto-approve) live in the `settings` table, read through `services/settings.ts`; keys, defaults and allowed values are in `packages/shared/src/settings.ts`. The catalog lives in `catalog_items` (`services/catalog.ts`), filled from the seed in `packages/shared/src/catalog.ts` on first use. Both are cached for 30 seconds per Worker isolate, so an admin edit can take up to 30 s to show everywhere. Prices are computed by `packages/shared/src/pricing.ts` (`services/quotes.ts`, `services/rides.ts`).
 
@@ -146,4 +153,4 @@ Locally, `node scripts/smoke-admin.mjs http://localhost:8787/v1` creates its own
 
 ## Not yet built
 
-Real SMS OTP, payments, live driver tracking, real bus inventory (the timetable is generated).
+Real SMS OTP, payments, live driver tracking, real bus inventory (the timetable is generated). Push needs a Firebase project and the app's `firebase_messaging` registration (the server side is ready).

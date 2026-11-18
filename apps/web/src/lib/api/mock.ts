@@ -6,7 +6,7 @@ import type { QuikflyApi } from "./contract";
 import {
   BUS_OPERATORS, CATALOG_SEED, DEFAULT_SETTINGS, DEPOSIT_LINE, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
-  type AppConfig, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
+  type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
 import { KEYS, currentUser, fail, load, save, uid, wait, walletEntry, type MockRide } from "./mock-store";
@@ -17,6 +17,12 @@ const settings = DEFAULT_SETTINGS;
 const seed = CATALOG_SEED;
 const QUOTES_KEY = "quikfly.mockQuotes";
 const HOLDS_KEY = "quikfly.mockSeatHolds";
+const NOTES_KEY = "quikfly.mockNotifications";
+const notesStore = () => load<AppNotification[]>(NOTES_KEY, []);
+/** Like the API's notify(): one notification per event. */
+function mockNotify(n: Omit<AppNotification, "id" | "createdAt" | "readAt">) {
+  save(NOTES_KEY, [{ ...n, id: uid("NT"), createdAt: new Date().toISOString(), readAt: null }, ...notesStore()].slice(0, 50));
+}
 type StoredHold = SeatHold & { busId: string; date: string; bookingId: string };
 const holdsStore = () => load<StoredHold[]>(HOLDS_KEY, []);
 const holdsFor = (busId: string, date: string) => holdsStore().filter((h) => h.busId === busId && h.date === date);
@@ -228,6 +234,21 @@ export const mockApi: QuikflyApi = {
     },
   },
 
+  notifications: {
+    async list() {
+      await wait(200);
+      const items = notesStore();
+      return { items, unread: items.filter((n) => !n.readAt).length };
+    },
+    async markRead(ids) {
+      await wait(150);
+      const now = new Date().toISOString();
+      const items = notesStore().map((n) => (!n.readAt && (!ids || ids.includes(n.id)) ? { ...n, readAt: now } : n));
+      save(NOTES_KEY, items);
+      return { unread: items.filter((n) => !n.readAt).length };
+    },
+  },
+
   bookings: {
     async list() { await wait(200); return bookingsStore(); },
     async get(id) { await wait(200); return bookingsStore().find((b) => b.id === id) ?? fail("Booking not found."); },
@@ -269,6 +290,7 @@ export const mockApi: QuikflyApi = {
         save(HOLDS_KEY, [...holdsStore(), ...req.seatIds.map((seatId, i) => ({ seatId, gender: req.genders?.[i] ?? "other" as const, busId: req.busId, date: req.date, bookingId: b.id }))]);
       }
       saveBookings([b, ...bookingsStore().map((x) => (x.id === input.tripOf && !x.tripId ? { ...x, tripId } : x))]);
+      if (!b.rideId || b.startsAt) mockNotify({ kind: "booking.confirmed", title: `Booking confirmed · ${b.title}`, body: `${b.subtitle}. ₹${amount.toLocaleString("en-IN")}.`, bookingId: b.id });
       return b;
     },
     // Refunds what the service's cancellation policy allows for the notice given, like the API.
@@ -281,6 +303,8 @@ export const mockApi: QuikflyApi = {
       const refund = ride ? current.amount - fee : refundAmount(current.amount, percent, current.deposit ?? 0);
       const b = finishBooking(id, "cancelled", { refundAmount: refund, cancelReason: reason ?? null, cancelFee: fee });
       save(HOLDS_KEY, holdsStore().filter((h) => h.bookingId !== id));
+      mockNotify({ kind: "booking.cancelled", title: `Cancelled · ${b.title}`, bookingId: b.id,
+        body: refund ? (b.payment === "wallet" ? `₹${refund.toLocaleString("en-IN")} is back in your QuikFly wallet.` : `Refund due: ₹${refund.toLocaleString("en-IN")}.`) : "No refund under the cancellation policy." });
       if (b.payment === "wallet" && refund > 0) walletEntry("refund", refund, `Refund${percent < 100 ? ` (${percent}%)` : ""} · ${b.title}`, b.id);
       return b;
     },
