@@ -10,6 +10,7 @@ import { Badge, Button, ErrorBox, PageHeader } from "@/components/ui";
 import { adminApi } from "@/lib/api";
 import { SERVICE_LABEL, STATUS_STYLE, dateTime, inr } from "@/lib/format";
 import { RequireAdmin, useSession } from "@/lib/session";
+import { PartnerAssign } from "@/components/PartnerAssign";
 import { useLoad } from "@/lib/useLoad";
 
 const KIND_LABEL: Record<string, string> = { payment: "Paid from wallet", refund: "Refunded to wallet", welcome: "Welcome credit", referral: "Referral", opening: "Opening balance" };
@@ -69,6 +70,7 @@ function Detail({ id }: { id: string }) {
         </section>
 
         <div className="grid gap-3 content-start">
+          <PartnerAssign detail={data} canManage={can("bookings.manage")} onChange={setData} />
           <section className="card p-5" aria-labelledby="cust">
             <h2 id="cust" className="font-semibold text-strong mb-2">Customer</h2>
             <p className="text-sm text-fg">{b.customer.name}</p>

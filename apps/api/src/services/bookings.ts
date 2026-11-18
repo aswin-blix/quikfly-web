@@ -7,6 +7,7 @@ import { ownRide } from "./rides";
 import { getSettings } from "./settings";
 import { notify } from "./notifications";
 import { creditExpiry, earnStatement, earnedNotice, spendPlan } from "./credits";
+import { settlementStatements } from "./partner-trips";
 
 export interface BookingRow {
   id: string; user_id: string; service: ServiceKey; title: string; subtitle: string; amount: number;
@@ -14,6 +15,7 @@ export interface BookingRow {
   quote_id: string | null; ride_id: string | null; coupon_code: string | null; discount: number;
   starts_at: string | null; refund_amount: number | null; deposit: number;
   cancel_reason: string | null; cancel_fee: number; trip_id: string | null; credits_used: number;
+  vendor_id: string | null; vendor_vehicle_id: string | null; vendor_driver_id: string | null;
 }
 export const toBooking = (r: BookingRow): Booking => ({
   id: r.id, service: r.service, title: r.title, subtitle: r.subtitle, amount: r.amount,
@@ -91,6 +93,11 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
 
   const id = uid("QF");
   const createdAt = new Date().toISOString();
+  // A ride on a partner's vehicle carries that partner (and earns them money on completion).
+  const partner = rideId
+    ? await db.prepare("SELECT r.vendor_vehicle_id, r.vendor_driver_id, vv.vendor_id FROM rides r LEFT JOIN vendor_vehicles vv ON vv.id = r.vendor_vehicle_id WHERE r.id = ?")
+      .bind(rideId).first<{ vendor_vehicle_id: string | null; vendor_driver_id: string | null; vendor_id: string | null }>()
+    : null;
   const lines: [string, string][] = [
     ...input.lines.filter(([k]) => k !== COUPON_LINE && k !== CREDITS_LINE),
     ...(coupon ? [[COUPON_LINE, `${coupon.code} (−₹${coupon.discount.toLocaleString("en-IN")})`] as [string, string]] : []),
@@ -115,10 +122,11 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   // Claim the quote with this booking's id, so only one booking can use it.
   if (quoteId) statements.push(db.prepare("UPDATE quotes SET used_at = ? WHERE id = ? AND used_at IS NULL").bind(id, quoteId));
   statements.push(db.prepare(
-    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit, trip_id, credits_used)
-     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
+    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit, trip_id, credits_used, vendor_id, vendor_vehicle_id, vendor_driver_id)
+     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
   ).bind(id, userId, booking.service, booking.title, booking.subtitle, amount, booking.payment, JSON.stringify(lines), createdAt,
-    quoteId, rideId, coupon?.code ?? null, coupon?.discount ?? 0, startsAt, deposit, tripId, creditsUsed, ...condParams));
+    quoteId, rideId, coupon?.code ?? null, coupon?.discount ?? 0, startsAt, deposit, tripId, creditsUsed,
+    partner?.vendor_id ?? null, partner?.vendor_vehicle_id ?? null, partner?.vendor_driver_id ?? null, ...condParams));
   if (plan.length) {
     statements.push(
       db.prepare(
@@ -276,6 +284,8 @@ export async function completeBooking(db: D1Database, userId: string, id: string
     const [done, earned] = await db.batch([
       db.prepare(`UPDATE bookings SET status = 'completed' WHERE id = ? AND user_id = ? AND status IN ${ACTIVE} RETURNING *`).bind(id, userId),
       ...(earn ? [earn.statement] : []),
+      // A partner's trip settles in the same batch (after the status change, so it sees 'completed').
+      ...settlementStatements(db, settings, active),
     ]);
     const row = (done.results as BookingRow[])[0];
     if (row) {
@@ -312,6 +322,7 @@ export async function completeBookingRow(db: D1Database, id: string): Promise<Bo
       .bind(id, deposit),
     // Credits for the completed trip (runs after the status change, so it sees 'completed').
     ...(earn ? [earn.statement] : []),
+    ...settlementStatements(db, settings, row),
   ]);
   const finished = (done.results as BookingRow[])[0] ?? null;
   if (finished && earn && earned?.meta.changes) await notify(db, row.user_id, { ...earnedNotice(earn.earn, row.title, settings), ref: id, bookingId: id });

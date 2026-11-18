@@ -153,6 +153,20 @@ void main() {
     expect(fleet.drivers, isA<List<VendorDriver>>());
   });
 
+  test('partner trips, dashboard and money parse', () async {
+    if (await api.vendorApplication() == null) await api.startVendorApplication();
+    final now = DateTime.now();
+    final to = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final trips = await api.vendorTrips('2026-01-01', to);
+    expect(trips, isA<List<VendorTrip>>());
+    final sum = await api.vendorSummary('2026-01-01', to);
+    expect(sum.trips, greaterThanOrEqualTo(0));
+    final money = await api.vendorMoney();
+    expect(money.minPayout, greaterThan(0));
+    expect(inrPaise(123456789), '₹12,34,567.89');
+    expect(inrPaise(-5), '−₹0.05');
+  });
+
   test('credits summary parses', () async {
     final sum = await api.credits();
     expect(sum.balance, greaterThanOrEqualTo(0));

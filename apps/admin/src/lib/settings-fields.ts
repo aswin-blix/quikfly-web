@@ -142,6 +142,8 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "vendorJoiningFee", type: "number", unit: "₹", label: "Joining fee", help: "Shown in onboarding step 2. Demo: no money is collected; staff confirm it. 0 skips the payment step." },
       { key: "vendorMaxVehicleAgeYears", type: "number", unit: "years", label: "Oldest vehicle accepted", help: "Vehicles older than this can't register. The 2025 aggregator guidelines allow up to 8 years for cabs." },
       { key: "vendorAuditAddress", type: "text", label: "Vehicle audit address", help: "Where partners bring their vehicle for the audit." },
+      { key: "vendorCommissionPercent", type: "number", unit: "%", label: "Commission on partner trips", help: "Of the fare without GST. Partners keep the rest, less 0.1% TDS. At most 20%: the 2025 aggregator guidelines leave cab drivers 80% or more." },
+      { key: "vendorMinPayout", type: "number", unit: "₹", label: "Smallest payout", help: "Partners can request a payout once they're owed at least this much." },
       { key: "vendorExpiryWarnDays", type: "number", unit: "days", label: "Document expiry warning", help: "Partners are warned this many days before an RC, insurance or driving licence expires. On the expiry date the vehicle or driver is blocked until a renewal is checked." },
     ],
   },

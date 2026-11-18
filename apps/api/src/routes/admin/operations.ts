@@ -9,6 +9,7 @@ import { requireAdmin } from "../../middleware/admin";
 import { adminCancel, adminComplete, bookingDetail, searchBookings } from "../../services/admin/bookings";
 import { licenceQueue, reviewLicence } from "../../services/admin/licences";
 import { finishReview, markSticker, reviewSection, vendorDetail, vendorDocument, vendorQueue } from "../../services/admin/vendors";
+import { assignBookingVendor, assignableVehicles, decidePayout, payoutQueue } from "../../services/admin/partner-money";
 import {
   adminDriverLicence, adminVehicleDocument, blockDriver, blockVehicle, fleetQueue, reviewDriver, reviewDriverDocs, reviewVehicle, reviewVehicleDocs, stickerVehicle,
 } from "../../services/admin/fleet";
@@ -41,6 +42,13 @@ export const adminBookings = new Hono<AppEnv>()
   })
   .get("/:id", requireAdmin("bookings.view"), async (c) => c.json(await bookingDetail(c.env.DB, c.req.param("id"))))
   // { reason } — refunds a wallet payment to the customer's wallet.
+  // { vehicleId | null } — give a group-travel booking to a live partner vehicle (or take it back)
+  .post("/:id/vendor", requireAdmin("bookings.manage"), async (c) => {
+    const body = await jsonBody(c);
+    if (body.vehicleId !== null && typeof body.vehicleId !== "string") throw badRequest('"vehicleId" must be a vehicle id or null.');
+    await assignBookingVendor(c.env.DB, c.var.admin.id, c.req.param("id"), body.vehicleId as string | null);
+    return c.json(await bookingDetail(c.env.DB, c.req.param("id")));
+  })
   .post("/:id/cancel", requireAdmin("bookings.manage"), async (c) =>
     c.json(await adminCancel(c.env.DB, c.var.admin.id, c.req.param("id"), reason(await jsonBody(c)))))
   .post("/:id/complete", requireAdmin("bookings.manage"), async (c) =>
@@ -63,8 +71,21 @@ export const adminLicences = new Hono<AppEnv>()
 // Partner (vendor) applications from the QuikFly Partner app.
 const note = (body: Record<string, unknown>) => (typeof body.note === "string" && body.note.trim() ? text(body, "note", 3, ADMIN_RULES.reasonMax) : undefined);
 export const adminVendors = new Hono<AppEnv>()
-  // Live partners' vehicles and drivers waiting for staff (must come before /:id).
+  // Live partners' vehicles and drivers waiting for staff (these come before /:id).
   .get("/fleet-queue", requireAdmin("vendors.review"), async (c) => c.json(await fleetQueue(c.env.DB)))
+  // ?status=requested (default) | paid | rejected
+  .get("/payouts", requireAdmin("vendors.review"), async (c) =>
+    c.json(await payoutQueue(c.env.DB, pick(c.req.query("status"), ["requested", "paid", "rejected"] as const, "status") ?? "requested")))
+  // { decision: paid | rejected, reference?, note? } — paid needs the bank reference, rejected a reason
+  .post("/payouts/:pid", requireAdmin("vendors.review"), async (c) => {
+    const body = await jsonBody(c);
+    const decision = pick(String(body.decision ?? ""), ["paid", "rejected"] as const, "decision");
+    if (!decision) throw badRequest('"decision" is required.');
+    const reference = typeof body.reference === "string" && body.reference.trim() ? text(body, "reference", 4, 40) : undefined;
+    await decidePayout(c.env.DB, c.var.admin.id, c.req.param("pid"), decision, { reference, note: note(body) });
+    return c.json(await payoutQueue(c.env.DB, "requested"));
+  })
+  .get("/assignable-vehicles", requireAdmin("vendors.review"), async (c) => c.json(await assignableVehicles(c.env.DB)))
   // ?status=submitted (default) | draft | onboarding | active | rejected | blocked
   .get("/", requireAdmin("vendors.review"), async (c) =>
     c.json(await vendorQueue(c.env.DB, pick(c.req.query("status"), VENDOR_STATUSES, "status") ?? "submitted")))

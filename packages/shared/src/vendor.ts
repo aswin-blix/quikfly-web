@@ -1,3 +1,6 @@
+import { gstRate, type Settings } from "./settings";
+import type { PaymentMethod, ServiceKey } from "./types";
+
 // Vendor (partner) registration: vehicle owners who put a cab, auto, tempo traveller or bus
 // on QuikFly, through the QuikFly Partner app. Step 1 is an application of six sections that
 // staff review one by one; step 2 (onboarding) is the joining fee, the agreement, and the
@@ -159,6 +162,8 @@ export interface VendorSummary {
 /** The staff view of one vendor: the application plus the full bank account number. */
 export interface AdminVendorDetail {
   application: VendorApplication;
+  /** What QuikFly owes the partner (negative: the partner owes), and a payout waiting for staff. */
+  money: { balancePaise: number; pendingPayoutPaise: number | null };
   /** Every vehicle and driver, once the partner is live. */
   fleet: VendorFleet;
   bankAccount: string | null;
@@ -179,6 +184,126 @@ export const VENDOR_RULES = {
   /** How far ahead an audit can be booked (days). */
   auditMaxDays: 30,
 } as const;
+
+// ── Trips, earnings and payouts (part 3) ──
+
+/** Income-tax TDS an e-commerce operator deducts from partners' gross sales (section 194-O, from Oct 2024). */
+export const TDS_194O_PERCENT = 0.1;
+
+/**
+ * What a partner earns on one trip, in paise. `gross` is the fare before coupons and credits
+ * (QuikFly absorbs those); prices include GST, which QuikFly pays as the e-commerce operator.
+ * earning = fare without GST − QuikFly's commission − TDS.
+ */
+export function tripEarnings(settings: Settings, service: ServiceKey, grossRupees: number) {
+  const gross = Math.round(grossRupees * 100);
+  const fare = Math.round(gross / (1 + gstRate(settings, service) / 100));
+  const commission = Math.round((fare * settings.vendorCommissionPercent) / 100);
+  const tds = Math.round((gross * TDS_194O_PERCENT) / 100);
+  return { gross, gst: gross - fare, fare, commission, tds, earning: fare - commission - tds };
+}
+
+/** Which partner vehicle type can take a ride option: cabs for car rides, autos for the Auto option. */
+export function vehicleTypeForRide(option: { id: string; service: ServiceKey }): VendorVehicleType | null {
+  if (option.service === "car") return "car";
+  return option.id === "auto" ? "auto" : null;
+}
+
+/** A trip on a partner's vehicle (GET /vendor/trips). Money is in paise. */
+export interface VendorTrip {
+  bookingId: string;
+  status: "confirmed" | "ongoing" | "completed" | "cancelled";
+  service: ServiceKey;
+  title: string;
+  subtitle: string;
+  createdAt: string;
+  startsAt: string | null;
+  completedAt: string | null;
+  vehicleId: string | null;
+  regNumber: string | null;
+  driverId: string | null;
+  driverName: string | null;
+  payment: PaymentMethod;
+  grossPaise: number;
+  discountPaise: number;
+  gstPaise: number;
+  farePaise: number;
+  commissionPaise: number;
+  tdsPaise: number;
+  earningPaise: number;
+  /** True until the trip is completed: the numbers use today's commission and may change. */
+  estimate: boolean;
+}
+
+/** The dashboard for a date range (GET /vendor/summary). */
+export interface VendorTripSummary {
+  from: string;
+  to: string;
+  revenue: { trips: number; grossPaise: number; cashPaise: number; onlinePaise: number; discountPaise: number; earningPaise: number };
+  vehicles: { vehicleId: string; regNumber: string; trips: number; earningPaise: number }[];
+  drivers: { driverId: string; name: string; trips: number; earningPaise: number }[];
+}
+
+export type LedgerKind = "earning" | "cash" | "payout" | "payment" | "adjustment";
+export const LEDGER_LABEL: Record<LedgerKind, string> = {
+  earning: "Trip earning",
+  cash: "Cash your driver collected",
+  payout: "Paid to your bank",
+  payment: "You paid QuikFly",
+  adjustment: "Adjustment",
+};
+
+export interface LedgerEntry {
+  id: string;
+  kind: LedgerKind;
+  amountPaise: number;
+  note: string;
+  bookingId: string | null;
+  createdAt: string;
+}
+
+export interface VendorPayout {
+  id: string;
+  amountPaise: number;
+  status: "requested" | "paid" | "rejected";
+  reference: string | null;
+  note: string | null;
+  requestedAt: string;
+  decidedAt: string | null;
+}
+
+/** GET /vendor/money: balance, monthly statements (every month kept), ledger and payouts. */
+export interface VendorMoney {
+  /** Positive: QuikFly owes the partner. Negative: the partner owes QuikFly (cash their drivers kept). */
+  balancePaise: number;
+  minPayoutPaise: number;
+  pendingPayout: VendorPayout | null;
+  statements: { month: string; trips: number; grossPaise: number; commissionPaise: number; tdsPaise: number; earningPaise: number; cashPaise: number }[];
+  entries: LedgerEntry[];
+  payouts: VendorPayout[];
+}
+
+/** A payout request in the staff queue. */
+export interface AdminPayout extends VendorPayout {
+  vendorId: string;
+  vendorName: string;
+  bank: { holder: string; ifsc: string; account: string } | null;
+}
+
+/** A live partner vehicle staff can assign a trip to. */
+export interface AssignableVehicle {
+  vehicleId: string;
+  regNumber: string;
+  type: VendorVehicleType;
+  vendorId: string;
+  vendorName: string;
+  driverId: string;
+  driverName: string;
+}
+
+/** "₹1,234.50" from paise. */
+export const inrPaise = (paise: number) =>
+  `${paise < 0 ? "−" : ""}₹${(Math.abs(paise) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /** Vehicles that count towards a partner's fleet on the dashboard. */
 export const isLiveVehicle = (v: Pick<VendorVehicle, "status">) => v.status === "active" || v.status === "inactive" || v.status === "blocked";

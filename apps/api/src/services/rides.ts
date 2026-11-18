@@ -5,6 +5,7 @@ import { uid } from "../lib/random";
 import { visible, visibleById } from "./catalog";
 import { placeById } from "./places";
 import { getSettings } from "./settings";
+import { partnerDriverCard, partnerForRide } from "./partner-trips";
 
 /**
  * Fares for every visible option of a service, with surge from Settings. `scheduledFor`
@@ -47,11 +48,14 @@ export async function bookRide(
   const stopIds = input.stopIds ?? [];
   const quote = (await quoteRides(db, option.service, input.pickupId, input.dropId, input.scheduledFor, stopIds)).find((q) => q.option.id === option.id)!;
   const stops = await rideStops(db, input.pickupId, input.dropId, stopIds);
-  const drivers = await visible(db, "driver");
-  if (!drivers.length) throw badRequest("No drivers are available right now. Please try again shortly.");
+  // A live partner vehicle of the right type takes the ride when one is free; otherwise a simulated driver.
+  const partner = await partnerForRide(db, option);
+  const drivers = partner ? [] : await visible(db, "driver");
+  if (!partner && !drivers.length) throw badRequest("No drivers are available right now. Please try again shortly.");
 
   const seed = Date.now();
-  const { id: _driverId, ...driver } = pick(drivers, seed);
+  const model = pick(option.models.length ? option.models : [option.name], seed >> 2);
+  const simulated = partner ? null : (({ id: _driverId, ...d }) => d)(pick(drivers, seed));
   const ride: Ride = {
     id: uid("RD"),
     quote,
@@ -59,16 +63,16 @@ export async function bookRide(
     drop: await placeById(db, input.dropId),
     payment: input.payment,
     otp: String(1000 + (seed % 9000)),
-    driver: {
-      ...driver,
-      vehicle: pick(option.models.length ? option.models : [option.name], seed >> 2),
+    driver: partner ? partnerDriverCard(partner, model) : {
+      ...simulated!,
+      vehicle: model,
       plate: `${pick(RIDE_SIM.plateStates, seed >> 3)} ${pick(RIDE_SIM.plateLetters, seed >> 5)} ${1000 + (seed % 8999)}`,
     },
     scheduledFor: input.scheduledFor ? localToIso(input.scheduledFor) : null,
     stops,
   };
-  await db.prepare("INSERT INTO rides (id, user_id, status, data, created_at) VALUES (?, ?, 'confirmed', ?, ?)")
-    .bind(ride.id, userId, JSON.stringify(ride), new Date().toISOString()).run();
+  await db.prepare("INSERT INTO rides (id, user_id, status, data, created_at, vendor_vehicle_id, vendor_driver_id) VALUES (?, ?, 'confirmed', ?, ?, ?, ?)")
+    .bind(ride.id, userId, JSON.stringify(ride), new Date().toISOString(), partner?.vehicle_id ?? null, partner?.driver_id ?? null).run();
   return ride;
 }
 
