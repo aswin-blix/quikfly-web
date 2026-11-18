@@ -9,6 +9,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/bus/bus_screens.dart';
 import 'screens/checkout/checkout_screen.dart';
 import 'screens/checkout/confirmed_screen.dart';
+import 'screens/trips/trip_screen.dart';
 import 'screens/checkout/invoice_screen.dart';
 import 'screens/not_found.dart';
 import 'screens/help/help_screen.dart';
@@ -42,11 +43,15 @@ final router = GoRouter(
       path: '/ride/:service',
       parentNavigatorKey: _rootKey,
       // ?ride=&booking= starts a scheduled ride (from My Trips).
+      // ?to=&at=&trip= prefill a ride that joins a trip (from a booking's confirmation).
       builder: (_, s) => RideScreen(
-        key: ValueKey('${s.pathParameters['service']}${s.uri.queryParameters['ride'] ?? ''}'),
+        key: ValueKey('${s.pathParameters['service']}${s.uri.query}'),
         service: s.pathParameters['service'] == 'bike' ? ServiceKey.bike : ServiceKey.car,
         resumeRideId: s.uri.queryParameters['ride'],
         resumeBookingId: s.uri.queryParameters['booking'],
+        toPlaceId: s.uri.queryParameters['to'],
+        scheduleAt: s.uri.queryParameters['at'],
+        tripOf: s.uri.queryParameters['trip'],
       ),
     ),
     GoRoute(path: '/bus', parentNavigatorKey: _rootKey, builder: (_, _) => const BusScreen()),
@@ -72,6 +77,7 @@ final router = GoRouter(
       builder: (_, s) => ConfirmedScreen(id: s.pathParameters['id']!, booking: s.extra is Booking ? s.extra as Booking : null),
     ),
     GoRoute(path: '/invoice/:id', parentNavigatorKey: _rootKey, builder: (_, s) => InvoiceScreen(id: s.pathParameters['id']!)),
+    GoRoute(path: '/trip/:id', parentNavigatorKey: _rootKey, builder: (_, s) => TripScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/rent', parentNavigatorKey: _rootKey, builder: (_, _) => const RentScreen()),
     GoRoute(path: '/rent/:id', parentNavigatorKey: _rootKey, builder: (_, s) => RentDetailScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/group', parentNavigatorKey: _rootKey, builder: (_, _) => const GroupScreen()),

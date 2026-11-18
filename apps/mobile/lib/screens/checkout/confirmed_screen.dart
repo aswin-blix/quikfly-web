@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
 import '../../core/format.dart';
 import '../../core/services.dart';
+import '../../core/trips.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
@@ -80,6 +81,28 @@ class ConfirmedScreen extends ConsumerWidget {
                   ),
                 ]),
               ),
+              ...() {
+                final cfg = ref.watch(configProvider).value;
+                final offer = cfg == null ? null : rideOffer(b, cfg.settings, (id) => cfg.places.where((p) => p.id == id).firstOrNull?.name);
+                if (offer == null) return const <Widget>[];
+                return [
+                  const SizedBox(height: 14),
+                  Panel(
+                    child: Row(children: [
+                      Icon(Icons.local_taxi, color: c.accent),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(offer.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                          Text(offer.text, style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
+                        ]),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(onPressed: () => context.push(offer.route), child: const Text('Add a ride')),
+                    ]),
+                  ),
+                ];
+              }(),
               const SizedBox(height: 20),
               GoldButton(label: 'View my trips', onPressed: () => context.go('/trips')),
               const SizedBox(height: 10),

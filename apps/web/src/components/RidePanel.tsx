@@ -32,8 +32,12 @@ function defaultPickup(minMinutes: number) {
   return toLocalInput(d);
 }
 
-export function RidePanel({ service, initialFrom, initialTo, resume }: {
+export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt, tripOf }: {
   service: "bike" | "car"; initialFrom?: string | null; initialTo?: string | null;
+  /** Pre-select "Schedule" at this local time (e.g. before a bus departs). */
+  scheduleAt?: string | null;
+  /** The booking whose trip this ride joins (the bus or holiday it gets you to). */
+  tripOf?: string | null;
   /** A scheduled ride to start now (from My Trips). */
   resume?: { rideId: string; bookingId: string };
 }) {
@@ -68,8 +72,8 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
   const [reason, setReason] = useState<RideCancelReason | null>(null);
   const settings = useSettings();
   /** Ride now, or book ahead for a pickup time (local "YYYY-MM-DDTHH:mm"). */
-  const [when, setWhen] = useState<"now" | "later">("now");
-  const [at, setAt] = useState(() => defaultPickup(30));
+  const [when, setWhen] = useState<"now" | "later">(scheduleAt ? "later" : "now");
+  const [at, setAt] = useState(() => scheduleAt || defaultPickup(30));
   const scheduledFor = when === "later" ? at : undefined;
   const [t, setT] = useState(0);
   const [rating, setRating] = useState(0);
@@ -182,6 +186,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
         // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
         const b = await api.bookings.create({
           service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, rideId: r.id, payment,
+          ...(tripOf ? { tripOf } : {}),
           lines: r.scheduledFor
             ? [["Pickup time", prettyDateTime(r.scheduledFor)], ...stopLine, ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]]
             : [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ...stopLine, ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
@@ -229,6 +234,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
           initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.25 }}>
         {phase === "plan" && (
           <>
+            {tripOf && <p className="text-xs text-success border border-success/30 bg-success/10 rounded-lg px-3 py-2">This ride will be added to your trip.</p>}
             <div className="relative space-y-2">
               <PlacePicker icon={<span className="w-2.5 h-2.5 rounded-full bg-success" />} placeholder="Pickup location" value={pickup} onChange={setPickup} exclude={drop?.id} saved={saved} />
               {stops.map((s, i) => (
@@ -340,6 +346,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume }: {
         {phase === "scheduled" && ride?.scheduledFor && (
           <div className="py-6 space-y-4 text-center">
             <p className="font-display text-2xl">Ride scheduled</p>
+            {tripOf && <p className="text-sm text-success">Added to your trip</p>}
             <p className="text-soft">{ride.quote.option.name} · {ride.pickup.name} → {ride.drop.name}</p>
             <p className="text-gold font-semibold text-lg">{prettyDateTime(ride.scheduledFor)}</p>
             <p className="text-sm text-muted">Fare {inr(ride.quote.fare)} ({ride.payment.toUpperCase()}), locked. Your driver is assigned {RIDE_SCHEDULE.startWindowMinutes} minutes before pickup: start the ride from My Trips then. Free cancellation until {settings.rideScheduleFreeCancelMinutes} minutes before pickup.</p>

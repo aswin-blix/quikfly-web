@@ -1,7 +1,7 @@
 "use client";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BadgePercent, Building2, ChevronDown, CreditCard, FileText, Info, Lock, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
+import { ArrowLeft, BadgePercent, Building2, CarTaxiFront, ChevronDown, CreditCard, FileText, Info, Lock, Route, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { TweenNumber } from "@/components/motion";
 import { Empty, GhostLink, GoldButton, Spinner } from "@/components/ui";
@@ -11,7 +11,8 @@ import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
 import { RIDE_SCHEDULE, cancelPolicyFor, formatLicence, minutesUntilStart, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
-import { useSettings } from "@/components/ConfigProvider";
+import { useConfig, useSettings } from "@/components/ConfigProvider";
+import { bookingWhen, rideOffer } from "@/lib/trips";
 import { LicenceBadge, LicenceForm, licenceMessage, useLicencePolling } from "@/components/account/LicenceSection";
 import { GSTIN_LINE } from "@/lib/invoice";
 
@@ -280,6 +281,8 @@ export function ConfirmedScreen() {
   const { bookings } = useApp();
   const b = bookings.find((x) => x.id === id);
   const ref = useRef<HTMLDivElement>(null);
+  const settings = useSettings();
+  const places = useConfig()?.places ?? [];
 
   useGSAP(() => {
     if (!b || prefersReducedMotion()) return;
@@ -334,6 +337,20 @@ export function ConfirmedScreen() {
           <dt className="text-subtle border-t border-line pt-2">Amount paid</dt><dd className="text-right font-bold text-gold border-t border-line pt-2">{inr(b.amount)}</dd>
         </dl>
       </motion.div>
+      {(() => {
+        const offer = rideOffer(b, settings, (pid) => places.find((p) => p.id === pid)?.name);
+        if (!offer) return null;
+        return (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.3 }} className="panel text-left mt-4 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <span className="w-11 h-11 shrink-0 rounded-xl bg-gold/10 text-gold grid place-items-center"><CarTaxiFront size={22} /></span>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold">{offer.title}</p>
+              <p className="text-sm text-muted">{offer.text}</p>
+            </div>
+            <Link href={offer.href} className="btn-gold rounded-xl px-5 py-2.5 text-sm text-center shrink-0">Add a ride</Link>
+          </motion.div>
+        );
+      })()}
       <div className="flex flex-wrap justify-center gap-3 mt-8">
         <Link href="/bookings" className="btn-gold rounded-xl px-6 py-3">View my trips</Link>
         <GhostLink href={`/invoice${qs({ id: b.id })}`}>Invoice</GhostLink>
@@ -362,6 +379,14 @@ export function BookingsScreen() {
 
   const match: Record<typeof tab, BookingStatus[]> = { upcoming: ["confirmed", "ongoing"], past: ["completed"], cancelled: ["cancelled"] };
   const list = bookings.filter((b) => match[tab].includes(b.status));
+  const tripSize = (tripId: string) => bookings.filter((x) => x.tripId === tripId).length;
+  const inTrip = (b: Booking) => !!b.tripId && tripSize(b.tripId) > 1;
+  // A trip's bookings stay together (in time order) where its first booking appears.
+  const ordered = list.flatMap((b, i) => {
+    if (!inTrip(b)) return [b];
+    if (list.findIndex((x) => x.tripId === b.tripId) !== i) return [];
+    return list.filter((x) => x.tripId === b.tripId).sort((x, y) => bookingWhen(x).localeCompare(bookingWhen(y)));
+  });
 
   /** What cancelling now gives back under the service's policy (the API applies the same rule). */
   function preview(b: Booking) {
@@ -418,11 +443,18 @@ export function BookingsScreen() {
                 <Empty icon={<Ticket size={40} />} text={tab === "upcoming" ? "No upcoming trips. Where to next?" : `No ${tab} bookings.`} action={tab === "upcoming" ? <GhostLink href="/">Book something</GhostLink> : undefined} />
               </motion.div>
             )}
-            {list.map((b) => {
+            {ordered.flatMap((b, i) => {
               const s = serviceByKey(b.service);
               const isOpen = open === b.id;
-              return (
-                <motion.div key={b.id} layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -40 }} className="panel overflow-hidden">
+              const grouped = inTrip(b);
+              const header = grouped && (i === 0 || ordered[i - 1].tripId !== b.tripId) ? (
+                <motion.div key={`trip-${b.tripId}`} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center justify-between gap-3 pt-2 text-sm">
+                  <span className="flex items-center gap-2 font-semibold"><Route size={16} className="text-gold" />Trip · {tripSize(b.tripId!)} bookings</span>
+                  <Link href={`/trip${qs({ id: b.tripId! })}`} className="text-gold">Trip summary →</Link>
+                </motion.div>
+              ) : null;
+              return [header, (
+                <motion.div key={b.id} layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -40 }} className={cx("panel overflow-hidden", grouped && "ml-3 border-l-2 !border-l-gold/60")}>
                   <button className="w-full flex items-center gap-4 p-4 text-left" onClick={() => setOpen(isOpen ? null : b.id)} aria-expanded={isOpen}>
                     <img src={s.image} alt="" className="w-14 h-14 rounded-xl object-cover" />
                     <div className="flex-1 min-w-0">
@@ -470,7 +502,7 @@ export function BookingsScreen() {
                     )}
                   </AnimatePresence>
                 </motion.div>
-              );
+              )].filter(Boolean);
             })}
           </AnimatePresence>
         </motion.div>

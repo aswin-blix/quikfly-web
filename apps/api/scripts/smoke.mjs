@@ -231,6 +231,20 @@ const toClose = (await call("POST", "/bookings", newBooking({ service: "tours", 
 await expect("customers can't complete a holiday (staff close it)", call("POST", `/bookings/${toClose.id}/complete`), 409, (j) => /staff/.test(j.message));
 await call("POST", `/bookings/${toClose.id}/cancel`);
 
+// Trips: a ride joins a holiday's trip; both share the holiday's id as trip id.
+const tripTourQ = (await call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 1, kids: 0, start: TRAVEL })).json;
+const tripAnchor = await expect("a holiday to start a trip from", call("POST", "/bookings", newBooking({ service: "tours", quoteId: tripTourQ.id, payment: "upi" })), 201, (j) => j.tripId === null);
+const legRide = (await call("POST", "/rides", { ...rideInput, payment: "cash" })).json;
+const tripLeg = await expect("a ride joins the holiday's trip", call("POST", "/bookings", newBooking({ service: "car", rideId: legRide.id, payment: "cash", tripOf: tripAnchor.id })), 201,
+  (j) => j.tripId === tripAnchor.id);
+await expect("the holiday now carries the trip id too", call("GET", `/bookings/${tripAnchor.id}`), 200, (j) => j.tripId === tripAnchor.id);
+const strayRide = (await call("POST", "/rides", { ...rideInput, payment: "cash" })).json;
+await expect("joining an unknown booking's trip is refused", call("POST", "/bookings", newBooking({ service: "car", rideId: strayRide.id, payment: "cash", tripOf: "QFNOPE" })), 404);
+await call("POST", `/bookings/${tripLeg.id}/cancel`, { reason: "plans_changed" });
+await call("POST", `/bookings/${tripAnchor.id}/cancel`);
+await expect("a cancelled booking's trip can't be joined", call("POST", "/bookings", newBooking({ service: "car", rideId: strayRide.id, payment: "cash", tripOf: tripAnchor.id })), 409, (j) => /cancelled/.test(j.message));
+await call("POST", `/rides/${strayRide.id}/cancel`);
+
 // Bus seat holds: a seat sells once, a woman's seat makes its pair women only, cancelling frees both.
 const pairSeat = seats.find((x) => x.col === 0 && !x.booked && !x.ladies && partnerOf(seats, x) && !partnerOf(seats, x).booked && !partnerOf(seats, x).ladies);
 if (pairSeat) {

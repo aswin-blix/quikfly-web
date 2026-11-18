@@ -25,11 +25,14 @@ import 'place_search_screen.dart';
 const ridePayments = [PaymentMethod.upi, PaymentMethod.cash, PaymentMethod.wallet, PaymentMethod.card];
 
 class RideScreen extends ConsumerStatefulWidget {
-  const RideScreen({super.key, required this.service, this.resumeRideId, this.resumeBookingId});
+  const RideScreen({super.key, required this.service, this.resumeRideId, this.resumeBookingId, this.toPlaceId, this.scheduleAt, this.tripOf});
   final ServiceKey service; // bike or car
 
   /// A scheduled ride to start now (from My Trips).
   final String? resumeRideId, resumeBookingId;
+
+  /// Prefill from a trip offer: the drop place, a pickup time (local "YYYY-MM-DDTHH:mm"), and the booking whose trip this ride joins.
+  final String? toPlaceId, scheduleAt, tripOf;
   @override
   ConsumerState<RideScreen> createState() => _RideScreenState();
 }
@@ -50,8 +53,9 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   DateTime? _bookedAt;
 
   /// Book ahead: the pickup time (null = ride now), and the ride just scheduled (shows its confirmation).
-  DateTime? _at;
+  late DateTime? _at = widget.scheduleAt == null ? null : DateTime.tryParse(widget.scheduleAt!);
   Ride? _scheduled;
+  bool _prefilledDrop = false;
   int _rating = 0;
   late final _clock = AnimationController(vsync: this)..addListener(() => setState(() {}));
   int _quoteRequest = 0;
@@ -207,6 +211,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         subtitle: '${r.pickup.name} → ${r.drop.name}',
         payment: _payment,
         rideId: r.id,
+        tripOf: widget.tripOf,
         // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
         lines: r.scheduledFor != null
             ? [
@@ -386,6 +391,12 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     final places = ref.watch(configProvider).value?.places ?? const <Place>[];
     // Places arrive with /config: pre-fill a sensible pickup once they do.
     if (_pickup == null && places.isNotEmpty) _pickup = places[places.length > 2 ? 2 : 0];
+    // From a trip offer: the drop (e.g. the bus stand), once places have loaded.
+    if (!_prefilledDrop && widget.toPlaceId != null && places.isNotEmpty) {
+      _prefilledDrop = true;
+      _drop = places.where((p) => p.id == widget.toPlaceId && p.id != _pickup?.id).firstOrNull;
+      if (_drop != null) WidgetsBinding.instance.addPostFrameCallback((_) => _loadQuotes());
+    }
 
     final pickup = _pickup, drop = _drop;
     final live = _phase == RidePhase.arriving || _phase == RidePhase.ontrip || _phase == RidePhase.done;
@@ -472,6 +483,13 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         );
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (widget.tripOf != null)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: c.success.withValues(alpha: 0.1), border: Border.all(color: c.success.withValues(alpha: 0.3)), borderRadius: BorderRadius.circular(10)),
+          child: Text('This ride will be added to your trip.', style: TextStyle(color: c.success, fontSize: 12.5)),
+        ),
       Stack(children: [
         Column(children: [
           field(Container(width: 10, height: 10, decoration: BoxDecoration(color: c.success, shape: BoxShape.circle)), 'Pickup location', _pickup,
@@ -801,6 +819,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       Icon(Icons.event_available, color: c.accent, size: 40),
       const SizedBox(height: 8),
       const Text('Ride scheduled', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
+      if (widget.tripOf != null) Text('Added to your trip', textAlign: TextAlign.center, style: TextStyle(color: c.success, fontSize: 13)),
       const SizedBox(height: 4),
       Text('${r.quote.option.name} · ${r.pickup.name} → ${r.drop.name}', textAlign: TextAlign.center, style: TextStyle(color: c.fgSoft)),
       const SizedBox(height: 8),

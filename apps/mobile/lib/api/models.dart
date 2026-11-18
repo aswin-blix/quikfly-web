@@ -345,7 +345,7 @@ class TravelVehicle {
 
 class Booking {
   const Booking(this.id, this.service, this.title, this.subtitle, this.amount, this.status, this.createdAt, this.payment, this.lines,
-      {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0, this.rideId});
+      {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0, this.rideId, this.tripId});
   final String id, title, subtitle, payment;
   final ServiceKey service;
   final int amount;
@@ -361,6 +361,9 @@ class Booking {
 
   /// The ride behind a bike/car booking (to start a scheduled ride).
   final String? rideId;
+
+  /// Bookings that belong together share a trip id; null when alone.
+  final String? tripId;
 
   /// Why the rider cancelled (a ride cancel reason key), and the cancellation fee kept or owed.
   final String? cancelReason;
@@ -384,6 +387,7 @@ class Booking {
         cancelReason: j['cancelReason'] as String?,
         cancelFee: j['cancelFee'] == null ? 0 : _int(j['cancelFee']),
         rideId: j['rideId'] as String?,
+        tripId: j['tripId'] as String?,
       );
 }
 

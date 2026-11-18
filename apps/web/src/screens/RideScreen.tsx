@@ -29,7 +29,7 @@ export function RideScreen({ service }: { service: "bike" | "car" }) {
       </PageHeader>
 
       <section className="max-w-7xl mx-auto px-4">
-        <RidePanel service={service} initialFrom={q.get("from")} initialTo={q.get("to")}
+        <RidePanel service={service} initialFrom={q.get("from")} initialTo={q.get("to")} scheduleAt={q.get("at")} tripOf={q.get("trip")}
           resume={q.get("ride") && q.get("booking") ? { rideId: q.get("ride")!, bookingId: q.get("booking")! } : undefined} />
       </section>
 

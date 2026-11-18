@@ -21,6 +21,9 @@ export const RIDE_SCHEDULE = { startWindowMinutes: 15 };
 /** Stops a rider can add between pickup and drop (Uber allows the same). */
 export const RIDE_MAX_STOPS = 2;
 
+/** Trips: the cab to a bus is scheduled to arrive this many minutes before boarding; a holiday's ride is offered at this hour on the start date. */
+export const TRIP_RIDE = { leadMinutes: 45, holidayHour: 6 };
+
 /**
  * Why a rider cancels (Motor Vehicle Aggregator Guidelines 2025: apps list the reasons, and a
  * cancellation fee applies only without a valid one). `waivesFee` marks the valid ones.
