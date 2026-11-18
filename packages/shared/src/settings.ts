@@ -127,6 +127,8 @@ export interface Settings {
   vendorJoiningFee: number;
   vendorMaxVehicleAgeYears: number;
   vendorAuditAddress: string;
+  /** Partners are warned this many days before a vehicle or licence document expires; on expiry it's blocked. */
+  vendorExpiryWarnDays: number;
 
   /** Seller details printed on invoices. */
   companyName: string;
@@ -205,6 +207,7 @@ export const DEFAULT_SETTINGS: Settings = {
   vendorJoiningFee: 1000,
   vendorMaxVehicleAgeYears: 8,
   vendorAuditAddress: "QuikFly partner hub, Chennai",
+  vendorExpiryWarnDays: 30,
   companyName: "QuikFly Mobility Pvt. Ltd.",
   companyAddress: "Chennai, Tamil Nadu, India",
   companyGstin: "33AAACQ0000A1Z5",
@@ -291,6 +294,7 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   vendorJoiningFee: money(50000),
   vendorMaxVehicleAgeYears: { type: "number", min: 1, max: 20, integer: true },
   vendorAuditAddress: { type: "text", min: 5, max: 200 },
+  vendorExpiryWarnDays: { type: "number", min: 1, max: 90, integer: true },
   companyName: { type: "text", min: 2, max: 120 },
   companyAddress: { type: "text", min: 2, max: 240 },
   companyGstin: { type: "text", max: 15, pattern: /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, hint: "A 15-character GSTIN, e.g. 33ABCDE1234F1Z5." },

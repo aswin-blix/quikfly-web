@@ -30,6 +30,9 @@ export const VENDOR_SECTION_LABEL: Record<VendorSection, string> = {
 
 /** Document photos a vendor uploads (stored privately; only the vendor and reviewing staff can open them). */
 export const VENDOR_DOCUMENTS = ["photo", "rc", "insurance"] as const;
+/** Photos on a vehicle added after joining, and on a driver. */
+export const VEHICLE_DOCUMENTS = ["rc", "insurance"] as const;
+export type VehicleDocument = (typeof VEHICLE_DOCUMENTS)[number];
 export type VendorDocument = (typeof VENDOR_DOCUMENTS)[number];
 
 /** pending: not filled yet · filled: waiting for review · changes: staff asked for a fix (see note) · approved */
@@ -59,7 +62,59 @@ export interface VendorVehicle {
   rc: { ownerName: string; validTill: string; hasPhoto: boolean } | null;
   insurance: { insurer: string; policyNumber: string; validTill: string; hasPhoto: boolean } | null;
   audit: { date: string; slot: AuditSlot; result: "booked" | "passed" | "failed"; note: string | null } | null;
-  status: "pending" | "active" | "inactive" | "blocked";
+  /**
+   * pending: part of the application · draft: an added vehicle being filled · submitted: waiting
+   * for review · approved: waiting for sticker & paint · active · inactive (the partner paused it)
+   * · blocked (staff, or a document expired: see blockedReason) · rejected
+   */
+  status: VehicleStatus;
+  /** Staff note when a vehicle was sent back or rejected. */
+  reviewNote: string | null;
+  blockedReason: string | null;
+  /** A renewed RC or insurance waiting for staff to check it. */
+  docsPending: boolean;
+  /** The driver assigned to this vehicle, if any. */
+  driverId: string | null;
+}
+
+export const VEHICLE_STATUSES = ["pending", "draft", "submitted", "approved", "active", "inactive", "blocked", "rejected"] as const;
+export type VehicleStatus = (typeof VEHICLE_STATUSES)[number];
+
+/** A driver a partner registers; staff confirm police verification and training before approving. */
+export interface VendorDriver {
+  id: string;
+  name: string;
+  phone: string;
+  dlNumber: string;
+  /** YYYY-MM-DD */
+  dlValidTill: string;
+  hasDlPhoto: boolean;
+  /** submitted (waiting for review) · active · rejected · blocked (staff, or the licence expired) */
+  status: "submitted" | "active" | "rejected" | "blocked";
+  policeVerifiedAt: string | null;
+  trainingDoneAt: string | null;
+  reviewNote: string | null;
+  blockedReason: string | null;
+  docsPending: boolean;
+  vehicleId: string | null;
+  /** The partner drives this vehicle themselves. */
+  self: boolean;
+}
+
+/** A partner's vehicles and drivers (GET /vendor/fleet). */
+export interface VendorFleet {
+  vehicles: VendorVehicle[];
+  drivers: VendorDriver[];
+}
+
+/** Something staff need to look at on a live partner's fleet. */
+export interface FleetReviewItem {
+  vendorId: string;
+  vendorName: string;
+  kind: "vehicle" | "vehicle_sticker" | "vehicle_docs" | "driver" | "driver_docs";
+  id: string;
+  label: string;
+  since: string;
 }
 
 export interface VendorApplication {
@@ -104,6 +159,8 @@ export interface VendorSummary {
 /** The staff view of one vendor: the application plus the full bank account number. */
 export interface AdminVendorDetail {
   application: VendorApplication;
+  /** Every vehicle and driver, once the partner is live. */
+  fleet: VendorFleet;
   bankAccount: string | null;
   customerId: string;
 }
@@ -122,6 +179,9 @@ export const VENDOR_RULES = {
   /** How far ahead an audit can be booked (days). */
   auditMaxDays: 30,
 } as const;
+
+/** Vehicles that count towards a partner's fleet on the dashboard. */
+export const isLiveVehicle = (v: Pick<VendorVehicle, "status">) => v.status === "active" || v.status === "inactive" || v.status === "blocked";
 
 /** "tn 57 ax-9979" → "TN57AX9979" */
 export const normaliseRegNumber = (s: string) => s.toUpperCase().replace(/[\s-]/g, "");

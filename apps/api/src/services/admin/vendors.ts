@@ -8,6 +8,7 @@ import {
 } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { documentResponse, loadVendor, parseSections, toApplication } from "../vendors";
+import { fleetOf } from "../fleet";
 import { getSettings } from "../settings";
 import { notify } from "../notifications";
 import { auditStatement } from "./audit";
@@ -45,7 +46,7 @@ async function found(db: D1Database, id: string) {
 
 export async function vendorDetail(db: D1Database, id: string): Promise<AdminVendorDetail> {
   const { v, vehicle } = await found(db, id);
-  return { application: toApplication(v, vehicle), bankAccount: v.bank_account, customerId: v.user_id };
+  return { application: toApplication(v, vehicle), fleet: await fleetOf(db, v.id), bankAccount: v.bank_account, customerId: v.user_id };
 }
 
 export async function vendorDocument(db: D1Database, bucket: R2Bucket | undefined, id: string, kind: "photo" | "rc" | "insurance") {
