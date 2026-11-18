@@ -4,6 +4,9 @@
 import 'package:dio/dio.dart';
 import '../core/env.dart';
 import 'models.dart';
+import 'vendor_models.dart';
+
+export 'vendor_models.dart';
 
 /// An error to show the user: the API's own `{ message }`, or a plain network message.
 class ApiException implements Exception {
@@ -72,6 +75,37 @@ class QuikFlyApi {
   Future<AuthResult> verifyOtp(String phone, String otp) => _post('/auth/verify', (d) => AuthResult.fromJson(d as Json), {'phone': phone, 'otp': otp});
   Future<void> logout() => _post('/auth/logout', _ignore);
   Future<User> me() => _get('/auth/me', (d) => User.fromJson(d as Json));
+
+  // ── Partner (vendor) registration: the QuikFly Partner app ──
+  VendorApplication? _vendorOrNull(dynamic d) {
+    final a = (d as Json)['application'];
+    return a == null ? null : VendorApplication.fromJson(a as Json);
+  }
+
+  VendorApplication _vendor(dynamic d) => VendorApplication.fromJson(d as Json);
+
+  /// The partner application, or null before one is started.
+  Future<VendorApplication?> vendorApplication() => _get('/vendor', _vendorOrNull);
+  Future<VendorApplication> startVendorApplication() => _post('/vendor', _vendor);
+  Future<VendorApplication> saveVendorSection(String section, Json body) => _put('/vendor/sections/$section', _vendor, body);
+
+  /// Uploads a document photo (JPEG, PNG or WebP bytes) for 'photo', 'rc' or 'insurance'.
+  Future<VendorApplication> uploadVendorDocument(String kind, List<int> bytes, {String contentType = 'image/jpeg'}) => _send(
+        () => _dio.put('/vendor/documents/$kind',
+            data: Stream.fromIterable([bytes]),
+            options: Options(contentType: contentType, headers: {Headers.contentLengthHeader: bytes.length})),
+        _vendor,
+      );
+
+  /// Where the app loads a document photo from; needs [authHeaders].
+  String vendorDocumentUrl(String kind) => '${_dio.options.baseUrl}/vendor/documents/$kind';
+  Map<String, String> get authHeaders => {if (token != null) 'Authorization': 'Bearer $token'};
+
+  Future<VendorApplication> resetVendorApplication() => _post('/vendor/reset', _vendor);
+  Future<VendorApplication> submitVendorApplication() => _post('/vendor/submit', _vendor);
+  Future<VendorApplication> payVendorJoiningFee() => _post('/vendor/onboarding/payment', _vendor);
+  Future<VendorApplication> acceptVendorAgreement(String name) => _post('/vendor/onboarding/agreement', _vendor, {'name': name, 'accept': true});
+  Future<VendorApplication> requestVendorSticker() => _post('/vendor/onboarding/sticker', _vendor);
 
   // ── Account ──
   /// Send only what changes; null clears a field. Saving a name completes sign-up.
