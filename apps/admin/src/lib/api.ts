@@ -2,7 +2,7 @@
 // Endpoints are listed in apps/api/README.md (Admin section).
 import type {
   AdminBooking, AdminBookingDetail, AdminLoginResult, AdminStats, AdminUser, AuditEntry, BookingFilters, CatalogItem, CatalogKind, LicenceQueueStatus,
-  LicenceReview, Page, Settings, AdminVendorDetail, VendorDocument, VendorSection, VendorStatus, VendorSummary,
+  LicenceReview, Page, Settings, AdminVendorDetail, FleetReviewItem, VehicleDocument, VendorDocument, VendorSection, VendorStatus, VendorSummary,
 } from "@quikfly/shared";
 
 export interface CatalogKindSummary { kind: CatalogKind; total: number; visible: number; canEdit: boolean }
@@ -48,6 +48,14 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return json as T;
 }
 
+/** A private image (partner documents) as an object URL; revoke it when done. */
+async function photo(path: string): Promise<string> {
+  const token = getToken();
+  const res = await fetch(`${BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, ((await res.json().catch(() => ({}))) as { message?: string }).message || "Couldn't load the photo.");
+  return URL.createObjectURL(await res.blob());
+}
+
 /** `{ a: 1, b: undefined }` → "?a=1" */
 export function qs(params: Record<string, string | number | undefined | null>) {
   const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "");
@@ -88,12 +96,14 @@ export const adminApi = {
       req<AdminVendorDetail>("POST", `/admin/vendors/${encodeURIComponent(id)}/review`, { decision, note }),
     sticker: (id: string) => req<AdminVendorDetail>("POST", `/admin/vendors/${encodeURIComponent(id)}/sticker`),
     /** A document photo as an object URL (the image needs the staff token, so it can't be a plain <img src>). */
-    async document(id: string, kind: VendorDocument): Promise<string> {
-      const token = getToken();
-      const res = await fetch(`${BASE}/admin/vendors/${encodeURIComponent(id)}/documents/${kind}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-      if (!res.ok) throw new ApiError(res.status, ((await res.json().catch(() => ({}))) as { message?: string }).message || "Couldn't load the photo.");
-      return URL.createObjectURL(await res.blob());
-    },
+    document: (id: string, kind: VendorDocument) => photo(`/admin/vendors/${encodeURIComponent(id)}/documents/${kind}`),
+    vehicleDocument: (id: string, vehicleId: string, kind: VehicleDocument) => photo(`/admin/vendors/${encodeURIComponent(id)}/vehicles/${encodeURIComponent(vehicleId)}/documents/${kind}`),
+    driverLicence: (id: string, driverId: string) => photo(`/admin/vendors/${encodeURIComponent(id)}/drivers/${encodeURIComponent(driverId)}/documents/dl`),
+    fleetQueue: () => req<FleetReviewItem[]>("GET", "/admin/vendors/fleet-queue"),
+    vehicle: (id: string, vehicleId: string, action: "review" | "sticker" | "docs" | "block", body?: Record<string, unknown>) =>
+      req<AdminVendorDetail>("POST", `/admin/vendors/${encodeURIComponent(id)}/vehicles/${encodeURIComponent(vehicleId)}/${action}`, body),
+    driver: (id: string, driverId: string, action: "review" | "docs" | "block", body: Record<string, unknown>) =>
+      req<AdminVendorDetail>("POST", `/admin/vendors/${encodeURIComponent(id)}/drivers/${encodeURIComponent(driverId)}/${action}`, body),
   },
   licences: {
     list: (status: LicenceQueueStatus) => req<LicenceReview[]>("GET", `/admin/licences${qs({ status })}`),

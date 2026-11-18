@@ -24,6 +24,8 @@ const ICON: Record<NotificationKind, typeof Bell> = {
   "vendor.approved": Handshake,
   "vendor.rejected": Handshake,
   "vendor.active": Handshake,
+  "vendor.fleet": Handshake,
+  "vendor.document": Handshake,
 };
 
 /** Where tapping a notification goes. */
