@@ -5,7 +5,7 @@ import { BUSINESS_UTC_OFFSET_MIN } from "../../config";
 export interface AdminBookingRow {
   id: string; service: ServiceKey; title: string; subtitle: string; amount: number; status: AdminBooking["status"];
   payment: AdminBooking["payment"]; lines: string; created_at: string;
-  starts_at: string | null; refund_amount: number | null; deposit: number; cancel_reason: string | null; cancel_fee: number; ride_id: string | null; trip_id: string | null;
+  starts_at: string | null; refund_amount: number | null; deposit: number; cancel_reason: string | null; cancel_fee: number; ride_id: string | null; trip_id: string | null; credits_used: number;
   user_id: string; customer_name: string; customer_phone: string;
 }
 
@@ -14,6 +14,7 @@ export const toAdminBooking = (r: AdminBookingRow): AdminBooking => ({
   payment: r.payment, createdAt: r.created_at, lines: JSON.parse(r.lines),
   startsAt: r.starts_at ?? null, refundAmount: r.refund_amount ?? null, deposit: r.deposit ?? 0,
   cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0, rideId: r.ride_id ?? null, tripId: r.trip_id ?? null,
+  creditsUsed: r.credits_used ?? 0,
   customer: { id: r.user_id, name: r.customer_name, phone: r.customer_phone },
 });
 

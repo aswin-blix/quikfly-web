@@ -22,6 +22,8 @@ export const MAX_BOOKING_LINES = 30;
 
 /** Notification inbox: how many recent notifications GET /me/notifications returns. */
 export const NOTIFICATIONS_PAGE = 50;
+/** Rows in the QuikFly Credits history (GET /me/credits). */
+export const CREDITS_HISTORY = 100;
 /** Push (cron): notifications older than this aren't pushed (e.g. when push was switched on later). */
 export const PUSH_MAX_AGE_MINUTES = 60;
 /** Push (cron): at most this many sends per minute. */

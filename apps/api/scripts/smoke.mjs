@@ -331,6 +331,36 @@ await expect("wallet history: payment and refund are logged", call("GET", "/me/w
   (j) => j[0].kind === "refund" && j[0].amount === fareB && j[1].kind === "payment" && j[1].amount === -fareB && j[1].bookingId === paidB.id);
 await expect("another user's ride can't be booked", call("POST", "/bookings", newBooking({ service: "car", rideId: rideB.id })), 404);
 
+// QuikFly Credits: earned on a completed ride, part-pay the next booking, come back on cancel
+const st = cfg.settings;
+await expect("GET /me/credits needs sign-in", call("GET", "/me/credits", null, false), 401);
+await expect("new user: no credits yet", call("GET", "/me/credits", null, tokenB), 200, (j) => j.balance === 0 && j.items.length === 0 && j.nextExpiry === null);
+const earnRide = (await call("POST", "/rides", rideInput, tokenB)).json;
+const earnBooking = await expect("useCredits with no credits takes nothing", call("POST", "/bookings", newBooking({ service: "car", rideId: earnRide.id, useCredits: true }), tokenB), 201,
+  (j) => j.creditsUsed === 0 && j.amount === earnRide.quote.fare);
+await call("POST", `/bookings/${earnBooking.id}/complete`, null, tokenB);
+const earned = Math.min(st.creditsCap, Math.floor((earnBooking.amount * st.creditsRides) / 100));
+await expect("completing a ride earns credits", call("GET", "/me/credits", null, tokenB), 200,
+  (j) => earned > 0 && j.balance === earned && j.items[0].kind === "earned" && j.items[0].amount === earned && j.items[0].bookingId === earnBooking.id
+    && j.nextExpiry?.amount === earned && Math.abs(Date.parse(j.nextExpiry.expiresAt) - Date.now() - st.creditsExpiryDays * 86_400_000) < 300_000);
+await expect("GET /auth/me carries the credit balance", call("GET", "/auth/me", null, tokenB), 200, (j) => j.creditBalance === earned);
+await expect("the customer is told about credits earned", call("GET", "/me/notifications", null, tokenB), 200,
+  (j) => j.items.some((n) => n.kind === "credits.earned" && n.bookingId === earnBooking.id));
+await expect("completing again earns nothing more", call("POST", `/bookings/${earnBooking.id}/complete`, null, tokenB), 409);
+const spendRide = (await call("POST", "/rides", rideInput, tokenB)).json;
+const usable = Math.min(earned, Math.floor((spendRide.quote.fare * st.creditsMaxRedeemPercent) / 100));
+const spent = await expect("useCredits pays part of a booking (the API decides how much)", call("POST", "/bookings",
+  newBooking({ service: "car", rideId: spendRide.id, useCredits: true, lines: [["QuikFly Credits", "fake"]] }), tokenB), 201,
+  (j) => j.creditsUsed === usable && j.amount === spendRide.quote.fare - usable && j.lines.filter(([k]) => k === "QuikFly Credits").length === 1);
+await expect("spending is logged and lowers the balance", call("GET", "/me/credits", null, tokenB), 200,
+  (j) => j.balance === earned - usable && j.items[0].kind === "spent" && j.items[0].amount === -usable && j.items[0].bookingId === spent.id);
+await call("POST", `/bookings/${spent.id}/cancel`, null, tokenB);
+await expect("cancelling gives the credits back", call("GET", "/me/credits", null, tokenB), 200,
+  (j) => j.balance === earned && j.items[0].kind === "returned" && j.items[0].amount === usable && j.items[0].remaining === usable);
+const plainRide = (await call("POST", "/rides", rideInput, tokenB)).json;
+await expect("without useCredits nothing is taken", call("POST", "/bookings", newBooking({ service: "car", rideId: plainRide.id }), tokenB), 201,
+  (j) => j.creditsUsed === 0 && j.amount === plainRide.quote.fare);
+
 // Coupon limits per customer: QUIKFLY50 works 3 times for a cab, then stops
 const limited = cfg.offers.find((o) => o.code === "QUIKFLY50");
 for (let i = 1; i <= limited.perUserLimit; i++) {

@@ -89,6 +89,19 @@ export interface Settings {
   cancelPolicyRent: string;
   cancelPolicyGroup: string;
 
+  /** QuikFly Credits earned back on completed trips, % of the amount paid per service (0 = none). */
+  creditsRides: number;
+  creditsBus: number;
+  creditsTours: number;
+  creditsRent: number;
+  creditsGroup: number;
+  /** Most credits one booking can earn (₹). */
+  creditsCap: number;
+  /** Credits expire this many days after they are earned (or returned). */
+  creditsExpiryDays: number;
+  /** Credits can pay at most this share of a booking (%). */
+  creditsMaxRedeemPercent: number;
+
   /** Seller details printed on invoices. */
   companyName: string;
   companyAddress: string;
@@ -141,6 +154,14 @@ export const DEFAULT_SETTINGS: Settings = {
   cancelPolicyTours: "15d:100, 7d:50",
   cancelPolicyRent: "24h:100",
   cancelPolicyGroup: "48h:100",
+  creditsRides: 5,
+  creditsBus: 2,
+  creditsTours: 3,
+  creditsRent: 3,
+  creditsGroup: 3,
+  creditsCap: 150,
+  creditsExpiryDays: 60,
+  creditsMaxRedeemPercent: 50,
   companyName: "QuikFly Mobility Pvt. Ltd.",
   companyAddress: "Chennai, Tamil Nadu, India",
   companyGstin: "33AAACQ0000A1Z5",
@@ -202,6 +223,14 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   cancelPolicyTours: cancelPolicy,
   cancelPolicyRent: cancelPolicy,
   cancelPolicyGroup: cancelPolicy,
+  creditsRides: { type: "number", min: 0, max: 50, integer: true },
+  creditsBus: { type: "number", min: 0, max: 50, integer: true },
+  creditsTours: { type: "number", min: 0, max: 50, integer: true },
+  creditsRent: { type: "number", min: 0, max: 50, integer: true },
+  creditsGroup: { type: "number", min: 0, max: 50, integer: true },
+  creditsCap: money(5000),
+  creditsExpiryDays: { type: "number", min: 1, max: 365, integer: true },
+  creditsMaxRedeemPercent: percent,
   companyName: { type: "text", min: 2, max: 120 },
   companyAddress: { type: "text", min: 2, max: 240 },
   companyGstin: { type: "text", max: 15, pattern: /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, hint: "A 15-character GSTIN, e.g. 33ABCDE1234F1Z5." },

@@ -179,6 +179,12 @@ const rideB = (await call("POST", "/rides", { optionId: "mini", pickupId: places
 const bookB = (await call("POST", "/bookings", { service: "car", title: "Smoke admin ride 2", subtitle: "A → B", payment: "cash", lines: [], rideId: rideB.id }, C)).json;
 await expect("staff mark complete", call("POST", `/admin/bookings/${bookB.id}/complete`, null, T), 200, (j) => j.booking.status === "completed" && j.history[0]?.action === "booking.complete");
 await expect("completing again is refused", call("POST", `/admin/bookings/${bookB.id}/complete`, null, T), 409);
+const rideCredits = Math.min(s0.creditsCap, Math.floor((bookB.amount * s0.creditsRides) / 100));
+await expect("staff completion earns the customer credits", call("GET", "/me/credits", null, C), 200,
+  (j) => j.items.filter((x) => x.kind === "earned" && x.bookingId === bookB.id).length === (rideCredits ? 1 : 0)
+    && (!rideCredits || j.items.find((x) => x.bookingId === bookB.id).amount === rideCredits));
+await expect("credit settings are range-checked", call("PATCH", "/admin/settings", { creditsMaxRedeemPercent: 150 }, T), 400);
+await expect("credit expiry must be at least a day", call("PATCH", "/admin/settings", { creditsExpiryDays: 0 }, T), 400);
 await expect("unknown booking is 404", call("GET", "/admin/bookings/QFNOPE", null, T), 404);
 
 // ── Cancellation policies reach refunds ──
@@ -232,6 +238,9 @@ await expect("admin preview includes the deposit", call("GET", `/admin/bookings/
 await expect("customer can't complete a rental", call("POST", `/bookings/${r2.id}/complete`, null, C2), 409);
 await expect("staff completion records the deposit as due back", call("POST", `/admin/bookings/${r2.id}/complete`, null, T), 200,
   (j) => j.booking.status === "completed" && j.booking.refundAmount === r2.deposit && j.history[0]?.detail?.depositReturned === r2.deposit && j.history[0].detail.toWallet === false && j.wallet.length === 0);
+const rentCredits = Math.min(s0.creditsCap, Math.floor(((r2.amount - r2.deposit) * s0.creditsRent) / 100));
+await expect("rental credits leave out the deposit", call("GET", "/me/credits", null, C2), 200,
+  (j) => !rentCredits || j.items.find((x) => x.kind === "earned" && x.bookingId === r2.id)?.amount === rentCredits);
 // Wallet path, when the test customer can afford a self-drive booking.
 const balance0 = (await call("GET", "/auth/me", null, C2)).json.walletBalance;
 const rq = (await call("POST", "/quotes", rentReq)).json;

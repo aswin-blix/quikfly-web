@@ -30,6 +30,7 @@ export const bookings = new Hono<AppEnv>()
       rideId: optStr(body, "rideId", 40),
       couponCode: optStr(body, "couponCode", 20),
       tripOf: optStr(body, "tripOf", 40),
+      useCredits: body.useCredits === true,
     });
     return c.json(booking, 201);
   })
