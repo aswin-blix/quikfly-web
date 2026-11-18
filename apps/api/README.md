@@ -111,6 +111,11 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | PUT / GET 🔒 | `/vendor/drivers/:id/documents/dl` | licence photo |
 | POST 🔒 | `/vendor/drivers/:id/assign` | `{ vehicleId \| null }`: an approved driver onto a live vehicle (one driver per vehicle; the previous one comes off) |
 | DELETE 🔒 | `/vendor/drivers/:id` | remove a driver |
+| GET 🔒 | `/vendor/trips?from=&to=` | trips on the partner's vehicles booked in the range (India dates, default last 7 days), newest first; each with collection, GST, fare, commission, TDS and earning in **paise** (`estimate` until completed) |
+| GET 🔒 | `/vendor/summary?from=&to=` | completed trips in the range: totals (gross, cash, online, discount, earnings) and per vehicle / per driver |
+| GET 🔒 | `/vendor/money` | balance (positive: QuikFly owes the partner), minimum payout, open request, monthly statements (all months), last 100 ledger entries, payouts |
+| POST 🔒 | `/vendor/payouts` | request a payout of the whole balance (≥ `vendorMinPayout`, bank account on file, one open request) → 201 |
+| POST 🔒 | `/vendor/payments` | settle a negative balance: **demo, nothing is collected** |
 
 ### Admin (`/admin/*`, staff only)
 
@@ -140,6 +145,10 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | GET 🛡 | `/admin/vendors/:id/documents/:kind` | a document photo (`photo`, `rc`, `insurance`), private, not cached `[vendors.review]` |
 | POST 🛡 | `/admin/vendors/:id/sections/:section` | `{ decision: approve\|changes, note? }`: approve one section or send it back (note required; the partner sees it). The `audit` section records the audit as passed or failed `[vendors.review]` |
 | POST 🛡 | `/admin/vendors/:id/review` | `{ decision: approve\|changes\|reject, note? }`: approve (all sections approved; onboarding opens, the joining fee is fixed), return for changes (at least one section sent back), or reject (note required) `[vendors.review]` |
+| GET 🛡 | `/admin/vendors/payouts?status=` | payout requests (`requested` default, `paid`, `rejected`) with the partner's bank account `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/payouts/:pid` | `{ decision: paid\|rejected, reference?, note? }`: paid needs the bank reference (UTR) and writes the ledger row; rejected needs a reason `[vendors.review]` |
+| GET 🛡 | `/admin/vendors/assignable-vehicles` | live partner cars, tempo travellers and buses with an approved driver `[vendors.review]` |
+| POST 🛡 | `/admin/bookings/:id/vendor` | `{ vehicleId \| null }`: give an active group-travel booking to a partner vehicle (or take it back); the partner is notified `[bookings.manage]` |
 | GET 🛡 | `/admin/vendors/fleet-queue` | live partners' vehicles and drivers waiting for staff (new vehicle, sticker, renewal, new driver), oldest first `[vendors.review]` |
 | POST 🛡 | `/admin/vendors/:id/vehicles/:vid/review` | `{ decision: approve\|changes\|reject, note? }` for a submitted vehicle (approve = audit passed) `[vendors.review]` |
 | POST 🛡 | `/admin/vendors/:id/vehicles/:vid/sticker` | approved → live `[vendors.review]` |
@@ -165,6 +174,8 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 **Notifications.** Events write rows to `notifications` (`services/notifications.ts`, one per user/kind/ref, so retries don't duplicate). A cron trigger (`triggers.crons`, every minute, `src/scheduled.ts`) adds `ride.reminder` rows when a scheduled ride's start window opens and, when `FCM_SERVICE_ACCOUNT` is set, sends rows not yet pushed (newer than `PUSH_MAX_AGE_MINUTES`, `PUSH_BATCH` per run) to each of the user's devices through FCM HTTP v1 (`services/push.ts`); dead tokens are removed.
 
 **Service and feature switches** (`packages/shared/src/switches.ts`, owner-only settings `service*`, `servicePausedMessage`, `feature*`). `switchError()` is checked by `POST /quotes`, ride quotes and `POST /rides`, `POST /bookings` and `POST /me/referral`; a refusal is **409 with the customer-facing message** (the owner's paused message for a paused service). Bookings made before a switch went off carry on; scheduled rides still start. SOS and trip sharing have no switch.
+
+**Partner trips and money** (`services/partner-trips.ts`): `POST /rides` gives a cab ride (or the Auto option) to a free live partner vehicle of that type with an approved driver, least recently used first, else a simulated driver; the booking carries `vendor_id`/`vendor_vehicle_id`/`vendor_driver_id`. Staff assign group-travel bookings. On completion the trip settles in the same batch (`vendor_trips`, `vendor_ledger`): fare without GST (`gstRate`), less `vendorCommissionPercent` (max 20) and 0.1% TDS (`TDS_194O_PERCENT`); coupons and credits are QuikFly's cost; for cash the driver's collection is a negative ledger row. Amounts in paise. No payment gateway: payouts are paid by staff and recorded with the reference; partner payments are simulated.
 
 **Partner document expiry** (`scheduled.ts` → `documentExpiry`): once per document and validity date, a `vendor.document` notification when an RC, insurance or driving licence is within `vendorExpiryWarnDays`; on the expiry date the vehicle or driver is blocked with reason `Expired: …` (the driver comes off their vehicle) until staff accept a renewal.
 
