@@ -366,7 +366,7 @@ export function BookingsScreen() {
   /** What cancelling now gives back under the service's policy (the API applies the same rule). */
   function preview(b: Booking) {
     const percent = refundPercent(cancelPolicyFor(settings, b.service), b.startsAt);
-    return { percent, refund: refundAmount(b.amount, percent) };
+    return { percent, refund: refundAmount(b.amount, percent, b.deposit ?? 0) };
   }
   function confirmText(b: Booking) {
     const { percent, refund } = preview(b);
@@ -437,6 +437,7 @@ export function BookingsScreen() {
                           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                             {b.lines.map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-subtle">{k}</dt><dd className="text-right">{v}</dd></div>)}
                             {b.startsAt && <div className="flex justify-between gap-3"><dt className="text-subtle">Starts</dt><dd className="text-right">{prettyDateTime(b.startsAt)}</dd></div>}
+                            {b.deposit > 0 && b.status !== "cancelled" && <div className="flex justify-between gap-3"><dt className="text-subtle">Refundable deposit</dt><dd className="text-right">{b.status === "completed" ? `${inr(b.deposit)} ${b.payment === "wallet" ? "returned to wallet" : "due back"}` : `${inr(b.deposit)} (back after return)`}</dd></div>}
                             {b.status === "cancelled" && b.refundAmount !== null && <div className="flex justify-between gap-3"><dt className="text-subtle">{b.payment === "wallet" ? "Refunded to wallet" : "Refund due"}</dt><dd className="text-right">{b.refundAmount ? inr(b.refundAmount) : "Nothing (cancelled too late)"}</dd></div>}
                           </dl>
                           {b.status !== "cancelled" && (

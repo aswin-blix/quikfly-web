@@ -53,11 +53,11 @@ export async function createQuote(db: D1Database, req: QuoteRequest): Promise<Pr
   return quote;
 }
 
-interface QuoteRow { id: string; service: ServiceKey; total: number; expires_at: number; used_at: string | null; starts_at: string | null }
+interface QuoteRow { id: string; service: ServiceKey; total: number; expires_at: number; used_at: string | null; starts_at: string | null; lines: string }
 
 /** A quote that can still be booked: right service, not expired, not used. */
 export async function usableQuote(db: D1Database, id: string, service: ServiceKey) {
-  const q = await db.prepare("SELECT id, service, total, expires_at, used_at, starts_at FROM quotes WHERE id = ?").bind(id).first<QuoteRow>();
+  const q = await db.prepare("SELECT id, service, total, expires_at, used_at, starts_at, lines FROM quotes WHERE id = ?").bind(id).first<QuoteRow>();
   if (!q || q.service !== service) throw badRequest("That price isn't valid. Please go back and check the price again.");
   if (q.used_at) throw conflict("This price was already used for a booking.");
   if (q.expires_at < Date.now()) throw conflict(`Prices are held for ${QUOTE_TTL_MINUTES} minutes and this one has expired. Please check the price again.`);

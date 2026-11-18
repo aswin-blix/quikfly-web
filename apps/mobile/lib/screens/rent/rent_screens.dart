@@ -26,8 +26,11 @@ abstract final class RentalDefaults {
   static const minHours = 4, maxDays = 30;
 }
 
-/// Km plans and protection labels (RENT_PLANS / RENT_PROTECTION_LABEL in pricing.ts).
-const rentPlans = {'limited': ('140 km/day', '₹12/km beyond limit'), 'unlimited': ('Unlimited km', 'Drive as much as you like')};
+/// Km plan labels from settings (rentPlanLabel in pricing.ts) and protection labels (RENT_PROTECTION_LABEL).
+Map<String, (String, String)> rentPlans(Settings s) => {
+      'limited': ('${s.rentLimitedKmPerDay} km/day', '${inr(s.rentExtraKmRate)}/km beyond the limit'),
+      'unlimited': ('Unlimited km', 'Drive as much as you like'),
+    };
 const rentProtection = {'standard': ('Standard', 'You pay up to ₹10,000 for damage'), 'peace': ('Peace of mind', 'You pay up to ₹2,000 for damage')};
 
 (DateTime, DateTime) defaultRentalWindow([DateTime? now]) {
@@ -300,6 +303,7 @@ class _RentDetailScreenState extends ConsumerState<RentDetailScreen> {
 
   Future<void> _book(RentalCar car, RentTrip t) async {
     setState(() => _booking = true);
+    final settings = ref.read(configProvider).value?.settings ?? const Settings({});
     try {
       final quote = await _live.fresh(_request(car, t));
       ref.read(checkoutProvider.notifier).set(CheckoutDraft(
@@ -311,12 +315,12 @@ class _RentDetailScreenState extends ConsumerState<RentDetailScreen> {
               ('Pickup', dateTime(t.start)),
               ('Return', dateTime(t.end)),
               ('Delivery', _doorstep ? 'Doorstep' : 'Self pickup · ${t.city} hub'),
-              if (t.self) ('Plan', '${rentPlans[_km]!.$1} · ${rentProtection[_prot]!.$1}'),
+              if (t.self) ('Plan', '${rentPlans(settings)[_km]!.$1} · ${rentProtection[_prot]!.$1}'),
             ],
             quote: quote,
             travellers: const ['Primary driver'],
             needsLicence: t.self,
-            policy: cancelPolicyText(ref.read(configProvider).value?.settings ?? const Settings({}), ServiceKey.rent),
+            policy: '${cancelPolicyText(settings, ServiceKey.rent)}${t.self && settings.rentDeposit > 0 ? ' The ${inr(settings.rentDeposit)} deposit is always refunded on cancel, and after the return once we check the car (aim: within ${settings.rentDepositRefundHours} hours).' : ''}',
           ));
       if (mounted) context.push('/checkout');
     } catch (e) {
@@ -411,7 +415,7 @@ class _RentDetailScreenState extends ConsumerState<RentDetailScreen> {
         const SizedBox(height: 16),
         if (t.self) ...[
           group<String>('Kilometre plan', _km, (v) => setState(() => _km = v), [
-            for (final e in rentPlans.entries) (e.key, e.value.$1, e.value.$2, e.key == 'unlimited' ? '+${settings.rentUnlimitedKmExtraPercent}%' : 'Best value'),
+            for (final e in rentPlans(settings).entries) (e.key, e.value.$1, e.value.$2, e.key == 'unlimited' ? '+${settings.rentUnlimitedKmExtraPercent}%' : 'Best value'),
           ]),
           group<String>('Damage protection', _prot, (v) => setState(() => _prot = v), [
             for (final e in rentProtection.entries)
@@ -427,13 +431,18 @@ class _RentDetailScreenState extends ConsumerState<RentDetailScreen> {
             Text(t.self ? 'Documents needed' : 'Your chauffeur', style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             for (final x in t.self
-                ? const ['Driving licence (1+ year old)', 'Aadhaar or passport', 'Driver must be 21+']
-                : const ['Verified, uniformed driver', 'Fuel and tolls on actuals', 'Night charge ₹250 after 10 PM'])
+                ? settings.rentDocuments
+                : [
+                    'Verified, uniformed driver',
+                    'Fuel and tolls on actuals',
+                    if (settings.rentDriverNightCharge > 0) 'Night charge ${inr(settings.rentDriverNightCharge)} for each night between 10 PM and 6 AM (added to the price)',
+                  ])
               Text('•  $x', style: TextStyle(color: c.fgSoft)),
             const SizedBox(height: 10),
             const Text('Features', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
-            for (final f in [...car.features, 'Sanitised before every trip', '24×7 roadside assistance']) Text('•  $f', style: TextStyle(color: c.fgSoft)),
+            for (final f in [...car.features, 'Sanitised before every trip', settings.rentRoadsideAssistance ? '24×7 roadside assistance' : 'Breakdown help: call ${settings.companyPhone}'])
+              Text('•  $f', style: TextStyle(color: c.fgSoft)),
           ]),
         ),
         const SizedBox(height: 16),

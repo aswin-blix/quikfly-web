@@ -2,7 +2,7 @@
 // cancel (with wallet refund) or complete. Each action is audited.
 import { ADMIN_RULES, type AdminBookingDetail, type BookingFilters, type Page, type WalletTransaction } from "@quikfly/shared";
 import { conflict, notFound } from "../../lib/errors";
-import { ACTIVE, cancelBookingRow, refundFor } from "../bookings";
+import { cancelBookingRow, completeBookingRow, refundFor } from "../bookings";
 import { audit, listAudit } from "./audit";
 import { LOCAL_DATE, toAdminBooking, type AdminBookingRow } from "./stats";
 
@@ -71,9 +71,10 @@ export async function adminCancel(db: D1Database, adminId: string, id: string, r
   return bookingDetail(db, id);
 }
 
+/** Closes a booking; a self-drive deposit paid from the wallet goes back to the customer. */
 export async function adminComplete(db: D1Database, adminId: string, id: string) {
-  const done = await db.prepare(`UPDATE bookings SET status = 'completed' WHERE id = ? AND status IN ${ACTIVE} RETURNING id`).bind(id).first();
+  const done = await completeBookingRow(db, id);
   if (!done) await assertActive(db, id); // throws: not found, or already finished
-  await audit(db, { adminId, action: "booking.complete", entity: "booking", entityId: id });
+  await audit(db, { adminId, action: "booking.complete", entity: "booking", entityId: id, detail: done!.deposit ? { depositReturned: done!.deposit, toWallet: done!.payment === "wallet" } : undefined });
   return bookingDetail(db, id);
 }

@@ -79,6 +79,12 @@ const tourQuote = await expect("POST /quotes (tour)", call("POST", "/quotes", { 
   (j) => j.lines[0].amount === tours[0].price * 2 && j.lines[1].amount === Math.round((tours[0].price * cfg.settings.tourChildPercent) / 100));
 await expect("POST /quotes (self-drive)", call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "self", start: "2026-12-01T10:00", end: "2026-12-02T10:00", kmPlan: "limited", protection: "standard", doorstep: false }), 201,
   (j) => j.lines[0].amount === cars[0].pricePerHour * 24 && j.lines.at(-1).amount === cfg.settings.rentDeposit);
+const chauffeur = await expect("POST /quotes (chauffeur across a night)", call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "driver", start: "2026-12-01T10:00", end: "2026-12-02T10:00", kmPlan: "limited", protection: "standard", doorstep: false }), 201,
+  (j) => !j.lines.some((l) => /deposit/i.test(l.label)));
+check("chauffeur night charge follows the setting",
+  cfg.settings.rentDriverNightCharge > 0
+    ? chauffeur.lines.some((l) => l.label === "Driver night charge (1 night)" && l.amount === cfg.settings.rentDriverNightCharge)
+    : !chauffeur.lines.some((l) => /night/i.test(l.label)), JSON.stringify(chauffeur.lines));
 await expect("POST /quotes refuses a return before pickup", call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "driver", start: "2026-12-02T10:00", end: "2026-12-01T10:00", kmPlan: "limited", protection: "standard", doorstep: false }), 400);
 await expect("POST /quotes (group travel)", call("POST", "/quotes", { service: "rentals", vehicleId: vehicles[0].id, trip: "outstation", destinationId: cfg.groupDestinations[0].id, days: 1, start: TRAVEL }), 201,
   (j) => j.lines[0].label.includes("km") && j.total > 0);
@@ -163,6 +169,10 @@ const trip = await expect("POST /bookings (trip)", call("POST", "/bookings", new
 await expect("POST /bookings/:id/complete", call("POST", `/bookings/${trip.id}/complete`), 200, (j) => j.status === "completed");
 await expect("completed booking can't be cancelled", call("POST", `/bookings/${trip.id}/cancel`), 409);
 await expect("POST /bookings/:id/complete unknown booking", call("POST", "/bookings/QFNOPE/complete"), 404);
+const tourToClose = (await call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 1, kids: 0, start: TRAVEL })).json;
+const toClose = (await call("POST", "/bookings", newBooking({ service: "tours", quoteId: tourToClose.id, payment: "upi" }))).json;
+await expect("customers can't complete a holiday (staff close it)", call("POST", `/bookings/${toClose.id}/complete`), 409, (j) => /staff/.test(j.message));
+await call("POST", `/bookings/${toClose.id}/cancel`);
 
 await expect("unknown route", call("GET", "/nope"), 404, (j) => !!j.message);
 

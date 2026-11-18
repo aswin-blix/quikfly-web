@@ -195,6 +195,12 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               KeyValue('Booking ID', b.id),
               for (final l in b.lines) KeyValue(l.$1, l.$2),
               if (b.startsAt != null) KeyValue('Starts', dateTime(b.startsAt!)),
+              if (b.deposit > 0 && b.status != BookingStatus.cancelled)
+                KeyValue(
+                    'Refundable deposit',
+                    b.status == BookingStatus.completed
+                        ? '${inr(b.deposit)} ${b.payment == 'wallet' ? 'returned to wallet' : 'due back'}'
+                        : '${inr(b.deposit)} (back after return)'),
               if (b.status == BookingStatus.cancelled && b.refundAmount != null)
                 KeyValue(b.payment == 'wallet' ? 'Refunded to wallet' : 'Refund due', b.refundAmount! > 0 ? inr(b.refundAmount!) : 'Nothing (cancelled too late)'),
               // Bookings usually carry their own "Paid via" / "Payment" line; add one only when they don't.

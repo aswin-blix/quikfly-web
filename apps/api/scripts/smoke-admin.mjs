@@ -198,6 +198,39 @@ await expect("finished booking has no refund preview", call("GET", `/admin/booki
 await call("DELETE", `/admin/catalog/tour/${cheap.id}`, null, T);
 await expect("restore the holiday policy", call("PATCH", "/admin/settings", { cancelPolicyTours: policy0 }, T), 200, (j) => j.cancelPolicyTours === policy0);
 
+// ── Self-drive deposit: always back on cancel; back on staff completion ──
+await expect("documents list must not be empty", call("PATCH", "/admin/settings", { rentDocuments: "ab" }, T), 400);
+const rentPolicy0 = s0.cancelPolicyRent;
+await expect("PATCH a no-refund rent policy", call("PATCH", "/admin/settings", { cancelPolicyRent: "999d:0" }, T), 200, (j) => j.cancelPolicyRent === "999d:0");
+await eventually("rent policy reaches the API", () => call("GET", "/config"), (r) => r.json?.settings?.cancelPolicyRent === "999d:0");
+const carList = (await call("GET", "/rentals/cars?city=Chennai")).json;
+const rentReq = { service: "rent", carId: carList[0].id, mode: "self", start: `${TRAVEL}T10:00`, end: `${TRAVEL}T16:00`, kmPlan: "limited", protection: "standard", doorstep: false };
+const rentBook = async (payment) => {
+  const q = (await call("POST", "/quotes", rentReq)).json;
+  return (await call("POST", "/bookings", { service: "rent", title: "Smoke self-drive", subtitle: "Deposit test", payment, lines: [], quoteId: q.id }, C2)).json;
+};
+const r1 = await rentBook("upi");
+check("self-drive booking records its deposit", r1?.deposit === s0.rentDeposit && r1.amount > r1.deposit, JSON.stringify(r1)?.slice(0, 200));
+await expect("cancel under a 0% policy still returns the deposit", call("POST", `/bookings/${r1.id}/cancel`, null, C2), 200,
+  (j) => j.status === "cancelled" && j.refundAmount === r1.deposit);
+const r2 = await rentBook("upi");
+await expect("admin preview includes the deposit", call("GET", `/admin/bookings/${r2.id}`, null, T), 200, (j) => j.refundIfCancelled?.amount === r2.deposit && j.refundIfCancelled.percent === 0);
+await expect("customer can't complete a rental", call("POST", `/bookings/${r2.id}/complete`, null, C2), 409);
+await expect("staff completion records the deposit as due back", call("POST", `/admin/bookings/${r2.id}/complete`, null, T), 200,
+  (j) => j.booking.status === "completed" && j.booking.refundAmount === r2.deposit && j.history[0]?.detail?.depositReturned === r2.deposit && j.history[0].detail.toWallet === false && j.wallet.length === 0);
+// Wallet path, when the test customer can afford a self-drive booking.
+const balance0 = (await call("GET", "/auth/me", null, C2)).json.walletBalance;
+const rq = (await call("POST", "/quotes", rentReq)).json;
+if (balance0 >= rq.total) {
+  const r3 = (await call("POST", "/bookings", { service: "rent", title: "Smoke self-drive", subtitle: "Wallet deposit", payment: "wallet", lines: [], quoteId: rq.id }, C2)).json;
+  await expect("staff completion returns a wallet deposit", call("POST", `/admin/bookings/${r3.id}/complete`, null, T), 200,
+    (j) => j.wallet.some((w) => w.kind === "refund" && w.amount === r3.deposit && /Deposit returned/.test(w.note)));
+  check("deposit reached the wallet", (await call("GET", "/auth/me", null, C2)).json.walletBalance === balance0 - r3.amount + r3.deposit);
+} else {
+  console.log(`SKIP  wallet deposit return (test wallet ₹${balance0} < ₹${rq.total})`);
+}
+await expect("restore the rent policy", call("PATCH", "/admin/settings", { cancelPolicyRent: rentPolicy0 }, T), 200, (j) => j.cancelPolicyRent === rentPolicy0);
+
 // ── Licence reviews ── (the customer's licence is pending from the settings test above)
 await expect("GET /admin/licences lists pending first", call("GET", "/admin/licences", null, T), 200, (j) => j.some((l) => l.customer.id === cMe.id && l.status === "pending" && l.number));
 await expect("reject needs a reason", call("POST", `/admin/licences/${cMe.id}/reject`, { reason: "no" }, T), 400);

@@ -124,7 +124,7 @@ export function TravelRentalsScreen() {
       <section className="max-w-7xl mx-auto px-4 pt-20">
         <SectionTitle eyebrow="Why group travel with us" title="Everyone arrives together, happy" />
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[[ShieldCheck, "Experienced drivers", "10+ years on highways, verified & courteous."], [Route, "Transparent billing", "Per-km pricing with minimums shown upfront."], [Fuel, "Fuel included", "Fuel included in per-km rate; no surprise top-ups."], [Check, "Clean & checked", "Every vehicle inspected and cleaned before pickup."]].map(([I, t, d], i) => {
+          {[[ShieldCheck, "Verified drivers", "Every driver's licence and background checked before they drive for us."], [Route, "Transparent billing", "Per-km pricing with minimums shown upfront."], [Fuel, "Fuel included", "Fuel included in per-km rate; no surprise top-ups."], [Check, "Clean & checked", "Every vehicle inspected and cleaned before pickup."]].map(([I, t, d], i) => {
             const Icon = I as typeof Route;
             return <Reveal key={t as string} delay={i * 0.08}><div className="panel p-6 h-full"><Icon className="text-gold" /><p className="font-semibold mt-4">{t as string}</p><p className="text-sm text-muted mt-1">{d as string}</p></div></Reveal>;
           })}
