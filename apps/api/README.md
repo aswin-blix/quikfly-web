@@ -99,6 +99,18 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/vendor/onboarding/payment` | joining fee: **demo, nothing is collected** (no payment gateway) |
 | POST 🔒 | `/vendor/onboarding/agreement` | `{ name, accept: true }` after the fee |
 | POST 🔒 | `/vendor/onboarding/sticker` | ask for sticker & paint after the agreement; staff mark it done |
+| GET 🔒 | `/vendor/fleet` | `{ vehicles, drivers }`. Every fleet call below returns this. Changes need a live partner (409 otherwise) |
+| POST 🔒 | `/vendor/vehicles` | `{ type, fuel, regNumber, purchaseDate }` → a `draft` vehicle (201) |
+| PUT 🔒 | `/vendor/vehicles/:id/:part` | `details`, `rc`, `insurance`, `audit` while `draft`; `rc`/`insurance` on a live vehicle is a **renewal** (`docsPending`, staff check it) |
+| PUT / GET 🔒 | `/vendor/vehicles/:id/documents/:kind` | RC or insurance photo (`rc`, `insurance`) |
+| POST 🔒 | `/vendor/vehicles/:id/submit` | send a complete draft for review |
+| PATCH 🔒 | `/vendor/vehicles/:id` | `{ active }`: on or off duty (live, not blocked) |
+| DELETE 🔒 | `/vendor/vehicles/:id` | remove a draft or rejected vehicle |
+| POST 🔒 | `/vendor/drivers` | `{ name, phone, dlNumber, dlValidTill }` or `{ self: true, dlNumber, dlValidTill }` → `submitted` (201); one licence per driver across QuikFly |
+| PUT 🔒 | `/vendor/drivers/:id/licence` | correct (back to review) or renew (live driver: `docsPending`) |
+| PUT / GET 🔒 | `/vendor/drivers/:id/documents/dl` | licence photo |
+| POST 🔒 | `/vendor/drivers/:id/assign` | `{ vehicleId \| null }`: an approved driver onto a live vehicle (one driver per vehicle; the previous one comes off) |
+| DELETE 🔒 | `/vendor/drivers/:id` | remove a driver |
 
 ### Admin (`/admin/*`, staff only)
 
@@ -128,6 +140,14 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | GET 🛡 | `/admin/vendors/:id/documents/:kind` | a document photo (`photo`, `rc`, `insurance`), private, not cached `[vendors.review]` |
 | POST 🛡 | `/admin/vendors/:id/sections/:section` | `{ decision: approve\|changes, note? }`: approve one section or send it back (note required; the partner sees it). The `audit` section records the audit as passed or failed `[vendors.review]` |
 | POST 🛡 | `/admin/vendors/:id/review` | `{ decision: approve\|changes\|reject, note? }`: approve (all sections approved; onboarding opens, the joining fee is fixed), return for changes (at least one section sent back), or reject (note required) `[vendors.review]` |
+| GET 🛡 | `/admin/vendors/fleet-queue` | live partners' vehicles and drivers waiting for staff (new vehicle, sticker, renewal, new driver), oldest first `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/:id/vehicles/:vid/review` | `{ decision: approve\|changes\|reject, note? }` for a submitted vehicle (approve = audit passed) `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/:id/vehicles/:vid/sticker` | approved → live `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/:id/vehicles/:vid/docs` | `{ decision: approve\|changes, note? }` a renewal; accepting lifts an expiry block when everything is valid `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/:id/vehicles/:vid/block` | `{ block, note? }` (reason required to block); unblocking needs valid documents `[vendors.review]` |
+| GET 🛡 | `/admin/vendors/:id/vehicles/:vid/documents/:kind`, `/admin/vendors/:id/drivers/:did/documents/dl` | document photos `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/:id/drivers/:did/review` | `{ decision: approve\|reject, note?, policeVerified, trainingDone }`: approve needs both ticks and the licence photo `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/:id/drivers/:did/docs`, `/admin/vendors/:id/drivers/:did/block` | renewal check; block (taken off the vehicle) / unblock `[vendors.review]` |
 | POST 🛡 | `/admin/vendors/:id/sticker` | sticker & paint done (after the agreement): the partner and vehicle go live `[vendors.review]` |
 | GET 🛡 | `/admin/licences?status=` | licence queue: `pending` (default, oldest first), `rejected` or `verified` `[licences.review]` |
 | POST 🛡 | `/admin/licences/:userId/approve` | pending → verified `[licences.review]` |
@@ -145,6 +165,8 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 **Notifications.** Events write rows to `notifications` (`services/notifications.ts`, one per user/kind/ref, so retries don't duplicate). A cron trigger (`triggers.crons`, every minute, `src/scheduled.ts`) adds `ride.reminder` rows when a scheduled ride's start window opens and, when `FCM_SERVICE_ACCOUNT` is set, sends rows not yet pushed (newer than `PUSH_MAX_AGE_MINUTES`, `PUSH_BATCH` per run) to each of the user's devices through FCM HTTP v1 (`services/push.ts`); dead tokens are removed.
 
 **Service and feature switches** (`packages/shared/src/switches.ts`, owner-only settings `service*`, `servicePausedMessage`, `feature*`). `switchError()` is checked by `POST /quotes`, ride quotes and `POST /rides`, `POST /bookings` and `POST /me/referral`; a refusal is **409 with the customer-facing message** (the owner's paused message for a paused service). Bookings made before a switch went off carry on; scheduled rides still start. SOS and trip sharing have no switch.
+
+**Partner document expiry** (`scheduled.ts` → `documentExpiry`): once per document and validity date, a `vendor.document` notification when an RC, insurance or driving licence is within `vendorExpiryWarnDays`; on the expiry date the vehicle or driver is blocked with reason `Expired: …` (the driver comes off their vehicle) until staff accept a renewal.
 
 **QuikFly Credits** (`services/credits.ts`, rules in `packages/shared/src/credits.ts`) live in the `credits` table, apart from the wallet. A completed booking (rider ends a ride, or staff complete it) earns its service's % of what was paid, deposit and credits excluded, up to `creditsCap`, once per booking, with a `credits.earned` notification; credits expire after `creditsExpiryDays`. Cancelling returns credits in the same share as the refund, with a fresh expiry. Balances always ignore expired rows; the cron only writes the `expired` history rows. Locally, `wrangler dev --test-scheduled` and `GET /__scheduled?cron=*+*+*+*+*` run the cron once.
 
