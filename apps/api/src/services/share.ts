@@ -36,6 +36,7 @@ export async function readShare(db: D1Database, token: string): Promise<SharedRi
     startedAt: row.started_at ?? ride.scheduledFor ?? row.created_at,
     pickup: ride.pickup,
     drop: ride.drop,
+    stops: ride.stops ?? [],
     distanceKm: ride.quote.distanceKm,
     durationMin: ride.quote.durationMin,
     etaMin: ride.quote.etaMin,

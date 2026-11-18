@@ -81,7 +81,8 @@ export const httpApi: QuikflyApi = {
   },
   places: { search: (q) => req("GET", `/places${qs({ q })}`) },
   rides: {
-    quote: (service, pickupId, dropId, scheduledFor) => req("POST", "/rides/quote", { service, pickupId, dropId, ...(scheduledFor ? { scheduledFor } : {}) }),
+    quote: (service, pickupId, dropId, scheduledFor, stopIds) =>
+      req("POST", "/rides/quote", { service, pickupId, dropId, ...(scheduledFor ? { scheduledFor } : {}), ...(stopIds?.length ? { stopIds } : {}) }),
     book: (input) => req("POST", "/rides", input),
     get: (id) => req("GET", `/rides/${id}`),
     start: (id) => req("POST", `/rides/${id}/start`),

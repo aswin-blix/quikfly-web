@@ -4,7 +4,7 @@
 // Storage helpers: ./mock-store.ts. Account endpoints: ./mock-account.ts.
 import type { QuikflyApi } from "./contract";
 import {
-  BUS_OPERATORS, CATALOG_SEED, DEFAULT_SETTINGS, DEPOSIT_LINE, QUOTE_TTL_MINUTES, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
+  BUS_OPERATORS, CATALOG_SEED, DEFAULT_SETTINGS, DEPOSIT_LINE, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
   type AppConfig, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
@@ -106,16 +106,19 @@ export const mockApi: QuikflyApi = {
   },
 
   rides: {
-    async quote(service, pickupId, dropId, scheduledFor) {
+    async quote(service, pickupId, dropId, scheduledFor, stopIds = []) {
       await wait(700);
+      if (stopIds.length > RIDE_MAX_STOPS) fail(`Add up to ${RIDE_MAX_STOPS} stops.`);
+      const route = [pickupId, ...stopIds, dropId];
+      if (route.some((id, i) => i > 0 && id === route[i - 1])) fail("A stop can't be the same as the place before it.");
       if (scheduledFor) { const err = scheduleError(settings, scheduledFor); if (err) fail(err); }
       const hour = scheduledFor ? parseInt(scheduledFor.slice(11, 13), 10) : new Date().getHours();
-      return rideQuotes(seed.rideOption.filter((o) => o.service === service), placeById(pickupId), placeById(dropId), settings, hour);
+      return rideQuotes(seed.rideOption.filter((o) => o.service === service), placeById(pickupId), placeById(dropId), settings, hour, stopIds.map(placeById));
     },
-    async book({ optionId, pickupId, dropId, payment, scheduledFor }) {
+    async book({ optionId, pickupId, dropId, payment, scheduledFor, stopIds = [] }) {
       await wait(scheduledFor ? 900 : 2600); // "searching for drivers" only for ride-now
       const option = byId(seed.rideOption, optionId, "ride type");
-      const quote = (await mockApi.rides.quote(option.service, pickupId, dropId, scheduledFor)).find((q) => q.option.id === optionId)!;
+      const quote = (await mockApi.rides.quote(option.service, pickupId, dropId, scheduledFor, stopIds)).find((q) => q.option.id === optionId)!;
       const s = Date.now();
       const { id: _id, ...driver } = pick(seed.driver, s);
       const ride = {
@@ -131,6 +134,7 @@ export const mockApi: QuikflyApi = {
           plate: `${pick(RIDE_SIM.plateStates, s >> 3)} ${pick(RIDE_SIM.plateLetters, s >> 5)} ${1000 + (s % 8999)}`,
         },
         scheduledFor: scheduledFor ? localToIso(scheduledFor) : null,
+        stops: stopIds.map(placeById),
       };
       save(KEYS.rides, { ...ridesStore(), [ride.id]: { ride, startedAt: new Date().toISOString(), cancelled: false } });
       return ride;
@@ -171,7 +175,7 @@ export const mockApi: QuikflyApi = {
         service: ride.quote.option.service,
         status: r.cancelled ? "cancelled" : "active",
         startedAt: r.startedAt,
-        pickup: ride.pickup, drop: ride.drop,
+        pickup: ride.pickup, drop: ride.drop, stops: ride.stops ?? [],
         distanceKm: ride.quote.distanceKm, durationMin: ride.quote.durationMin, etaMin: ride.quote.etaMin,
         driver: { name: ride.driver.name, rating: ride.driver.rating, vehicle: ride.driver.vehicle, plate: ride.driver.plate },
       };

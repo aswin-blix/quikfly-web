@@ -94,12 +94,18 @@ export function surgeAt(settings: Settings, hour: number) {
   return parseSurgeHours(settings.surgeHours).some(([from, to]) => hour >= from && hour <= to) ? effectiveSurge(settings) : 1;
 }
 
-/** Fares for every option of one service between two places. `hour` is the India-time hour. */
-export function rideQuotes(options: RideOption[], a: Place, b: Place, settings: Settings, hour: number): FareQuote[] {
-  const distanceKm = Math.max(RIDE_SIM.minDistanceKm, Math.round(Math.hypot(a.x - b.x, a.y - b.y) * RIDE_SIM.kmPerMapUnit * 10) / 10);
+/**
+ * Fares for every option of one service from `a` to `b`, through any `stops` in order. Distance
+ * is the sum of the legs; each stop adds `rideStopMinutes` of waiting, charged per minute.
+ * `hour` is the India-time hour.
+ */
+export function rideQuotes(options: RideOption[], a: Place, b: Place, settings: Settings, hour: number, stops: Place[] = []): FareQuote[] {
+  const points = [a, ...stops, b];
+  const mapUnits = points.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - points[i].x, p.y - points[i].y), 0);
+  const distanceKm = Math.max(RIDE_SIM.minDistanceKm, Math.round(mapUnits * RIDE_SIM.kmPerMapUnit * 10) / 10);
   const surge = surgeAt(settings, hour);
   return options.map((option, i) => {
-    const durationMin = Math.round((distanceKm / RIDE_SIM.speedKmh[option.service]) * 60) + RIDE_SIM.pickupBufferMin;
+    const durationMin = Math.round((distanceKm / RIDE_SIM.speedKmh[option.service]) * 60) + RIDE_SIM.pickupBufferMin + stops.length * settings.rideStopMinutes;
     const fare = Math.round((option.baseFare + option.perKm * distanceKm + option.perMin * durationMin) * surge);
     return { option, fare, distanceKm, durationMin, etaMin: 2 + ((i * 3 + Math.round(distanceKm)) % 6), surge };
   });

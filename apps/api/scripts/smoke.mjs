@@ -126,6 +126,22 @@ const ride = await expect("POST /rides", call("POST", "/rides", rideInput), 201,
 await expect("POST /rides/:id/cancel", call("POST", `/rides/${ride.id}/cancel`), 200);
 await expect("POST /rides/:id/cancel unknown ride", call("POST", "/rides/RDNOPE/cancel"), 404);
 
+// Multi-stop rides: distance through the stops plus a wait per stop; limits enforced.
+const stopPlace = places.find((p) => p.id !== a.id && p.id !== b.id);
+const direct = quotes[0];
+const viaStop = await expect("POST /rides/quote (one stop)", call("POST", "/rides/quote", { service: "car", pickupId: a.id, dropId: b.id, stopIds: [stopPlace.id] }), 200, (j) => j.length === 4);
+check("a stop adds distance, its wait and fare", viaStop[0].distanceKm >= direct.distanceKm && viaStop[0].durationMin >= direct.durationMin + cfg.settings.rideStopMinutes && viaStop[0].fare > direct.fare,
+  `${direct.distanceKm}km/${direct.durationMin}min/${direct.fare} → ${viaStop[0].distanceKm}km/${viaStop[0].durationMin}min/${viaStop[0].fare}`);
+await expect("more than 2 stops is refused", call("POST", "/rides/quote", { service: "car", pickupId: a.id, dropId: b.id, stopIds: [places[3].id, places[4].id, places[5].id] }), 400, (j) => /up to 2/.test(j.message));
+await expect("a stop equal to the pickup is refused", call("POST", "/rides/quote", { service: "car", pickupId: a.id, dropId: b.id, stopIds: [a.id] }), 400, (j) => /same as the place before/.test(j.message));
+await expect("an unknown stop is refused", call("POST", "/rides/quote", { service: "car", pickupId: a.id, dropId: b.id, stopIds: ["nope"] }), 400);
+await expect("stopIds must be a list", call("POST", "/rides/quote", { service: "car", pickupId: a.id, dropId: b.id, stopIds: "p3" }), 400);
+const stopRide = await expect("POST /rides (with a stop)", call("POST", "/rides", { ...rideInput, stopIds: [stopPlace.id] }), 201,
+  (j) => j.stops.length === 1 && j.stops[0].id === stopPlace.id && j.quote.fare === viaStop.find((q) => q.option.id === rideInput.optionId).fare);
+const stopShare = (await call("POST", `/rides/${stopRide.id}/share`)).json;
+await expect("the share link shows the stops", call("GET", `/share/${stopShare.token}`, null, false), 200, (j) => j.stops.length === 1 && j.stops[0].name === stopPlace.name);
+await call("POST", `/rides/${stopRide.id}/cancel`);
+
 // Scheduled rides: quote and book ahead, start near pickup, cancel free until close to pickup.
 /** India-time "YYYY-MM-DDTHH:mm", `minutes` from now (rounded down to the minute). */
 const indiaLocal = (minutes) => new Date(Date.now() + (330 + minutes) * 60_000).toISOString().slice(0, 16);

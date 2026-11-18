@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { PAYMENT_METHODS } from "@quikfly/shared";
 import type { AppEnv } from "../env";
+import { badRequest } from "../lib/errors";
 import { jsonBody, matches, oneOf, optStr, str } from "../lib/validate";
 import { requireUser } from "../middleware/auth";
 import { bookRide, cancelRide, getRide, quoteRides, startRide } from "../services/rides";
@@ -13,10 +14,18 @@ const scheduledFor = (body: Record<string, unknown>) => {
   return v ? matches(v, LOCAL_DATETIME, '"scheduledFor" must be YYYY-MM-DDTHH:mm.') : undefined;
 };
 
+/** Optional stops between pickup and drop: a list of place ids, in order. */
+const stopIds = (body: Record<string, unknown>) => {
+  const v = body.stopIds;
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || v.some((s) => typeof s !== "string" || !s || s.length > 40)) throw badRequest('"stopIds" must be a list of place ids.');
+  return v as string[];
+};
+
 export const rides = new Hono<AppEnv>()
   .post("/quote", async (c) => {
     const body = await jsonBody(c);
-    return c.json(await quoteRides(c.env.DB, oneOf(body, "service", ["bike", "car"] as const), str(body, "pickupId"), str(body, "dropId"), scheduledFor(body)));
+    return c.json(await quoteRides(c.env.DB, oneOf(body, "service", ["bike", "car"] as const), str(body, "pickupId"), str(body, "dropId"), scheduledFor(body), stopIds(body)));
   })
   .get("/:id", requireUser, async (c) => c.json(await getRide(c.env.DB, c.var.user.id, c.req.param("id"))))
   // Scheduled rides: start near pickup time (driver assigned, live trip begins).
@@ -29,6 +38,7 @@ export const rides = new Hono<AppEnv>()
       dropId: str(body, "dropId"),
       payment: oneOf(body, "payment", PAYMENT_METHODS),
       scheduledFor: scheduledFor(body),
+      stopIds: stopIds(body),
     });
     return c.json(ride, 201);
   })

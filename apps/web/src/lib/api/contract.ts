@@ -75,9 +75,9 @@ export interface QuikflyApi {
   };
   rides: {
     /** POST /rides/quote; `scheduledFor` ("YYYY-MM-DDTHH:mm", India) prices a ride booked ahead. */
-    quote(service: "bike" | "car", pickupId: string, dropId: string, scheduledFor?: string): Promise<FareQuote[]>;
-    /** POST /rides */
-    book(input: { optionId: string; pickupId: string; dropId: string; payment: PaymentMethod; scheduledFor?: string }): Promise<Ride>;
+    quote(service: "bike" | "car", pickupId: string, dropId: string, scheduledFor?: string, stopIds?: string[]): Promise<FareQuote[]>;
+    /** POST /rides; `stopIds` = up to RIDE_MAX_STOPS places between pickup and drop, in order. */
+    book(input: { optionId: string; pickupId: string; dropId: string; payment: PaymentMethod; scheduledFor?: string; stopIds?: string[] }): Promise<Ride>;
     /** GET /rides/:id (the rider's own ride) */
     get(rideId: string): Promise<Ride>;
     /** POST /rides/:id/start: starts a scheduled ride near pickup time. */

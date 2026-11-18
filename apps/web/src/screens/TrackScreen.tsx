@@ -95,8 +95,8 @@ export function TrackScreen() {
           <p className="text-xs text-subtle">Worried? Call {SAFETY.emergency} or the QuikFly safety line {SAFETY.safetyLine}. Driver phone numbers aren&apos;t shown on shared links.</p>
         </div>
         <div className="h-[340px] lg:h-auto lg:min-h-[480px] order-1 lg:order-2">
-          <CityMap pickup={ride.pickup} drop={ride.drop} kind={ride.service} showRoute={phase !== "arriving"}
-            vehicle={cancelled ? null : vehiclePosition(phase, ride.pickup, ride.drop, t)}
+          <CityMap pickup={ride.pickup} drop={ride.drop} stops={ride.stops ?? []} kind={ride.service} showRoute={phase !== "arriving"}
+            vehicle={cancelled ? null : vehiclePosition(phase, ride.pickup, ride.drop, t, ride.stops ?? [])}
             vehicleFrom={!cancelled && phase === "arriving" ? driverStartFor(ride.pickup) : null} />
         </div>
       </div>

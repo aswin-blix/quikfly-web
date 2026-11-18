@@ -15,10 +15,26 @@ export function routePoint(a: Pt, b: Pt, t: number): Pt {
 /** Where the simulated driver starts before heading to the pickup. */
 export const driverStartFor = (pickup: Pt): Pt => ({ x: Math.max(4, pickup.x - 14), y: Math.min(96, pickup.y + 12) });
 
+/**
+ * Point on the route through `points` (pickup, stops…, drop) at t (0..1): t is shared out
+ * by each leg's straight-line length, and each leg follows the same curve as routePoint.
+ */
+export function routeVia(points: Pt[], t: number): Pt {
+  if (points.length < 2) return points[0];
+  const lens = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y));
+  const total = lens.reduce((a, b) => a + b, 0) || 1;
+  let left = Math.min(1, Math.max(0, t)) * total;
+  for (let i = 0; i < lens.length; i++) {
+    if (left <= lens[i] || i === lens.length - 1) return routePoint(points[i], points[i + 1], lens[i] ? Math.min(1, left / lens[i]) : 1);
+    left -= lens[i];
+  }
+  return points[points.length - 1];
+}
+
 /** Simulated vehicle position for a ride phase, with t = progress through that phase (0..1). */
-export function vehiclePosition(phase: "arriving" | "ontrip" | "done", pickup: Pt, drop: Pt, t: number): Pt {
+export function vehiclePosition(phase: "arriving" | "ontrip" | "done", pickup: Pt, drop: Pt, t: number, stops: Pt[] = []): Pt {
   if (phase === "done") return drop;
-  if (phase === "ontrip") return routePoint(pickup, drop, t);
+  if (phase === "ontrip") return routeVia([pickup, ...stops, drop], t);
   const s = driverStartFor(pickup);
   return { x: s.x + (pickup.x - s.x) * t, y: s.y + (pickup.y - s.y) * t };
 }
@@ -30,13 +46,21 @@ function control(a: Pt, b: Pt): Pt {
 }
 
 export function CityMap({
-  pickup, drop, vehicle, vehicleFrom, showRoute, searching, kind = "car",
+  pickup, drop, stops = [], vehicle, vehicleFrom, showRoute, searching, kind = "car",
 }: {
-  pickup?: Place | null; drop?: Place | null; vehicle?: Pt | null; vehicleFrom?: Pt | null;
+  pickup?: Place | null; drop?: Place | null; stops?: Place[]; vehicle?: Pt | null; vehicleFrom?: Pt | null;
   showRoute?: boolean; searching?: boolean; kind?: "bike" | "car";
 }) {
   const PLACES = useConfig()?.places ?? [];
-  const c = pickup && drop ? control(pickup, drop) : null;
+  // The route as one path: a curved leg from each point to the next (pickup → stops → drop).
+  const routeD = pickup && drop
+    ? [pickup, ...stops, drop].slice(1).reduce((d, p, i, legs) => {
+        const from = i === 0 ? pickup : legs[i - 1];
+        const k = control(from, p);
+        return `${d} Q ${k.x} ${k.y} ${p.x} ${p.y}`;
+      }, `M${pickup.x} ${pickup.y}`)
+    : null;
+  const onRoute = (id: string) => pickup?.id === id || drop?.id === id || stops.some((s) => s.id === id);
   return (
     <div className="relative w-full h-full min-h-[320px] overflow-hidden rounded-[1.25rem] border border-line bg-[var(--map-bg)]">
       <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 w-full h-full">
@@ -69,19 +93,27 @@ export function CityMap({
 
         {/* Landmarks */}
         {PLACES.map((p) => (
-          <g key={p.id} opacity={pickup?.id === p.id || drop?.id === p.id ? 0 : 0.6}>
+          <g key={p.id} opacity={onRoute(p.id) ? 0 : 0.6}>
             <circle cx={p.x} cy={p.y} r="0.7" fill="var(--map-landmark)" />
             <text x={p.x + 1.4} y={p.y + 0.8} fontSize="2.2" fill="var(--map-landmark-text)">{p.name.split(" ")[0]}</text>
           </g>
         ))}
 
         {/* Route */}
-        {pickup && drop && c && showRoute && (
+        {routeD && showRoute && (
           <>
-            <path d={`M${pickup.x} ${pickup.y} Q ${c.x} ${c.y} ${drop.x} ${drop.y}`} stroke="var(--accent)" strokeOpacity="0.25" strokeWidth="2.2" fill="none" strokeLinecap="round" />
-            <path d={`M${pickup.x} ${pickup.y} Q ${c.x} ${c.y} ${drop.x} ${drop.y}`} stroke="var(--accent)" strokeWidth="0.8" fill="none" strokeDasharray="2 2" className="route-dash" strokeLinecap="round" filter="url(#glow)" />
+            <path d={routeD} stroke="var(--accent)" strokeOpacity="0.25" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+            <path d={routeD} stroke="var(--accent)" strokeWidth="0.8" fill="none" strokeDasharray="2 2" className="route-dash" strokeLinecap="round" filter="url(#glow)" />
           </>
         )}
+        {/* Stops: numbered pins */}
+        {stops.map((s, i) => (
+          <g key={`${s.id}-${i}`}>
+            <circle cx={s.x} cy={s.y} r="2" fill="var(--accent)" stroke="var(--map-pin-outline)" strokeWidth="0.7" />
+            <text x={s.x} y={s.y + 0.8} fontSize="2.2" textAnchor="middle" fill="var(--on-brand)" fontWeight="700">{i + 1}</text>
+            <Label p={s} color="var(--accent)" text={s.name} dy={pickup && s.y >= pickup.y ? 5.5 : -5.5} />
+          </g>
+        ))}
         {vehicleFrom && pickup && (
           <path d={`M${vehicleFrom.x} ${vehicleFrom.y} L ${pickup.x} ${pickup.y}`} stroke="var(--success)" strokeOpacity="0.4" strokeWidth="0.5" strokeDasharray="1 1.2" />
         )}

@@ -36,6 +36,9 @@ class RideScreen extends ConsumerStatefulWidget {
 
 class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProviderStateMixin {
   Place? _pickup, _drop;
+
+  /// Stops between pickup and drop, in order (up to Rules.rideMaxStops).
+  final _stops = <Place>[];
   List<FareQuote>? _quotes;
   bool _loadingQuotes = false;
   String? _quoteErr;
@@ -92,6 +95,9 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       setState(() {
         _pickup = r.pickup;
         _drop = r.drop;
+        _stops
+          ..clear()
+          ..addAll(r.stops);
         _ride = r;
         _bookingId = b.id;
         _bookedAt = b.createdAt;
@@ -150,7 +156,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       _quoteErr = null;
     });
     try {
-      final q = await ref.read(apiProvider).rideQuotes(widget.service, a.id, b.id, scheduledFor: _scheduledFor);
+      final q = await ref.read(apiProvider).rideQuotes(widget.service, a.id, b.id, scheduledFor: _scheduledFor, stopIds: [for (final s in _stops) s.id]);
       if (!mounted || req != _quoteRequest) return;
       setState(() {
         _quotes = q;
@@ -171,6 +177,14 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     _loadQuotes();
   }
 
+  /// Picks a stop: [i] == _stops.length adds a new one.
+  Future<void> _pickStop(int i) async {
+    final p = await Navigator.of(context).push<Place>(MaterialPageRoute(builder: (_) => PlaceSearchScreen(title: 'Stop ${i + 1}')));
+    if (p == null || !mounted) return;
+    setState(() => i < _stops.length ? _stops[i] = p : _stops.add(p));
+    _loadQuotes();
+  }
+
   Future<void> _pick(bool isPickup) async {
     final p = await Navigator.of(context).push<Place>(MaterialPageRoute(
       builder: (_) => PlaceSearchScreen(title: isPickup ? 'Pickup location' : 'Where to?', exclude: isPickup ? _drop?.id : _pickup?.id),
@@ -186,7 +200,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     setState(() => _phase = RidePhase.searching);
     Ride? r;
     try {
-      r = await api.bookRide(q.option.id, a.id, b.id, _payment, scheduledFor: _scheduledFor);
+      r = await api.bookRide(q.option.id, a.id, b.id, _payment, scheduledFor: _scheduledFor, stopIds: [for (final s in _stops) s.id]);
       final booking = await api.createBooking(
         service: widget.service,
         title: '${r.quote.option.name} · ${r.drop.name}',
@@ -195,7 +209,12 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         rideId: r.id,
         // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
         lines: r.scheduledFor != null
-            ? [('Pickup time', dateTime(r.scheduledFor!)), ('Payment', paymentLabel(_payment.name)), ('Distance', '${r.quote.distanceKm} km')]
+            ? [
+                ('Pickup time', dateTime(r.scheduledFor!)),
+                if (r.stops.isNotEmpty) ('Stops', r.stops.map((s) => s.name).join(' → ')),
+                ('Payment', paymentLabel(_payment.name)),
+                ('Distance', '${r.quote.distanceKm} km'),
+              ]
             : [
           ('Driver', r.driver.name),
           ('Vehicle', '${r.driver.vehicle} · ${r.driver.plate}'),
@@ -374,10 +393,11 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       places: places,
       pickup: pickup,
       drop: drop,
+      stops: List.unmodifiable(_stops),
       bike: _bike,
       showRoute: drop != null && _phase != RidePhase.arriving,
       searching: _phase == RidePhase.searching,
-      vehicle: pickup != null && drop != null && live ? vehiclePosition(_phase, placePt(pickup), placePt(drop), _t) : null,
+      vehicle: pickup != null && drop != null && live ? vehiclePosition(_phase, placePt(pickup), placePt(drop), _t, [for (final s in _stops) placePt(s)]) : null,
       vehicleFrom: _phase == RidePhase.arriving && pickup != null ? driverStartFor(placePt(pickup)) : null,
     );
     final panel = AnimatedSwitcher(
@@ -456,6 +476,33 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         Column(children: [
           field(Container(width: 10, height: 10, decoration: BoxDecoration(color: c.success, shape: BoxShape.circle)), 'Pickup location', _pickup,
               () => _pick(true)),
+          for (var i = 0; i < _stops.length; i++) ...[
+            const SizedBox(height: 8),
+            // Room on the right for the swap button, so the remove button stays visible.
+            Padding(padding: const EdgeInsets.only(right: 48), child: Row(children: [
+              Expanded(
+                child: field(
+                    Container(
+                      width: 18,
+                      height: 18,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
+                      child: Text('${i + 1}', style: const TextStyle(color: Brand.onGold, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                    'Stop ${i + 1}',
+                    _stops[i],
+                    () => _pickStop(i)),
+              ),
+              IconButton(
+                tooltip: 'Remove stop ${i + 1}',
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () {
+                  setState(() => _stops.removeAt(i));
+                  _loadQuotes();
+                },
+              ),
+            ])),
+          ],
           const SizedBox(height: 8),
           field(Container(width: 10, height: 10, color: Brand.gold), 'Where to?', _drop, () => _pick(false)),
         ]),
@@ -475,6 +522,10 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
                       setState(() {
                         _pickup = _drop;
                         _drop = p;
+                        final reversed = _stops.reversed.toList();
+                        _stops
+                          ..clear()
+                          ..addAll(reversed);
                       });
                       _loadQuotes();
                     },
@@ -512,7 +563,16 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
           ),
         ]),
       ],
-      const SizedBox(height: 16),
+      if (_stops.length < Rules.rideMaxStops)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => _pickStop(_stops.length),
+            icon: const Icon(Icons.add, size: 18),
+            label: Text('Add a stop (${(ref.watch(configProvider).value?.settings ?? const Settings({})).rideStopMinutes} min wait included)'),
+          ),
+        ),
+      const SizedBox(height: 8),
       _label('When'),
       Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
         ChoiceChip(
