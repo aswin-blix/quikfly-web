@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
+import '../../core/credits.dart';
 import '../../core/format.dart';
 import '../../core/services.dart';
 import '../../state/catalog.dart';
@@ -47,6 +48,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   CouponCheck? _coupon;
   String? _couponErr;
   bool _couponBusy = false, _paying = false;
+  bool _useCredits = true;
+  int _creditsOff = 0;
   final _errors = <String, String>{};
 
   @override
@@ -148,6 +151,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             payment: _method,
             quoteId: d.quote.id,
             couponCode: _coupon?.code,
+            useCredits: _creditsOff > 0,
             lines: [
               ...d.summary,
               ('Traveller names', _names.map((c) => c.text.trim()).join(', ')),
@@ -189,8 +193,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     ref.listen(userProvider, (prev, next) {
       if (prev == null && next != null) setState(() => _fillContact(next));
     });
-    final total = (_coupon?.total ?? d.quote.total).clamp(0, 1 << 31);
-    final summary = _summary(d, total);
+    final afterCoupon = (_coupon?.total ?? d.quote.total).clamp(0, 1 << 31);
+    // Credits: the same rule the API applies at booking (never the refundable deposit).
+    final settings = ref.watch(configProvider).value?.settings ?? const Settings({});
+    final deposit = d.quote.lines.where((l) => l.label == 'Refundable security deposit').fold(0, (s, l) => s + l.amount).clamp(0, afterCoupon);
+    final canPay = user == null ? 0 : creditsUsable(settings, user.creditBalance, afterCoupon, deposit);
+    _creditsOff = _useCredits ? canPay : 0;
+    final total = afterCoupon - _creditsOff;
+    final earns = creditsEarned(settings, d.service, total, deposit.clamp(0, total));
+    final summary = _summary(d, total, user: user, canPay: canPay, deposit: deposit, earns: earns, settings: settings);
     final step = _step == 1 ? _details(d, user) : _payment(d, user, total);
     return PopScope(
       canPop: _step == 1 && !_paying,
@@ -236,7 +247,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-  Widget _summary(CheckoutDraft d, int total) {
+  Widget _summary(CheckoutDraft d, int total, {User? user, int canPay = 0, int deposit = 0, int earns = 0, required Settings settings}) {
     final c = context.qf;
     final s = serviceOf(d.service);
     return Column(children: [
@@ -272,15 +283,43 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   TextButton(onPressed: () => setState(() => _coupon = null), child: const Text('Remove')),
                   Text('−${inr(_coupon!.discount)}', style: TextStyle(color: c.success)),
                 ]),
+              if (_creditsOff > 0)
+                Row(children: [
+                  Expanded(child: Text(creditsLine, style: TextStyle(color: c.success))),
+                  Text('−${inr(_creditsOff)}', style: TextStyle(color: c.success)),
+                ]),
               Divider(color: c.border),
               Row(children: [
                 const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700))),
                 Text(inr(total), style: TextStyle(color: c.accent, fontSize: 22, fontWeight: FontWeight.w700)),
               ]),
+              if (earns > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Row(children: [
+                    Icon(Icons.toll_outlined, size: 15, color: c.accent),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text('Earn ${inr(earns)} QuikFly Credits when this trip is completed.', style: TextStyle(color: c.fgMuted, fontSize: 12))),
+                  ]),
+                ),
             ]),
           ),
         ]),
       ),
+      if (user != null && user.creditBalance > 0) ...[
+        const SizedBox(height: 12),
+        Panel(
+          padding: EdgeInsets.zero,
+          child: CheckboxListTile(
+            value: _useCredits && canPay > 0,
+            onChanged: canPay == 0 ? null : (v) => setState(() => _useCredits = v ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            title: Text(canPay > 0 ? 'Use ${inr(canPay)} QuikFly Credits' : 'QuikFly Credits', style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text('Balance ${inr(user.creditBalance)} · credits pay up to ${settings.creditsMaxRedeemPercent}% of a booking${deposit > 0 ? ', not the deposit' : ''}.',
+                style: TextStyle(color: c.fgMuted, fontSize: 12)),
+          ),
+        ),
+      ],
       if (_coupon == null) ...[
         const SizedBox(height: 12),
         Panel(

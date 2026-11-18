@@ -96,6 +96,20 @@ export const SETTING_GROUPS: SettingGroup[] = [
     ],
   },
   {
+    title: "QuikFly Credits",
+    sub: "Earned back on completed trips; separate from the wallet, they expire and can pay only part of a booking. Set every percentage to 0 to stop earning.",
+    fields: [
+      { key: "creditsRides", type: "number", unit: "%", label: "Rides (bike and cab)", help: "Share of the fare paid that comes back as credits." },
+      { key: "creditsBus", type: "number", unit: "%", label: "Bus", help: "Share of the ticket price paid." },
+      { key: "creditsTours", type: "number", unit: "%", label: "Holidays", help: "Share of the package price paid." },
+      { key: "creditsRent", type: "number", unit: "%", label: "Rent a car", help: "Share of the rental paid, not counting the refundable deposit." },
+      { key: "creditsGroup", type: "number", unit: "%", label: "Group travel", help: "Share of the trip price paid." },
+      { key: "creditsCap", type: "number", unit: "₹", label: "Most per booking", help: "No booking earns more than this." },
+      { key: "creditsExpiryDays", type: "number", unit: "days", label: "Expiry", help: "Credits expire this many days after they are earned or returned." },
+      { key: "creditsMaxRedeemPercent", type: "number", unit: "%", label: "Most of a booking", help: "Credits can pay at most this share of a booking." },
+    ],
+  },
+  {
     title: "Licence checks",
     sub: "Self-drive customers submit a driving licence before pickup.",
     fields: [

@@ -1,4 +1,4 @@
-import { COUPON_LINE, DEPOSIT_LINE, cancelPolicyFor, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type ServiceKey } from "@quikfly/shared";
+import { COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, cancelPolicyFor, creditsReturned, creditsUsable, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { checkCoupon } from "./offers";
@@ -6,19 +6,21 @@ import { usableQuote } from "./quotes";
 import { ownRide } from "./rides";
 import { getSettings } from "./settings";
 import { notify } from "./notifications";
+import { creditExpiry, earnStatement, earnedNotice, spendPlan } from "./credits";
 
 export interface BookingRow {
   id: string; user_id: string; service: ServiceKey; title: string; subtitle: string; amount: number;
   status: BookingStatus; payment: PaymentMethod; lines: string; created_at: string;
   quote_id: string | null; ride_id: string | null; coupon_code: string | null; discount: number;
   starts_at: string | null; refund_amount: number | null; deposit: number;
-  cancel_reason: string | null; cancel_fee: number; trip_id: string | null;
+  cancel_reason: string | null; cancel_fee: number; trip_id: string | null; credits_used: number;
 }
 export const toBooking = (r: BookingRow): Booking => ({
   id: r.id, service: r.service, title: r.title, subtitle: r.subtitle, amount: r.amount,
   status: r.status, payment: r.payment, createdAt: r.created_at, lines: JSON.parse(r.lines),
   startsAt: r.starts_at ?? null, refundAmount: r.refund_amount ?? null, deposit: r.deposit ?? 0,
   cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0, rideId: r.ride_id ?? null, tripId: r.trip_id ?? null,
+  creditsUsed: r.credits_used ?? 0,
 });
 
 /** Statuses a booking can still be cancelled or completed from. */
@@ -56,7 +58,8 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
 
 /**
  * Saves a booking priced by the API. In one transaction it claims the quote (once only),
- * applies the coupon, and takes a wallet payment; if the balance is too low none of it happens.
+ * applies the coupon, spends QuikFly Credits (soonest expiry first) and takes a wallet payment;
+ * if the wallet or the credits fall short none of it happens.
  */
 export async function createBooking(db: D1Database, userId: string, input: NewBooking): Promise<Booking> {
   const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit, seatHolds } = await grossPrice(db, userId, input);
@@ -70,32 +73,61 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
     tripId = anchor.trip_id ?? anchor.id;
   }
   const coupon = input.couponCode ? await checkCoupon(db, userId, input.couponCode, input.service, gross) : null;
-  const amount = gross - (coupon?.discount ?? 0);
+  const afterCoupon = gross - (coupon?.discount ?? 0);
+  // Credits pay up to creditsMaxRedeemPercent of the rest (never the refundable deposit).
+  let creditsUsed = 0;
+  let plan: { id: string; take: number }[] = [];
+  if (input.useCredits) {
+    const credits = await spendPlan(db, userId);
+    creditsUsed = creditsUsable(await getSettings(db), credits.balance, afterCoupon, Math.min(quotedDeposit, afterCoupon));
+    plan = credits.plan(creditsUsed);
+  }
+  const amount = afterCoupon - creditsUsed;
   // A coupon can't make the deposit larger than what was paid.
   const deposit = Math.min(quotedDeposit, amount);
 
   const id = uid("QF");
   const createdAt = new Date().toISOString();
   const lines: [string, string][] = [
-    ...input.lines.filter(([k]) => k !== COUPON_LINE),
+    ...input.lines.filter(([k]) => k !== COUPON_LINE && k !== CREDITS_LINE),
     ...(coupon ? [[COUPON_LINE, `${coupon.code} (−₹${coupon.discount.toLocaleString("en-IN")})`] as [string, string]] : []),
+    ...(creditsUsed ? [[CREDITS_LINE, `−₹${creditsUsed.toLocaleString("en-IN")}`] as [string, string]] : []),
   ];
-  const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0, rideId, tripId };
+  const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0, rideId, tripId, creditsUsed };
   const wallet = input.payment === "wallet";
 
   const conditions: string[] = [];
   const condParams: unknown[] = [];
   if (quoteId) { conditions.push("(SELECT used_at FROM quotes WHERE id = ?) = ?"); condParams.push(quoteId, id); }
   if (wallet) { conditions.push("(SELECT wallet_balance FROM users WHERE id = ?) >= ?"); condParams.push(userId, amount); }
+  // Every planned credit must still be there, unexpired, with enough left.
+  const planJson = JSON.stringify(plan);
+  if (plan.length) {
+    conditions.push(`(SELECT COUNT(*) FROM json_each(?) j JOIN credits c ON c.id = json_extract(j.value, '$.id')
+      WHERE c.user_id = ? AND c.remaining >= json_extract(j.value, '$.take') AND c.expires_at > ?) = ?`);
+    condParams.push(planJson, userId, createdAt, plan.length);
+  }
 
   const statements: D1PreparedStatement[] = [];
   // Claim the quote with this booking's id, so only one booking can use it.
   if (quoteId) statements.push(db.prepare("UPDATE quotes SET used_at = ? WHERE id = ? AND used_at IS NULL").bind(id, quoteId));
   statements.push(db.prepare(
-    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit, trip_id)
-     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
+    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit, trip_id, credits_used)
+     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
   ).bind(id, userId, booking.service, booking.title, booking.subtitle, amount, booking.payment, JSON.stringify(lines), createdAt,
-    quoteId, rideId, coupon?.code ?? null, coupon?.discount ?? 0, startsAt, deposit, tripId, ...condParams));
+    quoteId, rideId, coupon?.code ?? null, coupon?.discount ?? 0, startsAt, deposit, tripId, creditsUsed, ...condParams));
+  if (plan.length) {
+    statements.push(
+      db.prepare(
+        `UPDATE credits SET remaining = remaining - (SELECT json_extract(j.value, '$.take') FROM json_each(?1) j WHERE json_extract(j.value, '$.id') = credits.id)
+         WHERE id IN (SELECT json_extract(value, '$.id') FROM json_each(?1)) AND EXISTS (SELECT 1 FROM bookings WHERE id = ?2)`,
+      ).bind(planJson, id),
+      db.prepare(
+        `INSERT INTO credits (id, user_id, kind, amount, remaining, expires_at, booking_id, note, created_at)
+         SELECT ?1, ?2, 'spent', ?3, 0, NULL, ?4, ?5, ?6 WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?4)`,
+      ).bind(uid("CR"), userId, -creditsUsed, id, `Used · ${booking.title}`, createdAt),
+    );
+  }
   if (wallet) {
     statements.push(
       db.prepare("UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ? AND EXISTS (SELECT 1 FROM bookings WHERE id = ?)").bind(amount, userId, id),
@@ -132,6 +164,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   const inserted = results[quoteId ? 1 : 0];
   if (!inserted.meta.changes) {
     if (quoteId && !results[0].meta.changes) throw conflict("This price was already used for a booking.");
+    if (plan.length && !wallet) throw conflict("Your QuikFly Credits just changed. Please try again.");
     throw badRequest("Not enough wallet balance. Choose another payment method.");
   }
   // Ride-now riders are watching the trip; everything else (and rides booked ahead) gets a notification.
@@ -194,6 +227,9 @@ export async function cancelBookingRow(db: D1Database, userId: string | null, id
   const credit = row.payment === "wallet" ? refund.amount : 0;
   const detail = refund.fee ? ` (less ₹${refund.fee} cancellation fee)` : refund.percent < 100 ? ` (${refund.percent}%${row.deposit ? ", deposit in full" : ""})` : "";
   const note = `${refundNote}${detail} · ${row.title}`;
+  // Credits paid come back in the same share as the refund, with a fresh expiry.
+  const creditsBack = creditsReturned(row.credits_used ?? 0, refund.percent);
+  const creditsExpire = creditExpiry(await getSettings(db));
   // Every statement re-checks that the booking is still active, so a race can't pay twice.
   const results = await db.batch([
     db.prepare(
@@ -204,6 +240,10 @@ export async function cancelBookingRow(db: D1Database, userId: string | null, id
       `INSERT INTO wallet_transactions (id, user_id, kind, amount, note, booking_id, created_at)
        SELECT ?3, ?4, 'refund', ?5, ?6, ?1, ?7 WHERE ?5 > 0 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE})`,
     ).bind(...ids, uid("WT"), row.user_id, credit, note, new Date().toISOString()),
+    db.prepare(
+      `INSERT INTO credits (id, user_id, kind, amount, remaining, expires_at, booking_id, note, created_at)
+       SELECT ?3, ?4, 'returned', ?5, ?5, ?6, ?1, ?7, ?8 WHERE ?5 > 0 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE})`,
+    ).bind(...ids, uid("CR"), row.user_id, creditsBack, creditsExpire, `Returned · ${row.title}`, new Date().toISOString()),
     // Release any bus seats so they can be sold again.
     db.prepare(`DELETE FROM bus_seat_holds WHERE booking_id = ?1 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE})`).bind(...ids),
     db.prepare(`UPDATE bookings SET status = 'cancelled', refund_amount = ?3, cancel_reason = ?4, cancel_fee = ?5 WHERE id = ?1 ${owner} AND status IN ${ACTIVE} RETURNING *`)
@@ -225,9 +265,21 @@ export async function cancelBooking(db: D1Database, userId: string, id: string, 
  * confirm the return before a deposit goes back (see completeBookingRow).
  */
 export async function completeBooking(db: D1Database, userId: string, id: string): Promise<Booking> {
-  const row = await db.prepare(`UPDATE bookings SET status = 'completed' WHERE id = ? AND user_id = ? AND service IN ('bike', 'car') AND status IN ${ACTIVE} RETURNING *`)
+  const active = await db.prepare(`SELECT * FROM bookings WHERE id = ? AND user_id = ? AND service IN ('bike', 'car') AND status IN ${ACTIVE}`)
     .bind(id, userId).first<BookingRow>();
-  if (row) return toBooking(row);
+  if (active) {
+    const settings = await getSettings(db);
+    const earn = earnStatement(db, settings, active);
+    const [done, earned] = await db.batch([
+      db.prepare(`UPDATE bookings SET status = 'completed' WHERE id = ? AND user_id = ? AND status IN ${ACTIVE} RETURNING *`).bind(id, userId),
+      ...(earn ? [earn.statement] : []),
+    ]);
+    const row = (done.results as BookingRow[])[0];
+    if (row) {
+      if (earn && earned?.meta.changes) await notify(db, userId, { ...earnedNotice(earn.earn, row.title, settings), ref: id, bookingId: id });
+      return toBooking(row);
+    }
+  }
   const current = await db.prepare("SELECT service, status FROM bookings WHERE id = ? AND user_id = ?").bind(id, userId).first<{ service: ServiceKey; status: BookingStatus }>();
   if (current && current.service !== "bike" && current.service !== "car" && (current.status === "confirmed" || current.status === "ongoing")) {
     throw conflict("QuikFly staff close this booking once the trip is over.");
@@ -245,7 +297,9 @@ export async function completeBookingRow(db: D1Database, id: string): Promise<Bo
   const deposit = row.deposit ?? 0;
   const credit = row.payment === "wallet" ? deposit : 0;
   const stillActive = `EXISTS (SELECT 1 FROM bookings WHERE id = ?1 AND status IN ${ACTIVE})`;
-  const [, , done] = await db.batch([
+  const settings = await getSettings(db);
+  const earn = earnStatement(db, settings, row);
+  const [, , done, earned] = await db.batch([
     db.prepare(`UPDATE users SET wallet_balance = wallet_balance + ?2 WHERE id = ?3 AND ?2 > 0 AND ${stillActive}`).bind(id, credit, row.user_id),
     db.prepare(
       `INSERT INTO wallet_transactions (id, user_id, kind, amount, note, booking_id, created_at)
@@ -253,6 +307,10 @@ export async function completeBookingRow(db: D1Database, id: string): Promise<Bo
     ).bind(id, uid("WT"), row.user_id, credit, `Deposit returned · ${row.title}`, new Date().toISOString()),
     db.prepare(`UPDATE bookings SET status = 'completed', refund_amount = CASE WHEN ?2 > 0 THEN ?2 ELSE refund_amount END WHERE id = ?1 AND status IN ${ACTIVE} RETURNING *`)
       .bind(id, deposit),
+    // Credits for the completed trip (runs after the status change, so it sees 'completed').
+    ...(earn ? [earn.statement] : []),
   ]);
-  return (done.results as BookingRow[])[0] ?? null;
+  const finished = (done.results as BookingRow[])[0] ?? null;
+  if (finished && earn && earned?.meta.changes) await notify(db, row.user_id, { ...earnedNotice(earn.earn, row.title, settings), ref: id, bookingId: id });
+  return finished;
 }

@@ -18,6 +18,8 @@ export interface User {
   name: string;
   phone: string;
   walletBalance: number;
+  /** Unexpired QuikFly Credits (₹), separate from the wallet: see credits.ts. */
+  creditBalance: number;
   email: string | null;
   gender: Gender | null;
   /** YYYY-MM-DD */
@@ -92,10 +94,33 @@ export interface WalletTransaction {
   createdAt: string;
 }
 
+export type CreditKind = "earned" | "spent" | "returned" | "expired";
+
+/** One entry in the credits history (GET /me/credits). */
+export interface CreditEntry {
+  id: string;
+  kind: CreditKind;
+  /** Positive = credits in, negative = used or expired. */
+  amount: number;
+  note: string;
+  bookingId: string | null;
+  createdAt: string;
+  /** Credits in: when they expire, and how much of them is still unused. */
+  expiresAt: string | null;
+  remaining: number;
+}
+
+export interface CreditSummary {
+  balance: number;
+  /** The soonest-expiring unused credits, or null when there are none. */
+  nextExpiry: { amount: number; expiresAt: string } | null;
+  items: CreditEntry[];
+}
+
 /** What a notification is about; the apps pick an icon and where tapping it goes. */
 export const NOTIFICATION_KINDS = [
   "booking.confirmed", "booking.cancelled", "booking.cancelled_by_staff", "booking.deposit_returned",
-  "licence.approved", "licence.rejected", "ride.reminder",
+  "licence.approved", "licence.rejected", "ride.reminder", "credits.earned",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -334,6 +359,8 @@ export interface Booking {
   cancelFee: number;
   /** Refundable deposit inside `amount` (₹, self-drive only; 0 otherwise). Returned in full on cancel, and on completion once staff confirm the return. */
   deposit: number;
+  /** Paid with QuikFly Credits (₹), on top of `amount`; 0 when none. */
+  creditsUsed: number;
 }
 
 /** A coupon. The API checks it at booking; the website only shows it. */
@@ -435,6 +462,8 @@ export interface NewBooking {
   couponCode?: string;
   /** Join the trip of this booking (e.g. a cab to the boarding point of a bus booking). */
   tripOf?: string;
+  /** Pay part of it with QuikFly Credits (the API decides how much: creditsUsable). */
+  useCredits?: boolean;
 }
 
 /** What the generic /checkout page needs; created by any service page. */

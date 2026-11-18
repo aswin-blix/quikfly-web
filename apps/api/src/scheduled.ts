@@ -1,6 +1,7 @@
-// Every-minute cron (wrangler.jsonc → triggers.crons): writes scheduled-ride reminders and
-// pushes new notifications to phones when Firebase is configured. Stays well under the free
-// plan's 50 queries per invocation: a fixed handful of statements, no per-row queries.
+// Every-minute cron (wrangler.jsonc → triggers.crons): writes scheduled-ride reminders,
+// records expired QuikFly Credits, and pushes new notifications to phones when Firebase is
+// configured. Stays well under the free plan's 50 queries per invocation: a fixed handful of
+// statements, no per-row queries.
 import { RIDE_SCHEDULE } from "@quikfly/shared";
 import { PUSH_BATCH, PUSH_MAX_AGE_MINUTES } from "./config";
 import type { Env } from "./env";
@@ -16,6 +17,19 @@ async function rideReminders(db: D1Database) {
      WHERE service IN ('bike', 'car') AND status = 'confirmed' AND ride_id IS NOT NULL AND starts_at IS NOT NULL
        AND julianday(starts_at) > julianday('now') AND julianday(starts_at) <= julianday('now', ?2)`,
   ).bind(new Date().toISOString(), `+${RIDE_SCHEDULE.startWindowMinutes} minutes`).run();
+}
+
+/** Writes an 'expired' row for credits left unused past their expiry (balances already ignore them). */
+async function expireCredits(db: D1Database) {
+  const now = new Date().toISOString();
+  await db.batch([
+    db.prepare(
+      `INSERT INTO credits (id, user_id, kind, amount, remaining, expires_at, booking_id, note, created_at)
+       SELECT 'CR' || upper(hex(randomblob(8))), user_id, 'expired', -remaining, 0, NULL, booking_id, 'Expired unused', expires_at
+       FROM credits WHERE remaining > 0 AND expires_at <= ?1`,
+    ).bind(now),
+    db.prepare("UPDATE credits SET remaining = 0 WHERE remaining > 0 AND expires_at <= ?1").bind(now),
+  ]);
 }
 
 /** Pushes recent, not-yet-pushed notifications to each customer's phones; forgets dead tokens. */
@@ -50,5 +64,6 @@ async function pushNew(env: Env) {
 
 export async function runScheduled(env: Env) {
   await rideReminders(env.DB);
+  await expireCredits(env.DB);
   await pushNew(env);
 }

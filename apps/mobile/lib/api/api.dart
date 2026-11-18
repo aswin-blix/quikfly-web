@@ -100,6 +100,7 @@ class QuikFlyApi {
   Future<List<EmergencyContact>> removeContact(String id) => _delete('/me/contacts/$id', _listOf(EmergencyContact.fromJson));
 
   Future<List<WalletTransaction>> wallet() => _get('/me/wallet', _listOf(WalletTransaction.fromJson));
+  Future<CreditSummary> credits() => _get('/me/credits', (d) => CreditSummary.fromJson(d as Json));
 
   // ── Notifications ──
   Future<({List<AppNotification> items, int unread})> notifications() => _get('/me/notifications', (d) {
@@ -165,6 +166,7 @@ class QuikFlyApi {
     String? rideId,
     String? couponCode,
     String? tripOf,
+    bool useCredits = false,
   }) =>
       _post('/bookings', (d) => Booking.fromJson(d as Json), {
         'service': service.name,
@@ -176,6 +178,7 @@ class QuikFlyApi {
         'rideId': ?rideId,
         'couponCode': ?couponCode,
         'tripOf': ?tripOf,
+        if (useCredits) 'useCredits': true,
       });
   /// [reason] is a ride cancel reason key; a valid one waives the ride cancellation fee.
   Future<Booking> cancelBooking(String id, {String? reason}) =>

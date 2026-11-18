@@ -1,7 +1,7 @@
 import type {
   AppConfig, AuthResult, Booking, Bus, CouponCheck, EmergencyContact, FareQuote, Gender, NewBooking, PaymentMethod, Place, PriceQuote,
   ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
-  WalletTransaction, AppNotification,
+  WalletTransaction, AppNotification, CreditSummary,
 } from "@quikfly/shared";
 import type { RideCancelReason } from "@quikfly/shared";
 
@@ -44,6 +44,8 @@ export interface QuikflyApi {
     submitLicence(number: string, expiry: string): Promise<User>;
     /** GET /me/wallet */
     walletHistory(): Promise<WalletTransaction[]>;
+    /** GET /me/credits: QuikFly Credits balance, the soonest expiry, and history. */
+    credits(): Promise<CreditSummary>;
   };
   savedPlaces: {
     /** GET /me/places */

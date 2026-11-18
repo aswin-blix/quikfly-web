@@ -1,7 +1,7 @@
 // Website-side account settings: section list, labels and help text.
 // Business rules (limits, patterns) live in @quikfly/shared; amounts the owner can change
 // (welcome credit, referral bonus, safety line) come from the API settings (useSettings()).
-import type { WalletTxnKind } from "@quikfly/shared";
+import type { WalletTxnKind, CreditKind } from "@quikfly/shared";
 import { inr } from "./format";
 
 export const newUserWalletHint = (welcomeCredit: number) => (welcomeCredit ? `${inr(welcomeCredit)} welcome credit is in your wallet.` : "");
@@ -18,6 +18,13 @@ export const REFUND_TIMINGS: [string, string][] = [
   ["UPI", "1–3 working days"],
   ["Card / net banking", "5–7 working days"],
 ];
+
+export const CREDIT_KIND_LABEL: Record<CreditKind, string> = {
+  earned: "Earned",
+  spent: "Used",
+  returned: "Returned",
+  expired: "Expired",
+};
 
 export const WALLET_KIND_LABEL: Record<WalletTxnKind, string> = {
   welcome: "Welcome credit",

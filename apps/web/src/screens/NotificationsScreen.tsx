@@ -2,7 +2,7 @@
 // /notifications: the customer's inbox (booking confirmed, refunds, licence decisions, ride
 // reminders). Opening it marks everything read; unread ones keep their highlight until you leave.
 import { useEffect, useState } from "react";
-import { Bell, BadgeCheck, CalendarClock, CircleX, IdCard, RotateCcw, Ticket, Wallet } from "lucide-react";
+import { Bell, BadgeCheck, CalendarClock, CircleX, Coins, IdCard, RotateCcw, Ticket, Wallet } from "lucide-react";
 import type { AppNotification, NotificationKind } from "@quikfly/shared";
 import { useApp } from "@/components/AppProvider";
 import { Empty, GoldButton, Spinner } from "@/components/ui";
@@ -18,7 +18,12 @@ const ICON: Record<NotificationKind, typeof Bell> = {
   "licence.approved": BadgeCheck,
   "licence.rejected": IdCard,
   "ride.reminder": CalendarClock,
+  "credits.earned": Coins,
 };
+
+/** Where tapping a notification goes. */
+const target = (n: AppNotification) =>
+  n.kind === "credits.earned" ? "/account?tab=wallet" : n.bookingId ? "/bookings" : n.kind.startsWith("licence") ? "/account?tab=licence" : null;
 
 export function NotificationsScreen() {
   const { user, requireAuth, refreshNotifications } = useApp();
@@ -56,7 +61,8 @@ export function NotificationsScreen() {
             {!n.readAt && <span className="w-2 h-2 rounded-full bg-brand mt-2" aria-label="Unread" />}
           </div>
         );
-        return <li key={n.id}>{n.bookingId ? <Link href="/bookings" className="block">{body}</Link> : n.kind.startsWith("licence") ? <Link href="/account?tab=licence" className="block">{body}</Link> : body}</li>;
+        const href = target(n);
+        return <li key={n.id}>{href ? <Link href={href} className="block">{body}</Link> : body}</li>;
       })}
     </ul>,
   );

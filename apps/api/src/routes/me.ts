@@ -17,6 +17,7 @@ import {
   addContact, addTraveller, listContacts, listPlaces, listTravellers, removeContact, removePlace, removeTraveller, savePlace,
 } from "../services/saved";
 import { listTransactions } from "../services/wallet";
+import { creditSummary } from "../services/credits";
 import { listNotifications, markRead, registerDevice, removeDevice } from "../services/notifications";
 
 type Json = Record<string, unknown>;
@@ -124,6 +125,8 @@ export const me = new Hono<AppEnv>()
   .delete("/contacts/:id", async (c) => c.json(await removeContact(c.env.DB, c.var.user.id, c.req.param("id"))))
 
   .get("/wallet", async (c) => c.json(await listTransactions(c.env.DB, c.var.user.id)))
+  // QuikFly Credits: balance, the soonest expiry, and history (newest first).
+  .get("/credits", async (c) => c.json(await creditSummary(c.env.DB, c.var.user.id)))
 
   // Notification inbox
   .get("/notifications", async (c) => c.json(await listNotifications(c.env.DB, c.var.user.id)))

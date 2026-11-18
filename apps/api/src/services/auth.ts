@@ -3,6 +3,7 @@ import { DEFAULT_USER_NAME, PHONE_COUNTRY_CODE, PHONE_DIGITS, SESSION_TTL_DAYS }
 import { badRequest } from "../lib/errors";
 import { randomToken, sha256, uid } from "../lib/random";
 import { getSettings } from "./settings";
+import { CREDIT_BALANCE_COLUMN } from "./credits";
 import { txnStatement } from "./wallet";
 
 export interface UserRow {
@@ -12,6 +13,8 @@ export interface UserRow {
   licence_number: string | null; licence_expiry: string | null; licence_submitted_at: string | null;
   licence_status: LicenceStatus; licence_note: string | null; licence_reviewed_at: string | null;
   gstin: string | null; gst_name: string | null; auto_share_night: number; deleted_at: string | null;
+  /** Computed by CREDIT_BALANCE_COLUMN; absent when a query didn't ask for it. */
+  credit_balance?: number;
 }
 
 export const toUser = (r: UserRow): User => ({
@@ -19,6 +22,7 @@ export const toUser = (r: UserRow): User => ({
   name: r.name,
   phone: r.phone,
   walletBalance: r.wallet_balance,
+  creditBalance: r.credit_balance ?? 0,
   email: r.email,
   gender: r.gender,
   dob: r.dob,
@@ -42,7 +46,7 @@ export function checkOtp(demoOtp: string, otp: string) {
 }
 
 export const getUserRow = (db: D1Database, id: string) =>
-  db.prepare("SELECT * FROM users WHERE id = ?").bind(id).first<UserRow>();
+  db.prepare(`SELECT u.*, ${CREDIT_BALANCE_COLUMN} FROM users u WHERE u.id = ?`).bind(id).first<UserRow>();
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const referralCode = () => "QF" + [...crypto.getRandomValues(new Uint8Array(6))].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
@@ -70,7 +74,7 @@ export async function verifyOtp(db: D1Database, demoOtp: string, phoneInput: str
   const phone = normalisePhone(phoneInput);
   checkOtp(demoOtp, otp);
 
-  let row = await db.prepare("SELECT * FROM users WHERE phone = ?").bind(phone).first<UserRow>();
+  let row = await db.prepare(`SELECT u.*, ${CREDIT_BALANCE_COLUMN} FROM users u WHERE u.phone = ?`).bind(phone).first<UserRow>();
   let restored = false;
   if (row?.deleted_at) {
     const graceEnds = Date.parse(row.deleted_at) + DELETION_GRACE_DAYS * 86_400_000;
@@ -99,7 +103,7 @@ export async function endSession(db: D1Database, token: string) {
 
 export async function userForToken(db: D1Database, token: string): Promise<User | null> {
   const row = await db.prepare(
-    "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.deleted_at IS NULL",
+    `SELECT u.*, ${CREDIT_BALANCE_COLUMN} FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.deleted_at IS NULL`,
   ).bind(await sha256(token), Date.now()).first<UserRow>();
   return row ? toUser(row) : null;
 }

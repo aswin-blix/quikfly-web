@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../api/models.dart';
 import '../../core/cancellation.dart';
 import '../../core/env.dart';
+import '../../core/credits.dart';
 import '../../core/format.dart';
 import '../../core/services.dart';
 import '../../state/catalog.dart';
@@ -47,6 +48,8 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   String? _quoteErr;
   String? _selected;
   var _payment = PaymentMethod.upi;
+  var _useCredits = true;
+  int _creditsPaid = 0;
   var _phase = RidePhase.plan;
   Ride? _ride;
   String? _bookingId;
@@ -211,6 +214,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         subtitle: '${r.pickup.name} → ${r.drop.name}',
         payment: _payment,
         rideId: r.id,
+        useCredits: _creditsOff() > 0,
         tripOf: widget.tripOf,
         // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
         lines: r.scheduledFor != null
@@ -229,6 +233,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         ],
       );
       if (!mounted) return;
+      _creditsPaid = booking.creditsUsed;
       if (r.scheduledFor != null) {
         setState(() {
           _scheduled = r;
@@ -459,7 +464,11 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     final user = ref.watch(userProvider);
     final saved = ref.watch(savedPlacesProvider).value ?? const <SavedPlace>[];
     final quote = _quote;
-    final walletShort = user != null && quote != null && user.walletBalance < quote.fare;
+    final settings = ref.watch(configProvider).value?.settings ?? const Settings({});
+    final canPay = user != null && quote != null ? creditsUsable(settings, user.creditBalance, quote.fare) : 0;
+    final payable = quote == null ? 0 : quote.fare - (_useCredits ? canPay : 0);
+    final earns = quote == null ? 0 : creditsEarned(settings, widget.service, payable);
+    final walletShort = user != null && quote != null && user.walletBalance < payable;
     final s = serviceOf(widget.service);
 
     Widget field(Widget dot, String hint, Place? value, VoidCallback onTap) => Material(
@@ -669,9 +678,28 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
             padding: const EdgeInsets.only(top: 6),
             child: Text('Wallet balance ${inr(user.walletBalance)} is not enough for this ride.', style: TextStyle(color: c.fgMuted, fontSize: 12)),
           ),
+        if (canPay > 0)
+          CheckboxListTile(
+            value: _useCredits,
+            onChanged: (v) => setState(() => _useCredits = v ?? false),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: Text('Use ${inr(canPay)} QuikFly Credits'),
+            subtitle: Text('Balance ${inr(user!.creditBalance)}', style: TextStyle(color: c.fgMuted, fontSize: 12)),
+          ),
+        if (earns > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(children: [
+              Icon(Icons.toll_outlined, size: 15, color: c.accent),
+              const SizedBox(width: 6),
+              Expanded(child: Text('Earn ${inr(earns)} QuikFly Credits when the ride is completed.', style: TextStyle(color: c.fgMuted, fontSize: 12))),
+            ]),
+          ),
         const SizedBox(height: 14),
         GoldButton(
-          label: '${_at == null ? 'Book' : 'Schedule'} ${quote?.option.name ?? ''} · ${quote == null ? '' : inr(quote.fare)}',
+          label: '${_at == null ? 'Book' : 'Schedule'} ${quote?.option.name ?? ''} · ${quote == null ? '' : inr(payable)}',
           onPressed: quote == null || (_payment == PaymentMethod.wallet && walletShort) ? null : _book,
         ),
       ],
@@ -794,7 +822,8 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       Row(children: [Icon(Icons.navigation_outlined, size: 16, color: c.accent), const SizedBox(width: 8), Expanded(child: Text(r.drop.name))]),
       const SizedBox(height: 10),
       Divider(color: c.border),
-      KeyValue('Fare (${paymentLabel(r.payment)})', inr(r.quote.fare), bold: true),
+      KeyValue('Fare (${paymentLabel(r.payment)})', inr(r.quote.fare - _creditsPaid), bold: true),
+      if (_creditsPaid > 0) KeyValue('Paid with credits', inr(_creditsPaid)),
       const SizedBox(height: 10),
       Row(children: [
         FilledButton.icon(
@@ -847,6 +876,15 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     ]);
   }
 
+  /// Credits the next booking uses (same rule as the API), and what a finished ride earned.
+  int _creditsOff() {
+    final user = ref.read(userProvider), q = _quote;
+    if (!_useCredits || user == null || q == null) return 0;
+    return creditsUsable(ref.read(configProvider).value?.settings ?? const Settings({}), user.creditBalance, q.fare);
+  }
+
+  int _earnedNow(Ride r) => creditsEarned(ref.read(configProvider).value?.settings ?? const Settings({}), widget.service, r.quote.fare - _creditsPaid);
+
   Widget _done() {
     final c = context.qf;
     final r = _ride!;
@@ -855,9 +893,13 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       child: Column(children: [
         Text('YOU HAVE ARRIVED', style: TextStyle(color: c.success, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1)),
         const SizedBox(height: 4),
-        Text(inr(r.quote.fare), style: Theme.of(context).textTheme.headlineLarge),
+        Text(inr(r.quote.fare - _creditsPaid), style: Theme.of(context).textTheme.headlineLarge),
         const SizedBox(height: 4),
-        Text('${r.quote.distanceKm} km · ${r.quote.durationMin} min · paid by ${paymentLabel(r.payment)}', style: TextStyle(color: c.fgMuted)),
+        Text('${r.quote.distanceKm} km · ${r.quote.durationMin} min · paid by ${paymentLabel(r.payment)}${_creditsPaid > 0 ? ' + ${inr(_creditsPaid)} credits' : ''}', style: TextStyle(color: c.fgMuted)),
+        if (_earnedNow(r) > 0) ...[
+          const SizedBox(height: 6),
+          Text('${inr(_earnedNow(r))} QuikFly Credits earned', style: TextStyle(color: c.accent, fontWeight: FontWeight.w600)),
+        ],
         const SizedBox(height: 16),
         Text('Rate your ride with ${r.driver.name}'),
         const SizedBox(height: 6),

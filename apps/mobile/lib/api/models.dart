@@ -64,6 +64,7 @@ class User {
     required this.name,
     required this.phone,
     required this.walletBalance,
+    this.creditBalance = 0,
     this.email,
     this.gender,
     this.dob,
@@ -76,6 +77,9 @@ class User {
   });
   final String id, name, phone, referralCode;
   final int walletBalance;
+
+  /// Unexpired QuikFly Credits (separate from the wallet; see core/credits.dart).
+  final int creditBalance;
   final String? email, dob;
   final Gender? gender;
   final bool profileComplete, referred, autoShareNightRides;
@@ -89,6 +93,7 @@ class User {
         name: (j['name'] as String?) ?? '',
         phone: (j['phone'] as String?) ?? '',
         walletBalance: _int(j['walletBalance']),
+        creditBalance: j['creditBalance'] == null ? 0 : _int(j['creditBalance']),
         email: j['email'] as String?,
         gender: Gender.values.where((g) => g.name == j['gender']).firstOrNull,
         dob: j['dob'] as String?,
@@ -140,6 +145,32 @@ class EmergencyContact {
   final String id, name, phone;
   final String? relation;
   factory EmergencyContact.fromJson(Json j) => EmergencyContact(j['id'] as String, '${j['name']}', '${j['phone']}', j['relation'] as String?);
+}
+
+/// One entry in the QuikFly Credits history (CreditEntry in packages/shared).
+class CreditEntry {
+  const CreditEntry(this.id, this.kind, this.amount, this.note, this.bookingId, this.createdAt, this.expiresAt, this.remaining);
+  final String id, kind, note;
+  final int amount, remaining;
+  final String? bookingId;
+  final DateTime createdAt;
+  final DateTime? expiresAt;
+  factory CreditEntry.fromJson(Json j) => CreditEntry(j['id'] as String, '${j['kind']}', _int(j['amount']), '${j['note'] ?? ''}', j['bookingId'] as String?,
+      DateTime.tryParse('${j['createdAt']}')?.toLocal() ?? DateTime.now(),
+      j['expiresAt'] == null ? null : DateTime.tryParse('${j['expiresAt']}')?.toLocal(), j['remaining'] == null ? 0 : _int(j['remaining']));
+}
+
+/// GET /me/credits: balance, the soonest expiry, and history.
+class CreditSummary {
+  const CreditSummary(this.balance, this.nextExpiryAmount, this.nextExpiry, this.items);
+  final int balance, nextExpiryAmount;
+  final DateTime? nextExpiry;
+  final List<CreditEntry> items;
+  factory CreditSummary.fromJson(Json j) {
+    final next = j['nextExpiry'] as Json?;
+    return CreditSummary(_int(j['balance']), next == null ? 0 : _int(next['amount']), next == null ? null : DateTime.tryParse('${next['expiresAt']}')?.toLocal(),
+        ((j['items'] as List?) ?? const []).map((x) => CreditEntry.fromJson(x as Json)).toList());
+  }
 }
 
 class WalletTransaction {
@@ -357,7 +388,7 @@ class TravelVehicle {
 
 class Booking {
   const Booking(this.id, this.service, this.title, this.subtitle, this.amount, this.status, this.createdAt, this.payment, this.lines,
-      {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0, this.rideId, this.tripId});
+      {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0, this.rideId, this.tripId, this.creditsUsed = 0});
   final String id, title, subtitle, payment;
   final ServiceKey service;
   final int amount;
@@ -383,6 +414,9 @@ class Booking {
 
   /// Refundable deposit inside [amount] (self-drive; 0 otherwise). Always back on cancel; back on completion after staff check the car.
   final int deposit;
+
+  /// Paid with QuikFly Credits, on top of [amount].
+  final int creditsUsed;
   factory Booking.fromJson(Json j) => Booking(
         j['id'] as String,
         ServiceKey.parse('${j['service']}'),
@@ -400,6 +434,7 @@ class Booking {
         cancelFee: j['cancelFee'] == null ? 0 : _int(j['cancelFee']),
         rideId: j['rideId'] as String?,
         tripId: j['tripId'] as String?,
+        creditsUsed: j['creditsUsed'] == null ? 0 : _int(j['creditsUsed']),
       );
 }
 
@@ -527,6 +562,18 @@ class Settings {
   int get rentExtraKmRate => _i('rentExtraKmRate', 12);
   int get rentDriverNightCharge => _i('rentDriverNightCharge', 250);
   bool get rentRoadsideAssistance => (_raw['rentRoadsideAssistance'] as bool?) ?? false;
+
+  /// QuikFly Credits: % back per service, the per-booking cap, expiry and the share of a booking they can pay.
+  int creditPercent(ServiceKey s) => switch (s) {
+        ServiceKey.bike || ServiceKey.car => _i('creditsRides', 5),
+        ServiceKey.bus => _i('creditsBus', 2),
+        ServiceKey.tours => _i('creditsTours', 3),
+        ServiceKey.rent => _i('creditsRent', 3),
+        ServiceKey.rentals => _i('creditsGroup', 3),
+      };
+  int get creditsCap => _i('creditsCap', 150);
+  int get creditsExpiryDays => _i('creditsExpiryDays', 60);
+  int get creditsMaxRedeemPercent => _i('creditsMaxRedeemPercent', 50);
 
   /// Self-drive documents ("a; b; c" in settings).
   List<String> get rentDocuments => _s('rentDocuments', 'Driving licence held for at least 1 year; Aadhaar or passport; Driver aged 21 or over')

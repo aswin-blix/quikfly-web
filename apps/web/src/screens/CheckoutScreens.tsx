@@ -1,7 +1,7 @@
 "use client";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BadgePercent, Building2, CarTaxiFront, ChevronDown, CreditCard, FileText, Info, Lock, Route, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
+import { ArrowLeft, BadgePercent, Building2, CarTaxiFront, ChevronDown, Coins, CreditCard, FileText, Info, Lock, Route, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { TweenNumber } from "@/components/motion";
 import { Empty, GhostLink, GoldButton, Spinner } from "@/components/ui";
@@ -10,7 +10,7 @@ import { cx, inr, prettyDateTime } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
-import { RIDE_SCHEDULE, cancelPolicyFor, formatLicence, minutesUntilStart, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
+import { CREDITS_LINE, DEPOSIT_LINE, RIDE_SCHEDULE, cancelPolicyFor, creditsEarned, creditsUsable, formatLicence, minutesUntilStart, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { bookingWhen, rideOffer } from "@/lib/trips";
 import { LicenceBadge, LicenceForm, licenceMessage, useLicencePolling } from "@/components/account/LicenceSection";
@@ -34,6 +34,8 @@ export function CheckoutScreen() {
   const [couponBusy, setCouponBusy] = useState(false);
   const [paying, setPaying] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [useCredits, setUseCredits] = useState(true);
+  const settings = useSettings();
 
   useEffect(() => { if (draft) setNames((n) => draft.travellers.map((_, i) => n[i] ?? (i === 0 ? user?.name ?? "" : ""))); }, [draft, user]);
   useEffect(() => { if (user && !phone) setPhone(user.phone.replace("+91 ", "")); }, [user, phone]);
@@ -52,7 +54,13 @@ export function CheckoutScreen() {
   const svc = serviceByKey(draft.service);
   // The API priced this booking (draft.quote) and checks coupons against that price.
   const subtotal = draft.quote.total;
-  const total = Math.max(0, subtotal - (coupon?.off ?? 0));
+  const afterCoupon = Math.max(0, subtotal - (coupon?.off ?? 0));
+  // Credits: the same rule the API applies at booking (never the refundable deposit).
+  const deposit = Math.min(draft.quote.lines.find((l) => l.label === DEPOSIT_LINE)?.amount ?? 0, afterCoupon);
+  const creditsCanPay = user ? creditsUsable(settings, user.creditBalance, afterCoupon, deposit) : 0;
+  const creditsOff = useCredits ? creditsCanPay : 0;
+  const total = afterCoupon - creditsOff;
+  const earns = creditsEarned(settings, draft.service, total, Math.min(deposit, total));
 
   /** Asks the API what the code takes off this quote. Coupons have per-customer limits, so sign in first. */
   function applyCoupon() {
@@ -105,7 +113,7 @@ export function CheckoutScreen() {
       await new Promise((r) => setTimeout(r, 1400));
       const b = await api.bookings.create({
         service: draft!.service, title: draft!.title, subtitle: draft!.subtitle, payment: method,
-        quoteId: draft!.quote.id, couponCode: coupon?.code,
+        quoteId: draft!.quote.id, couponCode: coupon?.code, useCredits: creditsOff > 0,
         lines: [
           ...draft!.summary, ["Traveller names", names.join(", ")], ["Paid via", method.toUpperCase()],
           ...(gstInvoice && user?.gst ? [[GSTIN_LINE, `${user.gst.gstin} · ${user.gst.name}`] as [string, string]] : []),
@@ -251,11 +259,28 @@ export function CheckoutScreen() {
                   </motion.div>
                 )}
               </AnimatePresence>
+              <AnimatePresence>
+                {creditsOff > 0 && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="flex justify-between text-success">
+                    <span>{CREDITS_LINE}</span><span>−{inr(creditsOff)}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <div className="flex justify-between items-end pt-3 mt-2 border-t border-line">
                 <span className="font-semibold">Total</span><TweenNumber value={total} format={inr} className="text-2xl font-bold text-gold" />
               </div>
+              {earns > 0 && <p className="text-xs text-muted flex items-center gap-1.5 pt-1"><Coins size={13} className="text-gold shrink-0" />Earn {inr(earns)} QuikFly Credits when this trip is completed.</p>}
             </div>
           </div>
+          {user && user.creditBalance > 0 && (
+            <label className={cx("panel p-4 flex items-start gap-3", creditsCanPay ? "cursor-pointer" : "opacity-60")}>
+              <input type="checkbox" className="mt-1 accent-brand" checked={useCredits && creditsCanPay > 0} disabled={!creditsCanPay} onChange={(e) => setUseCredits(e.target.checked)} />
+              <span className="text-sm">
+                <span className="font-semibold text-strong">{creditsCanPay ? `Use ${inr(creditsCanPay)} QuikFly Credits` : "QuikFly Credits"}</span>
+                <span className="block text-xs text-muted">Balance {inr(user.creditBalance)} · credits pay up to {settings.creditsMaxRedeemPercent}% of a booking{deposit ? ", not the deposit" : ""}.</span>
+              </span>
+            </label>
+          )}
           {!coupon && (
             <div className="panel p-4">
               <p className="text-sm font-semibold flex items-center gap-2 mb-2"><BadgePercent size={16} className="text-gold" />Have a coupon?</p>
