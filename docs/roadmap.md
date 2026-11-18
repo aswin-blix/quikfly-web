@@ -99,6 +99,22 @@ What's there now: smoke tests ran against production, leaving test accounts **+9
 
 Phase 5 (full admin: customers screen, booking notes, SOS alerts, team, CSV export) and the backlog. Paid items (SMS OTP, payment gateway, maps, Play Store) wait for the client's sign-off.
 
+## Current task: Phase 4b, make the UI truthful 🔄
+
+Decided 2026-11-18 from the competitor research ([docs/competitor-gaps-2026-11.md](competitor-gaps-2026-11.md)): four screens promise rules the API never enforced. Cheapest credibility work before the next demo; all free-tier. Branch `phase4b/truthful-ui`.
+
+| ID | Item | Status |
+|---|---|---|
+| T1 | **Cancellation-policy engine**: per-service refund tiers in `Settings` (`cancelPolicyBus/Tours/Rent/Group`, text like `"15d:100, 7d:50"`), applied inside the refund `db.batch()`; bookings store `startsAt` (from the quote) and `refundAmount`; web, app and admin show the policy and the refund before cancelling. Replaces the hard-coded policy strings on bus, holiday, rent and group screens and the per-tour `cancellation` text | 🔄 |
+| T2 | Holiday page: remove the unbacked "25% to block", "expert calls within 2 hours" and "insurance at checkout" copy; the start date reaches the tour quote (`start`) and group quotes (`start`) | 🔄 (with T1) |
+| T3 | Rental and group copy into `Settings`: roadside assistance, night charge (+ quote line), documents list, deposit-refund window | ⬜ |
+| T4 | Bus: women-first seat rule (adjacent seat locked to women once a woman books) instead of the random unenforced `ladies` flag; seat layouts and amenities per bus type; reword the FAQ "UPI refunds in 3–5 days" | ⬜ |
+| T5 | Rides, MVAG 2025: `surgeCap` (2.0), cancellation-reason picker, `cancellationFeePct`/`Cap` (10% / ₹100), surge disclosure | ⬜ |
+
+### Phase 5 candidates, in priority order (from the same research; all free-tier)
+
+1. B5 ride scheduling + multi-stop → 2. a "Trip" object grouping bookings (timeline, one invoice, first/last-mile upsell on bus and holiday confirmations) → 3. outstation cab quote type reusing the group per-km engine → 4. FCM push (free) for booking status, refunds, licence decisions → 5. credits ledger (% back per service, per-trip cap, expiry) and a surge-waiving pass → 6. B6 bus reschedule + partial seat cancel + m-ticket with QR → 7. B8 women-only rides + Safety Preferences → 8. holiday departures (dates, seats left, departure city/month) + spiritual/women-only/seniors themes → 9. enquiry/callback queue + `wa.me` link + support tickets → 10. rental lifecycle (odometer, photo checklist, B7 extension, deposit deductions) → 11. Tamil/Hindi + DPDP pack (deadline ≈ May 2027) → 12. family and business profiles → 13. $25 Play Console + Truecaller login.
+
 ## Current task: Flutter Android app (M1–M6) 🔄
 
 Started 2026-11-17. Owner's choices: **full parity** with the website for the first APK the client sees; live price estimates **ask the API** (`POST /quotes`, debounced), no price maths in Dart; APK published as a **GitHub Release** (public repo, no login to download) and linked from the website's "Get it on Google Play" button; package id **`com.quikfly.app`**. Details in [decisions.md](decisions.md) and [apps/mobile/README.md](../apps/mobile/README.md).
