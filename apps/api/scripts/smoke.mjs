@@ -392,6 +392,21 @@ await expect("GET /share/:token is public", call("GET", `/share/${shared.token}`
 await expect("GET /share/:token unknown is 404", call("GET", "/share/nope", null, false), 404);
 await expect("sharing someone else's ride is 404", call("POST", `/rides/${ride.id}/share`, null, tokenB), 404);
 
+// Notification inbox: the bus booking and its cancellation from earlier are in it.
+await expect("GET /me/notifications needs sign-in", call("GET", "/me/notifications", null, false), 401);
+await expect("GET /me/notifications lists booking events", call("GET", "/me/notifications"), 200,
+  (j) => Array.isArray(j.items) && typeof j.unread === "number"
+    && j.items.some((n) => n.kind === "booking.confirmed" && n.bookingId === booking.id)
+    && j.items.some((n) => n.kind === "booking.cancelled" && n.bookingId === booking.id && /refund/i.test(n.body)));
+await expect("marking read needs a list of ids", call("POST", "/me/notifications/read", { ids: "all" }), 400);
+const someId = (await call("GET", "/me/notifications")).json.items[0].id;
+await expect("mark one notification read", call("POST", "/me/notifications/read", { ids: [someId] }), 200, (j) => typeof j.unread === "number");
+await expect("mark all notifications read", call("POST", "/me/notifications/read", {}), 200, (j) => j.unread === 0);
+// Push devices (Firebase tokens from the app)
+await expect("register a push device", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "android" }), 201, (j) => j.registered === true);
+await expect("a push device needs a known platform", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "fridge" }), 400);
+await expect("remove a push device", call("DELETE", "/me/push-devices/smoke-token-123"), 200, (j) => j.removed === true);
+
 // Sign out everywhere
 const second = (await call("POST", "/auth/verify", { phone: PHONE, otp: OTP })).json.token;
 await expect("POST /me/logout-all", call("POST", "/me/logout-all", null, second), 200);

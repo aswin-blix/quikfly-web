@@ -3,6 +3,7 @@
 import type { LicenceQueueStatus, LicenceReview } from "@quikfly/shared";
 import { conflict, notFound } from "../../lib/errors";
 import { auditStatement } from "./audit";
+import { notify } from "../notifications";
 
 interface Row {
   id: string; name: string; phone: string; licence_status: LicenceQueueStatus; licence_number: string; licence_expiry: string;
@@ -38,4 +39,8 @@ export async function reviewLicence(db: D1Database, adminId: string, userId: str
     auditStatement(db, { adminId, action: `licence.${decision}`, entity: "licence", entityId: userId, detail: { number: user.licence_number, ...(reason ? { reason } : {}) } }),
   ]);
   if (!updated.meta.changes) throw conflict("Someone else reviewed this licence just now.");
+  // Keyed by the review time, so a resubmitted licence gets its own notification.
+  await notify(db, userId, decision === "approve"
+    ? { kind: "licence.approved", ref: now, title: "Driving licence verified", body: "You can book self-drive cars now." }
+    : { kind: "licence.rejected", ref: now, title: "Driving licence not accepted", body: `${reason ?? "Please check the details"}. Fix it in Account → Driving licence and send it again.` });
 }

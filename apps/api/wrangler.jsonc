@@ -4,6 +4,8 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
   "observability": { "enabled": true },
+  // Every minute: scheduled-ride reminders and push delivery (src/scheduled.ts). Free plan.
+  "triggers": { "crons": ["* * * * *"] },
   // Non-secret settings. Override per environment in the Cloudflare dashboard.
   "vars": {
     // Fixed login code while there is no SMS provider. Remove when real OTP is added.

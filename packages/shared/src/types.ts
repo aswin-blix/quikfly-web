@@ -92,6 +92,25 @@ export interface WalletTransaction {
   createdAt: string;
 }
 
+/** What a notification is about; the apps pick an icon and where tapping it goes. */
+export const NOTIFICATION_KINDS = [
+  "booking.confirmed", "booking.cancelled", "booking.cancelled_by_staff", "booking.deposit_returned",
+  "licence.approved", "licence.rejected", "ride.reminder",
+] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+
+/** One entry in the customer's notification inbox (also pushed to their phones when push is on). */
+export interface AppNotification {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  /** The booking it is about, if any (tapping opens My Trips). */
+  bookingId: string | null;
+  createdAt: string;
+  readAt: string | null;
+}
+
 /** What a shared ride link shows. Personal details are trimmed. */
 export interface SharedRide {
   riderName: string;

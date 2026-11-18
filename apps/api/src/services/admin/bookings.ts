@@ -2,7 +2,8 @@
 // cancel (with wallet refund) or complete. Each action is audited.
 import { ADMIN_RULES, type AdminBookingDetail, type BookingFilters, type Page, type WalletTransaction } from "@quikfly/shared";
 import { conflict, notFound } from "../../lib/errors";
-import { cancelBookingRow, completeBookingRow, refundFor } from "../bookings";
+import { cancelBookingRow, completeBookingRow, refundFor, refundText } from "../bookings";
+import { notify } from "../notifications";
 import { audit, listAudit } from "./audit";
 import { LOCAL_DATE, toAdminBooking, type AdminBookingRow } from "./stats";
 
@@ -68,6 +69,7 @@ export async function adminCancel(db: D1Database, adminId: string, id: string, r
   const row = await cancelBookingRow(db, null, id, "Refund by QuikFly");
   if (!row) await assertActive(db, id); // lost a race: explain the new status
   await audit(db, { adminId, action: "booking.cancel", entity: "booking", entityId: id, detail: { reason, amount: row!.amount, payment: row!.payment, refund: row!.refund_amount, refundedToWallet: row!.payment === "wallet" && (row!.refund_amount ?? 0) > 0 } });
+  await notify(db, row!.user_id, { kind: "booking.cancelled_by_staff", ref: id, bookingId: id, title: `QuikFly cancelled · ${row!.title}`, body: `${reason} ${refundText(row!)}` });
   return bookingDetail(db, id);
 }
 
@@ -76,5 +78,9 @@ export async function adminComplete(db: D1Database, adminId: string, id: string)
   const done = await completeBookingRow(db, id);
   if (!done) await assertActive(db, id); // throws: not found, or already finished
   await audit(db, { adminId, action: "booking.complete", entity: "booking", entityId: id, detail: done!.deposit ? { depositReturned: done!.deposit, toWallet: done!.payment === "wallet" } : undefined });
+  if (done!.deposit) {
+    await notify(db, done!.user_id, { kind: "booking.deposit_returned", ref: id, bookingId: id, title: `Deposit returned · ${done!.title}`,
+      body: done!.payment === "wallet" ? `₹${done!.deposit.toLocaleString("en-IN")} is back in your QuikFly wallet.` : `₹${done!.deposit.toLocaleString("en-IN")} is due back to you.` });
+  }
   return bookingDetail(db, id);
 }

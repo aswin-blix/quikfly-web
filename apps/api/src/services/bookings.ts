@@ -5,6 +5,7 @@ import { checkCoupon } from "./offers";
 import { usableQuote } from "./quotes";
 import { ownRide } from "./rides";
 import { getSettings } from "./settings";
+import { notify } from "./notifications";
 
 export interface BookingRow {
   id: string; user_id: string; service: ServiceKey; title: string; subtitle: string; amount: number;
@@ -133,6 +134,11 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
     if (quoteId && !results[0].meta.changes) throw conflict("This price was already used for a booking.");
     throw badRequest("Not enough wallet balance. Choose another payment method.");
   }
+  // Ride-now riders are watching the trip; everything else (and rides booked ahead) gets a notification.
+  if (rideId === null || startsAt) {
+    await notify(db, userId, { kind: "booking.confirmed", ref: id, bookingId: id, title: `Booking confirmed · ${booking.title}`,
+      body: `${booking.subtitle}. ₹${amount.toLocaleString("en-IN")}${startsAt ? `, ${new Date(startsAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" })}` : ""}.` });
+  }
   return booking;
 }
 
@@ -142,6 +148,14 @@ async function notActive(db: D1Database, userId: string, id: string): Promise<ne
     .first<{ status: BookingStatus }>();
   if (!row) throw notFound("Booking not found.");
   throw conflict(`This booking is already ${row.status}.`);
+}
+
+/** One line about what a cancellation gave back (for notifications). */
+export function refundText(row: Pick<BookingRow, "payment" | "refund_amount" | "cancel_fee">): string {
+  const back = row.refund_amount ?? 0;
+  const fee = row.cancel_fee ? ` (cancellation fee ₹${row.cancel_fee.toLocaleString("en-IN")})` : "";
+  if (!back) return `No refund under the cancellation policy${fee}.`;
+  return row.payment === "wallet" ? `₹${back.toLocaleString("en-IN")} is back in your QuikFly wallet${fee}.` : `Refund due: ₹${back.toLocaleString("en-IN")}${fee}.`;
 }
 
 /** What cancelling a booking now gives back, per its service's policy and start time. */
@@ -200,7 +214,9 @@ export async function cancelBookingRow(db: D1Database, userId: string | null, id
 
 export async function cancelBooking(db: D1Database, userId: string, id: string, reason: string | null = null): Promise<Booking> {
   const row = await cancelBookingRow(db, userId, id, "Refund", reason);
-  return row ? toBooking(row) : notActive(db, userId, id);
+  if (!row) return notActive(db, userId, id);
+  await notify(db, userId, { kind: "booking.cancelled", ref: id, bookingId: id, title: `Cancelled · ${row.title}`, body: refundText(row) });
+  return toBooking(row);
 }
 
 /**
