@@ -4,7 +4,7 @@
 // done, which makes the vendor and its vehicle live. Every decision is audited.
 import {
   VENDOR_SECTION_LABEL, VENDOR_SECTIONS,
-  type AdminVendorDetail, type VendorSection, type VendorStatus, type VendorSummary,
+  type AdminVendorDetail, type VendorSection, type VendorStatus, type VendorSummary, type VendorVehicleType,
 } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { documentResponse, loadVendor, parseSections, toApplication } from "../vendors";
@@ -14,17 +14,17 @@ import { auditStatement } from "./audit";
 
 interface SummaryRow {
   id: string; status: VendorStatus; city: string | null; sections: string; submitted_at: string | null; updated_at: string;
-  name: string; phone: string; type: VendorSummary["vehicle"] extends infer V ? (V extends { type: infer T } ? T | null : null) : null; reg_number: string | null;
+  name: string; phone: string; type: VendorVehicleType | null; reg_number: string | null;
 }
 
-/** Waiting for review: oldest first. Everything else: most recently changed first. */
+/** Waiting for review: oldest first. Everything else: most recently changed first. Deleted accounts are left out. */
 export async function vendorQueue(db: D1Database, status: VendorStatus): Promise<VendorSummary[]> {
   const order = status === "submitted" ? "v.submitted_at ASC" : "v.updated_at DESC";
   const { results } = await db.prepare(
     `SELECT v.id, v.status, v.city, v.sections, v.submitted_at, v.updated_at, u.name, u.phone,
             (SELECT type FROM vendor_vehicles WHERE vendor_id = v.id ORDER BY created_at LIMIT 1) AS type,
             (SELECT reg_number FROM vendor_vehicles WHERE vendor_id = v.id ORDER BY created_at LIMIT 1) AS reg_number
-     FROM vendors v JOIN users u ON u.id = v.user_id WHERE v.status = ? ORDER BY ${order} LIMIT 200`,
+     FROM vendors v JOIN users u ON u.id = v.user_id WHERE v.status = ? AND u.deleted_at IS NULL ORDER BY ${order} LIMIT 200`,
   ).bind(status).all<SummaryRow>();
   return results.map((r) => {
     const sections = parseSections(r.sections);

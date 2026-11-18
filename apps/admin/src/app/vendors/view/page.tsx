@@ -42,7 +42,7 @@ function DocPhoto({ id, kind, version }: { id: string; kind: VendorDocument; ver
   }, [id, kind, version]);
   if (failed) return <p className="text-xs text-muted flex items-center gap-1.5"><ImageOff size={14} />{failed}</p>;
   if (!url) return <div className="skeleton h-40 w-full max-w-xs" />;
-  return <a href={url} target="_blank" rel="noreferrer"><img src={url} alt={`${kind} photo`} className="max-h-56 rounded-lg border border-line object-contain bg-fg/5" /></a>;
+  return <a href={url} target="_blank" rel="noreferrer"><img src={url} alt={kind === "photo" ? "Partner's profile photo" : kind === "rc" ? "Registration certificate" : "Insurance certificate"} className="max-h-56 rounded-lg border border-line object-contain bg-fg/5" /></a>;
 }
 
 function Detail({ id }: { id: string }) {
