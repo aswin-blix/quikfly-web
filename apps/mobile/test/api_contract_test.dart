@@ -129,6 +129,12 @@ void main() {
     expect(await api.markNotificationsRead(), 0);
   });
 
+  test('credits summary parses', () async {
+    final sum = await api.credits();
+    expect(sum.balance, greaterThanOrEqualTo(0));
+    expect(sum.nextExpiry == null, sum.balance == 0);
+  });
+
   test('errors carry the API message', () async {
     await expectLater(api.verifyOtp('+91 $phone', '0000'), throwsA(isA<ApiException>().having((e) => e.message, 'message', isNotEmpty)));
   });

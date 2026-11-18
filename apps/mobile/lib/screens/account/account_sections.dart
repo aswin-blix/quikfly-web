@@ -199,6 +199,8 @@ class _ProfileState extends ConsumerState<_Profile> with _Action {
 /* ───────────── Wallet ───────────── */
 
 final _walletProvider = FutureProvider.autoDispose<List<WalletTransaction>>((ref) => ref.watch(apiProvider).wallet());
+final _creditsProvider = FutureProvider.autoDispose<CreditSummary>((ref) => ref.watch(apiProvider).credits());
+const _creditKindLabel = {'earned': 'Earned', 'spent': 'Used', 'returned': 'Returned', 'expired': 'Expired'};
 
 class _Wallet extends ConsumerWidget {
   const _Wallet();
@@ -207,9 +209,16 @@ class _Wallet extends ConsumerWidget {
     final c = context.qf;
     final user = ref.watch(userProvider)!;
     final history = ref.watch(_walletProvider);
+    final credits = ref.watch(_creditsProvider);
+    final settings = ref.watch(configProvider).value?.settings ?? const Settings({});
+    final rates = [
+      for (final (label, key) in [('Rides', ServiceKey.car), ('Bus', ServiceKey.bus), ('Holidays', ServiceKey.tours), ('Rent a car', ServiceKey.rent), ('Group travel', ServiceKey.rentals)])
+        if (settings.creditPercent(key) > 0) '$label · ${settings.creditPercent(key)}%',
+    ];
     return ScreenList(
       onRefresh: () async {
         ref.invalidate(_walletProvider);
+        ref.invalidate(_creditsProvider);
         await ref.read(sessionProvider.notifier).refresh();
       },
       children: [
@@ -224,7 +233,60 @@ class _Wallet extends ConsumerWidget {
           ]),
         ),
         const SizedBox(height: 18),
-        const SectionTitle('History'),
+        const SectionTitle('QuikFly Credits'),
+        _sub(context, "Earned back on completed trips. Credits pay up to ${settings.creditsMaxRedeemPercent}% of a booking, expire ${settings.creditsExpiryDays} days after you get them, and can't be withdrawn."),
+        Panel(
+          child: Row(children: [
+            Icon(Icons.toll_outlined, color: c.accent, size: 30),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Credits to use', style: TextStyle(color: c.fgMuted, fontSize: 12)),
+                Text(inr(user.creditBalance), style: Theme.of(context).textTheme.headlineMedium),
+                if (credits.value?.nextExpiry != null)
+                  Text('${inr(credits.value!.nextExpiryAmount)} expire on ${shortDate(credits.value!.nextExpiry!)}', style: TextStyle(color: c.fgSubtle, fontSize: 12)),
+              ]),
+            ),
+          ]),
+        ),
+        if (rates.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text('How much comes back (up to ${inr(settings.creditsCap)} a booking)', style: TextStyle(color: c.fgMuted, fontSize: 12)),
+          const SizedBox(height: 6),
+          Wrap(spacing: 6, runSpacing: 6, children: [for (final r in rates) Chip(label: Text(r, style: const TextStyle(fontSize: 12)), visualDensity: VisualDensity.compact)]),
+        ],
+        const SizedBox(height: 8),
+        ...credits.when(
+          loading: () => const [Skeleton(height: 60)],
+          error: (e, _) => [ErrorBox(errorText(e), onRetry: () => ref.invalidate(_creditsProvider))],
+          data: (sum) => sum.items.isEmpty
+              ? [Text('Complete a trip to earn your first credits.', style: TextStyle(color: c.fgMuted))]
+              : [
+                  Panel(
+                    padding: EdgeInsets.zero,
+                    child: Column(children: [
+                      for (var i = 0; i < sum.items.length; i++) ...[
+                        if (i > 0) Divider(color: c.border),
+                        Builder(builder: (_) {
+                          final t = sum.items[i];
+                          final gained = t.amount >= 0;
+                          final left = gained && t.remaining > 0 && t.expiresAt != null
+                              ? ' · ${t.remaining < t.amount ? '${inr(t.remaining)} left, ' : ''}expires ${shortDate(t.expiresAt!)}'
+                              : '';
+                          return ListTile(
+                            leading: Icon(Icons.toll_outlined, color: gained ? c.accent : c.fgMuted),
+                            title: Text(t.note),
+                            subtitle: Text('${_creditKindLabel[t.kind] ?? t.kind} · ${dateTime(t.createdAt)}$left'),
+                            trailing: Text(inrSigned(t.amount), style: TextStyle(fontWeight: FontWeight.w700, color: gained ? c.accent : c.fg)),
+                          );
+                        }),
+                      ],
+                    ]),
+                  ),
+                ],
+        ),
+        const SizedBox(height: 18),
+        const SectionTitle('Wallet history'),
         ...history.when(
           loading: () => const [Skeleton(height: 60), SizedBox(height: 8), Skeleton(height: 60)],
           error: (e, _) => [ErrorBox(errorText(e), onRetry: () => ref.invalidate(_walletProvider))],

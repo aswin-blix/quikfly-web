@@ -16,6 +16,7 @@ IconData _icon(String kind) => switch (kind) {
       'licence.approved' => Icons.verified_outlined,
       'licence.rejected' => Icons.badge_outlined,
       'ride.reminder' => Icons.schedule,
+      'credits.earned' => Icons.toll_outlined,
       _ => Icons.notifications_none,
     };
 
@@ -55,7 +56,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Panel(
                     highlighted: n.readAt == null,
-                    onTap: n.bookingId != null
+                    onTap: n.kind == 'credits.earned'
+                        ? () => context.push('/account/wallet')
+                        : n.bookingId != null
                         ? () => context.go('/trips')
                         : n.kind.startsWith('licence')
                             ? () => context.push('/account/licence')
