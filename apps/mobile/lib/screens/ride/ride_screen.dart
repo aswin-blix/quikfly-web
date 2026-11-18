@@ -590,6 +590,15 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
             label: Text('Add a stop (${(ref.watch(configProvider).value?.settings ?? const Settings({})).rideStopMinutes} min wait included)'),
           ),
         ),
+      if (!_bike)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => context.push('/group?type=outstation&pax=2'),
+            icon: const Icon(Icons.route, size: 18),
+            label: const Text('Going out of town? Outstation cabs'),
+          ),
+        ),
       const SizedBox(height: 8),
       _label('When'),
       Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [

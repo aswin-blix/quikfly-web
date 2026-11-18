@@ -142,6 +142,9 @@ export const RENTAL_CARS: RentalCar[] = [
 ];
 
 export const TRAVEL_VEHICLES: TravelVehicle[] = [
+  // Outstation cabs (also added to existing databases by migration 0012).
+  { id: "tv6", name: "Sedan (Swift Dzire or similar)", seats: 4, perKm: 12, minKmPerDay: 250, driverBataPerDay: 300, localPackage: 2000, features: ["AC", "Boot for 2 bags", "Outstation cab"] },
+  { id: "tv7", name: "SUV (Maruti Ertiga or similar)", seats: 6, perKm: 15, minKmPerDay: 250, driverBataPerDay: 350, localPackage: 2400, features: ["AC", "Roof carrier", "Outstation cab"] },
   { id: "tv1", name: "Innova Crysta", seats: 7, perKm: 19, minKmPerDay: 250, driverBataPerDay: 400, localPackage: 2800, features: ["AC", "Push-back seats", "Carrier"] },
   { id: "tv2", name: "Tempo Traveller 12-seater", seats: 12, perKm: 24, minKmPerDay: 250, driverBataPerDay: 500, localPackage: 3800, features: ["AC", "Pushback", "Music system"] },
   { id: "tv3", name: "Force Urbania 17-seater", seats: 17, perKm: 32, minKmPerDay: 300, driverBataPerDay: 600, localPackage: 5500, features: ["AC", "Recliners", "USB charging", "LED TV"] },

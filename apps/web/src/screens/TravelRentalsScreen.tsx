@@ -10,10 +10,10 @@ import { useTravelVehicles } from "@/components/catalog-hooks";
 import { api } from "@/lib/api";
 import { cx, inr, prettyDate, todayISO } from "@/lib/format";
 import { useNav, useQuery } from "@/lib/nav";
-import { cancelPolicyText, groupBillKm, priceGroup, sumLines, type TravelVehicle } from "@quikfly/shared";
+import { cancelPolicyText, groupBillKm, groupDays, priceGroup, sumLines, type GroupTrip, type TravelVehicle } from "@quikfly/shared";
 import { serviceByKey } from "@/lib/services";
 
-const vehicleImg = (v: TravelVehicle) => (v.seats <= 7 ? serviceByKey("rent").image : v.seats >= 26 ? serviceByKey("bus").image : serviceByKey("rentals").image);
+const vehicleImg = (v: TravelVehicle) => (v.seats <= 4 ? serviceByKey("car").image : v.seats <= 7 ? serviceByKey("rent").image : v.seats >= 26 ? serviceByKey("bus").image : serviceByKey("rentals").image);
 
 export function TravelRentalsScreen() {
   const q = useQuery();
@@ -22,7 +22,7 @@ export function TravelRentalsScreen() {
   const settings = useSettings();
   const destinations = useConfig()?.groupDestinations ?? [];
   const [pricing, setPricing] = useState<string | null>(null);
-  const [type, setType] = useState<"outstation" | "local">("outstation");
+  const [type, setType] = useState<GroupTrip>(() => (["local", "outstation", "oneway"].includes(q.get("type") ?? "") ? q.get("type") as GroupTrip : "outstation"));
   const [dest, setDest] = useState("Pondicherry");
   const [date, setDate] = useState(q.get("date") || todayISO(2));
   const [days, setDays] = useState(2);
@@ -32,23 +32,25 @@ export function TravelRentalsScreen() {
   const destination = destinations.find((d) => d.name === dest) ?? destinations[0];
   const oneWayKm = destination?.km ?? 0;
   // Live estimates (same maths and settings as the API); book() charges the API's quote.
-  const billKm = (v: TravelVehicle) => groupBillKm(v, type, oneWayKm, days, settings);
+  const billDays = groupDays(type, days);
+  const billKm = (v: TravelVehicle) => groupBillKm(v, type, oneWayKm, billDays, settings);
   const estimate = (v: TravelVehicle) => sumLines(priceGroup(v, type, oneWayKm, days, settings));
-  const fits = vehicles.filter((v) => v.seats >= pax);
+  const fits = vehicles.filter((v) => v.seats >= pax).sort((a, b) => a.seats - b.seats);
 
   async function book(v: TravelVehicle) {
     setPricing(v.id);
     let quote;
     try {
-      quote = await api.quotes.create({ service: "rentals", vehicleId: v.id, trip: type, destinationId: type === "outstation" ? destination?.id : undefined, days, start: date });
+      quote = await api.quotes.create({ service: "rentals", vehicleId: v.id, trip: type, destinationId: type === "local" ? undefined : destination?.id, days: billDays, start: date });
     } catch (e) {
       toast((e as Error).message, "err");
       setPricing(null);
       return;
     }
     setDraft({
-      service: "rentals", title: v.name, subtitle: type === "local" ? `Chennai local · ${days} day(s)` : `Chennai ⇄ ${dest} round trip`, image: vehicleImg(v),
-      summary: [["Trip", type === "local" ? `Local · 8 hr / ${settings.groupLocalKmPerDay} km per day` : `Round trip to ${dest}`], ["Start", prettyDate(date)], ["Days", String(days)], ["Passengers", String(pax)], ["Billable distance", `${billKm(v)} km`]],
+      service: "rentals", title: v.name, image: vehicleImg(v),
+      subtitle: type === "local" ? `Chennai local · ${days} day(s)` : type === "oneway" ? `Chennai → ${dest} one way` : `Chennai ⇄ ${dest} round trip`,
+      summary: [["Trip", type === "local" ? `Local · 8 hr / ${settings.groupLocalKmPerDay} km per day` : type === "oneway" ? `One way to ${dest}` : `Round trip to ${dest}`], ["Start", prettyDate(date)], ["Days", String(billDays)], ["Passengers", String(pax)], ["Billable distance", `${billKm(v)} km`]],
       quote,
       travellers: ["Lead traveller"],
       policy: `${cancelPolicyText(settings, "rentals")} Tolls, parking & state permits paid on actuals.`,
@@ -61,22 +63,24 @@ export function TravelRentalsScreen() {
 
   return (
     <>
-      <PageHeader crumbs={[["Home", "/"], ["Group Travel"]]} title="Travel rentals for groups" icon={<Caravan className="text-gold" size={36} />}
-        sub="Family trips, pilgrimages, weddings and corporate outings. Tempo travellers to 45-seat coaches with experienced drivers.">
+      <PageHeader crumbs={[["Home", "/"], ["Group Travel"]]} title="Outstation cabs & group travel" icon={<Caravan className="text-gold" size={36} />}
+        sub="Intercity cabs one way or round trip, and tempo travellers to 45-seat coaches for family trips, pilgrimages and outings. All with experienced drivers.">
         <div className="panel gold-border p-4 mt-8 grid md:grid-cols-[auto_1fr_1fr_auto_auto] gap-4 items-end">
-          <Segmented id="trip-type" value={type} onChange={setType} options={[["outstation", "Outstation"], ["local", "Local"]]} />
-          {type === "outstation" ? (
+          <Segmented id="trip-type" value={type} onChange={setType} options={[["outstation", "Round trip"], ["oneway", "One way"], ["local", "Local"]]} />
+          {type !== "local" ? (
             <div><label className="label" htmlFor="dst">Chennai to</label>
               <select id="dst" className="field mt-1.5" value={dest} onChange={(e) => setDest(e.target.value)}>{destinations.map((d) => <option key={d.id}>{d.name}</option>)}</select></div>
           ) : <div><p className="label">Package</p><div className="field mt-1.5 text-muted">8 hrs / {settings.groupLocalKmPerDay} km per day</div></div>}
           <div><label className="label" htmlFor="tdate">Start date</label><input id="tdate" type="date" className="field mt-1.5" min={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></div>
-          <div className="min-w-[140px]"><p className="label mb-2">Days</p><Counter label="" value={days} min={1} max={15} onChange={setDays} /></div>
+          {type === "oneway"
+            ? <div className="min-w-[140px]"><p className="label mb-2">Days</p><div className="field text-muted">1 (drop)</div></div>
+            : <div className="min-w-[140px]"><p className="label mb-2">Days</p><Counter label="" value={days} min={1} max={15} onChange={setDays} /></div>}
           <div className="min-w-[140px]"><p className="label mb-2">Passengers</p><Counter label="" value={pax} min={1} max={45} onChange={setPax} /></div>
         </div>
       </PageHeader>
 
       <section className="max-w-7xl mx-auto px-4">
-        <p className="text-sm text-muted mb-4">{fits.length} vehicles seat {pax}+ {type === "outstation" && <>· ~{oneWayKm * 2} km round trip</>} · tolls & permits extra · tick up to 3 to compare</p>
+        <p className="text-sm text-muted mb-4">{fits.length} vehicles seat {pax}+ {type === "outstation" && <>· ~{oneWayKm * 2} km round trip{days > 1 && settings.groupDriverNightAllowance > 0 && <> · driver night allowance {inr(settings.groupDriverNightAllowance)}/night</>}</>}{type === "oneway" && <>· ~{oneWayKm} km one way (+{settings.groupOneWaySurchargePercent}% per km: the cab returns empty)</>} · tolls & permits extra · tick up to 3 to compare</p>
         <motion.div layout className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
           <AnimatePresence mode="popLayout">
             {fits.map((v) => (

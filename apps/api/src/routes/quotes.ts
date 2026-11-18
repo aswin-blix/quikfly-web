@@ -1,7 +1,7 @@
 // POST /quotes prices a bus, holiday, self-drive or group booking. POST /offers/check
 // tries a coupon against a quote or a ride. Bookings then refer to the quote by id.
 import { Hono } from "hono";
-import { GENDERS, PATTERNS, RENT_KM_PLANS, RENT_PROTECTION, type Gender, type QuoteRequest } from "@quikfly/shared";
+import { GENDERS, GROUP_TRIPS, PATTERNS, RENT_KM_PLANS, RENT_PROTECTION, type Gender, type QuoteRequest } from "@quikfly/shared";
 import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
 import { bool, int, jsonBody, matches, oneOf, optStr, str } from "../lib/validate";
@@ -42,7 +42,7 @@ function parseQuoteRequest(body: Record<string, unknown>): QuoteRequest {
       };
     case "rentals":
       return {
-        service, vehicleId: str(body, "vehicleId", 40), trip: oneOf(body, "trip", ["local", "outstation"] as const),
+        service, vehicleId: str(body, "vehicleId", 40), trip: oneOf(body, "trip", GROUP_TRIPS),
         destinationId: optStr(body, "destinationId", 40), days: int(body, "days", 1, 60),
         start: matches(str(body, "start", 10), PATTERNS.isoDate, '"start" must be YYYY-MM-DD.'),
       };

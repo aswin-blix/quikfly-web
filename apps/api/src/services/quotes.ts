@@ -42,7 +42,7 @@ async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLi
     case "rentals": {
       const vehicle = await visibleById(db, "travelVehicle", req.vehicleId);
       if (req.days < 1 || req.days > BOOKING_LIMITS.groupMaxDays) throw badRequest(`Trips can be 1 to ${BOOKING_LIMITS.groupMaxDays} days.`);
-      const km = req.trip === "outstation" ? (await visibleById(db, "groupDestination", req.destinationId ?? "")).km : 0;
+      const km = req.trip === "local" ? 0 : (await visibleById(db, "groupDestination", req.destinationId ?? "")).km;
       return { lines: priceGroup(vehicle, req.trip, km, req.days, settings), startsAt: quoteStartsAt(req) };
     }
   }

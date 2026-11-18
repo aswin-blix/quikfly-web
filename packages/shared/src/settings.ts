@@ -74,6 +74,10 @@ export interface Settings {
 
   /** Kilometres included per day in the group-travel local package. */
   groupLocalKmPerDay: number;
+  /** One-way trips cost this much more per km than round trips (the vehicle returns empty). */
+  groupOneWaySurchargePercent: number;
+  /** Paid to the driver for each night of a multi-day round trip (₹). 0 = none. */
+  groupDriverNightAllowance: number;
 
   /**
    * Refund tiers per service, as "notice:percent" pairs with the longest notice first,
@@ -131,6 +135,8 @@ export const DEFAULT_SETTINGS: Settings = {
   rentDocuments: "Driving licence held for at least 1 year; Aadhaar or passport; Driver aged 21 or over",
   rentRoadsideAssistance: false,
   groupLocalKmPerDay: 80,
+  groupOneWaySurchargePercent: 15,
+  groupDriverNightAllowance: 250,
   cancelPolicyBus: "12h:100, 4h:50",
   cancelPolicyTours: "15d:100, 7d:50",
   cancelPolicyRent: "24h:100",
@@ -190,6 +196,8 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   rentDocuments: { type: "text", min: 3, max: 300 },
   rentRoadsideAssistance: { type: "boolean" },
   groupLocalKmPerDay: { type: "number", min: 10, max: 500, integer: true },
+  groupOneWaySurchargePercent: percent,
+  groupDriverNightAllowance: money(5000),
   cancelPolicyBus: cancelPolicy,
   cancelPolicyTours: cancelPolicy,
   cancelPolicyRent: cancelPolicy,

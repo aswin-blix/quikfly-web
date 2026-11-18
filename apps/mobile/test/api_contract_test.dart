@@ -113,6 +113,9 @@ void main() {
     final vehicles = await api.travelVehicles();
     final group = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'outstation', 'destinationId': config.groupDestinations.first.id, 'days': 2, 'start': fmt(start).substring(0, 10)});
     expect(group.total, greaterThan(0));
+    // One-way outstation cab: billed as a single day.
+    final oneWay = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'oneway', 'destinationId': config.groupDestinations.first.id, 'days': 1, 'start': fmt(start).substring(0, 10)});
+    expect(oneWay.lines.first.label, contains('one way'));
     final local = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'local', 'days': 1, 'start': fmt(start).substring(0, 10)});
     expect(local.total, vehicles.first.localPackage);
     final u = await api.submitLicence('TN0920190001234', fmt(DateTime.now().add(const Duration(days: 400))).substring(0, 10));
