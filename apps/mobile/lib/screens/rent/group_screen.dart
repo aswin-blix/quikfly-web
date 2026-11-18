@@ -131,6 +131,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
     final cfg = ref.watch(configProvider).value;
     final dests = cfg?.groupDestinations ?? const <GroupDestination>[];
     final localKm = cfg?.settings.groupLocalKmPerDay ?? 80;
+    if (!(cfg?.settings.featureOutstation ?? true) && _trip != 'local') Future.microtask(() { if (mounted) setState(() => _trip = 'local'); });
     _destId ??= dests.where((d) => d.name == 'Pondicherry').firstOrNull?.id ?? dests.firstOrNull?.id;
     final dest = dests.where((d) => d.id == _destId).firstOrNull;
     final vehicles = ref.watch(travelVehiclesProvider);
@@ -145,7 +146,7 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
           Panel(
             highlighted: true,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SegmentedButton<String>(
+              if (cfg?.settings.featureOutstation ?? true) SegmentedButton<String>(
                 showSelectedIcon: false,
                 segments: const [
                   ButtonSegment(value: 'outstation', label: Text('Round trip')),

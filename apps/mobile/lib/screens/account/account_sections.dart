@@ -213,7 +213,7 @@ class _Wallet extends ConsumerWidget {
     final settings = ref.watch(configProvider).value?.settings ?? const Settings({});
     final rates = [
       for (final (label, key) in [('Rides', ServiceKey.car), ('Bus', ServiceKey.bus), ('Holidays', ServiceKey.tours), ('Rent a car', ServiceKey.rent), ('Group travel', ServiceKey.rentals)])
-        if (settings.creditPercent(key) > 0) '$label · ${settings.creditPercent(key)}%',
+        if (settings.creditPercent(key) > 0 && (key == ServiceKey.car ? settings.serviceOn(ServiceKey.car) || settings.serviceOn(ServiceKey.bike) : settings.serviceOn(key))) '$label · ${settings.creditPercent(key)}%',
     ];
     return ScreenList(
       onRefresh: () async {

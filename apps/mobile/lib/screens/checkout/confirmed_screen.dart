@@ -83,7 +83,7 @@ class ConfirmedScreen extends ConsumerWidget {
               ),
               ...() {
                 final cfg = ref.watch(configProvider).value;
-                final offer = cfg == null ? null : rideOffer(b, cfg.settings, (id) => cfg.places.where((p) => p.id == id).firstOrNull?.name);
+                final offer = cfg == null || !cfg.settings.featureTripOffers || !cfg.settings.serviceOn(ServiceKey.car) ? null : rideOffer(b, cfg.settings, (id) => cfg.places.where((p) => p.id == id).firstOrNull?.name);
                 if (offer == null) return const <Widget>[];
                 return [
                   const SizedBox(height: 14),

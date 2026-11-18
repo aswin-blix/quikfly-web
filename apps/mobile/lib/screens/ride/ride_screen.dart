@@ -459,7 +459,18 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         RidePhase.done => _done(),
       };
 
+  Settings get _settings => ref.watch(configProvider).value?.settings ?? const Settings({});
+
+  /// Feature switches turned off while this screen is open (or a link asked for one): fall back.
+  void _applySwitches() {
+    final st = _settings;
+    if (!st.featureRideScheduling && _at != null) Future.microtask(() { if (mounted) { setState(() => _at = null); _loadQuotes(); } });
+    if (!st.featureMultiStop && _stops.isNotEmpty) Future.microtask(() { if (mounted) { setState(() => _stops.clear()); _loadQuotes(); } });
+    if (!st.featureCashRides && _payment == PaymentMethod.cash) Future.microtask(() { if (mounted) setState(() => _payment = PaymentMethod.upi); });
+  }
+
   Widget _plan(List<Place> places) {
+    _applySwitches();
     final c = context.qf;
     final user = ref.watch(userProvider);
     final saved = ref.watch(savedPlacesProvider).value ?? const <SavedPlace>[];
@@ -590,7 +601,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
           ),
         ]),
       ],
-      if (_stops.length < Rules.rideMaxStops)
+      if (_settings.featureMultiStop && _stops.length < Rules.rideMaxStops)
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
@@ -599,7 +610,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
             label: Text('Add a stop (${(ref.watch(configProvider).value?.settings ?? const Settings({})).rideStopMinutes} min wait included)'),
           ),
         ),
-      if (!_bike)
+      if (!_bike && _settings.serviceOn(ServiceKey.rentals) && _settings.featureOutstation)
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
@@ -609,6 +620,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
           ),
         ),
       const SizedBox(height: 8),
+      if (_settings.featureRideScheduling) ...[
       _label('When'),
       Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
         ChoiceChip(
@@ -627,6 +639,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
               'Fare locked now. Your driver is assigned ${Rules.rideStartWindowMinutes} min before pickup; free cancellation until ${(ref.watch(configProvider).value?.settings ?? const Settings({})).rideScheduleFreeCancelMinutes} min before.',
               style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
         ),
+      ],
       if (_quoteErr != null) ...[const SizedBox(height: 14), ErrorBox(_quoteErr!, onRetry: _loadQuotes)],
       if (_loadingQuotes) ...[const SizedBox(height: 16), for (var i = 0; i < 3; i++) const Padding(padding: EdgeInsets.only(bottom: 8), child: Skeleton(height: 66))],
       if (_quotes != null && !_loadingQuotes && _quotes!.isNotEmpty) ...[
@@ -665,7 +678,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
           ),
         const SizedBox(height: 6),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final p in ridePayments)
+          for (final p in ridePayments.where((p) => p != PaymentMethod.cash || _settings.featureCashRides))
             ChoiceChip(
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               label: Text(paymentLabel(p.name)),
