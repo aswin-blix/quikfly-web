@@ -7,3 +7,4 @@ export * from "./catalog-kinds";
 export * from "./pricing";
 export * from "./cancellation";
 export * from "./credits";
+export * from "./vendor";

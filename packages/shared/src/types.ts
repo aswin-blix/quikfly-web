@@ -121,6 +121,7 @@ export interface CreditSummary {
 export const NOTIFICATION_KINDS = [
   "booking.confirmed", "booking.cancelled", "booking.cancelled_by_staff", "booking.deposit_returned",
   "licence.approved", "licence.rejected", "ride.reminder", "credits.earned",
+  "vendor.changes", "vendor.approved", "vendor.rejected", "vendor.active",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

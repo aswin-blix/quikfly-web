@@ -13,6 +13,8 @@
     // Comma-separated website origins allowed to call the API, or "*" for any.
     "ALLOWED_ORIGINS": "*"
   },
+  // Partner document photos (private). Create once: npx wrangler r2 bucket create quikfly-docs
+  "r2_buckets": [{ "binding": "DOCS", "bucket_name": "quikfly-docs" }],
   "d1_databases": [
     {
       "binding": "DB",

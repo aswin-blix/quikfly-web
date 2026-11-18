@@ -7,6 +7,8 @@ export interface Env {
   ALLOWED_ORIGINS: string;
   /** Secret (optional): a Firebase service account JSON key. Set it to switch push notifications on. */
   FCM_SERVICE_ACCOUNT?: string;
+  /** R2 bucket for partner document photos (wrangler.jsonc → r2_buckets). Missing = uploads switched off. */
+  DOCS?: R2Bucket;
 }
 
 /** Hono app typing shared by every router. `user` is set by requireUser, `admin` by requireAdmin. */

@@ -110,6 +110,15 @@ export const SETTING_GROUPS: SettingGroup[] = [
     ],
   },
   {
+    title: "Partners",
+    sub: "Vehicle owners who join through the QuikFly Partner app.",
+    fields: [
+      { key: "vendorJoiningFee", type: "number", unit: "₹", label: "Joining fee", help: "Shown in onboarding step 2. Demo: no money is collected; staff confirm it. 0 skips the payment step." },
+      { key: "vendorMaxVehicleAgeYears", type: "number", unit: "years", label: "Oldest vehicle accepted", help: "Vehicles older than this can't register. The 2025 aggregator guidelines allow up to 8 years for cabs." },
+      { key: "vendorAuditAddress", type: "text", label: "Vehicle audit address", help: "Where partners bring their vehicle for the audit." },
+    ],
+  },
+  {
     title: "Licence checks",
     sub: "Self-drive customers submit a driving licence before pickup.",
     fields: [
