@@ -85,6 +85,21 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/bookings/:id/cancel` | optional `{ reason }` (a `RIDE_CANCEL_REASONS` key, else 400). Rides: a rider cancelling after the free minutes without a valid (driver-side) reason pays the cancellation fee (% of the fare, capped; settings), kept from a wallet refund or recorded as owed; `cancelReason` and `cancelFee` are stored. Others: cancel; refunds the share the service's cancellation policy allows for the notice given (settings `cancelPolicyBus/Tours/Rent/Group`; rides and bookings without `startsAt` get it all; a `deposit` always comes back in full), to the wallet if paid from it, in the same transaction; `refundAmount` records it; 409 if already cancelled or completed |
 | POST 🔒 | `/bookings/:id/complete` | mark a finished **ride** (called by the website and app when a simulated ride ends; the driver app will own this). Other services: 409, staff close them |
 
+### Partner (`/vendor/*`, QuikFly Partner app; customer login)
+
+| Method | Path | What it does |
+|---|---|---|
+| GET 🔒 | `/vendor` | `{ application }`, null before one is started |
+| POST 🔒 | `/vendor` | start (or return) the application → 201 |
+| PUT 🔒 | `/vendor/sections/:section` | save `vehicle` `{ city, type, fuel, regNumber, purchaseDate }`, `bank` `{ holder, account, ifsc }`, `rc` `{ ownerName, validTill }`, `insurance` `{ insurer, policyNumber, validTill }` or `audit` `{ date, slot }`; only while `draft`. Rules in `packages/shared/src/vendor.ts` (registration format, vehicle age from settings, one vehicle per registration number, audit up to 30 days ahead) |
+| PUT 🔒 | `/vendor/documents/:kind` | raw JPEG/PNG/WebP body (≤ 2 MB, file signature checked) for `photo`, `rc` or `insurance`; stored in R2, replaces the old photo. 409 when R2 isn't bound |
+| GET 🔒 | `/vendor/documents/:kind` | the partner's own document photo |
+| POST 🔒 | `/vendor/reset` | clear a draft that was never sent (photos too) |
+| POST 🔒 | `/vendor/submit` | send for review (every section filled) |
+| POST 🔒 | `/vendor/onboarding/payment` | joining fee: **demo, nothing is collected** (no payment gateway) |
+| POST 🔒 | `/vendor/onboarding/agreement` | `{ name, accept: true }` after the fee |
+| POST 🔒 | `/vendor/onboarding/sticker` | ask for sticker & paint after the agreement; staff mark it done |
+
 ### Admin (`/admin/*`, staff only)
 
 Staff sign in with email + password (accounts come from `scripts/create-admin.mjs`; there is no sign-up). 🛡 = admin bearer token; the permission in brackets is checked against the role (`PERMISSIONS` in `@quikfly/shared`), 403 when the role lacks it. Every change writes an `audit_log` row.
@@ -108,6 +123,12 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | GET 🛡 | `/admin/bookings/:id` | `{ booking (with customer), wallet entries, coupon, refundIfCancelled ({ amount, percent } while active), history (staff actions) }` `[bookings.view]` |
 | POST 🛡 | `/admin/bookings/:id/cancel` | `{ reason }` (5–300 chars) → cancels an active booking; the policy's share of a wallet payment is refunded to the customer's wallet in the same transaction; 409 if already finished `[bookings.manage]` |
 | POST 🛡 | `/admin/bookings/:id/complete` | marks an active booking completed; a self-drive deposit paid from the wallet goes back to the customer in the same transaction (recorded as `refundAmount` and in the audit row either way) `[bookings.manage]` |
+| GET 🛡 | `/admin/vendors?status=` | partner applications: `submitted` (default, oldest first), `draft`, `onboarding`, `active`, `rejected`, `blocked`; deleted accounts left out `[vendors.review]` |
+| GET 🛡 | `/admin/vendors/:id` | `{ application, bankAccount, customerId }`: the full bank account number is staff-only `[vendors.review]` |
+| GET 🛡 | `/admin/vendors/:id/documents/:kind` | a document photo (`photo`, `rc`, `insurance`), private, not cached `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/:id/sections/:section` | `{ decision: approve\|changes, note? }`: approve one section or send it back (note required; the partner sees it). The `audit` section records the audit as passed or failed `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/:id/review` | `{ decision: approve\|changes\|reject, note? }`: approve (all sections approved; onboarding opens, the joining fee is fixed), return for changes (at least one section sent back), or reject (note required) `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/:id/sticker` | sticker & paint done (after the agreement): the partner and vehicle go live `[vendors.review]` |
 | GET 🛡 | `/admin/licences?status=` | licence queue: `pending` (default, oldest first), `rejected` or `verified` `[licences.review]` |
 | POST 🛡 | `/admin/licences/:userId/approve` | pending → verified `[licences.review]` |
 | POST 🛡 | `/admin/licences/:userId/reject` | `{ reason }` → rejected; the customer sees the reason (`licence.note`) and can submit again `[licences.review]` |
@@ -118,6 +139,7 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 |---|---|
 | `DEMO_OTP` | Fixed login code while there is no SMS provider. Every number signs in with it. |
 | `ALLOWED_ORIGINS` | Comma-separated website origins allowed by CORS, or `*`. |
+| `DOCS` (R2 binding) | Bucket `quikfly-docs` for partner document photos (private; only the partner and `vendors.review` staff can open them). Create it once with `npx wrangler r2 bucket create quikfly-docs` before deploying. Missing binding = uploads answer 409. |
 | `FCM_SERVICE_ACCOUNT` | **Secret**, optional: the Firebase service-account JSON. Unset = no push (the inbox still works). Set it with `npx wrangler secret put FCM_SERVICE_ACCOUNT`, never in `vars`. |
 
 **Notifications.** Events write rows to `notifications` (`services/notifications.ts`, one per user/kind/ref, so retries don't duplicate). A cron trigger (`triggers.crons`, every minute, `src/scheduled.ts`) adds `ride.reminder` rows when a scheduled ride's start window opens and, when `FCM_SERVICE_ACCOUNT` is set, sends rows not yet pushed (newer than `PUSH_MAX_AGE_MINUTES`, `PUSH_BATCH` per run) to each of the user's devices through FCM HTTP v1 (`services/push.ts`); dead tokens are removed.

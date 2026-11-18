@@ -1,6 +1,13 @@
 # QuikFly Android app
 
-Flutter app for all six QuikFly services, on the same REST API as the website (`apps/api`). Package id **`com.quikfly.app`**. Shared by a signed APK on GitHub Releases (no Play Store until the client signs off).
+Two Android apps from one Flutter project, on the same REST API as the website (`apps/api`), shared as signed APKs on GitHub Releases (no Play Store until the client signs off):
+
+| App | Flavor | Package id | Entry point |
+|---|---|---|---|
+| **QuikFly** (customers, all six services) | `customer` (default) | `com.quikfly.app` | `lib/main.dart` |
+| **QuikFly Partner** (vehicle owners: registration, onboarding) | `partner` | `com.quikfly.partner` | `lib/main_partner.dart`, screens in `lib/partner/` |
+
+They share `lib/api`, `lib/theme`, `lib/widgets` and the login screen. `pubspec.yaml` sets `default-flavor: customer`, so plain `flutter run` / `flutter build apk` build the customer app; add `--flavor partner -t lib/main_partner.dart` for the Partner app.
 
 Flutter 3.47 · Dart 3.13 · Riverpod 3 · go_router · Dio · flutter_secure_storage
 
@@ -12,6 +19,7 @@ flutter pub get
 flutter run                                                      # device/emulator → production API
 flutter run --dart-define=API_URL=http://10.0.2.2:8787/v1        # emulator → local API (npm run dev:api)
 flutter run --dart-define=API_URL=http://<PC LAN IP>:8787/v1     # phone on the same Wi-Fi → local API (start wrangler with --ip 0.0.0.0)
+flutter run --flavor partner -t lib/main_partner.dart --dart-define=API_URL=http://10.0.2.2:8787/v1   # the Partner app
 ```
 
 Quick UI checks without an emulator: build the web target and open it in Chrome at phone width (the web build is for development only, not shipped):
@@ -97,11 +105,12 @@ The upload key signs every APK shared with the client. Android installs an updat
    With `key.properties` present and no password, release builds stop with an error instead of falling back to the debug key. Without `key.properties`, release builds use the debug key (fine for testing, never for sharing).
 4. Bump `version:` in `pubspec.yaml` (`1.2.0+5`: the number after `+` must go up every release), then build one APK per phone type (about 20 MB each instead of one 58 MB file):
    ```bash
-   flutter build apk --release --split-per-abi   # build/app/outputs/flutter-apk/app-arm64-v8a-release.apk (most phones), armeabi-v7a, x86_64
+   flutter build apk --release --split-per-abi   # build/app/outputs/flutter-apk/app-arm64-v8a-customer-release.apk (most phones), armeabi-v7a, x86_64
+   # Partner app: flutter build apk --release --split-per-abi --flavor partner -t lib/main_partner.dart  → app-arm64-v8a-partner-release.apk
    ```
    Check the signature with the SDK's `apksigner` (`keytool -printcert -jarfile` prints nothing: these APKs use signature scheme v2 only):
    ```bash
-   <android-sdk>/build-tools/<version>/apksigner verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+   <android-sdk>/build-tools/<version>/apksigner verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-customer-release.apk
    ```
    It must show `CN=QuikFly, O=QuikFly Mobility Pvt. Ltd.` and certificate SHA-256 `c784cef550dc5fa5fc64c55a2ec6eec89981fd2d750aff9a496c9b4017033aae`, never `CN=Android Debug`.
    Split APKs get version codes per ABI (e.g. 2001 for arm64-v8a with `+1`); that's normal.
