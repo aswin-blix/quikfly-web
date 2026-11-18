@@ -1,5 +1,6 @@
-// One application section: a form (and a document photo where needed), "Save & continue".
-// Read-only while the application is with QuikFly or after it's approved.
+// One form: an application section, or (with [vehicleId]) part of a vehicle added after
+// joining: details, RC, insurance, audit. "new" adds a vehicle. Live vehicles can renew their
+// RC and insurance here; QuikFly checks the renewal. Read-only when nothing can change.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,8 +16,11 @@ import 'home_screen.dart' show partnerSettings;
 import 'partner_app.dart';
 
 class SectionScreen extends ConsumerStatefulWidget {
-  const SectionScreen({super.key, required this.section});
+  const SectionScreen({super.key, required this.section, this.vehicleId});
   final String section;
+
+  /// Null: the application. "new": add a vehicle. Otherwise a fleet vehicle's id.
+  final String? vehicleId;
   @override
   ConsumerState<SectionScreen> createState() => _SectionScreenState();
 }
@@ -30,6 +34,18 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
   String? _err;
 
   String get s => widget.section;
+  bool get _fleet => widget.vehicleId != null;
+  bool get _new => widget.vehicleId == 'new';
+
+  /// Live vehicles renew RC and insurance (staff check the renewal).
+  static const _renewable = {'active', 'inactive', 'blocked'};
+  bool _readOnly(VendorApplication a, VendorVehicle? v) {
+    if (!_fleet) return !a.editable;
+    if (_new) return false;
+    if (v == null) return true;
+    if (v.status == 'draft') return false;
+    return !((s == 'rc' || s == 'insurance') && _renewable.contains(v.status));
+  }
 
   @override
   void dispose() {
@@ -40,10 +56,9 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
   }
 
   /// Fill the form from what's saved, once.
-  void _prefill(VendorApplication a) {
+  void _prefill(VendorApplication a, VendorVehicle? v) {
     if (_filledIn) return;
     _filledIn = true;
-    final v = a.vehicle;
     switch (s) {
       case 'vehicle':
         _city = a.city;
@@ -71,7 +86,7 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
     String? need(bool ok, String msg) => ok ? null : msg;
     switch (s) {
       case 'vehicle':
-        return need(_city != null, 'Choose your city') ??
+        return need(_fleet || _city != null, 'Choose your city') ??
             need(_type != null, 'Choose the vehicle type') ??
             need(_fuel != null, 'Choose the fuel type') ??
             need(VendorRules.regNumber.hasMatch(VendorRules.normaliseReg(_a.text)), 'Enter the registration number as on the RC, e.g. TN57AX9979') ??
@@ -95,7 +110,7 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
   }
 
   Json _body() => switch (s) {
-        'vehicle' => {'city': _city, 'type': _type, 'fuel': _fuel, 'regNumber': VendorRules.normaliseReg(_a.text), 'purchaseDate': isoDate(_date!)},
+        'vehicle' => {if (!_fleet) 'city': _city, 'type': _type, 'fuel': _fuel, 'regNumber': VendorRules.normaliseReg(_a.text), 'purchaseDate': isoDate(_date!)},
         'bank' => {'holder': _a.text.trim(), 'account': _b.text.replaceAll(' ', ''), 'ifsc': _d.text.trim().toUpperCase()},
         'rc' => {'ownerName': _a.text.trim(), 'validTill': isoDate(_date!)},
         'insurance' => {'insurer': _a.text.trim(), 'policyNumber': _b.text.trim().toUpperCase(), 'validTill': isoDate(_date!)},
@@ -105,9 +120,9 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
 
   bool get _hasDocument => s == 'photo' || s == 'rc' || s == 'insurance';
 
-  Future<void> _save(VendorApplication a) async {
+  Future<void> _save(VendorApplication a, VendorVehicle? v) async {
     final problem = s == 'photo' ? null : _validate();
-    final needPhoto = _hasDocument && _photo == null && !_savedPhoto(a);
+    final needPhoto = _hasDocument && _photo == null && !_savedPhoto(a, v);
     if (problem != null || needPhoto) {
       setState(() => _err = problem ?? 'Add a clear photo of the ${s == 'photo' ? 'your face' : 'document'}');
       return;
@@ -115,13 +130,34 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
     setState(() { _busy = true; _err = null; });
     final api = ref.read(apiProvider);
     try {
-      VendorApplication latest = a;
-      if (s != 'photo') latest = await api.saveVendorSection(s, _body());
-      if (_photo != null) latest = await api.uploadVendorDocument(s, _photo!);
-      setVendor(ref, latest);
-      if (mounted) {
-        toast(context, '${vendorSectionLabel[s]} saved');
-        context.pop();
+      if (_fleet) {
+        if (_new) {
+          final reg = VendorRules.normaliseReg(_a.text);
+          final fleet = await api.addVendorVehicle(_body());
+          ref.invalidate(fleetProvider);
+          final added = fleet.vehicles.where((x) => x.regNumber == reg).firstOrNull;
+          if (mounted) {
+            toast(context, 'Vehicle added. Now add its RC, insurance and audit day.');
+            added == null ? context.pop() : context.pushReplacement('/vehicle/${added.id}');
+          }
+        } else {
+          if (s != 'photo') await api.saveVendorVehicle(widget.vehicleId!, s == 'vehicle' ? 'details' : s, _body());
+          if (_photo != null) await api.uploadVendorVehicleDocument(widget.vehicleId!, s, _photo!);
+          ref.invalidate(fleetProvider);
+          if (mounted) {
+            toast(context, v != null && _renewable.contains(v.status) ? 'Sent to QuikFly to check' : '${vendorSectionLabel[s]} saved');
+            context.pop();
+          }
+        }
+      } else {
+        VendorApplication latest = a;
+        if (s != 'photo') latest = await api.saveVendorSection(s, _body());
+        if (_photo != null) latest = await api.uploadVendorDocument(s, _photo!);
+        setVendor(ref, latest);
+        if (mounted) {
+          toast(context, '${vendorSectionLabel[s]} saved');
+          context.pop();
+        }
       }
     } catch (e) {
       setState(() => _err = errorText(e));
@@ -129,12 +165,15 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
     if (mounted) setState(() => _busy = false);
   }
 
-  bool _savedPhoto(VendorApplication a) => switch (s) {
+  bool _savedPhoto(VendorApplication a, VendorVehicle? v) => switch (s) {
         'photo' => a.hasPhoto,
-        'rc' => a.vehicle?.rc?.hasPhoto ?? false,
-        'insurance' => a.vehicle?.insurance?.hasPhoto ?? false,
+        'rc' => v?.rc?.hasPhoto ?? false,
+        'insurance' => v?.insurance?.hasPhoto ?? false,
         _ => false,
       };
+
+  /// Where the saved photo loads from (the application's or a fleet vehicle's).
+  String _photoUrl(QuikFlyApi api) => _fleet && !_new ? api.vendorVehicleDocumentUrl(widget.vehicleId!, s) : api.vendorDocumentUrl(s);
 
   Future<void> _pick(ImageSource source) async {
     try {
@@ -156,10 +195,15 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
   Widget build(BuildContext context) {
     final c = context.qf;
     final a = ref.watch(vendorProvider).value;
-    if (a == null) return Scaffold(appBar: AppBar(title: Text(vendorSectionLabel[s] ?? 'Section')), body: const Center(child: CircularProgressIndicator()));
-    _prefill(a);
-    final st = a.sections[s];
-    final ro = !a.editable;
+    final fleet = _fleet ? ref.watch(fleetProvider).value : null;
+    final title = _new ? 'Add a vehicle' : (s == 'vehicle' && _fleet ? 'Vehicle details' : vendorSectionLabel[s] ?? 'Section');
+    if (a == null || (_fleet && !_new && fleet == null)) return Scaffold(appBar: AppBar(title: Text(title)), body: const Center(child: CircularProgressIndicator()));
+    final v = !_fleet ? a.vehicle : _new ? null : fleet!.vehicles.where((x) => x.id == widget.vehicleId).firstOrNull;
+    _prefill(a, v);
+    final st = _fleet ? null : a.sections[s];
+    final ro = _readOnly(a, v);
+    final renewing = _fleet && v != null && _renewable.contains(v.status) && (s == 'rc' || s == 'insurance');
+    final staffNote = _fleet ? v?.reviewNote : (st?.state == 'changes' ? st?.note : null);
 
     InputDecoration deco(String label, {String? hint, String? helper}) => InputDecoration(labelText: label, hintText: hint, helperText: helper);
     Widget radio(String label, List<String> values, Map<String, String> labels, String? value, ValueChanged<String> on, {Map<String, IconData>? icons}) => Column(
@@ -204,7 +248,7 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
 
     final fields = <Widget>[
       if (s == 'vehicle') ...[
-        DropdownButtonFormField<String>(
+        if (!_fleet) DropdownButtonFormField<String>(
           initialValue: cities.contains(_city) ? _city : null,
           decoration: deco('Preferred city'),
           items: [for (final x in cities) DropdownMenuItem(value: x, child: Text(x))],
@@ -259,14 +303,14 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
         ])),
         dateField('Audit day', () => _pickDate(first: today.add(const Duration(days: 1)), last: today.add(const Duration(days: VendorRules.auditMaxDays)), initial: _date ?? today.add(const Duration(days: 2)))),
         radio('Time slot', auditSlots, auditSlotLabel, _slot, (v) => _slot = v),
-        if (a.vehicle?.audit?.result == 'passed') Padding(padding: const EdgeInsets.only(top: 12), child: Text('Audit passed.', style: TextStyle(color: c.success))),
+        if (v?.audit?.result == 'passed') Padding(padding: const EdgeInsets.only(top: 12), child: Text('Audit passed.', style: TextStyle(color: c.success))),
       ],
       if (_hasDocument) ...[
         const SizedBox(height: 18),
         Text(s == 'photo' ? 'A clear photo of your face, no sunglasses or cap.' : 'A clear photo of the whole ${s == 'rc' ? 'RC (front)' : 'insurance certificate'}, all text readable.',
             style: TextStyle(color: c.fgMuted)),
         const SizedBox(height: 10),
-        _PhotoBox(kind: s, picked: _photo, saved: _savedPhoto(a)),
+        _PhotoBox(kind: s, picked: _photo, saved: _savedPhoto(a, v), url: _photoUrl(ref.read(apiProvider))),
         if (!ro)
           Padding(
             padding: const EdgeInsets.only(top: 10),
@@ -280,14 +324,22 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: Text(vendorSectionLabel[s] ?? 'Section')),
+      appBar: AppBar(title: Text(title)),
       bottomNavigationBar: ro
           ? null
-          : SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12), child: GoldButton(label: 'Save & continue', loading: _busy, onPressed: () => _save(a)))),
+          : SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: GoldButton(label: renewing ? 'Send renewal to QuikFly' : _new ? 'Add vehicle' : 'Save & continue', loading: _busy, onPressed: () => _save(a, v)))),
       body: ScreenList(children: [
-        Text(ro ? (a.status == 'submitted' ? 'With QuikFly for review. You can\'t change this now.' : 'Already approved.') : 'Please provide the details below.',
+        Text(
+            ro
+                ? (_fleet
+                    ? (v?.status == 'submitted' ? 'With QuikFly for review. You can\'t change this now.' : 'This can\'t be changed now.')
+                    : a.status == 'submitted' ? 'With QuikFly for review. You can\'t change this now.' : 'Already approved.')
+                : renewing
+                    ? 'Renewed it? Enter the new details and photo. The vehicle keeps running while QuikFly checks it${v.status == 'blocked' ? ', and is unblocked once the renewal is accepted' : ''}.'
+                    : 'Please provide the details below.',
             style: TextStyle(color: c.fgMuted)),
-        if (st?.state == 'changes' && st?.note != null)
+        if (staffNote != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Container(
@@ -296,7 +348,7 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Icon(Icons.info_outline, color: c.warning),
                 const SizedBox(width: 10),
-                Expanded(child: Text('QuikFly asked: ${st!.note}')),
+                Expanded(child: Text('QuikFly asked: $staffNote')),
               ]),
             ),
           ),
@@ -311,8 +363,8 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
 
 /// The picked photo, else the saved one (loaded with the partner's token), else a placeholder.
 class _PhotoBox extends ConsumerWidget {
-  const _PhotoBox({required this.kind, required this.picked, required this.saved});
-  final String kind;
+  const _PhotoBox({required this.kind, required this.picked, required this.saved, required this.url});
+  final String kind, url;
   final Uint8List? picked;
   final bool saved;
   @override
@@ -322,7 +374,7 @@ class _PhotoBox extends ConsumerWidget {
     final Widget child = picked != null
         ? Image.memory(picked!, fit: BoxFit.cover)
         : saved
-            ? Image.network(api.vendorDocumentUrl(kind), headers: api.authHeaders, fit: BoxFit.cover,
+            ? Image.network(url, headers: api.authHeaders, fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => Center(child: Text('Saved photo', style: TextStyle(color: c.fgMuted))))
             : Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Icon(kind == 'photo' ? Icons.account_circle_outlined : Icons.description_outlined, size: 44, color: c.fgSubtle),

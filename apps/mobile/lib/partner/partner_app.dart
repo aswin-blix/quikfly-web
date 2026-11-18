@@ -7,6 +7,7 @@ import '../screens/account/notifications_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../state/providers.dart';
 import '../theme/theme.dart';
+import 'fleet_screens.dart';
 import 'home_screen.dart';
 import 'onboarding_screens.dart';
 import 'section_screen.dart';
@@ -18,6 +19,13 @@ final vendorProvider = FutureProvider<VendorApplication?>((ref) async {
   return ref.watch(apiProvider).vendorApplication();
 });
 
+/// The live partner's vehicles and drivers (empty until the partner is live).
+final fleetProvider = FutureProvider<VendorFleet?>((ref) async {
+  final status = ref.watch(vendorProvider.select((a) => a.value?.status));
+  if (status != 'active') return null;
+  return ref.watch(apiProvider).vendorFleet();
+});
+
 /// Screens call this after an API call that returns the application, so every screen updates.
 void setVendor(WidgetRef ref, VendorApplication a) => ref.invalidate(vendorProvider);
 
@@ -26,6 +34,12 @@ final partnerRouter = GoRouter(
     GoRoute(path: '/', builder: (_, _) => const PartnerHomeScreen()),
     GoRoute(path: '/login', builder: (_, _) => const LoginScreen(showReferral: false)),
     GoRoute(path: '/section/:id', builder: (_, s) => SectionScreen(section: s.pathParameters['id']!)),
+    GoRoute(path: '/vehicles/new', builder: (_, _) => const SectionScreen(section: 'vehicle', vehicleId: 'new')),
+    GoRoute(path: '/vehicle/:id', builder: (_, s) => VehicleScreen(id: s.pathParameters['id']!)),
+    GoRoute(path: '/vehicle/:id/:part', builder: (_, s) => SectionScreen(section: s.pathParameters['part']!, vehicleId: s.pathParameters['id'])),
+    GoRoute(path: '/drivers/new', builder: (_, _) => const DriverFormScreen()),
+    GoRoute(path: '/driver/:id', builder: (_, s) => DriverScreen(id: s.pathParameters['id']!)),
+    GoRoute(path: '/driver/:id/licence', builder: (_, s) => DriverFormScreen(driverId: s.pathParameters['id'])),
     GoRoute(path: '/onboarding/payment', builder: (_, _) => const PaymentScreen()),
     GoRoute(path: '/onboarding/agreement', builder: (_, _) => const AgreementScreen()),
     GoRoute(path: '/onboarding/sticker', builder: (_, _) => const StickerScreen()),
@@ -58,6 +72,7 @@ class _PartnerAppState extends ConsumerState<PartnerApp> with WidgetsBindingObse
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(configProvider);
       ref.invalidate(vendorProvider);
+      ref.invalidate(fleetProvider);
     }
   }
 

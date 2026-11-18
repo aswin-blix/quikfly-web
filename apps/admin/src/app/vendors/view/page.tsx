@@ -2,16 +2,18 @@
 // One partner application: each section with its details and photo, approve or send back
 // with a note; then approve the application, return it for changes, or reject it. During
 // onboarding, staff mark the sticker and paint done, which puts the partner live.
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { BadgeCheck, CheckCircle2, ChevronLeft, ImageOff, RotateCcw, Undo2, XCircle } from "lucide-react";
+import { BadgeCheck, CheckCircle2, ChevronLeft, RotateCcw, Undo2, XCircle } from "lucide-react";
 import {
   AUDIT_SLOT_LABEL, FUEL_LABEL, VENDOR_SECTION_LABEL, VENDOR_SECTIONS, VENDOR_VEHICLE_LABEL, formatRegNumber, vehicleAgeYears,
   type AdminVendorDetail, type SectionState, type VendorDocument, type VendorSection,
 } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PrivatePhoto } from "@/components/PrivatePhoto";
 import { ReasonDialog } from "@/components/ReasonDialog";
+import { VendorFleet } from "@/components/VendorFleet";
 import { Badge, Button, ErrorBox, PageHeader } from "@/components/ui";
 import { adminApi } from "@/lib/api";
 import { VENDOR_TAB_LABEL, dateTime, inr } from "@/lib/format";
@@ -32,17 +34,8 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 
 /** A document photo, fetched with the staff token. */
 function DocPhoto({ id, kind, version }: { id: string; kind: VendorDocument; version: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState("");
-  useEffect(() => {
-    let live = true;
-    let made: string | null = null;
-    adminApi.vendors.document(id, kind).then((u) => { made = u; if (live) setUrl(u); else URL.revokeObjectURL(u); }, (e) => live && setFailed(e instanceof Error ? e.message : "Couldn't load"));
-    return () => { live = false; if (made) URL.revokeObjectURL(made); };
-  }, [id, kind, version]);
-  if (failed) return <p className="text-xs text-muted flex items-center gap-1.5"><ImageOff size={14} />{failed}</p>;
-  if (!url) return <div className="skeleton h-40 w-full max-w-xs" />;
-  return <a href={url} target="_blank" rel="noreferrer"><img src={url} alt={kind === "photo" ? "Partner's profile photo" : kind === "rc" ? "Registration certificate" : "Insurance certificate"} className="max-h-56 rounded-lg border border-line object-contain bg-fg/5" /></a>;
+  return <PrivatePhoto load={() => adminApi.vendors.document(id, kind)} version={version}
+    alt={kind === "photo" ? "Partner's profile photo" : kind === "rc" ? "Registration certificate" : "Insurance certificate"} />;
 }
 
 function Detail({ id }: { id: string }) {
@@ -170,6 +163,8 @@ function Detail({ id }: { id: string }) {
             )}
           </section>
         )}
+
+        {a.status === "active" && <VendorFleet detail={data} onChange={setData} />}
       </div>
 
       <ReasonDialog

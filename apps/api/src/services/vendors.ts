@@ -30,6 +30,7 @@ export interface VehicleRow {
   insurer: string | null; insurance_number: string | null; insurance_valid_till: string | null; insurance_key: string | null;
   audit_date: string | null; audit_slot: AuditSlot | null;
   audit_result: "booked" | "passed" | "failed" | null; audit_note: string | null; status: VendorVehicle["status"]; created_at: string;
+  review_note: string | null; blocked_reason: string | null; docs_pending: number; submitted_at: string | null;
 }
 
 export const emptySections = (): Sections =>
@@ -40,13 +41,13 @@ export function parseSections(json: string): Sections {
   return { ...emptySections(), ...saved };
 }
 
-const toVehicle = (r: VehicleRow): VendorVehicle => ({
+export const toVehicle = (r: VehicleRow, driverId: string | null = null): VendorVehicle => ({
   id: r.id, type: r.type, fuel: r.fuel, regNumber: r.reg_number, purchaseDate: r.purchase_date,
   rc: r.rc_owner && r.rc_valid_till ? { ownerName: r.rc_owner, validTill: r.rc_valid_till, hasPhoto: !!r.rc_key } : null,
   insurance: r.insurer && r.insurance_number && r.insurance_valid_till
     ? { insurer: r.insurer, policyNumber: r.insurance_number, validTill: r.insurance_valid_till, hasPhoto: !!r.insurance_key } : null,
   audit: r.audit_date && r.audit_slot ? { date: r.audit_date, slot: r.audit_slot, result: r.audit_result ?? "booked", note: r.audit_note } : null,
-  status: r.status,
+  status: r.status, reviewNote: r.review_note ?? null, blockedReason: r.blocked_reason ?? null, docsPending: !!r.docs_pending, driverId,
 });
 
 export const toApplication = (v: VendorRow, vehicle: VehicleRow | null): VendorApplication => ({
@@ -119,20 +120,49 @@ async function refreshSection(db: D1Database, userId: string, section: VendorSec
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const today = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10); // India date
-const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+export const today = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10); // India date
+export const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
-function date(body: Json, key: string, label: string) {
+export function date(body: Json, key: string, label: string) {
   const v = body[key];
   if (typeof v !== "string" || !ISO_DATE.test(v) || Number.isNaN(Date.parse(v))) throw badRequest(`${label} must be a date (YYYY-MM-DD).`);
   return v;
 }
-function futureDate(body: Json, key: string, label: string) {
+export function futureDate(body: Json, key: string, label: string) {
   const v = date(body, key, label);
   if (v < today()) throw badRequest(`${label} has passed. Renew it first, then add the new date.`);
   return v;
 }
-const personName = (body: Json, key: string) => text(body, key, VENDOR_RULES.nameMin, VENDOR_RULES.nameMax);
+export const personName = (body: Json, key: string) => text(body, key, VENDOR_RULES.nameMin, VENDOR_RULES.nameMax);
+
+/** Checks a vehicle's type, fuel, registration number (unique across partners) and age. */
+export async function parseVehicleDetails(db: D1Database, body: Json, vehicleId: string | null) {
+  const settings = await getSettings(db);
+  const type = oneOf(body, "type", VENDOR_VEHICLE_TYPES);
+  const fuel = oneOf(body, "fuel", FUEL_TYPES);
+  const reg = matches(normaliseRegNumber(text(body, "regNumber", 6, 16)), VENDOR_RULES.regNumber, "Enter the registration number as on the RC, e.g. TN57AX9979.");
+  const purchase = date(body, "purchaseDate", "Purchase date");
+  if (purchase > today()) throw badRequest("Purchase date can't be in the future.");
+  if (vehicleAgeYears(purchase, today()) >= settings.vendorMaxVehicleAgeYears) throw badRequest(`Vehicles older than ${settings.vendorMaxVehicleAgeYears} years can't join QuikFly.`);
+  const taken = await db.prepare("SELECT 1 FROM vendor_vehicles WHERE reg_number = ? AND id <> ?").bind(reg, vehicleId ?? "").first();
+  if (taken) throw conflict("This vehicle is already registered with QuikFly.");
+  return { type, fuel, reg, purchase };
+}
+
+/** RC details: owner name and a validity date that hasn't passed. */
+export const parseRc = (body: Json) => ({ owner: personName(body, "ownerName"), validTill: futureDate(body, "validTill", "Registration validity") });
+/** Insurance details: insurer, policy number and a validity date that hasn't passed. */
+export const parseInsurance = (body: Json) => ({
+  insurer: text(body, "insurer", 2, 60),
+  policy: matches(String(body.policyNumber ?? "").trim().toUpperCase().replace(/\s/g, ""), VENDOR_RULES.policyNumber, "Enter the policy number as on the insurance certificate."),
+  validTill: futureDate(body, "validTill", "Insurance validity"),
+});
+/** An audit day from tomorrow up to auditMaxDays ahead, and a slot. */
+export function parseAudit(body: Json) {
+  const day = date(body, "date", "Audit date");
+  if (day <= today() || day > addDays(today(), VENDOR_RULES.auditMaxDays)) throw badRequest(`Pick a day from tomorrow up to ${VENDOR_RULES.auditMaxDays} days ahead.`);
+  return { day, slot: oneOf(body, "slot", AUDIT_SLOTS) };
+}
 
 /** Saves one step-1 section (photos are uploaded separately, see uploadDocument). */
 export async function saveSection(db: D1Database, userId: string, section: VendorSection, body: Json): Promise<VendorApplication> {
@@ -142,18 +172,10 @@ export async function saveSection(db: D1Database, userId: string, section: Vendo
   const needVehicle = () => vehicle ?? (() => { throw conflict("Add your city and vehicle details first."); })();
   switch (section) {
     case "vehicle": {
-      const settings = await getSettings(db);
       const city = text(body, "city", 2, 60);
       const cities = (await visible(db, "city")).map((c) => c.name);
       if (!cities.includes(city)) throw badRequest("QuikFly doesn't take partners in that city yet.");
-      const type = oneOf(body, "type", VENDOR_VEHICLE_TYPES);
-      const fuel = oneOf(body, "fuel", FUEL_TYPES);
-      const reg = matches(normaliseRegNumber(text(body, "regNumber", 6, 16)), VENDOR_RULES.regNumber, "Enter the registration number as on the RC, e.g. TN57AX9979.");
-      const purchase = date(body, "purchaseDate", "Purchase date");
-      if (purchase > today()) throw badRequest("Purchase date can't be in the future.");
-      if (vehicleAgeYears(purchase, today()) >= settings.vendorMaxVehicleAgeYears) throw badRequest(`Vehicles older than ${settings.vendorMaxVehicleAgeYears} years can't join QuikFly.`);
-      const taken = await db.prepare("SELECT 1 FROM vendor_vehicles WHERE reg_number = ? AND vendor_id <> ?").bind(reg, v.id).first();
-      if (taken) throw conflict("This vehicle is already registered with QuikFly.");
+      const { type, fuel, reg, purchase } = await parseVehicleDetails(db, body, vehicle?.id ?? null);
       await db.batch([
         db.prepare("UPDATE vendors SET city = ?, updated_at = ? WHERE id = ?").bind(city, now, v.id),
         vehicle
@@ -172,23 +194,20 @@ export async function saveSection(db: D1Database, userId: string, section: Vendo
     }
     case "rc": {
       const ve = needVehicle();
-      await db.prepare("UPDATE vendor_vehicles SET rc_owner = ?, rc_valid_till = ? WHERE id = ?")
-        .bind(personName(body, "ownerName"), futureDate(body, "validTill", "Registration validity"), ve.id).run();
+      const rc = parseRc(body);
+      await db.prepare("UPDATE vendor_vehicles SET rc_owner = ?, rc_valid_till = ? WHERE id = ?").bind(rc.owner, rc.validTill, ve.id).run();
       break;
     }
     case "insurance": {
       const ve = needVehicle();
-      const policy = matches(String(body.policyNumber ?? "").trim().toUpperCase().replace(/\s/g, ""), VENDOR_RULES.policyNumber, "Enter the policy number as on the insurance certificate.");
-      await db.prepare("UPDATE vendor_vehicles SET insurer = ?, insurance_number = ?, insurance_valid_till = ? WHERE id = ?")
-        .bind(text(body, "insurer", 2, 60), policy, futureDate(body, "validTill", "Insurance validity"), ve.id).run();
+      const ins = parseInsurance(body);
+      await db.prepare("UPDATE vendor_vehicles SET insurer = ?, insurance_number = ?, insurance_valid_till = ? WHERE id = ?").bind(ins.insurer, ins.policy, ins.validTill, ve.id).run();
       break;
     }
     case "audit": {
       const ve = needVehicle();
-      const day = date(body, "date", "Audit date");
-      if (day <= today() || day > addDays(today(), VENDOR_RULES.auditMaxDays)) throw badRequest(`Pick a day from tomorrow up to ${VENDOR_RULES.auditMaxDays} days ahead.`);
-      await db.prepare("UPDATE vendor_vehicles SET audit_date = ?, audit_slot = ?, audit_result = 'booked', audit_note = NULL WHERE id = ?")
-        .bind(day, oneOf(body, "slot", AUDIT_SLOTS), ve.id).run();
+      const audit = parseAudit(body);
+      await db.prepare("UPDATE vendor_vehicles SET audit_date = ?, audit_slot = ?, audit_result = 'booked', audit_note = NULL WHERE id = ?").bind(audit.day, audit.slot, ve.id).run();
       break;
     }
     case "photo":
@@ -207,6 +226,25 @@ function sniff(bytes: Uint8Array): "jpg" | "png" | "webp" | null {
 const MIME = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" } as const;
 const SECTION_OF: Record<VendorDocument, VendorSection> = { photo: "photo", rc: "rc", insurance: "insurance" };
 
+/** Checks and stores an image under vendors/<vendorId>/; returns its key. */
+export async function storeImage(docs: R2Bucket, vendorId: string, kind: string, body: ArrayBuffer) {
+  if (!body.byteLength) throw badRequest("Choose a photo to upload.");
+  if (body.byteLength > VENDOR_RULES.maxPhotoBytes) throw badRequest(`Photos can be up to ${VENDOR_RULES.maxPhotoBytes / 1024 / 1024} MB.`);
+  const ext = sniff(new Uint8Array(body.slice(0, 12)));
+  if (!ext) throw badRequest("Upload a JPEG, PNG or WebP photo.");
+  const key = `vendors/${vendorId}/${kind}-${crypto.randomUUID()}.${ext}`;
+  await docs.put(key, body, { httpMetadata: { contentType: MIME[ext] } });
+  return key;
+}
+
+/** A stored image as a private, uncached response; null when missing. */
+export async function imageResponse(bucket: R2Bucket | undefined, key: string | null | undefined) {
+  if (!key) return null;
+  const obj = await needBucket(bucket).get(key);
+  if (!obj) return null;
+  return new Response(obj.body, { headers: { "content-type": obj.httpMetadata?.contentType ?? "image/jpeg", "cache-control": "private, no-store" } });
+}
+
 export function needBucket(bucket: R2Bucket | undefined): R2Bucket {
   if (!bucket) throw conflict("Document uploads aren't switched on yet. Please try again later.");
   return bucket;
@@ -218,12 +256,7 @@ export async function uploadDocument(db: D1Database, bucket: R2Bucket | undefine
   const { v, vehicle } = await mine(db, userId);
   editable(v);
   if (kind !== "photo" && !vehicle) throw conflict("Add your city and vehicle details first.");
-  if (!body.byteLength) throw badRequest("Choose a photo to upload.");
-  if (body.byteLength > VENDOR_RULES.maxPhotoBytes) throw badRequest(`Photos can be up to ${VENDOR_RULES.maxPhotoBytes / 1024 / 1024} MB.`);
-  const ext = sniff(new Uint8Array(body.slice(0, 12)));
-  if (!ext) throw badRequest("Upload a JPEG, PNG or WebP photo.");
-  const key = `vendors/${v.id}/${kind}-${crypto.randomUUID()}.${ext}`;
-  await docs.put(key, body, { httpMetadata: { contentType: MIME[ext] } });
+  const key = await storeImage(docs, v.id, kind, body);
   const old = kind === "photo" ? v.photo_key : kind === "rc" ? vehicle!.rc_key : vehicle!.insurance_key;
   if (kind === "photo") await db.prepare("UPDATE vendors SET photo_key = ? WHERE id = ?").bind(key, v.id).run();
   else await db.prepare(`UPDATE vendor_vehicles SET ${kind === "rc" ? "rc_key" : "insurance_key"} = ? WHERE id = ?`).bind(key, vehicle!.id).run();

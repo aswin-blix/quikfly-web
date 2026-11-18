@@ -9,6 +9,9 @@ import { requireAdmin } from "../../middleware/admin";
 import { adminCancel, adminComplete, bookingDetail, searchBookings } from "../../services/admin/bookings";
 import { licenceQueue, reviewLicence } from "../../services/admin/licences";
 import { finishReview, markSticker, reviewSection, vendorDetail, vendorDocument, vendorQueue } from "../../services/admin/vendors";
+import {
+  adminDriverLicence, adminVehicleDocument, blockDriver, blockVehicle, fleetQueue, reviewDriver, reviewDriverDocs, reviewVehicle, reviewVehicleDocs, stickerVehicle,
+} from "../../services/admin/fleet";
 
 const pick = <T extends string>(v: string | undefined, allowed: readonly T[], name: string): T | undefined => {
   if (!v) return undefined;
@@ -60,6 +63,8 @@ export const adminLicences = new Hono<AppEnv>()
 // Partner (vendor) applications from the QuikFly Partner app.
 const note = (body: Record<string, unknown>) => (typeof body.note === "string" && body.note.trim() ? text(body, "note", 3, ADMIN_RULES.reasonMax) : undefined);
 export const adminVendors = new Hono<AppEnv>()
+  // Live partners' vehicles and drivers waiting for staff (must come before /:id).
+  .get("/fleet-queue", requireAdmin("vendors.review"), async (c) => c.json(await fleetQueue(c.env.DB)))
   // ?status=submitted (default) | draft | onboarding | active | rejected | blocked
   .get("/", requireAdmin("vendors.review"), async (c) =>
     c.json(await vendorQueue(c.env.DB, pick(c.req.query("status"), VENDOR_STATUSES, "status") ?? "submitted")))
@@ -80,4 +85,49 @@ export const adminVendors = new Hono<AppEnv>()
     if (!decision) throw badRequest('"decision" is required.');
     return c.json(await finishReview(c.env.DB, c.var.admin.id, c.req.param("id"), decision, note(body)));
   })
-  .post("/:id/sticker", requireAdmin("vendors.review"), async (c) => c.json(await markSticker(c.env.DB, c.var.admin.id, c.req.param("id"))));
+  .post("/:id/sticker", requireAdmin("vendors.review"), async (c) => c.json(await markSticker(c.env.DB, c.var.admin.id, c.req.param("id"))))
+
+  // Fleet: vehicles added after joining, and drivers.
+  .get("/:id/vehicles/:vid/documents/:kind", requireAdmin("vendors.review"), async (c) =>
+    adminVehicleDocument(c.env.DB, c.env.DOCS, c.req.param("id"), c.req.param("vid"), pick(c.req.param("kind"), ["rc", "insurance"] as const, "kind")!))
+  // { decision: approve | changes | reject, note? }
+  .post("/:id/vehicles/:vid/review", requireAdmin("vendors.review"), async (c) => {
+    const body = await jsonBody(c);
+    const decision = pick(String(body.decision ?? ""), ["approve", "changes", "reject"] as const, "decision");
+    if (!decision) throw badRequest('"decision" is required.');
+    return c.json(await reviewVehicle(c.env.DB, c.var.admin.id, c.req.param("id"), c.req.param("vid"), decision, note(body)));
+  })
+  .post("/:id/vehicles/:vid/sticker", requireAdmin("vendors.review"), async (c) => c.json(await stickerVehicle(c.env.DB, c.var.admin.id, c.req.param("id"), c.req.param("vid"))))
+  // { decision: approve | changes, note? } — a renewed RC or insurance
+  .post("/:id/vehicles/:vid/docs", requireAdmin("vendors.review"), async (c) => {
+    const body = await jsonBody(c);
+    const decision = pick(String(body.decision ?? ""), ["approve", "changes"] as const, "decision");
+    if (!decision) throw badRequest('"decision" is required.');
+    return c.json(await reviewVehicleDocs(c.env.DB, c.var.admin.id, c.req.param("id"), c.req.param("vid"), decision, note(body)));
+  })
+  // { block: boolean, note? } — a reason is required to block
+  .post("/:id/vehicles/:vid/block", requireAdmin("vendors.review"), async (c) => {
+    const body = await jsonBody(c);
+    if (typeof body.block !== "boolean") throw badRequest('"block" must be true or false.');
+    return c.json(await blockVehicle(c.env.DB, c.var.admin.id, c.req.param("id"), c.req.param("vid"), body.block, note(body)));
+  })
+  .get("/:id/drivers/:did/documents/dl", requireAdmin("vendors.review"), async (c) => adminDriverLicence(c.env.DB, c.env.DOCS, c.req.param("id"), c.req.param("did")))
+  // { decision: approve | reject, note?, policeVerified?, trainingDone? }
+  .post("/:id/drivers/:did/review", requireAdmin("vendors.review"), async (c) => {
+    const body = await jsonBody(c);
+    const decision = pick(String(body.decision ?? ""), ["approve", "reject"] as const, "decision");
+    if (!decision) throw badRequest('"decision" is required.');
+    return c.json(await reviewDriver(c.env.DB, c.var.admin.id, c.req.param("id"), c.req.param("did"), decision,
+      { note: note(body), policeVerified: body.policeVerified === true, trainingDone: body.trainingDone === true }));
+  })
+  .post("/:id/drivers/:did/docs", requireAdmin("vendors.review"), async (c) => {
+    const body = await jsonBody(c);
+    const decision = pick(String(body.decision ?? ""), ["approve", "changes"] as const, "decision");
+    if (!decision) throw badRequest('"decision" is required.');
+    return c.json(await reviewDriverDocs(c.env.DB, c.var.admin.id, c.req.param("id"), c.req.param("did"), decision, note(body)));
+  })
+  .post("/:id/drivers/:did/block", requireAdmin("vendors.review"), async (c) => {
+    const body = await jsonBody(c);
+    if (typeof body.block !== "boolean") throw badRequest('"block" must be true or false.');
+    return c.json(await blockDriver(c.env.DB, c.var.admin.id, c.req.param("id"), c.req.param("did"), body.block, note(body)));
+  });

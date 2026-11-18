@@ -407,6 +407,92 @@ if (pvUp.status === 409) {
   await expect("staff mark sticker done: partner goes live", call("POST", `/admin/vendors/${vid}/sticker`, null, T), 200,
     (j) => j.application.status === "active" && j.application.vehicle.status === "active");
   await expect("the partner is told they're live", call("GET", "/me/notifications", null, PV), 200, (j) => j.items.some((n) => n.kind === "vendor.active"));
+
+  // Fleet (part 2): add a vehicle, drivers, renewals, blocks
+  await expect("the live partner's fleet has the first vehicle", call("GET", "/vendor/fleet", null, PV), 200,
+    (j) => j.vehicles.length === 1 && j.vehicles[0].status === "active" && j.drivers.length === 0);
+  await expect("a duplicate registration is refused", call("POST", "/vendor/vehicles", { type: "car", fuel: "petrol_diesel", regNumber: pvReg, purchaseDate: dayOffset(-100) }, PV), 409);
+  const reg2 = randomReg();
+  const added = await expect("add a second vehicle (draft)", call("POST", "/vendor/vehicles", { type: "bus", fuel: "petrol_diesel", regNumber: reg2, purchaseDate: dayOffset(-300) }, PV), 201,
+    (j) => j.vehicles.some((v) => v.regNumber === reg2 && v.status === "draft"));
+  const v2 = added.vehicles.find((v) => v.regNumber === reg2).id;
+  await expect("an incomplete vehicle can't be sent", call("POST", `/vendor/vehicles/${v2}/submit`, null, PV), 400, (j) => /RC/.test(j.message));
+  await call("PUT", `/vendor/vehicles/${v2}/rc`, { ownerName: "Smoke Vendor", validTill: dayOffset(500) }, PV);
+  await call("PUT", `/vendor/vehicles/${v2}/insurance`, { insurer: "Smoke General", policyNumber: "BUS-445566", validTill: dayOffset(300) }, PV);
+  await call("PUT", `/vendor/vehicles/${v2}/audit`, { date: dayOffset(3), slot: "afternoon" }, PV);
+  await upload(`/vendor/vehicles/${v2}/documents/rc`, JPEG, PV);
+  await upload(`/vendor/vehicles/${v2}/documents/insurance`, JPEG, PV);
+  await expect("send the vehicle for review", call("POST", `/vendor/vehicles/${v2}/submit`, null, PV), 200, (j) => j.vehicles.find((v) => v.id === v2).status === "submitted");
+  await expect("a vehicle under review can't be edited", call("PUT", `/vendor/vehicles/${v2}/details`, { type: "bus", fuel: "petrol_diesel", regNumber: reg2, purchaseDate: dayOffset(-300) }, PV), 409);
+  await expect("the fleet queue shows it", call("GET", "/admin/vendors/fleet-queue", null, T), 200, (j) => j.some((x) => x.id === v2 && x.kind === "vehicle" && x.vendorId === vid));
+  await expect("sending a vehicle back needs a note", call("POST", `/admin/vendors/${vid}/vehicles/${v2}/review`, { decision: "changes" }, T), 400);
+  await expect("send the vehicle back", call("POST", `/admin/vendors/${vid}/vehicles/${v2}/review`, { decision: "changes", note: "Insurance photo is blurry" }, T), 200,
+    (j) => j.fleet.vehicles.find((v) => v.id === v2).status === "draft");
+  await expect("the partner sees the note", call("GET", "/vendor/fleet", null, PV), 200, (j) => j.vehicles.find((v) => v.id === v2).reviewNote === "Insurance photo is blurry");
+  await upload(`/vendor/vehicles/${v2}/documents/insurance`, JPEG, PV);
+  await call("POST", `/vendor/vehicles/${v2}/submit`, null, PV);
+  await expect("approve the vehicle", call("POST", `/admin/vendors/${vid}/vehicles/${v2}/review`, { decision: "approve" }, T), 200,
+    (j) => j.fleet.vehicles.find((v) => v.id === v2).status === "approved" && j.fleet.vehicles.find((v) => v.id === v2).audit.result === "passed");
+  await expect("approved vehicles wait for sticker in the queue", call("GET", "/admin/vendors/fleet-queue", null, T), 200, (j) => j.some((x) => x.id === v2 && x.kind === "vehicle_sticker"));
+  await expect("sticker done: the vehicle goes live", call("POST", `/admin/vendors/${vid}/vehicles/${v2}/sticker`, null, T), 200, (j) => j.fleet.vehicles.find((v) => v.id === v2).status === "active");
+  await expect("take it off duty", call("PATCH", `/vendor/vehicles/${v2}`, { active: false }, PV), 200, (j) => j.vehicles.find((v) => v.id === v2).status === "inactive");
+  await expect("and back on", call("PATCH", `/vendor/vehicles/${v2}`, { active: true }, PV), 200, (j) => j.vehicles.find((v) => v.id === v2).status === "active");
+  // Drivers
+  const dl1 = `TN09${new Date().getFullYear() - 5}${String(Date.now()).slice(-7)}`;
+  const dl2 = `TN10${new Date().getFullYear() - 3}${String(Date.now() + 5).slice(-7)}`;
+  await expect("a bad licence number is refused", call("POST", "/vendor/drivers", { self: true, dlNumber: "12345", dlValidTill: dayOffset(900) }, PV), 400);
+  const withSelf = await expect("the partner registers themselves as a driver", call("POST", "/vendor/drivers", { self: true, dlNumber: dl1, dlValidTill: dayOffset(900) }, PV), 201,
+    (j) => j.drivers.some((d) => d.self && d.name === "Smoke Vendor" && d.status === "submitted"));
+  const d1 = withSelf.drivers.find((d) => d.self).id;
+  await expect("only one self driver", call("POST", "/vendor/drivers", { self: true, dlNumber: dl2, dlValidTill: dayOffset(900) }, PV), 409);
+  await expect("a duplicate licence is refused", call("POST", "/vendor/drivers", { name: "Copy Cat", phone: "9123456780", dlNumber: dl1, dlValidTill: dayOffset(900) }, PV), 409);
+  await expect("a driver needs a 10-digit phone", call("POST", "/vendor/drivers", { name: "Ravi Kumar", phone: "123", dlNumber: dl2, dlValidTill: dayOffset(900) }, PV), 400);
+  const withRavi = await expect("add a driver", call("POST", "/vendor/drivers", { name: "Ravi Kumar", phone: "91234 56780", dlNumber: dl2, dlValidTill: dayOffset(20) }, PV), 201,
+    (j) => j.drivers.some((d) => d.name === "Ravi Kumar" && d.phone === "+91 9123456780"));
+  const d2 = withRavi.drivers.find((d) => d.name === "Ravi Kumar").id;
+  await expect("an unapproved driver can't be assigned", call("POST", `/vendor/drivers/${d1}/assign`, { vehicleId: v2 }, PV), 409);
+  await expect("approving needs police verification and training", call("POST", `/admin/vendors/${vid}/drivers/${d1}/review`, { decision: "approve" }, T), 400, (j) => /police/.test(j.message));
+  await expect("approving needs the licence photo", call("POST", `/admin/vendors/${vid}/drivers/${d1}/review`, { decision: "approve", policeVerified: true, trainingDone: true }, T), 409);
+  await upload(`/vendor/drivers/${d1}/documents/dl`, JPEG, PV);
+  await upload(`/vendor/drivers/${d2}/documents/dl`, JPEG, PV);
+  await expect("the fleet queue shows new drivers", call("GET", "/admin/vendors/fleet-queue", null, T), 200, (j) => j.some((x) => x.id === d1 && x.kind === "driver"));
+  const dlDoc = await fetch(BASE + `/admin/vendors/${vid}/drivers/${d1}/documents/dl`, { headers: { Authorization: `Bearer ${T}` } });
+  check("staff can open the licence photo", dlDoc.status === 200, String(dlDoc.status));
+  await expect("approve a driver", call("POST", `/admin/vendors/${vid}/drivers/${d1}/review`, { decision: "approve", policeVerified: true, trainingDone: true }, T), 200,
+    (j) => { const d = j.fleet.drivers.find((x) => x.id === d1); return d.status === "active" && !!d.policeVerifiedAt && !!d.trainingDoneAt; });
+  await call("POST", `/admin/vendors/${vid}/drivers/${d2}/review`, { decision: "approve", policeVerified: true, trainingDone: true }, T);
+  await expect("assign a driver to a vehicle", call("POST", `/vendor/drivers/${d1}/assign`, { vehicleId: v2 }, PV), 200,
+    (j) => j.drivers.find((d) => d.id === d1).vehicleId === v2 && j.vehicles.find((v) => v.id === v2).driverId === d1);
+  await expect("assigning another driver takes the first off", call("POST", `/vendor/drivers/${d2}/assign`, { vehicleId: v2 }, PV), 200,
+    (j) => j.drivers.find((d) => d.id === d2).vehicleId === v2 && j.drivers.find((d) => d.id === d1).vehicleId === null);
+  // Renewals and blocks
+  await expect("renew the insurance of a live vehicle", call("PUT", `/vendor/vehicles/${v2}/insurance`, { insurer: "Smoke General", policyNumber: "BUS-445577", validTill: dayOffset(600) }, PV), 200,
+    (j) => j.vehicles.find((v) => v.id === v2).docsPending && j.vehicles.find((v) => v.id === v2).status === "active");
+  await expect("renewals show in the fleet queue", call("GET", "/admin/vendors/fleet-queue", null, T), 200, (j) => j.some((x) => x.id === v2 && x.kind === "vehicle_docs"));
+  await expect("accept the renewal", call("POST", `/admin/vendors/${vid}/vehicles/${v2}/docs`, { decision: "approve" }, T), 200, (j) => !j.fleet.vehicles.find((v) => v.id === v2).docsPending);
+  await expect("blocking needs a reason", call("POST", `/admin/vendors/${vid}/vehicles/${v2}/block`, { block: true }, T), 400);
+  await expect("block a vehicle", call("POST", `/admin/vendors/${vid}/vehicles/${v2}/block`, { block: true, note: "Customer complaint under review" }, T), 200,
+    (j) => j.fleet.vehicles.find((v) => v.id === v2).status === "blocked");
+  await expect("a blocked vehicle can't be put on duty by the partner", call("PATCH", `/vendor/vehicles/${v2}`, { active: true }, PV), 409);
+  await expect("unblock it", call("POST", `/admin/vendors/${vid}/vehicles/${v2}/block`, { block: false }, T), 200, (j) => j.fleet.vehicles.find((v) => v.id === v2).status === "active");
+  await expect("block a driver (taken off the vehicle)", call("POST", `/admin/vendors/${vid}/drivers/${d2}/block`, { block: true, note: "Licence check failed" }, T), 200,
+    (j) => { const d = j.fleet.drivers.find((x) => x.id === d2); return d.status === "blocked" && d.vehicleId === null; });
+  await expect("unblock the driver", call("POST", `/admin/vendors/${vid}/drivers/${d2}/block`, { block: false }, T), 200, (j) => j.fleet.drivers.find((x) => x.id === d2).status === "active");
+  if (LOCAL) {
+    // Ravi's licence runs out in 20 days, inside the warning window: the cron warns once.
+    await fetch(BASE.replace(/\/v1$/, "") + "/__scheduled?cron=*+*+*+*+*");
+    await fetch(BASE.replace(/\/v1$/, "") + "/__scheduled?cron=*+*+*+*+*");
+    await expect("the cron warns once about an expiring licence", call("GET", "/me/notifications", null, PV), 200,
+      (j) => j.items.filter((n) => n.kind === "vendor.document" && /Ravi Kumar/.test(n.body)).length === 1);
+  }
+  const junk = randomReg();
+  const withJunk = (await call("POST", "/vendor/vehicles", { type: "car", fuel: "electric", regNumber: junk, purchaseDate: dayOffset(-30) }, PV)).json;
+  const junkId = withJunk.vehicles.find((v) => v.regNumber === junk).id;
+  await expect("a draft vehicle can be removed", call("DELETE", `/vendor/vehicles/${junkId}`, null, PV), 200, (j) => !j.vehicles.some((v) => v.id === junkId));
+  await expect("a live vehicle can't be removed", call("DELETE", `/vendor/vehicles/${v2}`, null, PV), 409);
+  await expect("remove a driver", call("DELETE", `/vendor/drivers/${d2}`, null, PV), 200, (j) => !j.drivers.some((d) => d.id === d2));
+  await expect("fleet decisions are audited", call("GET", `/admin/audit?entity=vendor&entityId=${vid}`, null, T), 200,
+    (j) => ["vendor.vehicle.approve", "vendor.vehicle.activate", "vendor.driver.approve", "vendor.vehicle.block", "vendor.vehicle.docs.approve"].every((a) => j.items.some((e) => e.action === a)));
   await expect("vendor decisions are audited", call("GET", `/admin/audit?entity=vendor&entityId=${vid}`, null, T), 200,
     (j) => ["vendor.approve", "vendor.changes", "vendor.activate", "vendor.section.changes"].every((a) => j.items.some((e) => e.action === a)));
   // Rejection path with a second partner
@@ -422,6 +508,7 @@ if (pvUp.status === 409) {
   await expect("rejecting needs a reason", call("POST", `/admin/vendors/${rv.id}/review`, { decision: "reject" }, T), 400);
   await expect("reject an application", call("POST", `/admin/vendors/${rv.id}/review`, { decision: "reject", note: "Permit not valid for this route (smoke)" }, T), 200, (j) => j.application.status === "rejected");
   await expect("the partner sees why", call("GET", "/vendor", null, RV), 200, (j) => j.application.status === "rejected" && /Permit/.test(j.application.note));
+  await expect("a partner who isn't live can't add vehicles", call("POST", "/vendor/vehicles", { type: "car", fuel: "petrol_diesel", regNumber: randomReg(), purchaseDate: dayOffset(-100) }, RV), 409);
   await call("POST", "/me/delete", { otp: OTP }, RV);
 }
 await call("POST", "/me/delete", { otp: OTP }, PV);
