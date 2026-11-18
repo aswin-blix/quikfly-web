@@ -14,6 +14,7 @@ import { api, DEMO_MODE, DEMO_OTP } from "@/lib/api";
 import { cx, inr } from "@/lib/format";
 import { Link, usePath } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
+import { PausedGate, useOpenServices } from "./ServiceGate";
 import { ANDROID_APP, AUTHOR } from "@/lib/site";
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -28,7 +29,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <AppProvider>
       <BottomNavProvider>
         <Header onOpenServices={openServices} />
-        <main className="min-h-[70vh]">{children}</main>
+        <main className="min-h-[70vh]"><PausedGate path={path}>{children}</PausedGate></main>
         <Footer />
         <BottomNav servicesOpen={servicesOpen} onOpenServices={openServices} />
         <ServicesSheet open={servicesOpen} onClose={() => setServicesOpen(false)} />
@@ -65,6 +66,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
   });
 
   const activeKey = SERVICES.find((s) => path.startsWith(s.href))?.key;
+  const open = useOpenServices();
 
   return (
     <motion.header
@@ -80,7 +82,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
           <img src="/assets/logo.png" alt="QuikFly" className="h-10 sm:h-11 w-auto rounded-md" />
         </Link>
         <nav className="hidden xl:flex items-center ml-4" aria-label="Services">
-          {SERVICES.map((s) => (
+          {open.map((s) => (
             <Link key={s.key} href={s.href}
               className={cx("relative px-3 py-2 text-sm rounded-lg transition-colors", activeKey === s.key ? "text-gold" : "text-soft hover:text-strong")}>
               {activeKey === s.key && <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-lg bg-gold/10 border border-gold/20" transition={{ type: "spring", stiffness: 380, damping: 30 }} />}
@@ -139,6 +141,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
 }
 
 function Footer() {
+  const open = useOpenServices();
   return (
     <footer className="no-print mt-24 border-t border-line bg-coal/40">
       <div className="max-w-7xl mx-auto px-4 py-14 grid sm:grid-cols-2 lg:grid-cols-5 gap-10 text-sm">
@@ -152,7 +155,7 @@ function Footer() {
             <span className="px-3 py-2 rounded-lg border border-line text-xs text-muted">iPhone: coming later</span>
           </div>
         </div>
-        <FooterCol title="Services" links={SERVICES.map((s) => [s.action, s.href])} />
+        <FooterCol title="Services" links={open.map((s) => [s.action, s.href])} />
         <FooterCol title="Company" links={[["Offers", "/offers"], ["Become a partner", "/partner"], ["My trips", "/bookings"]]} />
         <FooterCol title="Support" links={[["Help centre", "/help"], ["Safety", "/help"], ["Cancellation & refunds", "/help"]]} />
       </div>

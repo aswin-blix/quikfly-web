@@ -2,6 +2,7 @@
 // Signed-in account sheet for the mobile bottom bar: shortcuts into /account and the rest of the app.
 import { BadgePercent, ChevronRight, Gift, Handshake, HelpCircle, LogOut, Settings, ShieldCheck, Ticket, Wallet } from "lucide-react";
 import { useApp } from "./AppProvider";
+import { useSettings } from "./ConfigProvider";
 import { SheetLink } from "./ServicesSheet";
 import { Modal } from "./ui";
 import { inr } from "@/lib/format";
@@ -9,6 +10,7 @@ import { Link } from "@/lib/nav";
 
 export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, signOut: endSession, toast } = useApp();
+  const settings = useSettings();
   if (!user) return null;
 
   const signOut = () => { endSession(); toast("Signed out"); onClose(); };
@@ -35,7 +37,7 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
 
       <div className="mt-5 rounded-2xl border border-line divide-y divide-line">
         <SheetLink href="/bookings" icon={<Ticket size={18} />} label="My trips" onClick={onClose} />
-        <SheetLink href="/account?tab=refer" icon={<Gift size={18} />} label="Refer & earn" onClick={onClose} />
+        {settings.featureReferral && <SheetLink href="/account?tab=refer" icon={<Gift size={18} />} label="Refer & earn" onClick={onClose} />}
         <SheetLink href="/account?tab=safety" icon={<ShieldCheck size={18} />} label="Safety & emergency contacts" onClick={onClose} />
         <SheetLink href="/account" icon={<Settings size={18} />} label="All account settings" onClick={onClose} />
       </div>

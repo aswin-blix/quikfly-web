@@ -8,6 +8,7 @@ import '../../core/format.dart';
 import '../../core/services.dart';
 import '../../state/catalog.dart';
 import '../../state/providers.dart';
+import '../../widgets/service_gate.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/art.dart';
 import '../../widgets/logo.dart';
@@ -136,11 +137,11 @@ class _Hero extends StatelessWidget {
   }
 }
 
-class _ServiceGrid extends StatelessWidget {
+class _ServiceGrid extends ConsumerWidget {
   const _ServiceGrid();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final wide = MediaQuery.sizeOf(context).width > 600;
     return GridView.count(
       shrinkWrap: true,
@@ -149,7 +150,7 @@ class _ServiceGrid extends StatelessWidget {
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
       childAspectRatio: 1.05,
-      children: [for (final s in services) _ServiceTile(s)],
+      children: [for (final s in openServices(ref.watch(configProvider).value?.settings ?? const Settings({}))) _ServiceTile(s)],
     );
   }
 }

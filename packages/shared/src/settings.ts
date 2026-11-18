@@ -6,6 +6,27 @@ import { CANCEL_POLICY_HINT, CANCEL_POLICY_PATTERN, checkCancelPolicy } from "./
 import type { ServiceKey } from "./types";
 
 export interface Settings {
+  /**
+   * Services open for new bookings (see switches.ts). Off = hidden in the website and app and
+   * refused by the API; bookings already made carry on.
+   */
+  serviceBike: boolean;
+  serviceCar: boolean;
+  serviceBus: boolean;
+  serviceTours: boolean;
+  serviceRent: boolean;
+  serviceGroup: boolean;
+  /** What customers see where a paused service would be. */
+  servicePausedMessage: string;
+  /** Features that can be switched off without pausing a whole service. */
+  featureRideScheduling: boolean;
+  featureMultiStop: boolean;
+  featureCashRides: boolean;
+  featureOutstation: boolean;
+  featureSelfDrive: boolean;
+  featureTripOffers: boolean;
+  featureReferral: boolean;
+
   /** Verify a submitted driving licence at once instead of waiting for an admin (unattended demos). */
   licenceAutoApprove: boolean;
 
@@ -113,6 +134,20 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  serviceBike: true,
+  serviceCar: true,
+  serviceBus: true,
+  serviceTours: true,
+  serviceRent: true,
+  serviceGroup: true,
+  servicePausedMessage: "This service is paused for now. Please check back soon.",
+  featureRideScheduling: true,
+  featureMultiStop: true,
+  featureCashRides: true,
+  featureOutstation: true,
+  featureSelfDrive: true,
+  featureTripOffers: true,
+  featureReferral: true,
   licenceAutoApprove: false,
   welcomeCredit: 500,
   referralBonus: 100,
@@ -182,6 +217,20 @@ const cancelPolicy: Rule = { type: "text", max: 80, pattern: CANCEL_POLICY_PATTE
 
 /** Allowed values per setting. The API refuses anything else. */
 export const SETTING_RULES: Record<keyof Settings, Rule> = {
+  serviceBike: { type: "boolean" },
+  serviceCar: { type: "boolean" },
+  serviceBus: { type: "boolean" },
+  serviceTours: { type: "boolean" },
+  serviceRent: { type: "boolean" },
+  serviceGroup: { type: "boolean" },
+  servicePausedMessage: { type: "text", min: 5, max: 160 },
+  featureRideScheduling: { type: "boolean" },
+  featureMultiStop: { type: "boolean" },
+  featureCashRides: { type: "boolean" },
+  featureOutstation: { type: "boolean" },
+  featureSelfDrive: { type: "boolean" },
+  featureTripOffers: { type: "boolean" },
+  featureReferral: { type: "boolean" },
   licenceAutoApprove: { type: "boolean" },
   welcomeCredit: money(5000),
   referralBonus: money(5000),

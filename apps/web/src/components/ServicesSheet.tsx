@@ -5,15 +5,17 @@ import { Modal } from "./ui";
 import { cx } from "@/lib/format";
 import { Link, usePath } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
+import { useOpenServices } from "./ServiceGate";
 
 export function ServicesSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const path = usePath();
   const current = SERVICES.find((s) => path.startsWith(s.href))?.key;
+  const openServices = useOpenServices();
 
   return (
     <Modal open={open} onClose={onClose} title="What would you like to book?">
       <ul className="grid grid-cols-2 gap-3">
-        {SERVICES.map((s) => (
+        {openServices.map((s) => (
           <li key={s.key}>
             <Link href={s.href} onClick={onClose} aria-current={current === s.key ? "page" : undefined}
               className={cx("group block h-full rounded-2xl border overflow-hidden transition-colors active:scale-[.98]",

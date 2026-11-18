@@ -8,6 +8,7 @@ import { Accordion, Empty, GhostLink, GoldButton, PageHeader, SectionTitle, Segm
 import { cx, inr } from "@/lib/format";
 import { Link } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
+import { useOpenServices } from "@/components/ServiceGate";
 import type { Faq } from "@quikfly/shared";
 import { useConfig } from "@/components/ConfigProvider";
 
@@ -17,13 +18,15 @@ export function OffersScreen() {
   const OFFERS = useConfig()?.offers ?? [];
   const { toast } = useApp();
   const [filter, setFilter] = useState<string>("all");
-  const shown = OFFERS.filter((o) => filter === "all" || o.service === filter);
+  const open = useOpenServices();
+  // Coupons for paused services can't be used, so they aren't shown.
+  const shown = OFFERS.filter((o) => (o.service === "all" || open.some((s) => s.key === o.service)) && (filter === "all" || o.service === filter));
   return (
     <>
       <PageHeader crumbs={[["Home", "/"], ["Offers"]]} title="Offers & coupons" icon={<BadgePercent className="text-gold" size={36} />} sub="Tap a code to copy it, then apply at checkout.">
         <div className="flex flex-wrap gap-2 mt-6">
           <button data-on={filter === "all"} onClick={() => setFilter("all")} className="chip">All</button>
-          {SERVICES.map((s) => <button key={s.key} data-on={filter === s.key} onClick={() => setFilter(s.key)} className="chip">{s.nav}</button>)}
+          {open.map((s) => <button key={s.key} data-on={filter === s.key} onClick={() => setFilter(s.key)} className="chip">{s.nav}</button>)}
         </div>
       </PageHeader>
       <section className="max-w-7xl mx-auto px-4">

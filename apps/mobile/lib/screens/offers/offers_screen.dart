@@ -1,8 +1,9 @@
 // Offers: every visible coupon from GET /config, filterable by service.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/services.dart';
 import '../../state/providers.dart';
+import '../../api/models.dart' show Settings;
+import '../../widgets/service_gate.dart';
 import '../../widgets/offer_card.dart';
 import '../../widgets/ui.dart';
 
@@ -32,7 +33,7 @@ class _OffersScreenState extends ConsumerState<OffersScreen> {
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(children: [
-                  for (final (key, label) in [('all', 'All'), for (final s in services) (s.key.name, s.action)])
+                  for (final (key, label) in [('all', 'All'), for (final s in openServices(ref.watch(configProvider).value?.settings ?? const Settings({}))) (s.key.name, s.action)])
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ChoiceChip(label: Text(label), selected: _filter == key, onSelected: (_) => setState(() => _filter = key)),

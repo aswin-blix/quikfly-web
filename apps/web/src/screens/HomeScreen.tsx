@@ -16,6 +16,7 @@ import { ANDROID_APP } from "@/lib/site";
 import { useApp } from "@/components/AppProvider";
 import { useConfig } from "@/components/ConfigProvider";
 import { useTours } from "@/components/catalog-hooks";
+import { useOpenServices, useServiceOn } from "@/components/ServiceGate";
 
 export function HomeScreen() {
   return (
@@ -95,11 +96,12 @@ function Hero() {
 
 /* ── Services grid: Framer stagger + tilt ── */
 function ServicesGrid() {
+  const open = useOpenServices();
   return (
     <section className="max-w-7xl mx-auto px-4 py-12">
       <SectionTitle eyebrow="Our services" title="Where do you want to go today?" />
       <StaggerGroup className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        {SERVICES.map((s) => (
+        {open.map((s) => (
           <motion.div key={s.key} variants={fadeUp}>
             <Tilt>
               <Link href={s.href} className="group block gold-border rounded-2xl overflow-hidden">
@@ -137,6 +139,7 @@ function Stats() {
 
 /* ── Offers: draggable carousel (Framer Motion drag) ── */
 function Offers() {
+  const isOn = useServiceOn();
   const OFFERS = useConfig()?.offers ?? [];
   const wrap = useRef<HTMLDivElement>(null);
   const { toast } = useApp();
@@ -148,7 +151,7 @@ function Offers() {
       </div>
       <div ref={wrap} className="overflow-hidden -mx-4 px-4">
         <motion.div drag="x" dragConstraints={wrap} className="flex gap-4 w-max cursor-grab active:cursor-grabbing">
-          {OFFERS.map((o) => {
+          {OFFERS.filter((o) => o.service === "all" || isOn(o.service)).map((o) => {
             const s = SERVICES.find((x) => x.key === o.service);
             return (
               <motion.div key={o.id} whileHover={{ y: -6 }} className="w-[300px] sm:w-[340px] rounded-2xl p-6 relative overflow-hidden border border-line select-none"
