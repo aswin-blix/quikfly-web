@@ -3,6 +3,8 @@
 // the ride and the booking carries its rideId, never an amount.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../api/models.dart';
 import '../../core/cancellation.dart';
@@ -23,8 +25,11 @@ import 'place_search_screen.dart';
 const ridePayments = [PaymentMethod.upi, PaymentMethod.cash, PaymentMethod.wallet, PaymentMethod.card];
 
 class RideScreen extends ConsumerStatefulWidget {
-  const RideScreen({super.key, required this.service});
+  const RideScreen({super.key, required this.service, this.resumeRideId, this.resumeBookingId});
   final ServiceKey service; // bike or car
+
+  /// A scheduled ride to start now (from My Trips).
+  final String? resumeRideId, resumeBookingId;
   @override
   ConsumerState<RideScreen> createState() => _RideScreenState();
 }
@@ -40,6 +45,10 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   Ride? _ride;
   String? _bookingId;
   DateTime? _bookedAt;
+
+  /// Book ahead: the pickup time (null = ride now), and the ride just scheduled (shows its confirmation).
+  DateTime? _at;
+  Ride? _scheduled;
   int _rating = 0;
   late final _clock = AnimationController(vsync: this)..addListener(() => setState(() {}));
   int _quoteRequest = 0;
@@ -60,6 +69,60 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         _complete();
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_resumed && widget.resumeRideId != null && widget.resumeBookingId != null) {
+      _resumed = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _resume());
+    }
+  }
+
+  bool _resumed = false;
+
+  /// Starts a scheduled ride: the driver is assigned now and the live trip runs.
+  Future<void> _resume() async {
+    final api = ref.read(apiProvider);
+    try {
+      final r = await api.startRide(widget.resumeRideId!);
+      final b = await api.booking(widget.resumeBookingId!);
+      if (!mounted) return;
+      setState(() {
+        _pickup = r.pickup;
+        _drop = r.drop;
+        _ride = r;
+        _bookingId = b.id;
+        _bookedAt = b.createdAt;
+      });
+      _startPhase(RidePhase.arriving);
+      _autoShareIfNight(r);
+    } catch (e) {
+      if (mounted) toast(context, errorText(e));
+    }
+  }
+
+  /// Local "YYYY-MM-DDTHH:mm" sent as scheduledFor.
+  String? get _scheduledFor => _at == null ? null : DateFormat("yyyy-MM-dd'T'HH:mm").format(_at!);
+
+  /// Date then time pickers, within the settings' limits.
+  Future<void> _pickTime() async {
+    final s = ref.read(configProvider).value?.settings ?? const Settings({});
+    final now = DateTime.now();
+    final first = now.add(Duration(minutes: s.rideScheduleMinMinutes));
+    final start = _at ?? first.add(const Duration(minutes: 15));
+    final day = await showDatePicker(context: context, initialDate: start, firstDate: DateTime(first.year, first.month, first.day), lastDate: now.add(Duration(days: s.rideScheduleMaxDays)));
+    if (day == null || !mounted) return;
+    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(start));
+    if (time == null || !mounted) return;
+    final picked = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+    if (picked.isBefore(first)) {
+      toast(context, 'Schedule a ride at least ${s.rideScheduleMinMinutes} minutes ahead.');
+      return;
+    }
+    setState(() => _at = picked);
+    _loadQuotes();
   }
 
   @override
@@ -87,7 +150,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       _quoteErr = null;
     });
     try {
-      final q = await ref.read(apiProvider).rideQuotes(widget.service, a.id, b.id);
+      final q = await ref.read(apiProvider).rideQuotes(widget.service, a.id, b.id, scheduledFor: _scheduledFor);
       if (!mounted || req != _quoteRequest) return;
       setState(() {
         _quotes = q;
@@ -123,14 +186,17 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     setState(() => _phase = RidePhase.searching);
     Ride? r;
     try {
-      r = await api.bookRide(q.option.id, a.id, b.id, _payment);
+      r = await api.bookRide(q.option.id, a.id, b.id, _payment, scheduledFor: _scheduledFor);
       final booking = await api.createBooking(
         service: widget.service,
         title: '${r.quote.option.name} · ${r.drop.name}',
         subtitle: '${r.pickup.name} → ${r.drop.name}',
         payment: _payment,
         rideId: r.id,
-        lines: [
+        // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
+        lines: r.scheduledFor != null
+            ? [('Pickup time', dateTime(r.scheduledFor!)), ('Payment', paymentLabel(_payment.name)), ('Distance', '${r.quote.distanceKm} km')]
+            : [
           ('Driver', r.driver.name),
           ('Vehicle', '${r.driver.vehicle} · ${r.driver.plate}'),
           ('Ride OTP', r.otp),
@@ -139,6 +205,15 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         ],
       );
       if (!mounted) return;
+      if (r.scheduledFor != null) {
+        setState(() {
+          _scheduled = r;
+          _phase = RidePhase.plan;
+        });
+        ref.invalidate(bookingsProvider);
+        ref.read(sessionProvider.notifier).refresh();
+        return;
+      }
       _ride = r;
       _bookingId = booking.id;
       _bookedAt = booking.createdAt;
@@ -167,7 +242,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       showDragHandle: true,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setSheet) {
         final c = ctx.qf;
-        final fee = picked == null ? null : rideCancelFee(settings, fare, picked, _bookedAt ?? DateTime.now());
+        final fee = picked == null ? null : rideCancelFee(settings, fare, picked, _bookedAt ?? DateTime.now(), scheduledFor: _ride?.scheduledFor);
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(Brand.gutter, 0, Brand.gutter, 16),
@@ -341,6 +416,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   }
 
   Widget _panel(List<Place> places) => switch (_phase) {
+        RidePhase.plan when _scheduled != null => _scheduledView(_scheduled!),
         RidePhase.plan => _plan(places),
         RidePhase.searching => _searching(),
         RidePhase.arriving || RidePhase.ontrip => _live(),
@@ -436,6 +512,25 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
           ),
         ]),
       ],
+      const SizedBox(height: 16),
+      _label('When'),
+      Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        ChoiceChip(
+            label: const Text('Ride now'),
+            selected: _at == null,
+            onSelected: (_) {
+              setState(() => _at = null);
+              _loadQuotes();
+            }),
+        ChoiceChip(label: Text(_at == null ? 'Schedule' : dateTime(_at!)), selected: _at != null, onSelected: (_) => _pickTime()),
+      ]),
+      if (_at != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(
+              'Fare locked now. Your driver is assigned ${Rules.rideStartWindowMinutes} min before pickup; free cancellation until ${(ref.watch(configProvider).value?.settings ?? const Settings({})).rideScheduleFreeCancelMinutes} min before.',
+              style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
+        ),
       if (_quoteErr != null) ...[const SizedBox(height: 14), ErrorBox(_quoteErr!, onRetry: _loadQuotes)],
       if (_loadingQuotes) ...[const SizedBox(height: 16), for (var i = 0; i < 3; i++) const Padding(padding: EdgeInsets.only(bottom: 8), child: Skeleton(height: 66))],
       if (_quotes != null && !_loadingQuotes && _quotes!.isNotEmpty) ...[
@@ -489,7 +584,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
           ),
         const SizedBox(height: 14),
         GoldButton(
-          label: 'Book ${quote?.option.name ?? ''} · ${quote == null ? '' : inr(quote.fare)}',
+          label: '${_at == null ? 'Book' : 'Schedule'} ${quote?.option.name ?? ''} · ${quote == null ? '' : inr(quote.fare)}',
           onPressed: quote == null || (_payment == PaymentMethod.wallet && walletShort) ? null : _book,
         ),
       ],
@@ -633,6 +728,33 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
             ),
           ),
         ],
+      ]),
+    ]);
+  }
+
+  /// Confirmation after booking ahead: no driver yet; start from My Trips near pickup.
+  Widget _scheduledView(Ride r) {
+    final c = context.qf;
+    final s = ref.watch(configProvider).value?.settings ?? const Settings({});
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SizedBox(height: 8),
+      Icon(Icons.event_available, color: c.accent, size: 40),
+      const SizedBox(height: 8),
+      const Text('Ride scheduled', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
+      const SizedBox(height: 4),
+      Text('${r.quote.option.name} · ${r.pickup.name} → ${r.drop.name}', textAlign: TextAlign.center, style: TextStyle(color: c.fgSoft)),
+      const SizedBox(height: 8),
+      Text(dateTime(r.scheduledFor!), textAlign: TextAlign.center, style: TextStyle(color: c.accent, fontWeight: FontWeight.w700, fontSize: 17)),
+      const SizedBox(height: 8),
+      Text(
+          'Fare ${inr(r.quote.fare)} (${paymentLabel(r.payment)}), locked. Your driver is assigned ${Rules.rideStartWindowMinutes} minutes before pickup: start the ride from My Trips then. Free cancellation until ${s.rideScheduleFreeCancelMinutes} minutes before pickup.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: c.fgMuted, fontSize: 13)),
+      const SizedBox(height: 16),
+      Row(children: [
+        Expanded(child: OutlinedButton(onPressed: () => setState(() { _scheduled = null; _at = null; }), child: const Text('Book another'))),
+        const SizedBox(width: 10),
+        Expanded(child: FilledButton(onPressed: () => context.go('/trips'), child: const Text('My Trips'))),
       ]),
     ]);
   }

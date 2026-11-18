@@ -66,9 +66,12 @@ const rideCancelReasons = [
 ];
 
 /// Ride cancellation fee (MVAG 2025): free within the window after booking or with a valid reason; else % of the fare, capped.
-int rideCancelFee(Settings s, int fare, String? reason, DateTime bookedAt, {DateTime? now}) {
+int rideCancelFee(Settings s, int fare, String? reason, DateTime bookedAt, {DateTime? now, DateTime? scheduledFor}) {
+  final t = now ?? DateTime.now();
   if (rideCancelReasons.any((r) => r.$1 == reason && r.$3)) return 0;
-  if ((now ?? DateTime.now()).difference(bookedAt).inSeconds / 60 < s.rideCancelFreeMinutes) return 0;
+  if (t.difference(bookedAt).inSeconds / 60 < s.rideCancelFreeMinutes) return 0;
+  // A ride booked ahead is free to cancel until the free window before pickup.
+  if (scheduledFor != null && scheduledFor.difference(t).inSeconds / 60 >= s.rideScheduleFreeCancelMinutes) return 0;
   final fee = (fare * s.rideCancelFeePercent / 100).round();
   return [fee, s.rideCancelFeeCap, fare].reduce((a, b) => a < b ? a : b);
 }
@@ -91,7 +94,7 @@ String cancelPolicyText(Settings settings, ServiceKey service) =>
 (int, int) refundPreview(Settings settings, Booking b) {
   if (b.service == ServiceKey.bike || b.service == ServiceKey.car) {
     // From My Trips there's no reason, so the fee applies after the free minutes.
-    return (100, b.amount - rideCancelFee(settings, b.amount, null, b.createdAt));
+    return (100, b.amount - rideCancelFee(settings, b.amount, null, b.createdAt, scheduledFor: b.startsAt));
   }
   final percent = refundPercent(parseCancelPolicy(settings.cancelPolicy(b.service)), b.startsAt);
   return (percent, refundAmount(b.amount, percent, b.deposit));

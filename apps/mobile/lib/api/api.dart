@@ -103,10 +103,15 @@ class QuikFlyApi {
 
   // ── Rides ──
   Future<List<Place>> places(String q) => _get('/places', _listOf(Place.fromJson), {'q': q});
-  Future<List<FareQuote>> rideQuotes(ServiceKey service, String pickupId, String dropId) =>
-      _post('/rides/quote', _listOf(FareQuote.fromJson), {'service': service.name, 'pickupId': pickupId, 'dropId': dropId});
-  Future<Ride> bookRide(String optionId, String pickupId, String dropId, PaymentMethod payment) => _post('/rides', (d) => Ride.fromJson(d as Json),
-      {'optionId': optionId, 'pickupId': pickupId, 'dropId': dropId, 'payment': payment.name});
+  /// [scheduledFor] = local "YYYY-MM-DDTHH:mm" (India) for a ride booked ahead.
+  Future<List<FareQuote>> rideQuotes(ServiceKey service, String pickupId, String dropId, {String? scheduledFor}) => _post('/rides/quote',
+      _listOf(FareQuote.fromJson), {'service': service.name, 'pickupId': pickupId, 'dropId': dropId, 'scheduledFor': ?scheduledFor});
+  Future<Ride> bookRide(String optionId, String pickupId, String dropId, PaymentMethod payment, {String? scheduledFor}) => _post('/rides',
+      (d) => Ride.fromJson(d as Json), {'optionId': optionId, 'pickupId': pickupId, 'dropId': dropId, 'payment': payment.name, 'scheduledFor': ?scheduledFor});
+  Future<Ride> ride(String id) => _get('/rides/$id', (d) => Ride.fromJson(d as Json));
+
+  /// Starts a scheduled ride near pickup time (driver assigned, live trip begins).
+  Future<Ride> startRide(String id) => _post('/rides/$id/start', (d) => Ride.fromJson(d as Json));
   Future<void> cancelRide(String id) => _post('/rides/$id/cancel', _ignore);
   Future<ShareLink> shareRide(String id) => _post('/rides/$id/share', (d) => ShareLink.fromJson(d as Json));
 

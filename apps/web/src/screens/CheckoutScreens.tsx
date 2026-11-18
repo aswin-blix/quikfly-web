@@ -10,7 +10,7 @@ import { cx, inr, prettyDateTime } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
-import { cancelPolicyFor, formatLicence, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
+import { RIDE_SCHEDULE, cancelPolicyFor, formatLicence, minutesUntilStart, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
 import { useSettings } from "@/components/ConfigProvider";
 import { LicenceBadge, LicenceForm, licenceMessage, useLicencePolling } from "@/components/account/LicenceSection";
 import { GSTIN_LINE } from "@/lib/invoice";
@@ -367,7 +367,7 @@ export function BookingsScreen() {
   function preview(b: Booking) {
     if (b.service === "bike" || b.service === "car") {
       // No reason from My Trips, so the fee applies after the free minutes.
-      const fee = rideCancelFee(settings, b.amount, null, b.createdAt);
+      const fee = rideCancelFee(settings, b.amount, null, b.createdAt, Date.now(), b.startsAt);
       return { percent: 100, refund: b.amount - fee, fee };
     }
     const percent = refundPercent(cancelPolicyFor(settings, b.service), b.startsAt);
@@ -442,13 +442,19 @@ export function BookingsScreen() {
                         <div className="px-4 pb-4 border-t border-line pt-4">
                           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                             {b.lines.map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-subtle">{k}</dt><dd className="text-right">{v}</dd></div>)}
-                            {b.startsAt && <div className="flex justify-between gap-3"><dt className="text-subtle">Starts</dt><dd className="text-right">{prettyDateTime(b.startsAt)}</dd></div>}
+                            {b.startsAt && !b.lines.some(([k]) => k === "Pickup time") && <div className="flex justify-between gap-3"><dt className="text-subtle">Starts</dt><dd className="text-right">{prettyDateTime(b.startsAt)}</dd></div>}
                             {b.deposit > 0 && b.status !== "cancelled" && <div className="flex justify-between gap-3"><dt className="text-subtle">Refundable deposit</dt><dd className="text-right">{b.status === "completed" ? `${inr(b.deposit)} ${b.payment === "wallet" ? "returned to wallet" : "due back"}` : `${inr(b.deposit)} (back after return)`}</dd></div>}
                             {b.status === "cancelled" && b.cancelFee > 0 && <div className="flex justify-between gap-3"><dt className="text-subtle">Cancellation fee</dt><dd className="text-right">{inr(b.cancelFee)}{b.payment === "wallet" ? " (kept)" : " (demo: not collected)"}</dd></div>}
                             {b.status === "cancelled" && b.refundAmount !== null && <div className="flex justify-between gap-3"><dt className="text-subtle">{b.payment === "wallet" ? "Refunded to wallet" : "Refund due"}</dt><dd className="text-right">{b.refundAmount ? inr(b.refundAmount) : "Nothing (cancelled too late)"}</dd></div>}
                           </dl>
                           {b.status !== "cancelled" && (
                             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
+                              {/* A ride booked ahead starts from here once the driver is assigned. */}
+                              {b.status === "confirmed" && b.rideId && b.startsAt && (b.service === "bike" || b.service === "car") && (
+                                minutesUntilStart(b.startsAt, RIDE_SCHEDULE.startWindowMinutes) <= 0
+                                  ? <Link href={`${serviceByKey(b.service).href}${qs({ ride: b.rideId, booking: b.id })}`} className="btn-gold rounded-lg px-3 py-1.5 text-sm">Start ride</Link>
+                                  : <span className="text-xs text-muted">Driver assigned {RIDE_SCHEDULE.startWindowMinutes} min before pickup; start the ride here then.</span>
+                              )}
                               <Link href={`/invoice${qs({ id: b.id })}`} className="text-sm text-gold flex items-center gap-1.5"><FileText size={15} />Invoice</Link>
                               {b.status === "confirmed" && (confirming === b.id ? (
                                 <>

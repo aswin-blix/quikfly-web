@@ -40,6 +40,9 @@ void main() {
     final quotes = await api.rideQuotes(ServiceKey.car, a.id, b.id);
     expect(quotes, isNotEmpty);
     expect(quotes.every((q) => q.surge >= 1 && q.surge <= config.settings.surgeCap), isTrue);
+    // A ride booked ahead (India time, two days out) is quoted and parsed with its pickup time.
+    final ahead = DateTime.now().toUtc().add(const Duration(days: 2, minutes: 330)).toIso8601String().substring(0, 16);
+    expect(await api.rideQuotes(ServiceKey.car, a.id, b.id, scheduledFor: ahead), isNotEmpty);
     final ride = await api.bookRide(quotes.first.option.id, a.id, b.id, PaymentMethod.cash);
     expect(ride.otp, hasLength(4));
     final link = await api.shareRide(ride.id);

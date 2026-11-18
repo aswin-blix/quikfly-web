@@ -4,7 +4,7 @@
 // Storage helpers: ./mock-store.ts. Account endpoints: ./mock-account.ts.
 import type { QuikflyApi } from "./contract";
 import {
-  BUS_OPERATORS, CATALOG_SEED, DEFAULT_SETTINGS, DEPOSIT_LINE, QUOTE_TTL_MINUTES, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
+  BUS_OPERATORS, CATALOG_SEED, DEFAULT_SETTINGS, DEPOSIT_LINE, QUOTE_TTL_MINUTES, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
   type AppConfig, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
@@ -106,14 +106,16 @@ export const mockApi: QuikflyApi = {
   },
 
   rides: {
-    async quote(service, pickupId, dropId) {
+    async quote(service, pickupId, dropId, scheduledFor) {
       await wait(700);
-      return rideQuotes(seed.rideOption.filter((o) => o.service === service), placeById(pickupId), placeById(dropId), settings, new Date().getHours());
+      if (scheduledFor) { const err = scheduleError(settings, scheduledFor); if (err) fail(err); }
+      const hour = scheduledFor ? parseInt(scheduledFor.slice(11, 13), 10) : new Date().getHours();
+      return rideQuotes(seed.rideOption.filter((o) => o.service === service), placeById(pickupId), placeById(dropId), settings, hour);
     },
-    async book({ optionId, pickupId, dropId, payment }) {
-      await wait(2600); // "searching for drivers"
+    async book({ optionId, pickupId, dropId, payment, scheduledFor }) {
+      await wait(scheduledFor ? 900 : 2600); // "searching for drivers" only for ride-now
       const option = byId(seed.rideOption, optionId, "ride type");
-      const quote = (await mockApi.rides.quote(option.service, pickupId, dropId)).find((q) => q.option.id === optionId)!;
+      const quote = (await mockApi.rides.quote(option.service, pickupId, dropId, scheduledFor)).find((q) => q.option.id === optionId)!;
       const s = Date.now();
       const { id: _id, ...driver } = pick(seed.driver, s);
       const ride = {
@@ -128,9 +130,26 @@ export const mockApi: QuikflyApi = {
           vehicle: pick(option.models, s >> 2),
           plate: `${pick(RIDE_SIM.plateStates, s >> 3)} ${pick(RIDE_SIM.plateLetters, s >> 5)} ${1000 + (s % 8999)}`,
         },
+        scheduledFor: scheduledFor ? localToIso(scheduledFor) : null,
       };
       save(KEYS.rides, { ...ridesStore(), [ride.id]: { ride, startedAt: new Date().toISOString(), cancelled: false } });
       return ride;
+    },
+    async get(id) {
+      await wait(200);
+      return (ridesStore()[id] ?? fail("Ride not found.")).ride;
+    },
+    async start(id) {
+      await wait(300);
+      const rides = ridesStore();
+      const r = rides[id] ?? fail("Ride not found.");
+      if (r.cancelled) fail("This ride was cancelled.");
+      const at = r.ride.scheduledFor ?? fail("Only scheduled rides are started this way.");
+      const wait_ = minutesUntilStart(at, RIDE_SCHEDULE.startWindowMinutes);
+      if (wait_ > 0) fail(`Your driver is assigned ${RIDE_SCHEDULE.startWindowMinutes} minutes before pickup. Start the ride in ${wait_} minute${wait_ === 1 ? "" : "s"}.`);
+      r.startedAt = new Date().toISOString();
+      save(KEYS.rides, rides);
+      return r.ride;
     },
     async cancel(id) {
       await wait(400);
@@ -222,7 +241,8 @@ export const mockApi: QuikflyApi = {
       const b: Booking = {
         id: uid("QF"), service: input.service, title: input.title, subtitle: input.subtitle, payment: input.payment,
         amount, lines, status: "confirmed", createdAt: new Date().toISOString(),
-        startsAt: quoted?.startsAt || null, refundAmount: null, deposit, cancelReason: null, cancelFee: 0,
+        startsAt: quoted?.startsAt || (input.rideId ? ridesStore()[input.rideId]?.ride.scheduledFor : null) || null, refundAmount: null, deposit, cancelReason: null, cancelFee: 0,
+        rideId: input.rideId ?? null,
       };
       if (input.payment === "wallet") {
         if (currentUser().walletBalance < amount) fail("Not enough wallet balance. Choose another payment method.");
@@ -245,7 +265,7 @@ export const mockApi: QuikflyApi = {
       await wait(500);
       const current = bookingsStore().find((x) => x.id === id) ?? fail("Booking not found.");
       const ride = current.service === "bike" || current.service === "car";
-      const fee = ride ? rideCancelFee(settings, current.amount, reason, current.createdAt) : 0;
+      const fee = ride ? rideCancelFee(settings, current.amount, reason, current.createdAt, Date.now(), current.startsAt) : 0;
       const percent = ride ? 100 : refundPercent(cancelPolicyFor(settings, current.service), current.startsAt);
       const refund = ride ? current.amount - fee : refundAmount(current.amount, percent, current.deposit ?? 0);
       const b = finishBooking(id, "cancelled", { refundAmount: refund, cancelReason: reason ?? null, cancelFee: fee });

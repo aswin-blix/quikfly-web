@@ -15,6 +15,9 @@ export const LIMITS = {
 
 export const DELETION_GRACE_DAYS = 30;
 
+/** Scheduled rides: the driver is assigned (and "Start ride" opens) this many minutes before pickup. */
+export const RIDE_SCHEDULE = { startWindowMinutes: 15 };
+
 /**
  * Why a rider cancels (Motor Vehicle Aggregator Guidelines 2025: apps list the reasons, and a
  * cancellation fee applies only without a valid one). `waivesFee` marks the valid ones.

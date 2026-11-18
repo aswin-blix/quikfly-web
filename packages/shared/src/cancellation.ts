@@ -85,9 +85,13 @@ export function refundAmount(amount: number, percent: number, deposit = 0): numb
  * Rider cancellation fee (MVAG 2025): nothing within the free minutes after booking or with
  * a valid reason; otherwise the % of the fare, capped. Rides only; staff cancels never pay.
  */
-export function rideCancelFee(settings: Settings, fare: number, reason: string | null | undefined, bookedAt: string, now = Date.now()): number {
+export function rideCancelFee(
+  settings: Settings, fare: number, reason: string | null | undefined, bookedAt: string, now = Date.now(), scheduledFor: string | null = null,
+): number {
   if (RIDE_CANCEL_REASONS.find((r) => r.key === reason)?.waivesFee) return 0;
   if ((now - Date.parse(bookedAt)) / 60_000 < settings.rideCancelFreeMinutes) return 0;
+  // A ride booked ahead is free to cancel until the free window before pickup.
+  if (scheduledFor && (Date.parse(scheduledFor) - now) / 60_000 >= settings.rideScheduleFreeCancelMinutes) return 0;
   return Math.min(Math.round((fare * settings.rideCancelFeePercent) / 100), settings.rideCancelFeeCap, fare);
 }
 
@@ -112,6 +116,22 @@ export function describeCancelPolicy(tiers: CancelTier[], event = "the start"): 
 /** The customer wording of a service's current policy. */
 export const cancelPolicyText = (settings: Settings, service: ServiceKey) =>
   describeCancelPolicy(cancelPolicyFor(settings, service), CANCEL_EVENT[service]);
+
+/** A local pickup time "YYYY-MM-DDTHH:mm" (India) as an ISO time. */
+export const localToIso = (local: string) => `${local}:00${BUSINESS_TZ_OFFSET}`;
+
+/** Why a pickup time can't be booked, or null when it can (between the settings' limits from `now`). */
+export function scheduleError(settings: Settings, local: string, now = Date.now()): string | null {
+  const at = Date.parse(localToIso(local));
+  if (Number.isNaN(at)) return "That pickup time isn't valid.";
+  if (at < now + settings.rideScheduleMinMinutes * 60_000) return `Schedule a ride at least ${settings.rideScheduleMinMinutes} minutes ahead.`;
+  if (at > now + settings.rideScheduleMaxDays * 86_400_000) return `Rides can be scheduled up to ${settings.rideScheduleMaxDays} days ahead.`;
+  return null;
+}
+
+/** Minutes until "Start ride" opens for a scheduled ride (≤ 0 = it's open). */
+export const minutesUntilStart = (scheduledFor: string, windowMinutes: number, now = Date.now()) =>
+  Math.ceil((Date.parse(scheduledFor) - windowMinutes * 60_000 - now) / 60_000);
 
 /**
  * When a quoted booking starts, as an ISO time, so the refund can be worked out later.

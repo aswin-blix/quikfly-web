@@ -3,7 +3,7 @@ import { SHARE_LINK_HOURS, type Ride, type SharedRide } from "@quikfly/shared";
 import { notFound } from "../lib/errors";
 import { randomToken } from "../lib/random";
 
-interface ShareRow { data: string; status: string; created_at: string; rider: string }
+interface ShareRow { data: string; status: string; created_at: string; started_at: string | null; rider: string }
 
 /** Returns the existing link for this ride if there is a live one, otherwise a new one. */
 export async function shareRide(db: D1Database, userId: string, rideId: string) {
@@ -22,7 +22,7 @@ export async function shareRide(db: D1Database, userId: string, rideId: string) 
 
 export async function readShare(db: D1Database, token: string): Promise<SharedRide> {
   const row = await db.prepare(
-    `SELECT r.data, r.status, r.created_at, u.name AS rider FROM ride_shares s
+    `SELECT r.data, r.status, r.created_at, r.started_at, u.name AS rider FROM ride_shares s
      JOIN rides r ON r.id = s.ride_id JOIN users u ON u.id = s.user_id
      WHERE s.token = ? AND s.expires_at > ?`,
   ).bind(token, Date.now()).first<ShareRow>();
@@ -32,7 +32,8 @@ export async function readShare(db: D1Database, token: string): Promise<SharedRi
     riderName: row.rider.split(" ")[0],
     service: ride.quote.option.service,
     status: row.status === "cancelled" ? "cancelled" : "active",
-    startedAt: row.created_at,
+    // Scheduled rides count from when the rider started them (or the pickup time until then).
+    startedAt: row.started_at ?? ride.scheduledFor ?? row.created_at,
     pickup: ride.pickup,
     drop: ride.drop,
     distanceKm: ride.quote.distanceKm,

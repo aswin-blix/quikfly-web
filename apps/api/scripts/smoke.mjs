@@ -126,6 +126,24 @@ const ride = await expect("POST /rides", call("POST", "/rides", rideInput), 201,
 await expect("POST /rides/:id/cancel", call("POST", `/rides/${ride.id}/cancel`), 200);
 await expect("POST /rides/:id/cancel unknown ride", call("POST", "/rides/RDNOPE/cancel"), 404);
 
+// Scheduled rides: quote and book ahead, start near pickup, cancel free until close to pickup.
+/** India-time "YYYY-MM-DDTHH:mm", `minutes` from now (rounded down to the minute). */
+const indiaLocal = (minutes) => new Date(Date.now() + (330 + minutes) * 60_000).toISOString().slice(0, 16);
+const ahead = indiaLocal(2 * 24 * 60);
+await expect("POST /rides/quote (scheduled)", call("POST", "/rides/quote", { service: "car", pickupId: a.id, dropId: b.id, scheduledFor: ahead }), 200,
+  (j) => j.length > 0 && j.every((q) => q.surge >= 1 && q.surge <= cfg.settings.surgeCap));
+await expect("scheduling too soon is refused", call("POST", "/rides/quote", { service: "car", pickupId: a.id, dropId: b.id, scheduledFor: indiaLocal(1) }), 400, (j) => /at least/.test(j.message));
+await expect("scheduling too far ahead is refused", call("POST", "/rides/quote", { service: "car", pickupId: a.id, dropId: b.id, scheduledFor: indiaLocal((cfg.settings.rideScheduleMaxDays + 2) * 1440) }), 400, (j) => /up to/.test(j.message));
+await expect("a malformed pickup time is refused", call("POST", "/rides/quote", { service: "car", pickupId: a.id, dropId: b.id, scheduledFor: "tomorrow 9am" }), 400);
+const later = await expect("POST /rides (scheduled)", call("POST", "/rides", { ...rideInput, scheduledFor: ahead }), 201, (j) => j.scheduledFor?.startsWith(ahead));
+await expect("GET /rides/:id", call("GET", `/rides/${later.id}`), 200, (j) => j.id === later.id && j.scheduledFor === later.scheduledFor);
+await expect("GET /rides/:id unknown is 404", call("GET", "/rides/RDNOPE"), 404);
+await expect("a scheduled ride can't start days early", call("POST", `/rides/${later.id}/start`), 409, (j) => /assigned/.test(j.message));
+await expect("a cancelled ride can't be started", call("POST", `/rides/${ride.id}/start`), 409, (j) => /cancelled/.test(j.message));
+const laterBooking = await expect("booking a scheduled ride", call("POST", "/bookings", { service: "car", title: "Smoke scheduled", subtitle: "A → B", payment: "cash", lines: [], rideId: later.id }), 201,
+  (j) => j.rideId === later.id && j.startsAt === later.scheduledFor);
+await expect("cancelling well before pickup is free", call("POST", `/bookings/${laterBooking.id}/cancel`, {}), 200, (j) => j.cancelFee === 0 && j.refundAmount === laterBooking.amount);
+
 // Bookings: priced by a quote or a ride, never by the client
 await expect("GET /bookings needs sign-in", call("GET", "/bookings", null, false), 401);
 const newBooking = (extra) => ({ service: "bus", title: "Chennai → Bengaluru", subtitle: "Smoke test", payment: "upi", lines: [["Seats", "L1"]], ...extra });

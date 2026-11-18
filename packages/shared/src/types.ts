@@ -189,6 +189,8 @@ export interface Ride {
   driver: Driver;
   otp: string;
   payment: PaymentMethod;
+  /** Pickup time of a ride booked ahead (ISO, India time); null for ride-now. The rider starts it from My Trips. */
+  scheduledFor: string | null;
 }
 
 export interface Bus {
@@ -295,6 +297,8 @@ export interface Booking {
   startsAt: string | null;
   /** What came back (₹): the policy's share when cancelled, the deposit when a rental is completed; null while active. */
   refundAmount: number | null;
+  /** The ride behind a bike/car booking (to start a scheduled ride); null for other services. */
+  rideId: string | null;
   /** Why the rider cancelled (a RIDE_CANCEL_REASONS key), when given. */
   cancelReason: string | null;
   /** Ride cancellation fee kept (wallet) or owed (cash/UPI, not collected in the preview); 0 when none. */

@@ -5,10 +5,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useHideBottomNav } from "./BottomNav";
 import { ArrowUpDown, Clock, MapPin, Navigation, Phone, Share2, Siren, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { RIDE_CANCEL_REASONS, RIDE_SIMULATION, isNightHour, rideCancelFee } from "@quikfly/shared";
+import { RIDE_CANCEL_REASONS, RIDE_SCHEDULE, RIDE_SIMULATION, isNightHour, rideCancelFee } from "@quikfly/shared";
 import type { FareQuote, PaymentMethod, Place, Ride, RideCancelReason, SavedPlace } from "@quikfly/shared";
 import { trackUrl } from "@/lib/account";
-import { cx, inr } from "@/lib/format";
+import { Link } from "@/lib/nav";
+import { cx, inr, prettyDateTime, toLocalInput } from "@/lib/format";
 import { PLACE_ICON } from "./account/PlacesSection";
 import { useApp } from "./AppProvider";
 import { CityMap, driverStartFor, vehiclePosition, type Pt } from "./CityMap";
@@ -17,14 +18,25 @@ import { GoldButton, Spinner } from "./ui";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { serviceByKey } from "@/lib/services";
 
-type Phase = "plan" | "searching" | "arriving" | "ontrip" | "done";
+type Phase = "plan" | "searching" | "scheduled" | "arriving" | "ontrip" | "done";
 
 /** Payment options offered for rides (net banking is checkout-only). */
 const RIDE_PAYMENTS: PaymentMethod[] = ["upi", "cash", "wallet", "card"];
 
 const { arriveMs: ARRIVE_MS, tripMs: TRIP_MS } = RIDE_SIMULATION;
 
-export function RidePanel({ service, initialFrom, initialTo }: { service: "bike" | "car"; initialFrom?: string | null; initialTo?: string | null }) {
+/** The default pickup time for "Schedule": the next quarter hour after the minimum lead time. */
+function defaultPickup(minMinutes: number) {
+  const d = new Date(Date.now() + (minMinutes + 15) * 60_000);
+  d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
+  return toLocalInput(d);
+}
+
+export function RidePanel({ service, initialFrom, initialTo, resume }: {
+  service: "bike" | "car"; initialFrom?: string | null; initialTo?: string | null;
+  /** A scheduled ride to start now (from My Trips). */
+  resume?: { rideId: string; bookingId: string };
+}) {
   const PLACES = useConfig()?.places ?? [];
   const { user, requireAuth, refreshBookings, toast } = useApp();
   const [pickup, setPickup] = useState<Place | null>(null);
@@ -51,6 +63,10 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState<RideCancelReason | null>(null);
   const settings = useSettings();
+  /** Ride now, or book ahead for a pickup time (local "YYYY-MM-DDTHH:mm"). */
+  const [when, setWhen] = useState<"now" | "later">("now");
+  const [at, setAt] = useState(() => defaultPickup(30));
+  const scheduledFor = when === "later" ? at : undefined;
   const [t, setT] = useState(0);
   const [rating, setRating] = useState(0);
   const [saved, setSaved] = useState<SavedPlace[]>([]);
@@ -91,13 +107,31 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
     if (!pickup || !drop || pickup.id === drop.id) { setQuotes(null); return; }
     let live = true;
     setLoadingQuotes(true);
-    api.rides.quote(service, pickup.id, drop.id).then((q) => {
+    api.rides.quote(service, pickup.id, drop.id, scheduledFor).then((q) => {
       if (!live) return;
       setQuotes(q); setSelected((s) => q.find((x) => x.option.id === s)?.option.id ?? q[0].option.id);
       setLoadingQuotes(false);
-    });
+    }, (e: Error) => { if (live) { setQuotes(null); setLoadingQuotes(false); toast(e.message, "err"); } });
     return () => { live = false; };
-  }, [pickup, drop, service]);
+  }, [pickup, drop, service, scheduledFor, toast]);
+
+  // Starting a scheduled ride from My Trips: assign the driver now and run the live trip.
+  const resumeKey = resume ? `${resume.rideId}:${resume.bookingId}` : "";
+  useEffect(() => {
+    if (!resume) return;
+    let live = true;
+    (async () => {
+      try {
+        const [r, b] = await Promise.all([api.rides.start(resume.rideId), api.bookings.get(resume.bookingId)]);
+        if (!live) return;
+        setPickup(r.pickup); setDrop(r.drop);
+        setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setT(0); setPhase("arriving");
+        autoShareIfNight(r);
+      } catch (e) { if (live) toast((e as Error).message, "err"); }
+    })();
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeKey]);
 
   // Drive the vehicle animation for arriving / on-trip phases
   useEffect(() => {
@@ -127,7 +161,7 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
 
   function reset() {
     cancelAnimationFrame(raf.current);
-    setPhase("plan"); setRide(null); setBookingId(null); setT(0); setRating(0); setCancelling(false); setReason(null);
+    setPhase("plan"); setRide(null); setBookingId(null); setT(0); setRating(0); setCancelling(false); setReason(null); setWhen("now");
   }
 
   const walletShort = !!user && !!quote && user.walletBalance < quote.fare;
@@ -138,11 +172,19 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
       setPhase("searching");
       let r: Ride | null = null;
       try {
-        r = await api.rides.book({ optionId: quote.option.id, pickupId: pickup.id, dropId: drop.id, payment });
+        r = await api.rides.book({ optionId: quote.option.id, pickupId: pickup.id, dropId: drop.id, payment, scheduledFor });
+        // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
         const b = await api.bookings.create({
           service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, rideId: r.id, payment,
-          lines: [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
+          lines: r.scheduledFor
+            ? [["Pickup time", prettyDateTime(r.scheduledFor)], ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]]
+            : [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
         });
+        if (r.scheduledFor) {
+          setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setPhase("scheduled");
+          refreshBookings();
+          return;
+        }
         setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setT(0); setPhase("arriving");
         refreshBookings();
         autoShareIfNight(r);
@@ -156,7 +198,7 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
   }
 
   /** Fee the rider would pay if they cancel now with the chosen reason (the API applies the same rule). */
-  const feeNow = ride && bookedAt ? rideCancelFee(settings, ride.quote.fare, reason, bookedAt) : 0;
+  const feeNow = ride && bookedAt ? rideCancelFee(settings, ride.quote.fare, reason, bookedAt, Date.now(), ride.scheduledFor) : 0;
 
   async function cancelRide() {
     cancelAnimationFrame(raf.current);
@@ -200,6 +242,26 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
                 </div>
               </div>
             )}
+
+            <div>
+              <p className="label mb-2">When</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {([["now", "Ride now"], ["later", "Schedule"]] as const).map(([k, l]) => (
+                  <button key={k} type="button" data-on={when === k} aria-pressed={when === k} onClick={() => setWhen(k)} className="chip">{l}</button>
+                ))}
+                {when === "later" && (
+                  <input type="datetime-local" aria-label="Pickup time" className="field !py-2 !w-auto" value={at} step={900}
+                    min={toLocalInput(new Date(Date.now() + settings.rideScheduleMinMinutes * 60_000))}
+                    max={toLocalInput(new Date(Date.now() + settings.rideScheduleMaxDays * 86_400_000))}
+                    onChange={(e) => e.target.value && setAt(e.target.value)} />
+                )}
+              </div>
+              {when === "later" && (
+                <p className="text-xs text-muted mt-2">
+                  Fare locked now. Your driver is assigned {RIDE_SCHEDULE.startWindowMinutes} min before pickup; free cancellation until {settings.rideScheduleFreeCancelMinutes} min before.
+                </p>
+              )}
+            </div>
 
             {!drop && (
               <div>
@@ -247,10 +309,23 @@ export function RidePanel({ service, initialFrom, initialTo }: { service: "bike"
                   })}
                 </div>
                 {payment === "wallet" && walletShort && <p className="text-xs text-danger">Wallet balance {inr(user!.walletBalance)} is not enough for this ride. Pick another payment method.</p>}
-                <GoldButton className="w-full mt-2 text-base" onClick={book} disabled={payment === "wallet" && walletShort}>Book {quote?.option.name} · {quote && inr(quote.fare)}</GoldButton>
+                <GoldButton className="w-full mt-2 text-base" onClick={book} disabled={payment === "wallet" && walletShort}>{when === "later" ? "Schedule" : "Book"} {quote?.option.name} · {quote && inr(quote.fare)}</GoldButton>
               </div>
             )}
           </>
+        )}
+
+        {phase === "scheduled" && ride?.scheduledFor && (
+          <div className="py-6 space-y-4 text-center">
+            <p className="font-display text-2xl">Ride scheduled</p>
+            <p className="text-soft">{ride.quote.option.name} · {ride.pickup.name} → {ride.drop.name}</p>
+            <p className="text-gold font-semibold text-lg">{prettyDateTime(ride.scheduledFor)}</p>
+            <p className="text-sm text-muted">Fare {inr(ride.quote.fare)} ({ride.payment.toUpperCase()}), locked. Your driver is assigned {RIDE_SCHEDULE.startWindowMinutes} minutes before pickup: start the ride from My Trips then. Free cancellation until {settings.rideScheduleFreeCancelMinutes} minutes before pickup.</p>
+            <div className="flex gap-2 justify-center pt-2">
+              <Link href="/bookings" className="btn-gold rounded-xl px-5 py-2.5 text-sm">View My Trips</Link>
+              <button type="button" onClick={reset} className="rounded-xl border border-line px-5 py-2.5 text-sm hover:border-line-strong">Book another ride</button>
+            </div>
+          </div>
         )}
 
         {phase === "searching" && (
