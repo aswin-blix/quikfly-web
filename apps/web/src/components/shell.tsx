@@ -2,7 +2,7 @@
 // Site chrome: header, footer, login modal, toasts, page transition.
 import { AnimatePresence, motion, MotionConfig, useMotionValueEvent, useScroll } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, CircleCheck, Download, HelpCircle, LayoutGrid, Ticket, TriangleAlert, User as UserIcon, Wallet } from "lucide-react";
+import { Bell, ChevronDown, CircleCheck, Download, HelpCircle, LayoutGrid, Ticket, TriangleAlert, User as UserIcon, Wallet } from "lucide-react";
 import { AppProvider, useApp } from "./AppProvider";
 import { LoginModal } from "./LoginModal";
 import { BottomNav, BottomNavProvider } from "./BottomNav";
@@ -52,7 +52,7 @@ export function PageTransition({ children, k }: { children: React.ReactNode; k?:
 
 function Header({ onOpenServices }: { onOpenServices: () => void }) {
   const path = usePath();
-  const { user, requireAuth, signOut, bookings, toast } = useApp();
+  const { user, requireAuth, signOut, bookings, toast, unread } = useApp();
   const [hidden, setHidden] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { scrollY } = useScroll();
@@ -91,6 +91,17 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
         </nav>
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <ThemeToggle />
+          {user && (
+            <Link href="/notifications" aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"} className="relative p-2 rounded-lg text-soft hover:bg-fg/5">
+              <Bell size={18} />
+              <AnimatePresence>
+                {unread > 0 && (
+                  <motion.span key={unread} initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                    className="absolute top-0.5 right-0.5 bg-brand text-on-brand text-[10px] font-bold rounded-full min-w-4 h-4 px-1 grid place-items-center">{unread > 9 ? "9+" : unread}</motion.span>
+                )}
+              </AnimatePresence>
+            </Link>
+          )}
           {/* Below lg these live in the bottom bar (BottomNav). */}
           <Link href="/help" className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5"><HelpCircle size={17} />Help</Link>
           <Link href="/bookings" className="relative hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5">

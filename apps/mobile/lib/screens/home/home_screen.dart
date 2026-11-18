@@ -45,6 +45,7 @@ class HomeScreen extends ConsumerWidget {
                 onPressed: () => context.push('/account/wallet'),
               ),
             ),
+          if (user != null) const _Bell(),
           const ThemeToggle(),
           const SizedBox(width: 8),
         ],
@@ -286,6 +287,23 @@ class _Safety extends StatelessWidget {
         item(Icons.share_location, 'Share your trip', 'Send a live link so family can follow your ride.'),
         item(Icons.sos_outlined, 'SOS in one tap', 'Call our 24×7 safety line or your emergency contacts from the ride screen.'),
       ]),
+    );
+  }
+}
+
+/// Notification bell with the unread count.
+class _Bell extends ConsumerWidget {
+  const _Bell();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(unreadProvider).value ?? 0;
+    return IconButton(
+      tooltip: unread > 0 ? 'Notifications, $unread unread' : 'Notifications',
+      onPressed: () async {
+        await context.push('/notifications');
+        ref.invalidate(notificationsProvider);
+      },
+      icon: Badge(isLabelVisible: unread > 0, label: Text(unread > 9 ? '9+' : '$unread'), child: const Icon(Icons.notifications_none)),
     );
   }
 }

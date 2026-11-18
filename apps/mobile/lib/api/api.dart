@@ -101,6 +101,20 @@ class QuikFlyApi {
 
   Future<List<WalletTransaction>> wallet() => _get('/me/wallet', _listOf(WalletTransaction.fromJson));
 
+  // ── Notifications ──
+  Future<({List<AppNotification> items, int unread})> notifications() => _get('/me/notifications', (d) {
+        final j = d as Json;
+        return (items: ((j['items'] as List?) ?? const []).map((x) => AppNotification.fromJson(x as Json)).toList(), unread: (j['unread'] as num?)?.round() ?? 0);
+      });
+
+  /// Marks [ids] read, or everything when null; returns what's still unread.
+  Future<int> markNotificationsRead([List<String>? ids]) =>
+      _post('/me/notifications/read', (d) => ((d as Json)['unread'] as num?)?.round() ?? 0, {'ids': ?ids});
+
+  /// Registers this phone's Firebase token for push (used once Firebase is set up).
+  Future<void> registerPushDevice(String token, String platform) => _post('/me/push-devices', _ignore, {'token': token, 'platform': platform});
+  Future<void> removePushDevice(String token) => _delete('/me/push-devices/${Uri.encodeComponent(token)}', _ignore);
+
   // ── Rides ──
   Future<List<Place>> places(String q) => _get('/places', _listOf(Place.fromJson), {'q': q});
   /// [scheduledFor] = local "YYYY-MM-DDTHH:mm" (India) for a ride booked ahead.

@@ -37,6 +37,17 @@ Order matters: **migration → API → website**. The new website may call endpo
 
 The smoke test reuses one test user (+91 90000 00001) and leaves cancelled or completed bookings on it. That's expected.
 
+## Push notifications (FCM, free)
+
+The in-app inbox works without any setup. Phone push needs a Firebase project, which the owner creates:
+
+1. [console.firebase.google.com](https://console.firebase.google.com) → new project (Analytics off is fine) → add an Android app with package `com.quikfly.app` → download `google-services.json` (goes to `apps/mobile/android/app/`; the app-side step is tracked in `docs/roadmap.md`).
+2. Project settings → Service accounts → **Generate new private key** (a JSON file). Keep it out of the repo.
+3. From `apps/api`: `npx wrangler secret put FCM_SERVICE_ACCOUNT` and paste the whole JSON. No redeploy needed; the next cron run (every minute) starts sending.
+4. To turn push off again: `npx wrangler secret delete FCM_SERVICE_ACCOUNT`.
+
+The cron (`* * * * *`) is free on Workers (5 triggers per account on the free plan; this uses one). It only sends notifications less than an hour old, so turning push on doesn't flood old ones. Cron runs show in the Cloudflare dashboard → Workers → quikfly-api → Logs.
+
 ## Android app (apps/mobile)
 
 - Builds against the production API by default; `--dart-define=API_URL=...` points it elsewhere (see `apps/mobile/README.md`).

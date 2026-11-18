@@ -152,6 +152,18 @@ class WalletTransaction {
       j['bookingId'] as String?, DateTime.tryParse('${j['createdAt']}')?.toLocal() ?? DateTime.now());
 }
 
+/// One entry in the notification inbox (AppNotification in packages/shared).
+class AppNotification {
+  const AppNotification(this.id, this.kind, this.title, this.body, this.bookingId, this.createdAt, this.readAt);
+  final String id, kind, title, body;
+  final String? bookingId;
+  final DateTime createdAt;
+  final DateTime? readAt;
+  factory AppNotification.fromJson(Json j) => AppNotification(j['id'] as String, '${j['kind']}', '${j['title']}', '${j['body'] ?? ''}',
+      j['bookingId'] as String?, DateTime.tryParse('${j['createdAt']}')?.toLocal() ?? DateTime.now(),
+      j['readAt'] == null ? null : DateTime.tryParse('${j['readAt']}')?.toLocal());
+}
+
 class RideOption {
   const RideOption(this.id, this.service, this.name, this.description, this.seats, this.models);
   final String id, name, description;

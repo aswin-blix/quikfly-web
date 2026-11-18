@@ -123,6 +123,12 @@ void main() {
     expect(u.licence.number, 'TN0920190001234');
   });
 
+  test('notification inbox parses and marks read', () async {
+    final inbox = await api.notifications();
+    expect(inbox.unread, greaterThanOrEqualTo(0));
+    expect(await api.markNotificationsRead(), 0);
+  });
+
   test('errors carry the API message', () async {
     await expectLater(api.verifyOtp('+91 $phone', '0000'), throwsA(isA<ApiException>().having((e) => e.message, 'message', isNotEmpty)));
   });

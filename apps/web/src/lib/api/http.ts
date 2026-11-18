@@ -105,6 +105,10 @@ export const httpApi: QuikflyApi = {
   },
   quotes: { create: (r) => req("POST", "/quotes", r) },
   offers: { check: (code, ref) => req("POST", "/offers/check", { code, ...ref }) },
+  notifications: {
+    list: () => req("GET", "/me/notifications"),
+    markRead: (ids) => req("POST", "/me/notifications/read", ids ? { ids } : {}),
+  },
   bookings: {
     list: () => req("GET", "/bookings"),
     get: (id) => req("GET", `/bookings/${encodeURIComponent(id)}`),
