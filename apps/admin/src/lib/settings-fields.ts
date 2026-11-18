@@ -29,6 +29,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "rideCancelFeePercent", type: "number", unit: "%", label: "Rider cancellation fee", help: "Charged when a rider cancels without a valid reason (guidelines: 10% of the fare)." },
       { key: "rideCancelFeeCap", type: "number", unit: "₹", label: "Cancellation fee cap", help: "The fee never exceeds this (guidelines: ₹100)." },
       { key: "rideCancelFreeMinutes", type: "number", unit: "min", label: "Free cancellation window", help: "Cancelling within this many minutes of booking is always free." },
+      { key: "rideStopMinutes", type: "number", unit: "min", label: "Wait per stop", help: "Waiting time included for each extra stop (up to 2), charged at the ride type's per-minute rate. 0 = stops cost only the extra distance." },
       { key: "rideScheduleMinMinutes", type: "number", unit: "min", label: "Schedule at least", help: "How soon a ride can be booked ahead (minutes before pickup)." },
       { key: "rideScheduleMaxDays", type: "number", unit: "days", label: "Schedule up to", help: "How far ahead a ride can be booked." },
       { key: "rideScheduleFreeCancelMinutes", type: "number", unit: "min", label: "Scheduled ride: free cancel until", help: "Cancelling a scheduled ride is free until this many minutes before pickup; after that the cancellation fee rules apply." },
