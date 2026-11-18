@@ -1,7 +1,7 @@
 // Server-side prices for bus, holiday, self-drive and group bookings. The website shows
 // a quote's lines; POST /bookings charges its total. Rides are priced by services/rides.ts.
 import {
-  BOOKING_LIMITS, QUOTE_TTL_MINUTES, generateSeats, priceBus, seatRuleError, priceGroup, priceRent, priceTour, quoteStartsAt, rentHours, sumLines,
+  BOOKING_LIMITS, QUOTE_TTL_MINUTES, generateSeats, switchError, priceBus, seatRuleError, priceGroup, priceRent, priceTour, quoteStartsAt, rentHours, sumLines,
   type FareLine, type PriceQuote, type QuoteRequest, type Seat, type ServiceKey,
 } from "@quikfly/shared";
 import { badRequest, conflict } from "../lib/errors";
@@ -13,6 +13,12 @@ import { getSettings } from "./settings";
 /** The price lines and when the trip starts (for the cancellation policy). */
 async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLine[]; startsAt: string }> {
   const settings = await getSettings(db);
+  const off = switchError(settings, {
+    service: req.service,
+    rentMode: req.service === "rent" ? req.mode : undefined,
+    groupTrip: req.service === "rentals" ? req.trip : undefined,
+  });
+  if (off) throw conflict(off);
   switch (req.service) {
     case "bus": {
       if (!req.seatIds.length || req.seatIds.length > BOOKING_LIMITS.busSeats) throw badRequest(`Choose 1 to ${BOOKING_LIMITS.busSeats} seats.`);

@@ -20,6 +20,32 @@ export interface SettingGroup {
 
 export const SETTING_GROUPS: SettingGroup[] = [
   {
+    title: "Services",
+    sub: "Switch a service off to pause new bookings: it disappears from the website and the app, and the API refuses new bookings. Bookings already made carry on.",
+    fields: [
+      { key: "serviceBike", type: "toggle", label: "Bike taxi", help: "Bike rides booked now or ahead." },
+      { key: "serviceCar", type: "toggle", label: "Cabs", help: "Cab rides (Mini, Sedan, SUV, Prime) booked now or ahead." },
+      { key: "serviceBus", type: "toggle", label: "Bus tickets", help: "Seat booking on every bus route." },
+      { key: "serviceTours", type: "toggle", label: "Holidays", help: "Holiday packages." },
+      { key: "serviceRent", type: "toggle", label: "Rent a car", help: "Self-drive and chauffeur rentals." },
+      { key: "serviceGroup", type: "toggle", label: "Group travel", help: "Tempo travellers, buses and outstation cabs." },
+      { key: "servicePausedMessage", type: "text", label: "Message for a paused service", help: "Shown where a paused service would be, and when someone tries to book it." },
+    ],
+  },
+  {
+    title: "Features",
+    sub: "Turn off one part of a service without pausing all of it. Safety features (SOS, trip sharing) are always on.",
+    fields: [
+      { key: "featureRideScheduling", type: "toggle", label: "Book rides ahead", help: "Off: rides can only be booked for now. Rides already scheduled still start." },
+      { key: "featureMultiStop", type: "toggle", label: "Extra stops on rides", help: "Off: rides go straight from pickup to drop." },
+      { key: "featureCashRides", type: "toggle", label: "Cash for rides", help: "Off: riders pay by UPI, card or wallet." },
+      { key: "featureOutstation", type: "toggle", label: "Outstation and one-way trips", help: "Off: group travel offers local packages only." },
+      { key: "featureSelfDrive", type: "toggle", label: "Self-drive", help: "Off: rent a car offers cars with a chauffeur only." },
+      { key: "featureTripOffers", type: "toggle", label: "Add a cab to a trip", help: "Off: no ride offer after a bus or holiday booking." },
+      { key: "featureReferral", type: "toggle", label: "Refer and earn", help: "Off: the referral section is hidden and codes can't be used." },
+    ],
+  },
+  {
     title: "Rides",
     sub: "Bike, auto and cab fares come from each ride type in the catalog, multiplied by surge.",
     fields: [
