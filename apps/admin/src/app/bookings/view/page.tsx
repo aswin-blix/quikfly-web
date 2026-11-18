@@ -121,9 +121,13 @@ function Detail({ id }: { id: string }) {
       />
       <ConfirmDialog
         open={dialog === "complete"} title="Mark as completed?" confirmLabel="Mark completed" busy={busy}
-        onCancel={() => setDialog(null)} onConfirm={() => act(() => adminApi.bookings.complete(b.id), "Marked completed.")}
+        onCancel={() => setDialog(null)}
+        onConfirm={() => act(() => adminApi.bookings.complete(b.id), b.deposit > 0 && b.payment === "wallet" ? `Marked completed. ${inr(b.deposit)} deposit returned to the wallet.` : "Marked completed.")}
       >
         Use this when the trip or stay has happened. Completed bookings can&apos;t be cancelled.
+        {b.deposit > 0 && (b.payment === "wallet"
+          ? <> Check the car first: the {inr(b.deposit)} deposit goes back to {b.customer.name}&apos;s wallet at once.</>
+          : <> Check the car first: the {inr(b.deposit)} deposit was paid by {b.payment.toUpperCase()}, so return it outside QuikFly.</>)}
         {actionError && <p className="text-sm text-danger mt-2" role="alert">{actionError}</p>}
       </ConfirmDialog>
     </>

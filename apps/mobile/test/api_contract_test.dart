@@ -94,6 +94,12 @@ void main() {
     });
     expect(rent.service, ServiceKey.rent);
     expect(rent.lines.length, greaterThanOrEqualTo(2));
+    // A chauffeur booking across a night carries the night charge line (when the setting is on).
+    final chauffeur = await api.quote({
+      'service': 'rent', 'carId': cars.first.id, 'mode': 'driver', 'start': fmt(start), 'end': fmt(start.add(const Duration(hours: 26))),
+      'kmPlan': 'limited', 'protection': 'standard', 'doorstep': false,
+    });
+    if (config.settings.rentDriverNightCharge > 0) expect(chauffeur.lines.any((l) => l.label.startsWith('Driver night charge')), isTrue);
     final vehicles = await api.travelVehicles();
     final group = await api.quote({'service': 'rentals', 'vehicleId': vehicles.first.id, 'trip': 'outstation', 'destinationId': config.groupDestinations.first.id, 'days': 2, 'start': fmt(start).substring(0, 10)});
     expect(group.total, greaterThan(0));

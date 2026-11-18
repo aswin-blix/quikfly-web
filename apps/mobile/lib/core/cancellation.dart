@@ -36,8 +36,11 @@ int refundPercent(List<CancelTier> tiers, DateTime? startsAt, {DateTime? now}) {
   return 0;
 }
 
-/// Rupees refunded, rounded to whole rupees.
-int refundAmount(int amount, int percent) => (amount * percent / 100).round();
+/// Rupees refunded, rounded to whole rupees. A refundable deposit always comes back in full; the policy's percentage applies to the rest.
+int refundAmount(int amount, int percent, [int deposit = 0]) {
+  final held = deposit.clamp(0, amount);
+  return held + ((amount - held) * percent / 100).round();
+}
 
 String noticeLabel(int hours) => hours >= 48 && hours % 24 == 0 ? '${hours ~/ 24} days' : '$hours hour${hours == 1 ? '' : 's'}';
 
@@ -69,5 +72,5 @@ String cancelPolicyText(Settings settings, ServiceKey service) =>
 /// The refund a booking gets if cancelled now: (percent, rupees).
 (int, int) refundPreview(Settings settings, Booking b) {
   final percent = refundPercent(parseCancelPolicy(settings.cancelPolicy(b.service)), b.startsAt);
-  return (percent, refundAmount(b.amount, percent));
+  return (percent, refundAmount(b.amount, percent, b.deposit));
 }

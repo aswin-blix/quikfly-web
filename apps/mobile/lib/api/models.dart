@@ -327,7 +327,7 @@ class TravelVehicle {
 
 class Booking {
   const Booking(this.id, this.service, this.title, this.subtitle, this.amount, this.status, this.createdAt, this.payment, this.lines,
-      {this.startsAt, this.refundAmount});
+      {this.startsAt, this.refundAmount, this.deposit = 0});
   final String id, title, subtitle, payment;
   final ServiceKey service;
   final int amount;
@@ -338,8 +338,11 @@ class Booking {
   /// When the trip starts (from the quote); null for rides and older bookings.
   final DateTime? startsAt;
 
-  /// What the cancellation policy refunded, once cancelled.
+  /// What came back: the policy's share when cancelled, the deposit when a rental is completed.
   final int? refundAmount;
+
+  /// Refundable deposit inside [amount] (self-drive; 0 otherwise). Always back on cancel; back on completion after staff check the car.
+  final int deposit;
   factory Booking.fromJson(Json j) => Booking(
         j['id'] as String,
         ServiceKey.parse('${j['service']}'),
@@ -352,6 +355,7 @@ class Booking {
         ((j['lines'] as List?) ?? const []).map((l) => ('${(l as List)[0]}', '${l[1]}')).toList(),
         startsAt: j['startsAt'] == null ? null : DateTime.tryParse('${j['startsAt']}')?.toLocal(),
         refundAmount: j['refundAmount'] == null ? null : _int(j['refundAmount']),
+        deposit: j['deposit'] == null ? 0 : _int(j['deposit']),
       );
 }
 
@@ -463,6 +467,18 @@ class Settings {
   int get rentProtectionStandardPerDay => _i('rentProtectionStandardPerDay', 199);
   int get rentProtectionPeacePerDay => _i('rentProtectionPeacePerDay', 399);
   int get rentUnlimitedKmExtraPercent => _i('rentUnlimitedKmExtraPercent', 25);
+  int get rentDepositRefundHours => _i('rentDepositRefundHours', 48);
+  int get rentLimitedKmPerDay => _i('rentLimitedKmPerDay', 140);
+  int get rentExtraKmRate => _i('rentExtraKmRate', 12);
+  int get rentDriverNightCharge => _i('rentDriverNightCharge', 250);
+  bool get rentRoadsideAssistance => (_raw['rentRoadsideAssistance'] as bool?) ?? false;
+
+  /// Self-drive documents ("a; b; c" in settings).
+  List<String> get rentDocuments => _s('rentDocuments', 'Driving licence held for at least 1 year; Aadhaar or passport; Driver aged 21 or over')
+      .split(';')
+      .map((x) => x.trim())
+      .where((x) => x.isNotEmpty)
+      .toList();
   String get safetyLine => _s('safetyLine', '1800 123 4567');
 
   /// Refund tiers per service ("15d:100, 7d:50"); see core/cancellation.dart. Rides have none.

@@ -71,8 +71,14 @@ export function refundPercent(tiers: CancelTier[], startsAt: string | null, now 
   return tier ? tier.refundPercent : 0;
 }
 
-/** Rupees refunded, rounded to whole rupees. */
-export const refundAmount = (amount: number, percent: number) => Math.round((amount * percent) / 100);
+/**
+ * Rupees refunded, rounded to whole rupees. A refundable deposit always comes back in
+ * full; the policy's percentage applies to the rest.
+ */
+export function refundAmount(amount: number, percent: number, deposit = 0): number {
+  const held = Math.min(Math.max(deposit, 0), amount);
+  return held + Math.round(((amount - held) * percent) / 100);
+}
 
 /** "15 days", "24 hours", "4 hours". */
 export function noticeLabel(hours: number): string {

@@ -280,8 +280,10 @@ export interface Booking {
   lines: [string, string][];
   /** When the trip starts (ISO), from the quote; null for rides and bookings made before policies existed. */
   startsAt: string | null;
-  /** What the cancellation policy gave back (₹), once cancelled; null while active. */
+  /** What came back (₹): the policy's share when cancelled, the deposit when a rental is completed; null while active. */
   refundAmount: number | null;
+  /** Refundable deposit inside `amount` (₹, self-drive only; 0 otherwise). Returned in full on cancel, and on completion once staff confirm the return. */
+  deposit: number;
 }
 
 /** A coupon. The API checks it at booking; the website only shows it. */

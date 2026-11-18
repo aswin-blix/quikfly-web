@@ -12,7 +12,7 @@ import { api } from "@/lib/api";
 import { cx, inr, prettyDateTime } from "@/lib/format";
 import { defaultRentalWindow } from "@/lib/rentals";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
-import { RENT_PLANS, RENT_PROTECTION_LABEL, cancelPolicyText, priceRent, rentHours, sumLines, type RentalCar } from "@quikfly/shared";
+import { RENT_PLANS, RENT_PROTECTION_LABEL, cancelPolicyText, priceRent, rentDocumentList, rentHours, rentPlanLabel, sumLines, type RentalCar } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { serviceByKey } from "@/lib/services";
 
@@ -137,7 +137,7 @@ export function RentDetailScreen({ id }: { id: string }) {
   // Live estimate while choosing (same maths and settings as the API); book() charges the API's quote.
   const lines = priceRent(car, choice, settings);
   const total = sumLines(lines);
-  const plan = RENT_PLANS[km];
+  const plan = rentPlanLabel(km, settings);
   const protectionLabel = RENT_PROTECTION_LABEL[prot];
 
   async function book() {
@@ -154,7 +154,7 @@ export function RentDetailScreen({ id }: { id: string }) {
       service: "rent", title: `${car!.name} · ${self ? "Self-drive" : "With driver"}`, subtitle: `${trip.city} · ${car!.category}`, image: carImg(car!),
       summary: [["Pickup", prettyDateTime(trip.start)], ["Return", prettyDateTime(trip.end)], ["Delivery", delivery === "doorstep" ? "Doorstep" : `Self pickup · ${trip.city} hub`], ...(self ? [["Plan", `${plan.label} · ${protectionLabel}`] as [string, string]] : [])],
       quote, travellers: ["Primary driver"], needsLicence: self,
-      policy: cancelPolicyText(settings, "rent"),
+      policy: `${cancelPolicyText(settings, "rent")}${self && settings.rentDeposit ? ` The ${inr(settings.rentDeposit)} deposit is always refunded on cancel, and after the return once we check the car (aim: within ${settings.rentDepositRefundHours} hours).` : ""}`,
     });
     nav.push("/checkout");
   }
@@ -182,7 +182,7 @@ export function RentDetailScreen({ id }: { id: string }) {
 
           {self && (
             <OptionGroup title="Kilometre plan" id="km" value={km} onChange={setKm}
-              options={(Object.keys(RENT_PLANS) as (keyof typeof RENT_PLANS)[]).map((k) => [k, RENT_PLANS[k].label, RENT_PLANS[k].sub, k === "unlimited" ? `+${settings.rentUnlimitedKmExtraPercent}%` : "Best value"])} />
+              options={(Object.keys(RENT_PLANS) as (keyof typeof RENT_PLANS)[]).map((k) => [k, rentPlanLabel(k, settings).label, rentPlanLabel(k, settings).sub, k === "unlimited" ? `+${settings.rentUnlimitedKmExtraPercent}%` : "Best value"])} />
           )}
           {self && (
             <OptionGroup title="Damage protection" id="prot" value={prot} onChange={setProt}
@@ -193,13 +193,13 @@ export function RentDetailScreen({ id }: { id: string }) {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="panel p-5"><p className="font-semibold flex items-center gap-2"><BadgeCheck size={18} className="text-gold" />Features</p>
-              <ul className="mt-3 space-y-1.5 text-sm text-soft">{[...car.features, "Sanitised before every trip", "24×7 roadside assistance"].map((f) => <li key={f}>• {f}</li>)}</ul></div>
+              <ul className="mt-3 space-y-1.5 text-sm text-soft">{[...car.features, "Sanitised before every trip", settings.rentRoadsideAssistance ? "24×7 roadside assistance" : `Breakdown help: call ${settings.companyPhone}`].map((f) => <li key={f}>• {f}</li>)}</ul></div>
             {self ? (
               <div className="panel p-5"><p className="font-semibold flex items-center gap-2"><FileCheck2 size={18} className="text-gold" />Documents needed</p>
-                <ul className="mt-3 space-y-1.5 text-sm text-soft"><li>• Driving licence (1+ year old)</li><li>• Aadhaar or passport</li><li>• Driver must be 21+</li></ul></div>
+                <ul className="mt-3 space-y-1.5 text-sm text-soft">{rentDocumentList(settings).map((d) => <li key={d}>• {d}</li>)}</ul></div>
             ) : (
               <div className="panel p-5"><p className="font-semibold flex items-center gap-2"><ShieldCheck size={18} className="text-gold" />Your chauffeur</p>
-                <ul className="mt-3 space-y-1.5 text-sm text-soft"><li>• Verified, uniformed driver</li><li>• Fuel & tolls on actuals</li><li>• Night charge ₹250 after 10 PM</li></ul></div>
+                <ul className="mt-3 space-y-1.5 text-sm text-soft"><li>• Verified, uniformed driver</li><li>• Fuel & tolls on actuals</li>{settings.rentDriverNightCharge > 0 && <li>• Night charge {inr(settings.rentDriverNightCharge)} for each night between 10 PM and 6 AM (added to the price)</li>}</ul></div>
             )}
           </div>
         </div>
