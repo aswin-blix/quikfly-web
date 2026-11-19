@@ -198,6 +198,78 @@ class _ProfileState extends ConsumerState<_Profile> with _Action {
 
 /* ───────────── Wallet ───────────── */
 
+/// QuikFly Pass: what it does, when it ends, and buying or extending it from the wallet.
+class _PassCard extends ConsumerStatefulWidget {
+  const _PassCard();
+  @override
+  ConsumerState<_PassCard> createState() => _PassCardState();
+}
+
+class _PassCardState extends ConsumerState<_PassCard> {
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _buy() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final until = await ref.read(apiProvider).buyPass();
+      await ref.read(sessionProvider.notifier).refresh();
+      ref.invalidate(_walletProvider);
+      if (mounted) toast(context, 'QuikFly Pass active until ${shortDate(until)}');
+    } catch (e) {
+      if (mounted) setState(() => _error = errorText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.qf;
+    final user = ref.watch(userProvider)!;
+    final s = ref.watch(configProvider).value?.settings ?? const Settings({});
+    final until = user.passUntil;
+    final short = user.walletBalance < s.passPrice;
+    final surge = s.effectiveSurge.toStringAsFixed(s.effectiveSurge % 1 == 0 ? 0 : 1);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SectionTitle('QuikFly Pass'),
+      _sub(context, 'Peak hours (${s.surgeHours}) add a ×$surge surge to ride fares. With the pass you pay the normal fare on every bike, auto and cab ride for ${s.passDays} days.'),
+      Panel(
+        child: Row(children: [
+          Icon(Icons.confirmation_number_outlined, color: c.accent, size: 30),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(until != null ? 'Active until' : 'Price', style: TextStyle(color: c.fgMuted, fontSize: 12)),
+              Text(until != null ? shortDate(until) : inr(s.passPrice), style: Theme.of(context).textTheme.headlineMedium),
+              if (until == null) Text('for ${s.passDays} days', style: TextStyle(color: c.fgSubtle, fontSize: 12)),
+            ]),
+          ),
+        ]),
+      ),
+      if (s.passOnSale) ...[
+        const SizedBox(height: 10),
+        GoldButton(
+          label: until != null ? 'Add ${s.passDays} days · ${inr(s.passPrice)}' : 'Get QuikFly Pass · ${inr(s.passPrice)}',
+          loading: _busy,
+          onPressed: short ? null : _buy,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          short
+              ? 'Your wallet has ${inr(user.walletBalance)}; the pass costs ${inr(s.passPrice)}.'
+              : "Paid from your wallet. A pass can't be cancelled or refunded.${until != null ? ' The new days start when this pass ends.' : ''}",
+          style: TextStyle(color: c.fgSubtle, fontSize: 12),
+        ),
+      ],
+      if (_error != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(_error!, style: TextStyle(color: c.danger, fontSize: 12.5))),
+    ]);
+  }
+}
+
 final _walletProvider = FutureProvider.autoDispose<List<WalletTransaction>>((ref) => ref.watch(apiProvider).wallet());
 final _creditsProvider = FutureProvider.autoDispose<CreditSummary>((ref) => ref.watch(apiProvider).credits());
 const _creditKindLabel = {'earned': 'Earned', 'spent': 'Used', 'returned': 'Returned', 'expired': 'Expired'};
@@ -232,6 +304,7 @@ class _Wallet extends ConsumerWidget {
                 style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
           ]),
         ),
+        if (settings.passOnSale || user.passUntil != null) ...[const SizedBox(height: 18), const _PassCard()],
         const SizedBox(height: 18),
         const SectionTitle('QuikFly Credits'),
         _sub(context, "Earned back on completed trips. Credits pay up to ${settings.creditsMaxRedeemPercent}% of a booking, expire ${settings.creditsExpiryDays} days after you get them, and can't be withdrawn."),

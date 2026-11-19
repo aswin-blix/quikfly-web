@@ -167,6 +167,21 @@ void main() {
     expect(inrPaise(-5), '−₹0.05');
   });
 
+  test('QuikFly Pass: buy, then surge-hour fares carry no surge', () async {
+    final s = config.settings;
+    expect(s.passPrice, greaterThanOrEqualTo(0));
+    expect((await api.me()).passUntil == null || (await api.me()).passUntil!.isAfter(DateTime.now()), isTrue);
+    // Production: parse only (don't spend the shared test account's wallet on every run).
+    if (apiUrl.contains('workers.dev') || !s.passOnSale) return;
+    final until = await api.buyPass();
+    expect((await api.me()).passUntil, until);
+    final peak = int.parse(RegExp(r'(\d{1,2})\s*-').firstMatch(s.surgeHours)!.group(1)!);
+    final day = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30, days: 2));
+    final at = '${day.toIso8601String().substring(0, 10)}T${peak.toString().padLeft(2, '0')}:00';
+    final quotes = await api.rideQuotes(ServiceKey.car, config.places[0].id, config.places[1].id, scheduledFor: at);
+    expect(quotes.every((q) => q.surge == 1 && q.passSaving > 0), isTrue);
+  });
+
   test('credits summary parses', () async {
     final sum = await api.credits();
     expect(sum.balance, greaterThanOrEqualTo(0));
