@@ -177,7 +177,7 @@ Decided 2026-11-18 from the competitor research ([docs/competitor-gaps-2026-11.m
   - **Still open from the research for buses:** a "free cancellation" add-on, a fare-aware date strip with a demand multiplier, and a "QuikFly Assured" on-time wallet credit.
 
 - 2026-11-19 **Partner application on the website** (branch `web/partner-apply`; owner request, scope "apply + onboard"; the customer app stays without partner screens): `/partner/apply` with step 1 (city & vehicle, photo, bank, RC, insurance, audit; photos shrunk in the browser and uploaded to the same R2-backed endpoints; staff notes; submit, reset) and step 2 (joining fee (demo), agreement, sticker request), polling while QuikFly reviews; `/partner` links it next to the app download. Contract/http/mock gain `vendor` (mock approves by itself after 20 s in demo mode). The agreement terms moved to `VENDOR_AGREEMENT_TERMS` in `packages/shared` (the Partner app keeps its copy). No API change. Checks: typecheck, build, `flutter analyze`; browser (headless Chrome over the DevTools protocol) against the local API at 390 px, light and dark: all six sections filled through the page including three photo uploads → submit → read-only; staff approved through the admin API → payment → agreement (locked before paying) → sticker request → staff marked it done → "You're live on QuikFly"; no sideways scroll. Fixed during the pass: the photo button kept saying "Add photo" after an upload.
-  - **Production, after merge:** website only.
+  - **Deployed 2026-11-19** (PR #60 merged): website `47c9eea6`; live `/partner` links `/partner/apply`, which serves (HTTP 200).
 
 ### Phase 5 candidates, in priority order (from the same research; all free-tier)
 
