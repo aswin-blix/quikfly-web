@@ -12,18 +12,7 @@ import { GoldButton } from "@/components/ui";
 import { ErrorText, Field } from "@/components/account/kit";
 import { api } from "@/lib/api";
 import { cx, prettyDate, shiftISO, todayISO } from "@/lib/format";
-import { PHOTO_MAX_EDGE, PHOTO_QUALITY } from "@/lib/partner";
-
-/** Shrinks a photo to a JPEG the API accepts (well under VENDOR_RULES.maxPhotoBytes). */
-async function shrink(file: File): Promise<Blob> {
-  const img = await createImageBitmap(file);
-  const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(img.width, img.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(img.width * scale);
-  canvas.height = Math.round(img.height * scale);
-  canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't read that photo."))), "image/jpeg", PHOTO_QUALITY));
-}
+import { shrinkPhoto as shrink } from "@/lib/photos";
 
 /** A document photo: the saved one (if any) and a picker that uploads at once. */
 function PhotoField({ kind, has, readOnly, label, onSaved }: { kind: VendorDocument; has: boolean; readOnly: boolean; label: string; onSaved: (a: VendorApplication) => void }) {

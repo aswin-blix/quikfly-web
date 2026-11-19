@@ -38,6 +38,7 @@ export const adminBookings = new Hono<AppEnv>()
       service: pick(q.service, SERVICE_KEYS, "service"),
       from: date(q.from, "from"),
       to: date(q.to, "to"),
+      rental: q.rental === "returned" ? "returned" : undefined,
       page: Math.max(1, parseInt(q.page ?? "1", 10) || 1),
     };
     return c.json(await searchBookings(c.env.DB, f));

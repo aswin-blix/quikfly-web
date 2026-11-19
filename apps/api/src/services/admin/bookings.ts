@@ -19,6 +19,7 @@ export async function searchBookings(db: D1Database, f: BookingFilters): Promise
     params.push(like, like, like, ...(digits.length >= 4 ? [`%${digits}%`] : []));
   }
   if (f.status) { where.push("b.status = ?"); params.push(f.status); }
+  if (f.rental === "returned") where.push("EXISTS (SELECT 1 FROM rentals r WHERE r.booking_id = b.id AND r.return_at IS NOT NULL AND r.settlement IS NULL)");
   if (f.service) { where.push("b.service = ?"); params.push(f.service); }
   if (f.from) { where.push(`${LOCAL_DATE("b.created_at")} >= ?`); params.push(f.from); }
   if (f.to) { where.push(`${LOCAL_DATE("b.created_at")} <= ?`); params.push(f.to); }

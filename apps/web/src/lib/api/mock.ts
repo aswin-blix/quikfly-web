@@ -12,6 +12,7 @@ import {
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
 import { mockVendor } from "./mock-vendor";
 import { mockSupport } from "./mock-support";
+import { mockRentalFor, mockRental } from "./mock-rental";
 import { KEYS, creditBalance, creditEntry, currentUser, fail, load, save, signedInUser, uid, wait, walletEntry, type MockRide } from "./mock-store";
 
 const creditExpiry = () => new Date(Date.now() + settings.creditsExpiryDays * 86_400_000).toISOString();
@@ -44,7 +45,7 @@ function withDeps(t: TourPackage): TourPackage {
 }
 const todayIso = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
 
-const bookingsStore = () => load<Booking[]>(KEYS.bookings, []).map((b): Booking => ({ ...b, discount: b.discount ?? 0, seats: b.seats ?? [], ticketToken: b.ticketToken ?? null, rescheduledAt: b.rescheduledAt ?? null }));
+const bookingsStore = () => load<Booking[]>(KEYS.bookings, []).map((b): Booking => ({ ...b, discount: b.discount ?? 0, seats: b.seats ?? [], ticketToken: b.ticketToken ?? null, rescheduledAt: b.rescheduledAt ?? null, rentalState: b.rentalState ?? null }));
 const saveBookings = (list: Booking[]) => save(KEYS.bookings, list);
 const ridesStore = () => load<Record<string, MockRide>>(KEYS.rides, {});
 type StoredQuote = PriceQuote & { used?: boolean; startsAt?: string; request?: QuoteRequest };
@@ -323,8 +324,9 @@ export const mockApi: QuikflyApi = {
         startsAt: quoted?.startsAt || (input.rideId ? ridesStore()[input.rideId]?.ride.scheduledFor : null) || null, refundAmount: null, deposit, cancelReason: null, cancelFee: 0,
         rideId: input.rideId ?? null, tripId, creditsUsed, discount: c?.discount ?? 0,
         seats: busReq ? busReq.seatIds.map((id, i) => ({ id, price: busReq.seatPrices?.[i] ?? 0, gender: busReq.genders?.[i] ?? "other" })) : [],
-        ticketToken: input.service === "bus" ? uid("TK").toLowerCase() : null, rescheduledAt: null,
+        ticketToken: input.service === "bus" ? uid("TK").toLowerCase() : null, rescheduledAt: null, rentalState: null,
       };
+      if (quoted?.request) b.rentalState = mockRentalFor(b.id, quoted.request, deposit);
       if (input.payment === "wallet") {
         if (currentUser().walletBalance < amount) fail("Not enough wallet balance. Choose another payment method.");
         walletEntry("payment", -amount, `Paid · ${input.title}`, b.id);
@@ -433,6 +435,7 @@ export const mockApi: QuikflyApi = {
 
   vendor: mockVendor,
   support: mockSupport,
+  rental: mockRental,
 
   tickets: {
     async get(token) {

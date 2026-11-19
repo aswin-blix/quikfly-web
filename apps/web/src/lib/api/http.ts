@@ -143,6 +143,15 @@ export const httpApi: QuikflyApi = {
   tickets: {
     get: (t) => req("GET", `/tickets/${encodeURIComponent(t)}`),
   },
+  rental: {
+    get: (id) => req("GET", `/bookings/${encodeURIComponent(id)}/rental`),
+    uploadPhoto: (id, stage, side, image) => upload(`/bookings/${encodeURIComponent(id)}/rental/photos/${stage}/${side}`, image),
+    photoUrl: (id, stage, side) => imageUrl(`/bookings/${encodeURIComponent(id)}/rental/photos/${stage}/${side}`),
+    start: (id, reading) => req("POST", `/bookings/${encodeURIComponent(id)}/rental/start`, reading),
+    extensionQuote: (id, hours) => req("GET", `/bookings/${encodeURIComponent(id)}/rental/extension${qs({ hours: String(hours) })}`),
+    extend: (id, hours) => req("POST", `/bookings/${encodeURIComponent(id)}/rental/extend`, { hours }),
+    end: (id, reading) => req("POST", `/bookings/${encodeURIComponent(id)}/rental/return`, reading),
+  },
   support: {
     requestCallback: (input) => req("POST", "/support/callbacks", input),
     list: () => req("GET", "/me/tickets"),

@@ -109,6 +109,8 @@ export interface BookingFilters {
   /** India-time dates, YYYY-MM-DD, inclusive. */
   from?: string;
   to?: string;
+  /** "returned": self-drive cars the customer has returned, waiting for staff to settle the deposit. */
+  rental?: "returned";
   page?: number;
 }
 
