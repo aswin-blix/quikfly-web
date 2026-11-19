@@ -8,6 +8,7 @@ Read this file first. Then read:
 - [docs/operations.md](docs/operations.md): environments, deploying, testing, troubleshooting.
 - [docs/demo-script.md](docs/demo-script.md): the client demo, step by step (Phase 4).
 - [docs/privacy.md](docs/privacy.md): DPDP privacy: notice, consent, export, erasure, and the data-breach plan.
+- [docs/prompts/](docs/prompts/): ready-to-paste prompts for planned work (e.g. the admin settings and pricing audit).
 - [apps/api/README.md](apps/api/README.md): endpoint list. [apps/web/README.md](apps/web/README.md): pages, theming, navigation. [apps/admin/README.md](apps/admin/README.md): admin panel structure and rules.
 
 ## Map
@@ -81,6 +82,7 @@ cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://1
 - `npm run build:demo` uses POSIX env syntax and won't run from Windows cmd; use Git Bash.
 - `apps/web/quikfly-web-architecture.md` is an old copy of the web README. Treat it as stale.
 - Free plan: at most 50 D1 queries per request. Keep loops of statements out of request paths (the catalog seed is one `json_each` insert for this reason).
+- `apps/web/.env.development.local` (the owner's) points the website at `http://localhost:8795/v1`. If that isn't an API, the dev site can't sign in or save; for local tests start the API (`npm run dev`, :8787) and build or run the website with `NEXT_PUBLIC_API_URL=http://localhost:8787/v1`. Old `wrangler dev` processes may still hold ports 8795–8797; pick a free port instead of killing them.
 - `next dev` errors on detail pages that weren't pre-built (new admin-created holidays/cars). Test those on a build served with `npx wrangler dev` in `apps/web`.
 - React lists derived from API data with `useMemo` must list that data in the dependencies, or they stay empty after it loads.
 - A plain `next build` of the website talks to the **production** API (`.env.production`). Building to test locally? Pass `NEXT_PUBLIC_API_URL` for the local API, or test submissions would hit production.
