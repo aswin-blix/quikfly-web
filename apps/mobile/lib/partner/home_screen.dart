@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../api/api.dart';
 import '../api/models.dart';
 import '../core/format.dart';
@@ -14,6 +13,7 @@ import '../widgets/logo.dart';
 import '../widgets/theme_toggle.dart';
 import '../widgets/ui.dart';
 import 'fleet_screens.dart';
+import 'help_button.dart';
 import 'partner_app.dart';
 
 class PartnerHomeScreen extends ConsumerWidget {
@@ -39,22 +39,19 @@ class PartnerHomeScreen extends ConsumerWidget {
 PreferredSizeWidget _bar(BuildContext context, WidgetRef ref, {String title = 'Partner registration'}) => AppBar(
       title: Text(title),
       actions: [
+        const PartnerHelpButton(),
         if (ref.watch(sessionProvider).value != null) const _Bell(),
         const ThemeToggle(),
-        PopupMenuButton<String>(
-          onSelected: (v) async {
-            final cfg = ref.read(configProvider).value;
-            if (v == 'support' && cfg != null) launchUrl(Uri(scheme: 'tel', path: cfg.settings.companyPhone.replaceAll(' ', '')));
-            if (v == 'signout') {
-              await ref.read(sessionProvider.notifier).signOut();
-              ref.invalidate(vendorProvider);
-            }
-          },
-          itemBuilder: (_) => [
-            const PopupMenuItem(value: 'support', child: Text('Call partner support')),
-            if (ref.read(sessionProvider).value != null) const PopupMenuItem(value: 'signout', child: Text('Sign out')),
-          ],
-        ),
+        if (ref.watch(sessionProvider).value != null)
+          PopupMenuButton<String>(
+            onSelected: (v) async {
+              if (v == 'signout') {
+                await ref.read(sessionProvider.notifier).signOut();
+                ref.invalidate(vendorProvider);
+              }
+            },
+            itemBuilder: (_) => const [PopupMenuItem(value: 'signout', child: Text('Sign out'))],
+          ),
       ],
     );
 
@@ -128,12 +125,23 @@ class _StartState extends ConsumerState<_Start> {
   bool _busy = false;
   String? _err;
 
+  // Straight after sign-up the application starts by itself and the first form opens, so a new
+  // partner goes OTP → City & vehicle details → the checklist. The button is only a retry.
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _go());
+  }
+
   Future<void> _go() async {
     setState(() { _busy = true; _err = null; });
     try {
-      setVendor(ref, await ref.read(apiProvider).startVendorApplication());
+      final a = await ref.read(apiProvider).startVendorApplication(); // idempotent on the API
+      if (!mounted) return;
+      setVendor(ref, a);
+      context.push('/section/${vendorSections.first}');
     } catch (e) {
-      setState(() => _err = errorText(e));
+      if (mounted) setState(() => _err = errorText(e));
     }
     if (mounted) setState(() => _busy = false);
   }
@@ -158,7 +166,7 @@ class _StartState extends ConsumerState<_Start> {
         ])),
         const SizedBox(height: 16),
         FormError(_err),
-        GoldButton(label: 'Start my application', loading: _busy, onPressed: _go),
+        GoldButton(label: _err == null ? 'Start my application' : 'Try again', loading: _busy, onPressed: _go),
       ]),
     );
   }

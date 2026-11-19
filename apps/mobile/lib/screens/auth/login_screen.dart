@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
 import '../../core/env.dart';
 import '../../core/format.dart';
+import '../../core/phone_hint.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/logo.dart';
@@ -42,6 +43,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _code = TextEditingController();
+  final _phoneFocus = FocusNode();
   var _showCode = false;
   var _busy = false;
   String? _err;
@@ -49,11 +51,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   static const _titles = {_Step.phone: 'Login or sign up', _Step.otp: 'Verify OTP', _Step.profile: 'Complete your profile'};
 
   @override
+  void initState() {
+    super.initState();
+    // Like other Indian apps: offer the SIM's number straight away, keyboard only if they close it.
+    if (phoneHintSupported) WidgetsBinding.instance.addPostFrameCallback((_) => _useSimNumber());
+  }
+
+  @override
   void dispose() {
     for (final c in [_phone, _otp, _name, _email, _code]) {
       c.dispose();
     }
+    _phoneFocus.dispose();
     super.dispose();
+  }
+
+  /// Google's number picker: a picked number goes straight to "Send OTP".
+  Future<void> _useSimNumber() async {
+    final n = await pickPhoneNumber();
+    if (!mounted || _step != _Step.phone) return;
+    if (n == null) {
+      _phoneFocus.requestFocus();
+      return;
+    }
+    _phone.text = n;
+    _send();
   }
 
   Future<void> _run(Future<void> Function() fn) async {
@@ -160,11 +182,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 20),
               TextField(
                 controller: _phone,
-                autofocus: true,
+                focusNode: _phoneFocus,
+                // On Android the number picker opens first; the keyboard waits until it closes.
+                autofocus: !phoneHintSupported,
                 keyboardType: TextInputType.phone,
                 autofillHints: const [AutofillHints.telephoneNumberNational],
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
-                decoration: const InputDecoration(labelText: 'Mobile number', prefixText: '+91  ', hintText: '98765 43210'),
+                decoration: InputDecoration(
+                  labelText: 'Mobile number',
+                  prefixText: '+91  ',
+                  hintText: '98765 43210',
+                  suffixIcon: phoneHintSupported
+                      ? IconButton(tooltip: 'Use a number on this phone', icon: const Icon(Icons.sim_card_outlined), onPressed: _busy ? null : _useSimNumber)
+                      : null,
+                ),
                 onSubmitted: (_) => _send(),
               ),
               FormError(_err),

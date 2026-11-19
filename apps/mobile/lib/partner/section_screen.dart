@@ -12,6 +12,7 @@ import '../core/format.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
+import 'help_button.dart';
 import 'home_screen.dart' show partnerSettings;
 import 'partner_app.dart';
 
@@ -30,7 +31,7 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
   String? _city, _type, _fuel, _slot;
   DateTime? _date;
   Uint8List? _photo; // picked, not uploaded yet
-  bool _busy = false, _filledIn = false;
+  bool _busy = false, _filledIn = false, _filling = false;
   String? _err;
 
   String get s => widget.section;
@@ -48,6 +49,19 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // Typing re-checks the form, so "Save & continue" lights up the moment it's complete.
+    for (final c in [_a, _b, _c, _d]) {
+      c.addListener(_typed);
+    }
+  }
+
+  void _typed() {
+    if (!_filling) setState(() {}); // _prefill runs inside build: no setState there
+  }
+
+  @override
   void dispose() {
     for (final c in [_a, _b, _c, _d]) {
       c.dispose();
@@ -55,10 +69,24 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
     super.dispose();
   }
 
+  /// What still has to be filled in before saving (null: ready). Same checks _save runs.
+  String? _missing(VendorApplication a, VendorVehicle? v) {
+    final problem = s == 'photo' ? null : _validate();
+    if (problem != null) return problem;
+    if (_hasDocument && _photo == null && !_savedPhoto(a, v)) return 'Add a clear photo of ${s == 'photo' ? 'your face' : 'the document'}';
+    return null;
+  }
+
   /// Fill the form from what's saved, once.
   void _prefill(VendorApplication a, VendorVehicle? v) {
     if (_filledIn) return;
     _filledIn = true;
+    _filling = true;
+    _fill(a, v);
+    _filling = false;
+  }
+
+  void _fill(VendorApplication a, VendorVehicle? v) {
     switch (s) {
       case 'vehicle':
         _city = a.city;
@@ -121,10 +149,9 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
   bool get _hasDocument => s == 'photo' || s == 'rc' || s == 'insurance';
 
   Future<void> _save(VendorApplication a, VendorVehicle? v) async {
-    final problem = s == 'photo' ? null : _validate();
-    final needPhoto = _hasDocument && _photo == null && !_savedPhoto(a, v);
-    if (problem != null || needPhoto) {
-      setState(() => _err = problem ?? 'Add a clear photo of the ${s == 'photo' ? 'your face' : 'document'}');
+    final missing = _missing(a, v);
+    if (missing != null) {
+      setState(() => _err = missing);
       return;
     }
     setState(() { _busy = true; _err = null; });
@@ -202,6 +229,7 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
     _prefill(a, v);
     final st = _fleet ? null : a.sections[s];
     final ro = _readOnly(a, v);
+    final missing = ro ? null : _missing(a, v);
     final renewing = _fleet && v != null && _renewable.contains(v.status) && (s == 'rc' || s == 'insurance');
     final staffNote = _fleet ? v?.reviewNote : (st?.state == 'changes' ? st?.note : null);
 
@@ -324,11 +352,19 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(title: Text(title), actions: const [PartnerHelpButton()]),
       bottomNavigationBar: ro
           ? null
           : SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: GoldButton(label: renewing ? 'Send renewal to QuikFly' : _new ? 'Add vehicle' : 'Save & continue', loading: _busy, onPressed: () => _save(a, v)))),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                // Grey until complete; the line under it says what's still needed.
+                GoldButton(
+                    label: renewing ? 'Send renewal to QuikFly' : _new ? 'Add vehicle' : 'Save & continue',
+                    loading: _busy,
+                    onPressed: missing == null ? () => _save(a, v) : null),
+                if (missing != null)
+                  Padding(padding: const EdgeInsets.only(top: 6), child: Text(missing, textAlign: TextAlign.center, style: TextStyle(color: c.fgSubtle, fontSize: 12))),
+              ]))),
       body: ScreenList(children: [
         Text(
             ro
