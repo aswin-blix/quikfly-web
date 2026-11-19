@@ -6,7 +6,7 @@ import type { QuikflyApi } from "./contract";
 import {
   BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
-  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare,
+  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
@@ -411,11 +411,11 @@ export const mockApi: QuikflyApi = {
       const b = bookingsStore().find((x) => x.ticketToken === token) ?? fail("Ticket not found.");
       const line = (k: string) => b.lines.find(([key]) => key === k)?.[1];
       return {
-        pnr: b.id, status: b.status === "cancelled" ? "cancelled" : b.status === "completed" ? "completed" : "valid",
+        pnr: b.id, status: ticketStatus(b),
         title: b.title, subtitle: b.subtitle, startsAt: b.startsAt,
         seats: b.status === "cancelled" ? [] : (line(SEATS_LINE) ?? "").split(", ").filter(Boolean),
         details: (["Date", "Departure", "Arrival"] as const).flatMap((k) => (line(k) ? [[k, line(k)!] as [string, string]] : [])),
-        travellers: (line(TRAVELLERS_LINE) ?? "").split(", ").filter(Boolean).map((n) => n.trim().split(/\s+/)[0]),
+        travellers: travellerNames(b.lines).map((n) => n.split(/\s+/)[0]),
       };
     },
   },

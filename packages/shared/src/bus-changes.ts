@@ -11,6 +11,25 @@ export const SEATS_LINE = "Seats";
 export const TRAVELLERS_LINE = "Traveller names";
 export const SEATS_CANCELLED_LINE = "Seats cancelled";
 export const BUS_CHANGED_LINE = "Changed from";
+/** Bookings made before app 0.1.6 labelled the names line "Travellers". */
+export const LEGACY_TRAVELLERS_LINE = "Travellers";
+
+/** An m-ticket stops showing as valid this many hours after departure (bus bookings stay "confirmed" until staff close them). */
+export const TICKET_VALID_HOURS_AFTER_DEPARTURE = 12;
+
+/** What an m-ticket shows: valid until a while after departure, then "expired"; cancelled and completed as they are. */
+export function ticketStatus(b: Pick<Booking, "status" | "startsAt">, now = Date.now()): "valid" | "expired" | "cancelled" | "completed" {
+  if (b.status === "cancelled") return "cancelled";
+  if (b.status === "completed") return "completed";
+  if (b.startsAt && Date.parse(b.startsAt) + TICKET_VALID_HOURS_AFTER_DEPARTURE * 3_600_000 < now) return "expired";
+  return "valid";
+}
+
+/** The travellers' names on a bus booking, in seat order (either label). */
+export function travellerNames(lines: [string, string][]): string[] {
+  const line = lines.find(([k]) => k === TRAVELLERS_LINE)?.[1] ?? lines.find(([k]) => k === LEGACY_TRAVELLERS_LINE)?.[1] ?? "";
+  return line.split(", ").map((n) => n.trim()).filter(Boolean);
+}
 
 /**
  * The part of `total` (₹) that belongs to the seats in `ids`, by seat price. Seats booked

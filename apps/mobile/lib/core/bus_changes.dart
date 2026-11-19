@@ -51,3 +51,13 @@ String? rescheduleError(Settings s, Booking b, {DateTime? now}) {
     fee: s.busRescheduleFee,
   );
 }
+
+/// An m-ticket stops showing as valid this many hours after departure (TICKET_VALID_HOURS_AFTER_DEPARTURE).
+const ticketValidHoursAfterDeparture = 12;
+
+/// Is this bus booking's ticket past its trip date (still "confirmed" because staff haven't closed it)?
+bool ticketExpired(Booking b, {DateTime? now}) =>
+    b.status == BookingStatus.confirmed && b.startsAt != null && b.startsAt!.add(const Duration(hours: ticketValidHoursAfterDeparture)).isBefore(now ?? DateTime.now());
+
+/// The travellers' names line; bookings made before app 0.1.6 labelled it "Travellers".
+String? travellerNamesLine(Booking b) => b.line('Traveller names') ?? b.line('Travellers');

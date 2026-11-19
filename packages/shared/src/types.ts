@@ -386,8 +386,8 @@ export interface BookingSeat {
 /** What a bus m-ticket's QR code opens: enough for a conductor to check it, nothing private beyond first names. */
 export interface PublicTicket {
   pnr: string;
-  /** "valid" until the trip, "cancelled", or "completed". */
-  status: "valid" | "cancelled" | "completed";
+  /** "valid" until a while after departure (TICKET_VALID_HOURS_AFTER_DEPARTURE), then "expired"; "cancelled" or "completed" as booked. */
+  status: "valid" | "expired" | "cancelled" | "completed";
   title: string;
   subtitle: string;
   startsAt: string | null;

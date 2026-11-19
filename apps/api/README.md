@@ -71,7 +71,7 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/rides/:id/cancel` | cancel a ride |
 | POST 🔒 | `/rides/:id/share` | `{ token, expiresAt }`: a 24-hour link to follow the ride (same link if one is live) |
 | GET | `/share/:token` | public, no sign-in: the shared ride (first name, driver, vehicle, route, start time, status) |
-| GET | `/tickets/:token` | public, no sign-in: a bus m-ticket (the QR code opens it): `{ pnr, status: valid\|cancelled\|completed, title, subtitle, startsAt, seats, details, travellers }` with first names only |
+| GET | `/tickets/:token` | public, no sign-in: a bus m-ticket (the QR code opens it): `{ pnr, status: valid\|expired\|cancelled\|completed, title, subtitle, startsAt, seats, details, travellers }` with first names only. `expired` once departure is more than `TICKET_VALID_HOURS_AFTER_DEPARTURE` (12) hours ago and staff haven't closed the booking |
 | GET | `/buses?from=&to=&date=` | bus search (same search, same results) |
 | GET | `/buses/:id/seats?from=&to=&date=` | seat layout, availability and each seat's price (the bus is regenerated from its route and date) |
 | GET | `/tours` | holiday packages |
