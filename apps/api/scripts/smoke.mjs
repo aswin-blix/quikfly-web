@@ -57,6 +57,8 @@ const places = await expect("GET /places", call("GET", "/places"), 200, (j) => j
 await expect("GET /places?q=airport", call("GET", "/places?q=airport"), 200, (j) => j.length === 1);
 const tours = await expect("GET /tours", call("GET", "/tours"), 200, (j) => j.length > 0 && j[0].itinerary.length > 0);
 await expect("GET /tours/:slug", call("GET", `/tours/${tours[0].slug}`), 200, (j) => j.id === tours[0].id);
+// Packages booked by start date; group tours with departures are checked further down.
+const anyDate = tours.find((t) => !t.departures?.length) ?? tours[0];
 await expect("GET /tours/:slug unknown is 404", call("GET", "/tours/no-such-trip"), 404);
 const cars = await expect("GET /rentals/cars", call("GET", "/rentals/cars?city=Chennai"), 200, (j) => j.length > 0);
 await expect("GET /rentals/cars/:id", call("GET", `/rentals/cars/${cars[0].id}`), 200, (j) => j.name === cars[0].name);
@@ -105,8 +107,8 @@ if (ladiesAt >= 0) {
   await expect("women-only seat is fine for a woman", call("POST", "/quotes", { ...body, genders: ["female"] }), 201);
 } else console.log("SKIP  no simulated women-only seat on this route and date");
 await expect("POST /quotes refuses too many seats", call("POST", "/quotes", { ...busQuoteBody, seatIds: seats.slice(0, 7).map((x) => x.id) }), 400);
-const tourQuote = await expect("POST /quotes (tour)", call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 2, kids: 1, start: TRAVEL }), 201,
-  (j) => j.lines[0].amount === tours[0].price * 2 && j.lines[1].amount === Math.round((tours[0].price * cfg.settings.tourChildPercent) / 100));
+const tourQuote = await expect("POST /quotes (tour)", call("POST", "/quotes", { service: "tours", tourId: anyDate.id, adults: 2, kids: 1, start: TRAVEL }), 201,
+  (j) => j.lines[0].amount === anyDate.price * 2 && j.lines[1].amount === Math.round((anyDate.price * cfg.settings.tourChildPercent) / 100));
 await expect("POST /quotes (self-drive)", call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "self", start: "2026-12-01T10:00", end: "2026-12-02T10:00", kmPlan: "limited", protection: "standard", doorstep: false }), 201,
   (j) => j.lines[0].amount === cars[0].pricePerHour * 24 && j.lines.at(-1).amount === cfg.settings.rentDeposit);
 const chauffeur = await expect("POST /quotes (chauffeur across a night)", call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "driver", start: "2026-12-01T10:00", end: "2026-12-02T10:00", kmPlan: "limited", protection: "standard", doorstep: false }), 201,
@@ -118,7 +120,7 @@ check("chauffeur night charge follows the setting",
 await expect("POST /quotes refuses a return before pickup", call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "driver", start: "2026-12-02T10:00", end: "2026-12-01T10:00", kmPlan: "limited", protection: "standard", doorstep: false }), 400);
 await expect("POST /quotes (group travel)", call("POST", "/quotes", { service: "rentals", vehicleId: vehicles[0].id, trip: "outstation", destinationId: cfg.groupDestinations[0].id, days: 1, start: TRAVEL }), 201,
   (j) => j.lines[0].label.includes("km") && j.total > 0);
-await expect("POST /quotes (tour) needs a start date", call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 1, kids: 0 }), 400, (j) => /start/.test(j.message));
+await expect("POST /quotes (tour) needs a start date", call("POST", "/quotes", { service: "tours", tourId: anyDate.id, adults: 1, kids: 0 }), 400, (j) => /start/.test(j.message));
 await expect("POST /quotes (group) needs a start date", call("POST", "/quotes", { service: "rentals", vehicleId: vehicles[0].id, trip: "local", days: 1 }), 400, (j) => /start/.test(j.message));
 // Outstation cabs: one way and multi-day round trips through the group engine.
 const sedan = vehicles.find((v) => v.seats <= 4);
@@ -230,7 +232,7 @@ await expect("a ride booking needs the ride", call("POST", "/bookings", newBooki
 await expect("a cancelled ride can't be booked", call("POST", "/bookings", newBooking({ service: "car", rideId: ride.id })), 400);
 
 // Coupons
-const tourQuote2 = (await call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 1, kids: 0, start: TRAVEL })).json;
+const tourQuote2 = (await call("POST", "/quotes", { service: "tours", tourId: anyDate.id, adults: 1, kids: 0, start: TRAVEL })).json;
 const holiday = cfg.offers.find((o) => o.code === "HOLIDAY10");
 const expected = Math.min(holiday.maxDiscount, Math.round((tourQuote2.total * holiday.percent) / 100));
 await expect("POST /offers/check needs sign-in", call("POST", "/offers/check", { code: "HOLIDAY10", quoteId: tourQuote2.id }, false), 401);
@@ -251,13 +253,13 @@ const trip = await expect("POST /bookings (trip)", call("POST", "/bookings", new
 await expect("POST /bookings/:id/complete", call("POST", `/bookings/${trip.id}/complete`), 200, (j) => j.status === "completed");
 await expect("completed booking can't be cancelled", call("POST", `/bookings/${trip.id}/cancel`), 409);
 await expect("POST /bookings/:id/complete unknown booking", call("POST", "/bookings/QFNOPE/complete"), 404);
-const tourToClose = (await call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 1, kids: 0, start: TRAVEL })).json;
+const tourToClose = (await call("POST", "/quotes", { service: "tours", tourId: anyDate.id, adults: 1, kids: 0, start: TRAVEL })).json;
 const toClose = (await call("POST", "/bookings", newBooking({ service: "tours", quoteId: tourToClose.id, payment: "upi" }))).json;
 await expect("customers can't complete a holiday (staff close it)", call("POST", `/bookings/${toClose.id}/complete`), 409, (j) => /staff/.test(j.message));
 await call("POST", `/bookings/${toClose.id}/cancel`);
 
 // Trips: a ride joins a holiday's trip; both share the holiday's id as trip id.
-const tripTourQ = (await call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 1, kids: 0, start: TRAVEL })).json;
+const tripTourQ = (await call("POST", "/quotes", { service: "tours", tourId: anyDate.id, adults: 1, kids: 0, start: TRAVEL })).json;
 const tripAnchor = await expect("a holiday to start a trip from", call("POST", "/bookings", newBooking({ service: "tours", quoteId: tripTourQ.id, payment: "upi" })), 201, (j) => j.tripId === null);
 const legRide = (await call("POST", "/rides", { ...rideInput, payment: "cash" })).json;
 const tripLeg = await expect("a ride joins the holiday's trip", call("POST", "/bookings", newBooking({ service: "car", rideId: legRide.id, payment: "cash", tripOf: tripAnchor.id })), 201,
@@ -348,6 +350,28 @@ if (pairSeat) {
   await call("POST", `/bookings/${bk.id}/cancel`);
   await expect("a cancelled ticket shows as cancelled", call("GET", `/tickets/${bk.ticketToken}`, null, false), 200, (j) => j.status === "cancelled" && j.seats.length === 0);
   await expect("cancelling frees the new seats", call("GET", sp(list[2])), 200, (j) => two.every((s) => !j.find((x) => x.id === s.id).booked));
+}
+
+// Holiday group departures: booked by departure (its date and price), seats left go down and come back.
+{
+  const group = tours.find((t) => t.departures?.some((d) => d.seatsLeft >= 2));
+  if (!group) console.log("SKIP  no group departure with seats left");
+  else {
+    check("packages list departures with seats left", group.departures.every((d) => d.date && d.seatsLeft >= 0 && d.seatsLeft <= d.seats && d.price > 0) && tours.some((t) => !t.departures?.length));
+    await expect("a group package needs a departure", call("POST", "/quotes", { service: "tours", tourId: group.id, adults: 1, kids: 0, start: TRAVEL }), 400, (j) => /departures/.test(j.message));
+    await expect("an unknown departure is refused", call("POST", "/quotes", { service: "tours", tourId: group.id, adults: 1, kids: 0, start: TRAVEL, departureId: "dpnope" }), 400);
+    const dep = group.departures.find((d) => d.seatsLeft >= 2);
+    const dq = await expect("a departure quote uses its date and price", call("POST", "/quotes", { service: "tours", tourId: group.id, adults: 2, kids: 0, start: "2030-01-01", departureId: dep.id }), 201,
+      (j) => j.lines[0].amount === dep.price * 2);
+    const db = await expect("booking a departure starts on its date", call("POST", "/bookings", newBooking({ service: "tours", title: group.title, subtitle: "Smoke departure", lines: [], quoteId: dq.id })), 201,
+      (j) => j.startsAt?.startsWith(dep.date));
+    const seatsNow = async () => (await call("GET", `/tours/${group.slug}`)).json.departures.find((d) => d.id === dep.id).seatsLeft;
+    check("its travellers take seats", (await seatsNow()) === dep.seatsLeft - 2);
+    if (dep.seatsLeft - 2 < 10) await expect("more travellers than seats left is refused", call("POST", "/quotes", { service: "tours", tourId: group.id, adults: dep.seatsLeft - 1, kids: 0, start: TRAVEL, departureId: dep.id }), 409, (j) => /left|sold out/.test(j.message));
+    await call("POST", `/bookings/${db.id}/cancel`);
+    check("cancelling gives the seats back", (await seatsNow()) === dep.seatsLeft);
+    await expect("an any-date package refuses a departure", call("POST", "/quotes", { service: "tours", tourId: anyDate.id, adults: 1, kids: 0, start: TRAVEL, departureId: dep.id }), 400);
+  }
 }
 
 await expect("unknown route", call("GET", "/nope"), 404, (j) => !!j.message);

@@ -10,4 +10,5 @@ export * from "./credits";
 export * from "./switches";
 export * from "./pass";
 export * from "./bus-changes";
+export * from "./holidays";
 export * from "./vendor";

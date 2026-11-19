@@ -7,6 +7,7 @@ import {
 import { badRequest, conflict } from "../lib/errors";
 import { uid } from "../lib/random";
 import { findBus, seatHolds } from "./buses";
+import { departuresOf } from "./departures";
 import { visibleById } from "./catalog";
 import { getSettings } from "./settings";
 
@@ -37,6 +38,16 @@ async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLi
     case "tours": {
       const tour = await visibleById(db, "tour", req.tourId);
       if (req.adults < 1 || req.kids < 0 || req.adults + req.kids > BOOKING_LIMITS.tourTravellers) throw badRequest(`Book for 1 to ${BOOKING_LIMITS.tourTravellers} travellers, with at least one adult.`);
+      // A package with upcoming group departures is booked on one of them (its date and price, seats permitting).
+      const { views } = await departuresOf(db, tour);
+      if (views.length) {
+        const dep = views.find((d) => d.id === req.departureId);
+        if (!dep) throw badRequest("Pick one of this package's departures.");
+        if (dep.seatsLeft < req.adults + req.kids) throw conflict(dep.seatsLeft ? `Only ${dep.seatsLeft} seat${dep.seatsLeft > 1 ? "s are" : " is"} left on this departure.` : "This departure is sold out. Please pick another date.");
+        req.start = dep.date;
+        return { lines: priceTour(tour, req.adults, req.kids, settings, dep.price), startsAt: quoteStartsAt(req) };
+      }
+      if (req.departureId) throw badRequest("This package has no departures to pick; choose a start date.");
       return { lines: priceTour(tour, req.adults, req.kids, settings), startsAt: quoteStartsAt(req) };
     }
     case "rent": {

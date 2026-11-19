@@ -4,10 +4,10 @@
 // type in types.ts, here, and to the seed in catalog.ts.
 import type { Permission } from "./admin";
 import {
-  BUS_OPERATORS, CITIES, DRIVERS, FAQS, GROUP_DESTINATIONS, OFFERS, PLACES, POPULAR_ROUTES, RENTAL_CARS, RIDE_OPTIONS, TOURS, TRAVEL_VEHICLES,
+  BUS_OPERATORS, CITIES, DEPARTURES, DRIVERS, FAQS, GROUP_DESTINATIONS, OFFERS, PLACES, POPULAR_ROUTES, RENTAL_CARS, RIDE_OPTIONS, TOURS, TRAVEL_VEHICLES,
 } from "./catalog";
 import type {
-  BusOperator, City, DriverProfile, Faq, GroupDestination, Offer, Place, PopularRoute, RentalCar, RideOption, TourPackage, TravelVehicle,
+  BusOperator, City, DriverProfile, Faq, GroupDestination, Offer, Place, PopularRoute, RentalCar, RideOption, TourDeparture, TourPackage, TravelVehicle,
 } from "./types";
 import { FAQ_CATEGORIES } from "./types";
 
@@ -19,6 +19,7 @@ export interface CatalogItemMap {
   busOperator: BusOperator;
   popularRoute: PopularRoute;
   tour: TourPackage;
+  departure: TourDeparture;
   rentalCar: RentalCar;
   travelVehicle: TravelVehicle;
   groupDestination: GroupDestination;
@@ -140,7 +141,7 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
       { key: "title", label: "Title", type: "text", maxLength: 80 },
       { key: "slug", label: "Web address (slug)", type: "text", maxLength: 60, pattern: /^[a-z0-9]+(-[a-z0-9]+)*$/, hint: "Lower-case words joined by dashes, e.g. goa-beach-holiday" },
       { key: "location", label: "Location", type: "text", maxLength: 60 },
-      { key: "themes", label: "Themes", type: "multiselect", options: ["beach", "hills", "international", "weekend", "heritage"] },
+      { key: "themes", label: "Themes", type: "multiselect", options: ["beach", "hills", "international", "weekend", "heritage", "spiritual", "women", "seniors"], hint: '"women" = women-only group, "seniors" = easy pace for older travellers' },
       { key: "days", label: "Days", type: "int", min: 1, max: 60 },
       { key: "nights", label: "Nights", type: "int", min: 0, max: 60 },
       rupees("price", "Price per adult", 2_000_000), rating,
@@ -153,6 +154,18 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
       { key: "itinerary", label: "Itinerary", type: "list", maxLength: 160, hint: "One line per day" },
     ],
     title: (d) => String(d.title), detail: (d) => `${d.location} · ${d.days}D/${d.nights}N · ${inr(d.price)}`,
+  },
+  departure: {
+    label: "Holiday departures", singular: "departure", group: "Holidays", idPrefix: "dp", permission: "catalog.edit",
+    description: "Dated group departures of a package. A package with upcoming departures is booked by departure (seats left shown); without, any start date.",
+    fields: [
+      { key: "tourId", label: "Package id", type: "text", maxLength: 20, hint: 'The holiday package\'s id, e.g. "t9"' },
+      { key: "date", label: "Departure date", type: "date" },
+      { key: "fromCity", label: "Departs from", type: "text", maxLength: 40, hint: 'e.g. "Chennai"' },
+      { key: "seats", label: "Seats", type: "int", min: 1, max: 200 },
+      { key: "price", label: "Price per adult", type: "int", optional: true, min: 0, max: 2_000_000, hint: "In rupees; empty = the package price" },
+    ],
+    title: (d) => `${d.tourId} · ${d.date} from ${d.fromCity}`, detail: (d) => `${d.seats} seats${d.price ? ` · ${inr(d.price)}` : ""}`,
   },
   rentalCar: {
     label: "Rental cars", singular: "rental car", group: "Rentals", idPrefix: "rc", permission: "catalog.edit",
@@ -224,7 +237,7 @@ export const isCatalogKind = (k: string): k is CatalogKind => k in CATALOG_DEFS;
 /** The seed copied into D1 on first use and by "reset catalog". */
 export const CATALOG_SEED: { [K in CatalogKind]: CatalogItemMap[K][] } = {
   place: PLACES, rideOption: RIDE_OPTIONS, driver: DRIVERS, city: CITIES, busOperator: BUS_OPERATORS,
-  popularRoute: POPULAR_ROUTES, tour: TOURS, rentalCar: RENTAL_CARS, travelVehicle: TRAVEL_VEHICLES,
+  popularRoute: POPULAR_ROUTES, tour: TOURS, departure: DEPARTURES, rentalCar: RENTAL_CARS, travelVehicle: TRAVEL_VEHICLES,
   groupDestination: GROUP_DESTINATIONS, offer: OFFERS, faq: FAQS,
 };
 

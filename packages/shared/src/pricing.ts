@@ -227,11 +227,13 @@ export function priceBus(seats: Seat[], settings: Settings): FareLine[] {
 
 /* ───────────── Holidays ───────────── */
 
-export const childPrice = (tour: TourPackage, settings: Settings) => Math.round((tour.price * settings.tourChildPercent) / 100);
+/** Child price: a share of the adult price (the package's, or a departure's own price). */
+export const childPrice = (tour: Pick<TourPackage, "price">, settings: Settings, adultPrice = tour.price) => Math.round((adultPrice * settings.tourChildPercent) / 100);
 
-export function priceTour(tour: TourPackage, adults: number, kids: number, settings: Settings): FareLine[] {
-  const kid = childPrice(tour, settings);
-  const lines: FareLine[] = [{ label: `${adults} adult × ${inr(tour.price)}`, amount: tour.price * adults }];
+/** `adultPrice`: a departure's own price per adult (defaults to the package price). */
+export function priceTour(tour: TourPackage, adults: number, kids: number, settings: Settings, adultPrice = tour.price): FareLine[] {
+  const kid = childPrice(tour, settings, adultPrice);
+  const lines: FareLine[] = [{ label: `${adults} adult × ${inr(adultPrice)}`, amount: adultPrice * adults }];
   if (kids) lines.push({ label: `${kids} child × ${inr(kid)}`, amount: kid * kids });
   return [...lines, ...gstLine(settings, "tours", sumLines(lines))];
 }

@@ -3,7 +3,7 @@
 // offline demo (mock API) uses it as its catalog, and the website pre-builds detail pages for
 // these slugs/ids. Never read it for live data in the apps: use GET /config and the catalog endpoints.
 import type {
-  BusOperator, City, DriverProfile, Faq, GroupDestination, Offer, Place, PopularRoute, RentalCar, RideOption, TourPackage, TravelVehicle,
+  BusOperator, City, DriverProfile, Faq, GroupDestination, Offer, Place, PopularRoute, RentalCar, RideOption, TourDeparture, TourPackage, TravelVehicle,
 } from "./types";
 
 /**
@@ -53,6 +53,17 @@ export const DRIVERS: DriverProfile[] = [
   { id: "d6", name: "Priya S", rating: 4.8, trips: 860, phone: "+91 97100 33417", gender: "female" },
 ];
 
+/** Dated group departures for the group-tour packages (others start any date). */
+export const DEPARTURES: TourDeparture[] = [
+  { id: "dp1", tourId: "t9", date: "2026-12-05", fromCity: "Chennai", seats: 30, price: null },
+  { id: "dp2", tourId: "t9", date: "2027-01-09", fromCity: "Chennai", seats: 30, price: null },
+  { id: "dp3", tourId: "t9", date: "2027-01-23", fromCity: "Bengaluru", seats: 25, price: 13999 },
+  { id: "dp4", tourId: "t10", date: "2026-12-12", fromCity: "Chennai", seats: 16, price: null },
+  { id: "dp5", tourId: "t10", date: "2027-02-06", fromCity: "Bengaluru", seats: 16, price: 22999 },
+  { id: "dp6", tourId: "t11", date: "2026-12-19", fromCity: "Chennai", seats: 20, price: null },
+  { id: "dp7", tourId: "t11", date: "2027-01-30", fromCity: "Chennai", seats: 20, price: null },
+];
+
 export const CITIES: City[] = [
   { id: "c1", name: "Chennai" },
   { id: "c2", name: "Bengaluru" },
@@ -75,6 +86,27 @@ export const BUS_OPERATORS: BusOperator[] = [
 ];
 
 export const TOURS: TourPackage[] = [
+  {
+    id: "t9", slug: "rameswaram-madurai-temple-trail", themes: ["spiritual", "heritage"], hotelStars: 3, meals: "Breakfast & dinner (veg)",
+    title: "Rameswaram & Madurai Temple Trail", location: "Tamil Nadu", days: 4, nights: 3, price: 12999, rating: 4.8, tag: "Group tour", hue: 25,
+    highlights: ["Meenakshi Amman temple", "Ramanathaswamy temple & theertham bath", "Dhanushkodi at sunrise"],
+    includes: ["Hotels", "Veg meals", "AC coach from the departure city", "Temple guide"],
+    itinerary: ["Depart, reach Madurai by evening; Meenakshi temple night ceremony", "Madurai to Rameswaram via Pamban bridge; temple darshan", "Dhanushkodi sunrise, theertham bath, Kothandaramar temple", "Return to the departure city"],
+  },
+  {
+    id: "t10", slug: "womens-special-kerala", themes: ["women", "hills"], hotelStars: 4, meals: "Breakfast & dinner",
+    title: "Women's Special: Kerala Backwaters", location: "Kerala", days: 5, nights: 4, price: 21999, rating: 4.9, tag: "Women only", hue: 320,
+    highlights: ["Women-only group with a woman tour manager", "Room partner arranged for solo travellers", "Houseboat day cruise & Kathakali evening"],
+    includes: ["Hotels (twin sharing)", "Breakfast & dinner", "AC tempo traveller", "Woman tour manager"],
+    itinerary: ["Meet at the departure city, travel to Kochi; Fort Kochi walk", "Munnar tea gardens", "Munnar to Thekkady, spice plantation", "Alleppey houseboat day cruise, Kathakali evening", "Return"],
+  },
+  {
+    id: "t11", slug: "seniors-ooty-coonoor", themes: ["seniors", "hills"], hotelStars: 3, meals: "All meals",
+    title: "Seniors' Ooty & Coonoor at an Easy Pace", location: "Tamil Nadu", days: 5, nights: 4, price: 17999, rating: 4.7, tag: "Seniors", hue: 160,
+    highlights: ["Nilgiri toy train", "Short walks only, hotels with lifts", "Tour manager and a doctor on call"],
+    includes: ["Hotels with lifts", "All meals", "AC coach", "Tour manager"],
+    itinerary: ["Depart, reach Ooty by evening and rest", "Botanical garden and lake, late start", "Toy train to Coonoor, Sim's Park", "Doddabetta viewpoint, afternoon free", "Return"],
+  },
   {
     id: "t1", slug: "munnar-alleppey", themes: ["hills"], hotelStars: 3, meals: "Breakfast & dinner",
     title: "Munnar & Alleppey Escape", location: "Kerala", days: 5, nights: 4, price: 18999, rating: 4.8, tag: "Bestseller", hue: 140,

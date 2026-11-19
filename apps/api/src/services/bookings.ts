@@ -1,6 +1,7 @@
 import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, cancelPolicyFor, creditsReturned, creditsUsable, switchError, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
+import { visibleById } from "./catalog";
 import { checkCoupon } from "./offers";
 import { usableQuote } from "./quotes";
 import { ownRide } from "./rides";
@@ -65,7 +66,7 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
     if (!input.rideId) throw badRequest('"rideId" is required for ride bookings.');
     const ride = await ownRide(db, userId, input.rideId);
     if (ride.quote.option.service !== input.service) throw badRequest("That ride is for a different service.");
-    return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: ride.scheduledFor ?? null, deposit: 0, seatHolds: null };
+    return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: ride.scheduledFor ?? null, deposit: 0, seatHolds: null, departure: null };
   }
   if (!input.quoteId) throw badRequest('"quoteId" is required. Get a price from POST /quotes first.');
   const q = await usableQuote(db, input.quoteId, input.service);
@@ -75,7 +76,11 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
   const seatHolds = req.service === "bus"
     ? { busId: req.busId, date: req.date, seats: req.seatIds.map((seat, i) => ({ seat, gender: req.genders?.[i] ?? "other", price: req.seatPrices?.[i] ?? 0 })) }
     : null;
-  return { gross: q.total, quoteId: q.id, rideId: null, startsAt: q.starts_at, deposit, seatHolds };
+  // A holiday departure: its seats are checked again inside the booking batch, so it can't be oversold.
+  const departure = req.service === "tours" && req.departureId
+    ? { id: req.departureId, travellers: req.adults + req.kids, seats: (await visibleById(db, "departure", req.departureId)).seats }
+    : null;
+  return { gross: q.total, quoteId: q.id, rideId: null, startsAt: q.starts_at, deposit, seatHolds, departure };
 }
 
 /**
@@ -87,7 +92,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   // A quote or ride made before a switch went off can't be booked after it.
   const off = switchError(await getSettings(db), { service: input.service, tripOf: input.tripOf });
   if (off) throw conflict(off);
-  const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit, seatHolds } = await grossPrice(db, userId, input);
+  const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit, seatHolds, departure } = await grossPrice(db, userId, input);
   // Joining a trip: the other booking must be the customer's own and not cancelled.
   let tripId: string | null = null;
   if (input.tripOf) {
@@ -132,6 +137,10 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   const condParams: unknown[] = [];
   if (quoteId) { conditions.push("(SELECT used_at FROM quotes WHERE id = ?) = ?"); condParams.push(quoteId, id); }
   if (wallet) { conditions.push("(SELECT wallet_balance FROM users WHERE id = ?) >= ?"); condParams.push(userId, amount); }
+  if (departure) {
+    conditions.push("(SELECT COALESCE(SUM(travellers), 0) FROM bookings WHERE departure_id = ? AND status <> 'cancelled') + ? <= ?");
+    condParams.push(departure.id, departure.travellers, departure.seats);
+  }
   // Every planned credit must still be there, unexpired, with enough left.
   const planJson = JSON.stringify(plan);
   if (plan.length) {
@@ -144,11 +153,11 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   // Claim the quote with this booking's id, so only one booking can use it.
   if (quoteId) statements.push(db.prepare("UPDATE quotes SET used_at = ? WHERE id = ? AND used_at IS NULL").bind(id, quoteId));
   statements.push(db.prepare(
-    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit, trip_id, credits_used, vendor_id, vendor_vehicle_id, vendor_driver_id, ticket_token)
-     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
+    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit, trip_id, credits_used, vendor_id, vendor_vehicle_id, vendor_driver_id, ticket_token, departure_id, travellers)
+     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
   ).bind(id, userId, booking.service, booking.title, booking.subtitle, amount, booking.payment, JSON.stringify(lines), createdAt,
     quoteId, rideId, coupon?.code ?? null, coupon?.discount ?? 0, startsAt, deposit, tripId, creditsUsed,
-    partner?.vendor_id ?? null, partner?.vendor_vehicle_id ?? null, partner?.vendor_driver_id ?? null, booking.ticketToken, ...condParams));
+    partner?.vendor_id ?? null, partner?.vendor_vehicle_id ?? null, partner?.vendor_driver_id ?? null, booking.ticketToken, departure?.id ?? null, departure?.travellers ?? 0, ...condParams));
   if (plan.length) {
     statements.push(
       db.prepare(
@@ -197,6 +206,10 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   const inserted = results[quoteId ? 1 : 0];
   if (!inserted.meta.changes) {
     if (quoteId && !results[0].meta.changes) throw conflict("This price was already used for a booking.");
+    if (departure) {
+      const taken = await db.prepare("SELECT COALESCE(SUM(travellers), 0) AS n FROM bookings WHERE departure_id = ? AND status <> 'cancelled'").bind(departure.id).first<{ n: number }>();
+      if ((taken?.n ?? 0) + departure.travellers > departure.seats) throw conflict("Those seats on this departure were just taken. Please check the seats left again.");
+    }
     if (plan.length && !wallet) throw conflict("Your QuikFly Credits just changed. Please try again.");
     throw badRequest("Not enough wallet balance. Choose another payment method.");
   }

@@ -299,7 +299,31 @@ export interface SeatHold {
   gender: Gender;
 }
 
-export type TourTheme = "beach" | "hills" | "international" | "weekend" | "heritage";
+export type TourTheme = "beach" | "hills" | "international" | "weekend" | "heritage" | "spiritual" | "women" | "seniors";
+
+/** A dated group departure of a holiday package (catalog kind "departure"). */
+export interface TourDeparture {
+  id: string;
+  tourId: string;
+  /** YYYY-MM-DD (India) */
+  date: string;
+  /** Where the group starts, e.g. "Chennai". */
+  fromCity: string;
+  seats: number;
+  /** Price per adult for this departure; null = the package price. */
+  price: number | null;
+}
+
+/** An upcoming departure as customers see it (GET /tours): seats left counts active bookings. */
+export interface DepartureView {
+  id: string;
+  date: string;
+  fromCity: string;
+  seats: number;
+  seatsLeft: number;
+  /** Price per adult. */
+  price: number;
+}
 
 export interface TourPackage {
   id: string;
@@ -318,6 +342,8 @@ export interface TourPackage {
   includes: string[];
   itinerary: string[];
   hue: number;
+  /** Set by the API (not stored on the package): upcoming group departures, soonest first. None = start any date. */
+  departures?: DepartureView[];
 }
 
 export interface RentalCar {
@@ -467,7 +493,8 @@ export type QuoteRequest =
   /** `genders` lines up with `seatIds` (who sits where); women-only seats need "female". */
   | { service: "bus"; busId: string; from: string; to: string; date: string; seatIds: string[]; genders?: Gender[]; /** Set by the API when it prices the quote (₹ per seat, before GST). */ seatPrices?: number[] }
   /** `start` is the travel date (YYYY-MM-DD); the cancellation policy counts down to it. */
-  | { service: "tours"; tourId: string; adults: number; kids: number; start: string }
+  /** `departureId` is required when the package has upcoming departures; `start` then becomes its date. */
+  | { service: "tours"; tourId: string; adults: number; kids: number; start: string; departureId?: string }
   | {
       service: "rent"; carId: string; mode: "self" | "driver";
       /** Local date-times "YYYY-MM-DDTHH:mm". */
