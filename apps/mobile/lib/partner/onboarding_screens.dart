@@ -99,6 +99,7 @@ class _AgreementScreenState extends ConsumerState<AgreementScreen> with _Step {
       body: ScreenList(children: [
         Text('Between you and ${s.companyName}', style: TextStyle(color: c.fgMuted)),
         const SizedBox(height: 12),
+        // Same terms as VENDOR_AGREEMENT_TERMS in packages/shared/src/vendor.ts (the website shows those).
         Panel(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           term('Your vehicle and every driver you assign keep valid RC, insurance, permit and licence. Expired documents stop trips until renewed.'),
           term('Only drivers registered with QuikFly drive your vehicle on QuikFly trips.'),

@@ -81,7 +81,7 @@ export function PartnerScreen() {
   return (
     <>
       <PageHeader crumbs={[["Home", "/"], ["Become a partner"]]} title="Put your vehicle on QuikFly" icon={<Handshake className="text-gold" size={36} />}
-        sub="Cab, auto, tempo traveller or bus owners register in the QuikFly Partner app, get approved, and run their vehicle on QuikFly trips." />
+        sub="Cab, auto, tempo traveller or bus owners apply here or in the QuikFly Partner app, get approved, and run their vehicle on QuikFly trips." />
       <section className="max-w-7xl mx-auto px-4 grid lg:grid-cols-2 gap-6 items-start">
         <Reveal>
           <div className="panel p-6 sm:p-8">
@@ -105,9 +105,11 @@ export function PartnerScreen() {
               {keepReady.map((t) => <li key={t} className="flex gap-2.5 text-sm"><CircleCheck size={17} className="text-success shrink-0 mt-0.5" />{t}</li>)}
             </ul>
             <div className="mt-8">
+              <Link href="/partner/apply" className="btn-gold rounded-xl px-5 py-3 inline-flex items-center gap-2"><ClipboardList size={18} />Apply on the website</Link>
+              <p className="text-sm text-muted mt-3 mb-6">Fill in your details and documents here, and onboard once approved. Your application also opens in the app.</p>
               {PARTNER_APP.downloadUrl ? (
                 <>
-                  <a href={PARTNER_APP.downloadUrl} className="btn-gold rounded-xl px-5 py-3 inline-flex items-center gap-2"><Download size={18} />Get the QuikFly Partner app (Android)</a>
+                  <a href={PARTNER_APP.downloadUrl} className="chip !text-sm !py-2.5 !px-4 inline-flex items-center gap-2"><Download size={16} />Or get the QuikFly Partner app (Android)</a>
                   <p className="text-sm text-muted mt-3">Android 7.0+. Older phone or need install steps? <a className="text-gold" href={PARTNER_APP.releaseUrl} target="_blank" rel="noopener noreferrer">See the release page</a>.</p>
                 </>
               ) : (

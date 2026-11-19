@@ -39,6 +39,26 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 
 const qs = (o: Record<string, string>) => "?" + new URLSearchParams(o).toString();
 
+/** Sends a raw image body (partner document photos). */
+async function upload<T>(path: string, image: Blob): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": image.type || "application/octet-stream", Accept: "application/json", ...(token() ? { Authorization: `Bearer ${token()}` } : {}) },
+    body: image,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.message || `Upload failed (${res.status})`);
+  return json as T;
+}
+
+/** A signed-in image (partner document photos) as an object URL, or null when there's none. */
+async function imageUrl(path: string): Promise<string | null> {
+  const res = await fetch(`${BASE}${path}`, { headers: token() ? { Authorization: `Bearer ${token()}` } : {} });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Couldn't load the photo (${res.status})`);
+  return URL.createObjectURL(await res.blob());
+}
+
 export const httpApi: QuikflyApi = {
   config: { get: () => req("GET", "/config") },
   auth: {
@@ -122,5 +142,17 @@ export const httpApi: QuikflyApi = {
   },
   tickets: {
     get: (t) => req("GET", `/tickets/${encodeURIComponent(t)}`),
+  },
+  vendor: {
+    get: async () => (await req<{ application: import("@quikfly/shared").VendorApplication | null }>("GET", "/vendor")).application,
+    start: () => req("POST", "/vendor"),
+    saveSection: (section, body) => req("PUT", `/vendor/sections/${section}`, body),
+    uploadDocument: (kind, image) => upload(`/vendor/documents/${kind}`, image),
+    documentUrl: (kind) => imageUrl(`/vendor/documents/${kind}`),
+    reset: () => req("POST", "/vendor/reset"),
+    submit: () => req("POST", "/vendor/submit"),
+    payJoiningFee: () => req("POST", "/vendor/onboarding/payment"),
+    acceptAgreement: (name) => req("POST", "/vendor/onboarding/agreement", { name, accept: true }),
+    requestSticker: () => req("POST", "/vendor/onboarding/sticker"),
   },
 };
