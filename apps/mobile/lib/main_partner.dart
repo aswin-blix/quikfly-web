@@ -4,5 +4,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'partner/partner_app.dart';
+import 'state/catalog.dart';
 
-void main() => runApp(const ProviderScope(child: PartnerApp()));
+void main() => runApp(ProviderScope(
+      // The account's inbox also holds customer bookings; this app shows partner updates only.
+      overrides: [notificationScopeProvider.overrideWithValue(NotificationScope.partner)],
+      child: const PartnerApp(),
+    ));

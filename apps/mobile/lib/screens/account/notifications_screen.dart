@@ -1,4 +1,5 @@
-// The notification inbox (the website's /notifications). Opening it marks everything read.
+// The notification inbox (the website's /notifications). Each app shows its own kinds
+// (NotificationScope); opening it marks those read.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -19,6 +20,12 @@ IconData _icon(String kind) => switch (kind) {
       'ride.reminder' => Icons.schedule,
       'credits.earned' => Icons.toll_outlined,
       'support.reply' => Icons.support_agent,
+      'vendor.approved' || 'vendor.active' => Icons.verified_outlined,
+      'vendor.changes' => Icons.edit_note,
+      'vendor.rejected' => Icons.cancel_outlined,
+      'vendor.fleet' => Icons.local_taxi_outlined,
+      'vendor.trip' => Icons.route_outlined,
+      'vendor.payout' => Icons.payments_outlined,
       _ => Icons.notifications_none,
     };
 
@@ -35,11 +42,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Widget build(BuildContext context) {
     final c = context.qf;
     final inbox = ref.watch(notificationsProvider);
-    // Opening the inbox reads everything (unread ones keep their highlight until you leave).
+    final partner = ref.watch(notificationScopeProvider) == NotificationScope.partner;
+    // Opening the inbox reads what this app shows (unread ones keep their highlight until you
+    // leave); the other app's notifications stay unread there.
     inbox.whenData((d) {
       if (!_marked && d.unread > 0) {
         _marked = true;
-        ref.read(apiProvider).markNotificationsRead().then((_) => ref.invalidate(unreadProvider)).catchError((_) {});
+        final ids = [for (final n in d.items) if (n.readAt == null) n.id];
+        ref.read(apiProvider).markNotificationsRead(ids).then((_) => ref.invalidate(unreadProvider)).catchError((_) {});
       }
     });
     return Scaffold(
@@ -51,14 +61,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           onRefresh: () async => ref.invalidate(notificationsProvider),
           children: [
             if (d.items.isEmpty)
-              const EmptyState(icon: Icons.notifications_none, title: 'Nothing yet', message: 'Bookings, refunds and ride reminders show up here.')
+              EmptyState(
+                  icon: Icons.notifications_none,
+                  title: 'Nothing yet',
+                  message: partner ? 'Application reviews, vehicle and driver updates, trips and payouts show up here.' : 'Bookings, refunds and ride reminders show up here.')
             else
               for (final n in d.items)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Panel(
                     highlighted: n.readAt == null,
-                    onTap: n.kind == 'credits.earned'
+                    // Partner updates have no page of their own (the home screen shows them), and
+                    // the customer pages below don't exist in QuikFly Partner.
+                    onTap: partner
+                        ? null
+                        : n.kind == 'credits.earned'
                         ? () => context.push('/account/wallet')
                         : n.kind == 'support.reply'
                         ? () => context.push('/support')

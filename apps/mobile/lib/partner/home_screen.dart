@@ -23,6 +23,14 @@ class PartnerHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider);
     if (session.isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    // A saved login that couldn't be checked (no network at start) is not a sign-out: say so and
+    // retry, rather than showing the welcome screen as if the partner had signed out.
+    if (session.hasError && session.value == null) {
+      return Scaffold(
+        appBar: _bar(context, ref),
+        body: ScreenList(children: [ErrorBox(errorText(session.error!), onRetry: () => ref.invalidate(sessionProvider))]),
+      );
+    }
     if (session.value == null) return const _Welcome();
     final vendor = ref.watch(vendorProvider);
     return vendor.when(
