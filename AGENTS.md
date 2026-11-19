@@ -32,6 +32,7 @@ apps/mobile/      Flutter Android apps (read apps/mobile/README.md): the custome
                   owners (flavor partner, lib/main_partner.dart, screens in lib/partner/). Same endpoints as the website:
   lib/api/        api.dart (one method per endpoint) · models.dart (Dart copy of packages/shared types + Rules)
   lib/theme/      tokens.dart mirrors apps/web tokens.css · lib/screens/ one folder per area · test/api_contract_test.dart
+brand/           quikfly-logo.svg: the one logo. After changing it run `node scripts/logo.mjs` (copies to web/admin, renders the app PNG)
 packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation patterns, limits),
                   catalog.ts (SEED data only) + catalog-kinds.ts (13 kinds, fields, validation), settings.ts
                   (runtime Settings, defaults, rules), pricing.ts (all price maths + bus/ride simulation),
@@ -82,5 +83,6 @@ cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://1
 - A plain `next build` of the website talks to the **production** API (`.env.production`). Building to test locally? Pass `NEXT_PUBLIC_API_URL` for the local API, or test submissions would hit production.
 - New `Settings` fields can be missing for a minute after a deploy (old API, new website). Code reading them must not crash on `undefined`.
 - Run the production smoke test once per deploy; every run leaves bookings, tickets and callbacks on production.
+- The logo is transparent and suits both themes: never put it on a badge or background (`test/logo_test.dart` checks the app). Edit only `brand/quikfly-logo.svg`, then run `node scripts/logo.mjs`.
 - The customer app (QuikFly) never gets partner screens; partner flows live in the Partner app and on the website.
 - Screens shared by both apps (login, notifications, not-found) must not link to pages only one app has; the Partner router lacks customer routes like `/trips`. One account has one inbox: `NotificationScope` keeps `vendor.*` in the Partner app and the rest in the customer app. `test/partner_routes_test.dart` fails if `lib/partner` links to a page the Partner router doesn't have.
