@@ -83,3 +83,4 @@ cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://1
 - New `Settings` fields can be missing for a minute after a deploy (old API, new website). Code reading them must not crash on `undefined`.
 - Run the production smoke test once per deploy; every run leaves bookings, tickets and callbacks on production.
 - The customer app (QuikFly) never gets partner screens; partner flows live in the Partner app and on the website.
+- Screens shared by both apps (login, notifications, not-found) must not link to pages only one app has; the Partner router lacks customer routes like `/trips`. One account has one inbox: `NotificationScope` keeps `vendor.*` in the Partner app and the rest in the customer app. `test/partner_routes_test.dart` fails if `lib/partner` links to a page the Partner router doesn't have.
