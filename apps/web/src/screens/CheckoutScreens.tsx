@@ -1,7 +1,7 @@
 "use client";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BadgePercent, Building2, CarTaxiFront, ChevronDown, Coins, CreditCard, FileText, Info, Lock, QrCode, RotateCcw, Route, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
+import { ArrowLeft, BadgePercent, Building2, CarTaxiFront, ChevronDown, Coins, CreditCard, FileText, Info, LifeBuoy, Lock, QrCode, RotateCcw, Route, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { TweenNumber } from "@/components/motion";
 import { Empty, GhostLink, GoldButton, Spinner } from "@/components/ui";
@@ -531,6 +531,7 @@ export function BookingsScreen() {
                               )}
                               {b.ticketToken && b.status === "confirmed" && <Link href={`/ticket${qs({ t: b.ticketToken })}`} className="text-sm text-gold flex items-center gap-1.5"><QrCode size={15} />m-Ticket</Link>}
                               <Link href={`/invoice${qs({ id: b.id })}`} className="text-sm text-gold flex items-center gap-1.5"><FileText size={15} />Invoice</Link>
+                              <Link href={`/account${qs({ tab: "support", booking: b.id })}`} className="text-sm text-gold flex items-center gap-1.5"><LifeBuoy size={15} />Get help</Link>
                               {b.service === "bus" && !rescheduleError(settings, b) && b.startsAt && (
                                 <Link href={`/bus/search${qs({ from: b.title.split(" → ")[0], to: b.title.split(" → ")[1] ?? "", date: b.startsAt.slice(0, 10), change: b.id })}`} className="text-sm text-gold flex items-center gap-1.5"><RotateCcw size={15} />Change bus</Link>
                               )}

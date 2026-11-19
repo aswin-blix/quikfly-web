@@ -143,6 +143,14 @@ export const httpApi: QuikflyApi = {
   tickets: {
     get: (t) => req("GET", `/tickets/${encodeURIComponent(t)}`),
   },
+  support: {
+    requestCallback: (input) => req("POST", "/support/callbacks", input),
+    list: () => req("GET", "/me/tickets"),
+    get: (id) => req("GET", `/me/tickets/${encodeURIComponent(id)}`),
+    open: (input) => req("POST", "/me/tickets", input),
+    reply: (id, body) => req("POST", `/me/tickets/${encodeURIComponent(id)}/messages`, { body }),
+    close: (id) => req("POST", `/me/tickets/${encodeURIComponent(id)}/close`),
+  },
   vendor: {
     get: async () => (await req<{ application: import("@quikfly/shared").VendorApplication | null }>("GET", "/vendor")).application,
     start: () => req("POST", "/vendor"),

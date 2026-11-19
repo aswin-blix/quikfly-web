@@ -48,6 +48,7 @@ export const ACCOUNT_SECTIONS = [
   { id: "travellers", label: "Travellers", hint: "Fill bookings in one tap" },
   { id: "safety", label: "Safety", hint: "Emergency contacts, trip sharing" },
   { id: "licence", label: "Driving licence", hint: "Needed for self-drive" },
+  { id: "support", label: "Support", hint: "Tickets and callback requests" },
   { id: "business", label: "Business / GST", hint: "GST details on invoices" },
   { id: "security", label: "Login & security", hint: "Number, devices, delete account" },
 ] as const;
