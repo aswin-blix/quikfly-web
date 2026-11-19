@@ -22,6 +22,10 @@ export const toLocalInput = (d: Date) =>
 export const prettyDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
 
+/** "19 November 2026" */
+export const longDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+
 export const prettyDateTime = (iso: string) =>
   new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 

@@ -13,6 +13,7 @@ import { RentDetailScreen, RentScreen } from "@/screens/RentScreens";
 import { TravelRentalsScreen } from "@/screens/TravelRentalsScreen";
 import { BookingsScreen, CheckoutScreen, ConfirmedScreen } from "@/screens/CheckoutScreens";
 import { HelpScreen, NotFoundScreen, OffersScreen, PartnerScreen } from "@/screens/InfoScreens";
+import { PrivacyScreen } from "@/screens/PrivacyScreen";
 import { AccountScreen } from "@/screens/AccountScreen";
 import { TrackScreen } from "@/screens/TrackScreen";
 import { TicketScreen } from "@/screens/TicketScreen";
@@ -38,6 +39,7 @@ const ROUTES: [RegExp, (m: RegExpMatchArray) => React.ReactNode][] = [
   [/^\/offers$/, () => <OffersScreen />],
   [/^\/partner$/, () => <PartnerScreen />],
   [/^\/help$/, () => <HelpScreen />],
+  [/^\/privacy$/, () => <PrivacyScreen />],
   [/^\/account$/, () => <AccountScreen />],
   [/^\/track$/, () => <TrackScreen />],
   [/^\/ticket$/, () => <TicketScreen />],

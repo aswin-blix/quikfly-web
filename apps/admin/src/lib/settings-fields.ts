@@ -180,4 +180,17 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "whatsappNumber", type: "text", label: "Support WhatsApp number", help: 'Shows a free "Chat on WhatsApp" link on Help, holidays and bookings (opens WhatsApp with a message ready). Empty hides it.' },
     ],
   },
+  {
+    title: "Privacy (DPDP)",
+    sub: "Shown on the privacy notice (website /privacy and both apps). The law requires a published contact for privacy questions and complaints.",
+    fields: [
+      { key: "privacyOfficerName", type: "text", label: "Grievance Officer name", help: "A person or a role, e.g. \"QuikFly Grievance Officer\". Placeholder until the company names one." },
+      { key: "privacyOfficerEmail", type: "text", label: "Grievance Officer email", help: "Replies are due within 30 days." },
+      { key: "privacyOfficerPhone", type: "text", label: "Grievance Officer phone", help: "" },
+      {
+        key: "inactivityEraseDays", type: "number", unit: "days", label: "Close unused accounts after",
+        help: "Accounts nobody has signed in to for this long are closed with a notice and erased 30 days later unless the person signs in. Accounts with wallet money, a confirmed booking or a partner application are skipped. 0 = never; otherwise at least 180. 1095 = 3 years.",
+      },
+    ],
+  },
 ];

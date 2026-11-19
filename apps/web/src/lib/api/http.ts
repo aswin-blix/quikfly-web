@@ -79,6 +79,8 @@ export const httpApi: QuikflyApi = {
     requestPhoneChange: (phone) => req("POST", "/me/phone/otp", { phone }),
     changePhone: (phone, otp) => req("POST", "/me/phone", { phone, otp }),
     async signOutEverywhere() { await req("POST", "/me/logout-all"); clearToken(); },
+    consent: (version) => req("POST", "/me/consent", { version }),
+    exportData: () => req("GET", "/me/export"),
     async deleteAccount(otp) { await req("POST", "/me/delete", { otp }); clearToken(); },
     applyReferral: (code) => req("POST", "/me/referral", { code }),
     submitLicence: (number, expiry) => req("PUT", "/me/licence", { number, expiry }),

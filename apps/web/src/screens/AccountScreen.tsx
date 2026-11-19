@@ -1,11 +1,12 @@
 "use client";
 // /account: phones see a list of sections (tap one to open it); desktops get a sidebar.
 // The open section is in the URL (?tab=), so it can be linked to and survives a reload.
-import { ArrowLeft, Briefcase, Headphones, ChevronRight, Gift, IdCard, MapPin, ShieldCheck, UserRound, Users, Wallet, KeyRound } from "lucide-react";
+import { ArrowLeft, Briefcase, Headphones, ChevronRight, Gift, IdCard, MapPin, ShieldCheck, UserRound, Users, Wallet, KeyRound, FileLock2 } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { BusinessSection } from "@/components/account/BusinessSection";
 import { LicenceBadge, LicenceSection } from "@/components/account/LicenceSection";
 import { PlacesSection } from "@/components/account/PlacesSection";
+import { PrivacySection } from "@/components/account/PrivacySection";
 import { ProfileSection } from "@/components/account/ProfileSection";
 import { ReferSection } from "@/components/account/ReferSection";
 import { SafetySection } from "@/components/account/SafetySection";
@@ -21,7 +22,7 @@ import { Link, qs, useQuery } from "@/lib/nav";
 
 const ICONS: Record<AccountSectionId, typeof UserRound> = {
   profile: UserRound, wallet: Wallet, refer: Gift, places: MapPin, travellers: Users,
-  safety: ShieldCheck, licence: IdCard, support: Headphones, business: Briefcase, security: KeyRound,
+  safety: ShieldCheck, licence: IdCard, support: Headphones, business: Briefcase, privacy: FileLock2, security: KeyRound,
 };
 
 const CONTENT: Record<AccountSectionId, () => React.ReactNode> = {
@@ -34,6 +35,7 @@ const CONTENT: Record<AccountSectionId, () => React.ReactNode> = {
   licence: () => <LicenceSection />,
   support: () => <SupportSection />,
   business: () => <BusinessSection />,
+  privacy: () => <PrivacySection />,
   security: () => <SecuritySection />,
 };
 

@@ -1,7 +1,7 @@
 // Mock (demo mode) versions of the account endpoints. Same rules as the API,
 // using the shared limits and patterns, but stored in this browser only.
 import {
-  CATALOG_SEED, DEFAULT_SETTINGS, DELETION_GRACE_DAYS, LIMITS, PASS_NAME, PATTERNS, RIDE_PIN, compactCode, passEnd, passSaleError,
+  CATALOG_SEED, DEFAULT_SETTINGS, DELETION_GRACE_DAYS, PRIVACY_NOTICE, LIMITS, PASS_NAME, PATTERNS, RIDE_PIN, compactCode, passEnd, passSaleError,
   type EmergencyContact, type SavedPlace, type Traveller, type User,
 } from "@quikfly/shared";
 import type { QuikflyApi } from "./contract";
@@ -19,7 +19,7 @@ function newUser(phone: string): User {
   return {
     id: uid("U"), name: "Guest", phone, walletBalance: 0, creditBalance: 0, passUntil: null, email: null, gender: null, dob: null, profileComplete: false,
     referralCode: "QF" + Math.random().toString(36).slice(2, 8).toUpperCase(), referred: false,
-    licence: { status: "none", number: null, expiry: null, note: null }, gst: null, autoShareNightRides: false, autoShareRides: "off", ridePin: null,
+    licence: { status: "none", number: null, expiry: null, note: null }, gst: null, autoShareNightRides: false, autoShareRides: "off", ridePin: null, privacyConsent: null,
   };
 }
 
@@ -82,6 +82,20 @@ export const mockAccount: QuikflyApi["account"] = {
   },
   async changePhone(phone, otp) { await wait(500); checkOtp(otp); return patchUser({ phone: tenDigits(phone) }); },
   async signOutEverywhere() { await wait(300); },
+  async consent(version) {
+    await wait(300);
+    if (version !== PRIVACY_NOTICE.version) fail("The privacy notice has changed. Please read the new one and agree again.");
+    return withLicenceStatus(patchUser({ privacyConsent: version }));
+  },
+  async exportData() {
+    await wait(400);
+    const data: Record<string, unknown[]> = { account: [currentUser()] };
+    for (const [name, key] of Object.entries(KEYS)) {
+      const v = load<unknown>(key, null);
+      if (Array.isArray(v)) data[name] = v;
+    }
+    return { exportedAt: new Date().toISOString(), noticeVersion: PRIVACY_NOTICE.version, data };
+  },
   async deleteAccount(otp) { await wait(500); checkOtp(otp); currentUser(); save(KEYS.deletedAt, new Date().toISOString()); },
   async applyReferral(input) {
     await wait(500);

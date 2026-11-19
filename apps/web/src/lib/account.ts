@@ -50,6 +50,7 @@ export const ACCOUNT_SECTIONS = [
   { id: "licence", label: "Driving licence", hint: "Needed for self-drive" },
   { id: "support", label: "Support", hint: "Tickets and callback requests" },
   { id: "business", label: "Business / GST", hint: "GST details on invoices" },
+  { id: "privacy", label: "Privacy & data", hint: "Download your data, privacy notice" },
   { id: "security", label: "Login & security", hint: "Number, devices, delete account" },
 ] as const;
 
