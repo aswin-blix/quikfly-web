@@ -18,6 +18,7 @@ import {
 } from "../services/saved";
 import { listTransactions } from "../services/wallet";
 import { creditSummary } from "../services/credits";
+import { buyPass } from "../services/pass";
 import { listNotifications, markRead, registerDevice, removeDevice } from "../services/notifications";
 
 type Json = Record<string, unknown>;
@@ -127,6 +128,8 @@ export const me = new Hono<AppEnv>()
   .get("/wallet", async (c) => c.json(await listTransactions(c.env.DB, c.var.user.id)))
   // QuikFly Credits: balance, the soonest expiry, and history (newest first).
   .get("/credits", async (c) => c.json(await creditSummary(c.env.DB, c.var.user.id)))
+  // QuikFly Pass: paid from the wallet; returns when the pass now ends.
+  .post("/pass", async (c) => c.json(await buyPass(c.env.DB, c.var.user.id), 201))
 
   // Notification inbox
   .get("/notifications", async (c) => c.json(await listNotifications(c.env.DB, c.var.user.id)))

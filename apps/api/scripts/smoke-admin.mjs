@@ -327,7 +327,7 @@ const switches0 = (await call("GET", "/admin/settings", null, T)).json;
 const SWITCHES_OFF = {
   serviceBus: false, servicePausedMessage: "Bus tickets are paused (smoke test).",
   featureRideScheduling: false, featureMultiStop: false, featureCashRides: false, featureOutstation: false,
-  featureSelfDrive: false, featureTripOffers: false, featureReferral: false,
+  featureSelfDrive: false, featureTripOffers: false, featureReferral: false, featureRidePass: false,
 };
 await expect("the paused message can't be blank", call("PATCH", "/admin/settings", { servicePausedMessage: " " }, T), 400);
 await expect("switch a service and every feature off", call("PATCH", "/admin/settings", SWITCHES_OFF, T), 200, (j) => j.serviceBus === false && j.featureReferral === false);
@@ -354,11 +354,24 @@ if (anyBooking) {
   await expect("joining a trip is refused when trip offers are off", call("POST", "/bookings", { service: "car", title: "Smoke", subtitle: "A → B", payment: "upi", lines: [], rideId: okRide.id, tripOf: anyBooking.id }, C), 409, (j) => /trip/.test(j.message));
 }
 await expect("referral codes are refused when off", call("POST", "/me/referral", { code: "QFZZZZZZ9" }, C), 409, (j) => /Refer/.test(j.message));
+await expect("QuikFly Pass isn't sold when off", call("POST", "/me/pass", null, C), 409, (j) => /isn't on sale/.test(j.message));
 if (okRide) await call("POST", `/rides/${okRide.id}/cancel`, null, C);
 } finally {
 const restore = Object.fromEntries(Object.keys(SWITCHES_OFF).map((k) => [k, switches0[k]]));
 await expect("restore the switches", call("PATCH", "/admin/settings", restore, T), 200, (j) => j.serviceBus === switches0.serviceBus && j.featureReferral === switches0.featureReferral);
 await eventually("restored switches reach the API", () => call("GET", "/config"), (r) => r.json?.settings?.serviceBus === switches0.serviceBus && r.json.settings.featureCashRides === switches0.featureCashRides);
+}
+// QuikFly Pass dearer than the wallet: refused, nothing taken; the price is put back.
+const cBefore = (await call("GET", "/auth/me", null, C)).json;
+if (switches0.featureRidePass && cBefore.walletBalance < 2000) {
+  await expect("set the pass price to ₹2,000", call("PATCH", "/admin/settings", { passPrice: 2000 }, T), 200, (j) => j.passPrice === 2000);
+  try {
+    await eventually("the new pass price reaches the API", () => call("GET", "/config"), (r) => r.json?.settings?.passPrice === 2000);
+    await expect("a pass the wallet can't cover is refused", call("POST", "/me/pass", null, C), 409, (j) => /wallet has/.test(j.message));
+    await expect("nothing was taken", call("GET", "/auth/me", null, C), 200, (j) => j.walletBalance === cBefore.walletBalance && j.passUntil === cBefore.passUntil);
+  } finally {
+    await expect("restore the pass price", call("PATCH", "/admin/settings", { passPrice: switches0.passPrice }, T), 200, (j) => j.passPrice === switches0.passPrice);
+  }
 }
 await call("POST", "/me/delete", { otp: OTP }, C);
 

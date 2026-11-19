@@ -6,13 +6,15 @@ import { visible, visibleById } from "./catalog";
 import { placeById } from "./places";
 import { getSettings } from "./settings";
 import { partnerDriverCard, partnerForRide } from "./partner-trips";
+import { passCoversAt } from "./pass";
 
 /**
  * Fares for every visible option of a service, with surge from Settings. `scheduledFor`
- * (local "YYYY-MM-DDTHH:mm", India) prices a ride booked ahead at its pickup hour.
+ * (local "YYYY-MM-DDTHH:mm", India) prices a ride booked ahead at its pickup hour. A signed-in
+ * rider (`userId`) whose QuikFly Pass covers the pickup time pays no surge.
  */
 export async function quoteRides(
-  db: D1Database, service: "bike" | "car", pickupId: string, dropId: string, scheduledFor?: string, stopIds: string[] = [],
+  db: D1Database, service: "bike" | "car", pickupId: string, dropId: string, scheduledFor?: string, stopIds: string[] = [], userId?: string | null,
 ): Promise<FareQuote[]> {
   if (pickupId === dropId) throw badRequest("Pickup and drop must be different places.");
   // Service and feature switches (Settings) come first: a paused service quotes nothing.
@@ -27,7 +29,8 @@ export async function quoteRides(
     if (err) throw badRequest(err);
   }
   const hour = scheduledFor ? parseInt(scheduledFor.slice(11, 13), 10) : businessHour();
-  return rideQuotes(options.filter((o) => o.service === service), a, b, settings, hour, stops);
+  const waive = !!userId && await passCoversAt(db, userId, new Date(scheduledFor ? localToIso(scheduledFor) : Date.now()).toISOString());
+  return rideQuotes(options.filter((o) => o.service === service), a, b, settings, hour, stops, waive);
 }
 
 /** Checks the stops (up to RIDE_MAX_STOPS visible places, none repeating the place before it) and loads them. */
@@ -46,7 +49,7 @@ export async function bookRide(
   const cashOff = switchError(await getSettings(db), { service: option.service, payment: input.payment });
   if (cashOff) throw conflict(cashOff);
   const stopIds = input.stopIds ?? [];
-  const quote = (await quoteRides(db, option.service, input.pickupId, input.dropId, input.scheduledFor, stopIds)).find((q) => q.option.id === option.id)!;
+  const quote = (await quoteRides(db, option.service, input.pickupId, input.dropId, input.scheduledFor, stopIds, userId)).find((q) => q.option.id === option.id)!;
   const stops = await rideStops(db, input.pickupId, input.dropId, stopIds);
   // A live partner vehicle of the right type takes the ride when one is free; otherwise a simulated driver.
   const partner = await partnerForRide(db, option);
