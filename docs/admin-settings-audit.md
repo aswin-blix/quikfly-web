@@ -1,6 +1,6 @@
 # Admin settings and pricing audit
 
-Audit of every tunable business value in QuikFly, how each service is priced, and what staff can change in the admin panel. **Stage 1 (inventory and findings)** is below. Stage 2 (research and recommendations) is added after the owner reviews this.
+Audit of every tunable business value in QuikFly, how each service is priced, and what staff can change in the admin panel. **Stage 1** (inventory and findings, sections 1–6) and **Stage 2** (research, recommendations and a prioritised plan, sections 7–10). Nothing here is implemented yet.
 
 - **Date:** 2026-11-19. **Code:** `main` at `2eb8cc0` (after PR #94). No app code was changed.
 - **Read first:** [AGENTS.md](../AGENTS.md), [roadmap.md](roadmap.md), [decisions.md](decisions.md). Findings that touch a recorded decision name it.
@@ -26,6 +26,9 @@ Audit of every tunable business value in QuikFly, how each service is priced, an
 3. **GST is handled two ways.** Bus and holidays add GST on top of the price. Rides, rentals and group travel include it. The holiday page says its price *includes* GST, but the quote adds 5% on top. Changing `gstRent` or `gstGroup` changes no price, only how the invoice splits it. (H5, M1)
 4. **Pricing can't vary where operators need it.** There is one surge for all ride types and every day. One bus fare applies to every route, whatever the distance. There is no minimum fare, night fare, airport fee, toll or zone, and no scheduled price change. (M2–M5)
 5. **The admin Settings page is one long form of 91 fields.** It has no search, no fare preview, no warnings when values conflict (a multiplier above the cap, Peace cheaper than Standard), no per-setting history and no reset to default. The content role can change every catalog price. (M6–M9, L-items)
+6. **Overseas holiday packages collect no TCS** (found in Stage 2). (H6)
+
+The recommendations and the plan are in sections 9 and 10.
 
 ---
 
@@ -316,6 +319,8 @@ The calls were made with a script against the API (the same calls the admin pane
 - The text: "Per person, twin sharing, including GST (5%)" (`HolidayScreens.tsx:272`, `holiday_screens.dart:591`).
 - What happens: `priceTour()` adds a `GST (5%)` line on top (`pricing.ts:238`), and the page's own estimate does too (`HolidayScreens.tsx:197`). A ₹14,499 package costs ₹15,224 per adult.
 
+**H6. No TCS on overseas holiday packages** (added in Stage 2, from 7.2). Packages can carry the `international` theme (`catalog-kinds.ts:144`). A seller of overseas tour packages must collect income-tax TCS: 5% up to ₹10 lakh a year per buyer, then 20% (section 206C(1G), from 1 Apr 2025). Nothing in pricing, booking or invoices collects or shows it. Confirm with the accountant before overseas packages are sold for real.
+
 ### Medium
 
 **M1. GST works two ways, and the GST settings don't say which.**
@@ -388,4 +393,179 @@ None. Every key is referenced outside its own definition. Five are display text 
 3. GST: should bus and holidays move to GST-inclusive display like the others, or the others to GST-added?
 4. Does the owner want maker-checker (one role proposes a price, the owner approves) or simply narrower roles?
 
-*Stage 2 (research, recommendations and the prioritised plan) will be appended here after review.*
+---
+
+# Stage 2: research and recommendations
+
+Added 2026-11-19 after the owner's go-ahead. Sources were read on 2026-11-19; publication dates are given where the source shows one. **Nothing here is implemented.** Each recommendation waits for the owner's approval.
+
+## 7. Research
+
+### 7.1 Ride rules: MVAG 2025 and three states
+
+- **Who sets the base fare.** The state notifies a fare for each vehicle category, and that fare is the "base fare" (clause 17.1, as quoted by [The News Men](https://thenewsmen.co.in/business/updated-peakhour-rates-cancellation-rules-for-ola-uber/140688)).
+- **Dynamic band.** Aggregators may charge from 50% below the base fare up to twice it ([same source](https://thenewsmen.co.in/business/updated-peakhour-rates-cancellation-rules-for-ola-uber/140688); [Business Standard, 2 Jul 2025](https://www.business-standard.com/india-news/cab-aggregators-surge-pricing-rapido-uber-ola-125070200228_1.html)). So the 2× cap applies to the whole state fare for the trip, not a flag-down amount. QuikFly's "surge × whole fare" (pricing.ts:112) has the right shape, but the cap's allowed range (up to 3×) is too wide.
+- **Minimum distance.** The base fare covers at least 3 km, to pay for dead mileage. Riders aren't charged dead mileage separately unless the trip is shorter than 3 km ([The News Men](https://thenewsmen.co.in/business/updated-peakhour-rates-cancellation-rules-for-ola-uber/140688)).
+- **Cancellation.** A cancellation without a valid reason costs 10% of the fare, at most ₹100, for riders and drivers alike. Apps must list the valid reasons ([Insights on India, 4 Jul 2025](https://www.insightsonindia.com/2025/07/04/motor-vehicle-aggregator-guidelines-mvag-2025/)). This matches decision 2026-11-18 and the current settings.
+- **Driver share.** A driver with their own vehicle keeps at least 80% of the fare; with an aggregator's vehicle, at least 60% ([same](https://www.insightsonindia.com/2025/07/04/motor-vehicle-aggregator-guidelines-mvag-2025/)). This matches `vendorCommissionPercent` ≤ 20.
+- **Tamil Nadu.** The minister said the state's aggregator rules will come only after fares are fixed per vehicle class. A draft has gone to the government ([DT Next](https://www.dtnext.in/news/tamilnadu/transport-min-tamil-nadu-will-roll-out-aggregator-rules-after-fixing-fares), undated). TN auto fares were revised, and app platforms hadn't adopted them yet ([The South First](https://thesouthfirst.com/tamilnadu/despite-tn-governments-auto-fare-revision-ola-uber-and-rapido-continue-to-charge-more-unions-seek-ban-on-platforms/)). **No final TN surge cap or fare table was found.**
+- **Karnataka.**
+  - A uniform cab fare has a minimum for the first 4 km, banded by vehicle price. For example, under ₹10 lakh: ₹100 for 4 km, then ₹24/km. Surge is barred ([The News Minute](https://www.thenewsminute.com/karnataka/karnataka-cab-fares-to-go-up-as-govt-revises-rates-disallows-surge-pricing); [DT Next](https://www.dtnext.in/news/national/karnataka-fixes-uniform-taxi-fare-puts-brakes-on-surge-pricing-765714)). The year looks like 2024 and is unconfirmed.
+  - Bengaluru autos: ₹36 for the first 2 km, then ₹18/km, from July 2025 ([OneIndia](https://www.oneindia.com/bengaluru/auto-fare-hike-in-bengaluru-bike-taxi-crackdown-leaves-commuters-with-fewer-options-8179823.html)).
+- **Maharashtra.**
+  - Surge is capped at 1.5× and discounts at 25% below the RTA fare: in the cabinet policy (May 2025) and the draft rules (Oct 2025) ([Free Press Journal](https://www.freepressjournal.in/mumbai/maharashtra-approves-cab-aggregator-policy-caps-surge-pricing-imposes-fines-for-cancellations); [YourStory, Oct 2025](https://yourstory.com/2025/10/maharashtras-draft-rules-vehicle-aggregators-cap-surge-pricing)).
+  - Bike taxis: ₹15 for the first 1.5 km, then ₹10.27/km ([Swarajya](https://swarajyamag.com/amp/story/news-brief/maharashtra-fixes-standard-bike-taxi-tariffs-grants-provisional-licences-to-aggregators)).
+  - In Mumbai, apps must use the black-and-yellow taxi fare ([Business Today, 19 Sep 2025](https://www.businesstoday.in/amp/india/story/ola-uber-rapido-app-based-cabs-asked-to-follow-base-fare-of-black-yellow-taxis-in-mumbai-494713-2025-09-19)). Whether the draft rules are final is unconfirmed.
+
+**What this means for QuikFly.** Ride prices in India are moving from "the app sets a rate card" to "the state sets the fare and the app may move within a band." Staff will need:
+- a fare card per state (or city) and ride type, with a minimum distance and fare;
+- a dynamic band (floor and cap) per state;
+- a cap no higher than 2×.
+
+Uber's own fares have long had a base, per km, per minute and a minimum, sometimes with a higher per-km rate after a distance ([Uber Chennai blog, 2016](https://www.uber.com/en-IN/blog/chennai/know-your-ubergo-and-uberx-fares-in-chennai), historical).
+
+### 7.2 GST (confirm every rate with the accountant)
+
+- **Passenger transport by road** (cabs, buses, rent-a-cab with a driver): 5% without input tax credit, or 18% with it, from 22 Sep 2025. The with-credit option was 12% before ([CA Club India](https://www.caclubindia.com/articles/gst-rate-changes-on-passenger-bus-services-56th-gst-council-meeting-54014.asp); [Business Standard FAQ, 4 Sep 2025](https://www.business-standard.com/economy/news/gst-rates-revised-faqs-key-changes-goods-services-itc-cars-milk-energy-125090400163_1.html); notification 15/2025-CT(Rate), [TaxGuru, 17 Sep 2025](https://taxguru.in/goods-and-service-tax/gst-rate-transport-courier-job-work-services-22-sept.html)).
+- **Rides booked through an app:** the platform pays the GST under section 9(5) ([TaxGarden](https://taxgarden.in/blog/gst-on-cab-taxi-ride-hailing-uber-ola-india-2026)). This matches decision 2026-11-18.
+- **Auto-rickshaws booked through apps:** sources conflict (exempt or 5%).
+- **Self-drive (renting a car without a driver):** 18% is the common practice, backed by a Kerala advance ruling ([Taxscan](https://www.taxscan.in/18-gst-applicable-on-car-rental-services-aar/457558)). A contested reading taxes it at the car's own rate, which after GST 2.0 could be 40% for bigger cars ([CalcGuru](https://calcguru.in/?p=2768)).
+- **Tour operators:** 5% without input credit on the whole package, or 18% with credit ([ClearTax](https://cleartax.in/s/gst-on-tours-travels)).
+- **Overseas tour packages: income-tax TCS** (separate from GST). The seller collects 5% up to ₹10 lakh a year per buyer and 20% above that, from 1 Apr 2025 ([Income Tax India](https://www.incometaxindia.gov.in/w/tcs-rates)). QuikFly sells "international" holidays (`catalog-kinds.ts:144`) and collects no TCS: **a new finding (H6)**.
+
+**What this means for QuikFly:**
+- **Chauffeur cars are taxed at the wrong rate.** A chauffeur car is passenger transport (5%), but it shares `gstRent` (18%) with self-drive.
+- **The rate has to be stored per booking (H3).** The rates changed in Sep 2025 and could change again.
+- **The tax option is a business choice.** Each service is either 5% without input credit or 18% with it, so it belongs in Settings with the accountant's sign-off.
+
+### 7.3 How competitors structure prices and who sets them
+
+| Platform | What sets the price | What operators/partners configure | Source |
+|---|---|---|---|
+| Uber, Ola (cabs) | Rate card per city and product: base, per km, per minute, minimum; long-distance per-km tiers; tolls added | Nothing for cab drivers; autos moved to driver subscriptions | [Uber blog 2016](https://www.uber.com/en-IN/blog/chennai/know-your-ubergo-and-uberx-fares-in-chennai), [TechCrunch, 19 Feb 2025](https://techcrunch.com/2025/02/19/uber-ditches-commissions-in-favor-of-fees-for-auto-rickshaw-drivers-in-india) |
+| Rapido | Fares within state tariffs; cabs and autos run as "SaaS": a daily or threshold subscription instead of commission | Drivers pay a subscription | [YourStory, Dec 2023](https://yourstory.com/2023/12/rapido-launches-cab-services-with-a-saas-platform), [Deccan Herald](https://www.deccanherald.com/business/companies/rapido-aims-to-attract-auto-drivers-with-zero-commission-2892438) |
+| Namma Yatri | Zero commission; drivers pay a flat daily fee (about ₹10–₹90 reported by region and plan) | Driver subscription | [Rest of World, 2025](https://restofworld.org/2025/uber-ola-copy-india-zero-commission-ride-hailing-app/), [Deccan Herald](https://www.deccanherald.com/india/karnataka/bengaluru/namma-yatri-to-charge-auto-drivers-subscription-fees-from-september-1-2660636) |
+| redBus | **The operator sets the fare**; seat-level dynamic pricing tools (revMax, Sciative) move it by demand, time to departure and occupancy | Operators: per bus, per seat, per date | [redBus engineering](https://medium.com/redbus-in/dynamic-pricing-platform-2-5-a412d4aa9757), [Autocar Pro](https://www.autocarpro.in/news/the-algorithm-that-adjusts-bus-prices-15000-times-a-day-129061) |
+| KSRTC (Kerala) | Dynamic pricing with at least 50% more at weekends and festivals | — | [Onmanorama, 8 Apr 2026](https://www.onmanorama.com/travel/travel-news/2026/04/08/bengaluru-kerala-travel-vishu-season-ksrtc.html) |
+| Zoomcar | The rental varies by car, distance, dates and place; a damage-protection fee; a per-km fee beyond the free km, stated at booking | Hosts: the car; Zoomcar keeps a facilitation fee | [Zoomcar host policy](https://host-policy.zoomcar.com/support/solutions/articles/16000137719-facilitation-fee-damage-protection-fee-fixed-payout-and-lease-rental), [Zoomcar guest fees](https://policy.zoomcar.com/support/solutions/articles/16000146256-here-is-a-comprehensive-list-of-fees-and-penalties-for-certain-scenarios-after-you-have-created-your-) |
+
+MakeMyTrip's own holiday price rules weren't found. Its package pricing (per person, twin sharing) is what QuikFly's holiday pages already copy.
+
+**Take-aways:**
+- Fares vary by **route, date and seat** (bus), by **dates and place** (self-drive), and by **city** (rides).
+- Partners increasingly pay a **subscription** rather than a commission.
+- Every platform states the per-km fee beyond the limit and the protection fee **at booking**. QuikFly's rental settlement should keep those numbers (H2, H4).
+
+### 7.4 Consumer law that shapes the admin rules
+
+- **Dark patterns.** The CCPA's *Guidelines for Prevention and Regulation of Dark Patterns* took effect on 30 Nov 2023. They ban **drip pricing**: hiding the total and revealing charges in stages, or charging more at checkout ([Mondaq](https://www.mondaq.com/india/advertising-marketing-branding/1400996/guidelines-notified-for-prevention-and-regulation-of-dark-patterns); [Vikaspedia](https://en.vikaspedia.in/viewcontent/social-welfare/social-awareness/consumer-education/the-guidelines-for-prevention-and-regulation-of-dark-patterns-2023)). Three things are at risk under this:
+  - the holiday page's "including GST" when GST is added (H5);
+  - "tolls on actuals" with no estimate;
+  - a website estimate that changes at checkout without notice (L7).
+- **E-commerce Rules.** The *Consumer Protection (E-Commerce) Rules, 2020* require clear cancellation and refund policies ([IndiaLaw summary](https://www.indialaw.in/blog/civil/consumer-protection-e-commerce-rules/)). A 2026 amendment, reported as effective 1 Jan 2027, changes Rule 5 ([IndiaLaw](https://www.indialaw.in/blog/consumer/consumer-protection-e-commerce-amendment-rules-2026/pdf/)). **Its text wasn't read.** Applying a stricter policy than the one shown at booking (H1) is the kind of practice these rules target.
+
+### 7.5 Admin patterns for pricing
+
+- **Prices are versions, not edits.** Stripe never changes a price. To change one, you create a new price and archive the old one, so past transactions keep their record ([Stripe docs](https://docs.stripe.com/products-prices/how-products-and-prices-work)). For QuikFly this means a booking points to, or copies, the terms it was sold under (H1–H3). A scheduled change becomes a new version with a start time.
+- **Maker-checker (four eyes).**
+  - One person proposes, another approves, and nobody approves their own change.
+  - The approver sees a diff. A rejection needs a reason.
+  - A single-admin team can bypass the approver step, but the draft and the audit still apply.
+  - Sources: [Flagsmith](https://www.flagsmith.com/blog/what-is-the-four-eyes-principle), [Trackier](https://help.trackier.com/en/articles/8267568-maker-checker), [Finologee](https://docs.bko.finologee.com/docs/tenant-settings-approvals).
+- **Fare cards and previews.** Operators edit a rate table (rows = ride types, columns = base / per km / per minute / minimum) next to a calculator showing an example trip before and after. QuikFly's shared pricing functions are pure, so the admin panel can run them on draft values in the browser without asking the API.
+
+### 7.6 What Stage 2 didn't verify
+
+- The official MoRTH MVAG PDF. The clauses are from press quotes.
+- Tamil Nadu's final rules. They haven't been issued.
+- Karnataka's current fare notice and court status.
+- The text of GST notification 15/2025. The PIB FAQ PDF is scanned images.
+- Whether auto rides booked through an app are exempt from GST.
+- The 2026 E-commerce amendment text.
+- MakeMyTrip's and Ola's current rate cards.
+
+**Legal and tax figures need a lawyer's and the accountant's confirmation before any setting goes live.**
+
+---
+
+## 8. Answers to the Stage 1 questions
+
+1. **Keep the terms a booking was sold under: yes.** The consumer rules (7.4) and the "prices are versions" pattern (7.5) agree. Each booking should snapshot its policy, rental rates and GST rate (R9).
+2. **MVAG.** The cap is 2× the state's base fare for the trip, with a floor of 50% below it; the base fare covers at least 3 km. QuikFly should model a state fare card and a band (R13, R14). The cap's allowed range drops to at most 2 (R3).
+3. **GST display.** Show **one total, including GST, everywhere**, with the tax split on the invoice. Rides, rentals and group travel already work this way, and drip-pricing rules favour totals shown upfront. Bus and holiday screens would then show the same total that is charged today (R10).
+4. **Roles before approvals.** First give pricing its own permission (R7). Add maker-checker later if the team grows (R18).
+
+---
+
+## 9. Recommendations
+
+**Effort:**
+- **S** = up to a day.
+- **M** = 2–4 days.
+- **L** = a week or more.
+
+**Layers follow AGENTS.md rule 1:** shared → API (+ migration) → website → admin → app → smoke and contract tests → READMEs/docs.
+
+**Everything here is free-tier.** Scheduled changes reuse the one-minute cron that already exists. New tables stay in D1. No paid service is needed. The API remains the only place prices are computed, and every money change stays inside one `db.batch()`.
+
+| # | Problem (finding) | Proposal | Example values | Benefit | Effort | Layers |
+|---|---|---|---|---|---|---|
+| R1 | Holiday page says "including GST" but adds it (H5) | Until R10 lands, change the text to "plus GST (5%)" and show the total with GST on the card and the page | "₹14,499 + GST = ₹15,224 per adult" | Honest price; avoids a drip-pricing complaint | S | web, app (text only) |
+| R2 | Damage not capped at the excess (H4) | Settings `rentExcessStandard`, `rentExcessPeace`. Car-page text reads them. The rental row stores the excess at booking. The API caps damage at it. Admin shows "up to ₹X" | ₹10,000 / ₹2,000 | Customers are never charged above what they bought; staff see the limit | S | shared (settings, rental.ts) → API + migration (rentals.excess) → web/app text → admin RentalReview → smoke |
+| R3 | Values that conflict or exceed the law (M6, M7) | `checkSettings(all)` for cross-field rules (multiplier ≤ cap; Peace ≥ Standard; AC ≥ non-AC); `surgeCap` max 2; tighter catalog limits (perKm ≤ 100, perMin ≤ 10, a ride type's fare > 0); departure `tourId` must exist; offer `type: percent \| flat`, plus `maxUses` and `validFrom` | Error: "Surge 2.5× is above the cap 2×" | Typos and illegal values are refused, not saved | S–M | shared → API routes → admin form → smoke-admin → README |
+| R4 | Settings audit not atomic (M10) | `updateSettings` takes the audit statement into its `db.batch()` | — | Every price change is guaranteed an audit row (rule 4) | S | API |
+| R5 | Ride fares never expire (M9) | A ride older than `QUOTE_TTL_MINUTES` can't be booked; the screens re-quote (they already handle a 409) | 30 min | No off-peak fare used at peak | S | API → smoke (web/app already handle the error) |
+| R6 | Admin labels and help (L1, L5, L6) | Help for every GST field ("added on top" / "included"); show the default and a "Reset to default" link; a "Review changes" dialog listing old → new before save; surge hours and cancellation tiers as small row editors that write the same text | "Bus GST: added on top of the fare. 5 → 12 makes a ₹690 seat ₹773" | Staff understand what a number does before they save | S–M | admin only |
+| R7 | Content role can change prices (M8) | New permission `pricing.edit` (owner, operations). Catalog fields flagged `pricing: true` (fares, prices, rates, offer amounts) need it; content keeps text, photos and FAQs. The API rejects a changed pricing field without it | Content edits a tour's itinerary but not its price | Fewer people can move money; extends decision 2026-11-16 as its "revisit" foresaw | S–M | shared (admin.ts, catalog-kinds) → API catalog route → admin edit form (locked fields) → smoke-admin → README |
+| R8 | "2,500+ operators" in the app (L10) | Remove, as on the website | — | Truthful app copy | S | app |
+| R9 | Rules applied with today's settings (H1, H2, H3) | `bookings.terms` JSON written at booking: cancel tiers, ride cancel fee %/cap/free minutes, GST rate and mode, rental km/day, extra-km rate, late %, grace, fuel per eighth, excess. `refundFor`, `rentalSettlement` and `invoiceFor` use it; old bookings fall back to today's settings. The admin help says "changes apply to new bookings" | — | Customers get what they were sold; old invoices never change | M | shared (types, functions take terms) → API + migration → web/app invoice + refund preview → models.dart + contract test → smoke → decisions.md |
+| R10 | GST in two models; chauffeur at the self-drive rate (M1, H3) | One rule: prices shown **include** GST everywhere. Bus seat and holiday prices become totals, and the quote shows "of which GST ₹x". Split `gstChauffeur` (5%) from `gstRent` (self-drive 18%). Exclude the deposit from the taxable value. A `gstWithItc` choice per service only if the accountant asks | Bus seat ₹725 incl. ₹35 GST | One way to read every price; correct invoices | M | shared (pricing, invoice maths moved to shared) → API → web/app screens → admin GST group → smoke, contract test → decisions.md (accountant sign-off first) |
+| R11 | No fare preview (L2) | A "Try a fare" panel beside Rides, Bus, Holidays, Rentals and Group settings, and in the ride type / car / vehicle edit forms. It picks a sample trip and shows **current vs draft** using the shared pricing functions in the browser | "T. Nagar → Airport, Mini, 09:00: ₹397 → ₹495" | Staff see the customer impact before saving | M | admin only (shared functions already pure) |
+| R12 | One long settings page, no history (L1, L3) | Split Settings into tabs (Services, Rides, Bus, Holidays, Rentals, Group, Money, Partners, Company). Add search and "changed from default" badges. "History" per field opens the audit log filtered to that key, with "Restore this value" | — | Faster to find, and safe to undo | M | admin → API (audit filter by setting key) |
+| R13 | One surge for everything (M2); MVAG band | A **Surge rule** catalog kind: service (bike / auto / cab / all), days of week, hours, multiplier. The highest matching rule applies, within `surgeCap` (≤ 2). A `rideDiscountFloorPercent` (MVAG: up to 50% below base; Maharashtra 25%) limits how low coupons and credits take a fare. Pass and disclosure keep working | Cabs Mon–Fri 8–10 ×1.3; bikes Sat 18–22 ×1.2 | Surge only where demand is | M | shared (catalog-kinds, pricing.surgeAt, pass.ts) → API → web/app disclosure → admin (new kind, no new screen) → smoke → migrate the old settings into one rule |
+| R14 | No minimum fare or included km; billed pickup minutes (M4) | Ride type gains `minFare`, `includedKm`, `speedKmh` (autos get their own speed). Fare = max(minFare, base + perKm × max(0, km − includedKm) + perMin × minutes). `RIDE_SIM.pickupBufferMin` stops being billed | Mini: min ₹100 incl. 4 km; Bike: ₹15 incl. 1.5 km | Matches state fare cards and MVAG's 3 km base | S–M | shared (types, catalog-kinds, pricing) → API → web/app fare text → admin (fields appear automatically) → smoke, contract test |
+| R15 | No night fare (M4) | Settings `rideNightPercent` + `rideNightHours`, default 0 (off), with a quote line "Night charge" | 0 until a state's notified tariff is set | Follows state tariffs when needed | S | shared → API → web/app quote line → admin → smoke |
+| R16 | One national bus fare (M3) | A **Bus route** kind (from, to, km, AC/non-AC per-km or a fixed fare, operator) replaces the flat setting for listed routes; unlisted routes keep the setting. A **Fare calendar** kind: date range × service × % (festival, weekend). Make the random add-on a setting (0 = none) | Chennai → Bengaluru 350 km, AC ₹1.9/km; Pongal 12–16 Jan +20% | Realistic route fares and planned festival prices | M | shared → API (buses) → web/app → admin kinds → smoke |
+| R17 | No scheduled changes (M5) | A `scheduled_changes` table: target (setting key or catalog field), new value, `effective_at`, created by, status. The one-minute cron applies due rows in one batch with audit rows. Admin "Upcoming changes" lets staff add, see and cancel them | `gstBus` → 18 on 2027-04-01 00:00 | Festival fares and tax changes go live on time without someone at a keyboard | M | shared types → API + migration + cron → admin screen → smoke-admin → operations.md |
+| R18 | No approval for price changes (M8, later) | Maker-checker on top of R17: a price change by operations or content becomes a **proposal** the owner approves or rejects (with a reason), with a diff. Owners' changes apply directly. Single-owner mode skips the approver | — | Four-eyes on money once the team grows | M–L | shared (PERMISSIONS) → API → admin → smoke-admin |
+| R19 | No bulk edit (L4) | "Adjust prices" on a catalog list: select items, +/− % or ₹, round to ₹1/₹5/₹10, preview table, one batch (one `json_each` statement, under the 50-query limit) with one audit row per item | All cabs +5%, round to ₹1 | A fare revision is one action, not ten | M | admin → API (bulk endpoint) → smoke-admin |
+| R20 | One commission for all partners (M5) | Per-partner override on the vendor row (admin Partners), within the 20% cap. Optional later: a subscription plan instead of commission (Rapido / Namma Yatri model) as a second earning mode | Autos 10%; cabs 20% | Competitive offers to partners | S (override); L (subscription) | shared (vendor.ts) → API + migration → admin → Partner app → smoke |
+| R21 | No city or zone prices (M5) | Fare card per city: ride types get a `city`, places get a city, quotes pick the city's ride types. Wait for a second city and real coordinates (OpenStreetMap is free) | Chennai and Coimbatore fare cards | Ready for state-by-state fares | L | all layers |
+| R22 | Tolls, airport fee, "on actuals" (M4, 7.4) | Place flag `airport` + setting `rideAirportFee`; `tollEstimate` on group destinations shown in the quote as "Tolls (estimate)"; staff enter actual tolls when completing a chauffeur or group trip, charged or refunded through the existing wallet batch | Airport ₹100; Chennai → Pondicherry tolls ≈ ₹200 | The total shown upfront is close to the total paid | M | shared → API → web/app → admin → smoke |
+| R23 | Website estimates go stale (L7) | Reload `/config` when the tab regains focus (as the app does) and show "Price updated: ₹x" when the quote differs from the estimate | — | No surprise at checkout | S | web |
+| R24 | Offers can make bookings free; no budget (M7) | Part of R3: `type` (percent / flat), `maxUses` total, `validFrom`, "funded by" note; the API counts uses inside the booking batch | FIRST100: flat ₹100, 1,000 uses | Promotions can't run away | S–M | shared → API + migration → admin → smoke |
+| R25 | No TCS on overseas packages (H6) | With the accountant: an `overseas` flag on tours (or the `international` theme), a TCS line (5% up to ₹10 lakh a year per buyer, then 20%) collected at booking, PAN asked at checkout, and TCS shown on the invoice | 5% / 20% | Compliance before real overseas sales | M | shared → API + migration → web/app checkout and invoice → admin → privacy notice (PAN is personal data) → smoke |
+
+### Decisions this touches (none reversed)
+
+- **"Catalog and settings are cached 30 s per isolate" (2026-11-16).** Kept. R17 schedules changes on top of it. The website and admin say "within 30 seconds" as today.
+- **"Catalog in one `catalog_items` table" (2026-11-16).** Kept. Surge rules, bus routes and the fare calendar become new kinds with no new screens. R17 and R25 need real tables, because they hold state the generic catalog doesn't.
+- **"Fixed roles with a permission map" (2026-11-16).** Extended with one permission (R7). Its "revisit when" condition, more granular roles, is what R7 meets.
+- **"Cancellation policies are per-service settings" (2026-11-18) and "Ride rules follow MVAG 2025" (2026-11-18).** Kept. R9 adds the booking snapshot; R3 and R13 align the ranges with the band in 7.1.
+- **"Invoices are printable pages" (2026-11-16).** Kept. R9 and R10 make their numbers fixed and correct.
+- **"Partner money: commission max 20%" (2026-11-18).** Kept. R20 allows per-partner values within it.
+- **"App price estimates come from the API" (2026-11-17).** Kept. R11 previews run only in the admin panel, never in a customer app.
+
+Each implemented recommendation adds its own entry to decisions.md (rule 11).
+
+---
+
+## 10. Prioritised plan
+
+Quick wins first. Each step is one PR, merged and deployed in the usual way.
+
+| Step | Contents | Fixes | Effort |
+|---|---|---|---|
+| **1. Honest prices and safe limits** | R1, R2, R4, R5, R8, R23 | H4, H5, M9, M10, L7, L10 | ~2 days |
+| **2. Validation and roles** | R3 + R24, R7 | M6, M7, M8 | ~2–3 days |
+| **3. Booking terms snapshot** | R9 | H1, H2, H3 | ~3 days |
+| **4. GST model** (after the accountant confirms 7.2) | R10, R25 | M1, H6 | ~3–4 days |
+| **5. Staff tools** | R6, R11, R12 | L1–L3, L5, L6 | ~4–5 days |
+| **6. Ride pricing that fits state rules** | R14, R15, R13 | M2, M4 | ~4 days |
+| **7. Bus and holiday pricing** | R16, R22 | M3, M4 | ~3–4 days |
+| **8. Time and scale** | R17, R19, R20 (override) | M5, L4 | ~4–5 days |
+| **Later** | R18 maker-checker, R20 subscriptions, R21 cities | — | when the team or the second city arrives |
+
+**Before step 4:** the accountant confirms the GST options and TCS.
+**Before step 6:** someone checks the notified fares for the states QuikFly launches in. Tamil Nadu's are still pending.
+
