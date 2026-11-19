@@ -11,10 +11,10 @@ import { api } from "@/lib/api";
 import { cx, inr, prettyDate, todayISO } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, useNav, useQuery } from "@/lib/nav";
-import { cancelPolicyText, childPrice, type TourPackage, type TourTheme } from "@quikfly/shared";
+import { cancelPolicyText, childPrice, departureMonth, departureStatus, type DepartureView, type TourPackage, type TourTheme } from "@quikfly/shared";
 import { useTours } from "@/components/catalog-hooks";
 
-const THEMES: [TourTheme | "all", string][] = [["all", "All"], ["beach", "Beaches"], ["hills", "Hill stations"], ["international", "International"], ["weekend", "Weekend"], ["heritage", "Heritage"]];
+const THEMES: [TourTheme | "all", string][] = [["all", "All"], ["beach", "Beaches"], ["hills", "Hill stations"], ["spiritual", "Spiritual"], ["women", "Women only"], ["seniors", "Seniors"], ["international", "International"], ["weekend", "Weekend"], ["heritage", "Heritage"]];
 
 /* ───────────── /holidays ───────────── */
 
@@ -25,14 +25,26 @@ export function HolidaysScreen() {
   const [dur, setDur] = useState<"any" | "short" | "mid" | "long">("any");
   const [budget, setBudget] = useState(70000);
   const [sort, setSort] = useState<"popular" | "price" | "duration">("popular");
+  /** Group departures: month ("YYYY-MM") and city filters. Any-date packages match any month but no city. */
+  const [month, setMonth] = useState("");
+  const [fromCity, setFromCity] = useState("");
+  const allDeps = TOURS.flatMap((t) => t.departures ?? []);
+  const months = Array.from(new Set(allDeps.map(departureMonth))).sort();
+  const cities = Array.from(new Set(allDeps.map((d) => d.fromCity))).sort();
 
   const shown = useMemo(() => {
+    const depMatch = (t: TourPackage) => {
+      if (!month && !fromCity) return true;
+      const deps = t.departures ?? [];
+      if (!deps.length) return !fromCity;
+      return deps.some((d) => (!month || departureMonth(d) === month) && (!fromCity || d.fromCity === fromCity));
+    };
     const l = TOURS.filter((t) =>
       (theme === "all" || t.themes.includes(theme)) &&
       (dur === "any" || (dur === "short" ? t.days <= 3 : dur === "mid" ? t.days >= 4 && t.days <= 5 : t.days >= 6)) &&
-      t.price <= budget);
+      t.price <= budget && depMatch(t));
     return l.sort((a, b) => sort === "price" ? a.price - b.price : sort === "duration" ? a.days - b.days : b.rating - a.rating);
-  }, [TOURS, theme, dur, budget, sort]);
+  }, [TOURS, theme, dur, budget, sort, month, fromCity]);
 
   return (
     <>
@@ -56,13 +68,25 @@ export function HolidaysScreen() {
             <input type="range" min={5000} max={70000} step={1000} value={budget} onChange={(e) => setBudget(+e.target.value)} className="accent-brand w-36" aria-label="Budget" />
             <span className="text-gold font-semibold w-20">{inr(budget)}</span>
           </div>
+          {months.length > 0 && (
+            <select className="field !w-auto !py-2 text-sm" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Departure month">
+              <option value="">Any month</option>
+              {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+            </select>
+          )}
+          {cities.length > 0 && (
+            <select className="field !w-auto !py-2 text-sm" value={fromCity} onChange={(e) => setFromCity(e.target.value)} aria-label="Departing from">
+              <option value="">Any departure city</option>
+              {cities.map((c) => <option key={c} value={c}>From {c}</option>)}
+            </select>
+          )}
           <select className="field !w-auto !py-2 text-sm ml-auto" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Sort">
             <option value="popular">Most popular</option><option value="price">Price: low to high</option><option value="duration">Shortest first</option>
           </select>
         </div>
 
         <p className="text-sm text-muted mb-4">{shown.length} package{shown.length !== 1 && "s"}</p>
-        {shown.length === 0 && <div className="panel"><Empty icon={<Palmtree size={40} />} text="No packages match. Try a bigger budget or another theme." /></div>}
+        {shown.length === 0 && <div className="panel"><Empty icon={<Palmtree size={40} />} text="No packages match. Try a bigger budget, another theme or any month." /></div>}
         <motion.div layout className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           <AnimatePresence mode="popLayout">
             {shown.map((t) => (
@@ -74,6 +98,24 @@ export function HolidaysScreen() {
         </motion.div>
       </section>
     </>
+  );
+}
+
+const monthLabel = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
+
+/** The next bookable group departure (or "any start date"). */
+function NextDeparture({ t }: { t: TourPackage }) {
+  const deps = t.departures ?? [];
+  if (!deps.length) return <p className="text-xs text-subtle">Private trip · start any date</p>;
+  const next = deps.find((d) => d.seatsLeft > 0) ?? deps[0];
+  const status = departureStatus(next);
+  return (
+    <p className="text-xs text-soft flex flex-wrap gap-x-2">
+      <span className="font-medium text-strong">Group departure {prettyDate(next.date)}</span>
+      <span>from {next.fromCity}</span>
+      <span className={cx(status === "open" ? "text-muted" : status === "filling" ? "text-warning" : "text-danger")}>{status === "sold_out" ? "Sold out" : `${next.seatsLeft} seats left`}{status === "filling" ? " · Filling fast" : ""}</span>
+      {deps.length > 1 && <span className="text-subtle">+{deps.length - 1} more date{deps.length > 2 ? "s" : ""}</span>}
+    </p>
   );
 }
 
@@ -98,6 +140,7 @@ function TourCard({ t }: { t: TourPackage }) {
             <span className="flex items-center gap-1"><Utensils size={13} />{t.meals}</span>
           </div>
           <ul className="text-sm text-soft space-y-1">{t.highlights.map((h) => <li key={h} className="flex gap-2"><Check size={14} className="text-gold mt-0.5 shrink-0" />{h}</li>)}</ul>
+          <NextDeparture t={t} />
           <div className="flex items-end justify-between pt-3 border-t border-line">
             <div><p className="text-[11px] text-subtle">per person</p><p className="text-xl font-bold text-gold">{inr(t.price)}</p></div>
             <span className="text-sm text-gold group-hover:translate-x-1 transition-transform">View details →</span>
@@ -120,6 +163,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
   const { setDraft, toast } = useApp();
   const nav = useNav();
   const [date, setDate] = useState(todayISO(14));
+  const [depId, setDepId] = useState<string | null>(null);
   const [adults, setAdults] = useState(2);
   const [kids, setKids] = useState(0);
   const [tab, setTab] = useState<"itinerary" | "inclusions" | "policies">("itinerary");
@@ -134,9 +178,13 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
   if (!toursList) return <div className="max-w-7xl mx-auto px-4 py-24 grid place-items-center text-gold" role="status" aria-label="Loading"><Spinner size={28} /></div>;
   if (!tour) return <div className="max-w-7xl mx-auto px-4 py-20"><Empty icon={<Palmtree size={40} />} text="Package not found." action={<Link href="/holidays" className="text-gold">Browse holidays</Link>} /></div>;
 
+  // Group departures: the chosen one sets the date, the price and how many can travel.
+  const deps = tour.departures ?? [];
+  const dep: DepartureView | null = deps.find((d) => d.id === depId) ?? deps.find((d) => d.seatsLeft >= adults + kids) ?? null;
+  const adultPrice = dep?.price ?? tour.price;
   // Live estimate while choosing; the price charged is the API's quote fetched in book().
-  const kidPrice = childPrice(tour, settings);
-  const subtotal = tour.price * adults + kidPrice * kids;
+  const kidPrice = childPrice(tour, settings, adultPrice);
+  const subtotal = adultPrice * adults + kidPrice * kids;
   const taxes = Math.round((subtotal * settings.gstTours) / 100);
   const similar = TOURS.filter((t) => t.id !== tour.id && t.themes.some((x) => tour.themes.includes(x))).slice(0, 3);
 
@@ -144,7 +192,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
     setPricing(true);
     let quote;
     try {
-      quote = await api.quotes.create({ service: "tours", tourId: tour!.id, adults, kids, start: date });
+      quote = await api.quotes.create({ service: "tours", tourId: tour!.id, adults, kids, start: dep?.date ?? date, ...(dep ? { departureId: dep.id } : {}) });
     } catch (e) {
       toast((e as Error).message, "err");
       setPricing(false);
@@ -152,7 +200,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
     }
     setDraft({
       service: "tours", title: tour!.title, subtitle: `${tour!.location} · ${tour!.days}D/${tour!.nights}N`,
-      summary: [["Start date", prettyDate(date)], ["Travellers", `${adults} adult${adults > 1 ? "s" : ""}${kids ? `, ${kids} child${kids > 1 ? "ren" : ""}` : ""}`], ["Hotels", `${tour!.hotelStars}★ · ${tour!.meals}`], ["Includes", tour!.includes.join(", ")]],
+      summary: [dep ? ["Departure", `${prettyDate(dep.date)} from ${dep.fromCity}`] : ["Start date", prettyDate(date)], ["Travellers", `${adults} adult${adults > 1 ? "s" : ""}${kids ? `, ${kids} child${kids > 1 ? "ren" : ""}` : ""}`], ["Hotels", `${tour!.hotelStars}★ · ${tour!.meals}`], ["Includes", tour!.includes.join(", ")]],
       quote,
       travellers: [...Array(adults).fill(0).map((_, i) => `Adult ${i + 1}`), ...Array(kids).fill(0).map((_, i) => `Child ${i + 1}`)],
       policy: cancelPolicyText(settings, "tours"),
@@ -221,15 +269,39 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
 
         <aside className="lg:sticky lg:top-24 h-fit">
           <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="panel gold-border p-5 space-y-4">
-            <div><p className="text-xs text-subtle">Starting from</p><p className="text-3xl font-bold text-gold">{inr(tour.price)}<span className="text-sm text-muted font-normal"> /person</span></p></div>
-            <div><label className="label" htmlFor="sd">Start date</label><input id="sd" type="date" className="field mt-1.5" min={todayISO(3)} value={date} onChange={(e) => setDate(e.target.value)} /></div>
+            <div><p className="text-xs text-subtle">{deps.length ? "Per person on this departure" : "Starting from"}</p><p className="text-3xl font-bold text-gold">{inr(adultPrice)}<span className="text-sm text-muted font-normal"> /person</span></p></div>
+            {deps.length ? (
+              <fieldset>
+                <legend className="label">Group departure</legend>
+                <div className="mt-1.5 space-y-1.5">
+                  {deps.map((d) => {
+                    const status = departureStatus(d);
+                    const full = d.seatsLeft < adults + kids;
+                    return (
+                      <label key={d.id} className={cx("flex items-center gap-3 px-3 py-2 rounded-xl border text-sm transition-colors", dep?.id === d.id ? "border-gold/60 bg-gold/5" : "border-line", full ? "opacity-50 cursor-not-allowed" : "cursor-pointer")}>
+                        <input type="radio" name="departure" className="accent-brand" checked={dep?.id === d.id} disabled={full} onChange={() => setDepId(d.id)} />
+                        <span className="flex-1 min-w-0">
+                          <span className="block font-medium text-strong">{prettyDate(d.date)} · from {d.fromCity}</span>
+                          <span className={cx("block text-xs", status === "open" ? "text-muted" : status === "filling" ? "text-warning" : "text-danger")}>
+                            {status === "sold_out" ? "Sold out" : `${d.seatsLeft} of ${d.seats} seats left`}{status === "filling" ? " · Filling fast" : ""}{d.price !== tour.price ? ` · ${inr(d.price)}` : ""}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {!dep && <p className="text-xs text-warning mt-2">No departure has seats for {adults + kids} travellers. Try fewer travellers.</p>}
+              </fieldset>
+            ) : (
+              <div><label className="label" htmlFor="sd">Start date</label><input id="sd" type="date" className="field mt-1.5" min={todayISO(3)} value={date} onChange={(e) => setDate(e.target.value)} /></div>
+            )}
             <Counter label="Adults" value={adults} min={1} onChange={setAdults} />
             <Counter label="Children (5–11)" value={kids} min={0} onChange={setKids} />
             <div className="border-t border-line pt-3 flex justify-between items-end">
               <span className="text-sm text-muted">Total incl. GST</span>
               <TweenNumber value={subtotal + taxes} format={inr} className="text-2xl font-bold" />
             </div>
-            <GoldButton className="w-full" loading={pricing} onClick={book}>Book now</GoldButton>
+            <GoldButton className="w-full" loading={pricing} onClick={book} disabled={deps.length > 0 && !dep}>Book now</GoldButton>
             <p className="text-[11px] text-subtle text-center">Demo: no payment is taken</p>
           </motion.div>
         </aside>

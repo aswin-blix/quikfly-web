@@ -2,9 +2,12 @@
 // Replace with real destination photos from the CMS when available.
 import type { TourPackage } from "@quikfly/shared";
 
+const ART_THEMES: readonly string[] = ["beach", "hills", "heritage", "international", "weekend"];
+
 export function SceneArt({ tour, className }: { tour: TourPackage; className?: string }) {
   const h = tour.hue;
-  const theme = tour.themes[0];
+  // Themes without their own artwork (spiritual, women, seniors) use the next theme that has one.
+  const theme = tour.themes.find((t) => ART_THEMES.includes(t)) ?? tour.themes[0];
   const sky = `hsl(${h} 55% 22%)`, sky2 = `hsl(${(h + 30) % 360} 60% 10%)`;
   const id = `g-${tour.id}`;
   return (
