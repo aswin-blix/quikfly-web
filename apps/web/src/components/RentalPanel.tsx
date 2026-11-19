@@ -66,11 +66,11 @@ function Checklist({ rental, stage, onDone, onClose }: { rental: Rental; stage: 
             <button key={side} type="button" onClick={() => inputs.current[side]?.click()} disabled={!!busySide}
               className={cx("relative aspect-[4/3] rounded-xl border overflow-hidden flex flex-col items-center justify-center gap-1 text-xs transition-colors",
                 has ? "border-gold/60 bg-gold/5" : "border-dashed border-line hover:border-gold/60")}>
-              {thumbs[side] && <img src={thumbs[side]} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" />}
+              {thumbs[side] && <><img src={thumbs[side]} alt="" className="absolute inset-0 w-full h-full object-cover" /><span aria-hidden className="absolute inset-0 bg-ink/60" /></>}
               <span className="relative flex flex-col items-center gap-1 text-strong">
                 {busySide === side ? <Spinner /> : has ? <CheckCircle2 size={20} className="text-gold" /> : <Camera size={20} className="text-gold" />}
                 <span className="font-medium">{RENTAL_PHOTO_LABEL[side]}</span>
-                <span className="text-subtle">{has ? "Retake" : "Add photo"}</span>
+                <span className={thumbs[side] ? "text-soft" : "text-subtle"}>{has ? "Retake" : "Add photo"}</span>
               </span>
               <input ref={(el) => { inputs.current[side] = el; }} type="file" accept="image/*" capture="environment" className="sr-only"
                 aria-label={`${RENTAL_PHOTO_LABEL[side]} photo`} onChange={(e) => { pick(side, e.target.files?.[0]); e.target.value = ""; }} />
