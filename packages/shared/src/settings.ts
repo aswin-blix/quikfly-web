@@ -100,6 +100,14 @@ export interface Settings {
   rentExtraKmRate: number;
   /** Added per night a chauffeur booking runs through 10 PM–6 AM (₹). 0 = no night charge. */
   rentDriverNightCharge: number;
+  /** Charged per eighth of a tank the car comes back with less fuel than at pickup (₹). */
+  rentFuelChargePerEighth: number;
+  /** A return this many minutes after the return time isn't charged as late. */
+  rentLateGraceMinutes: number;
+  /** Each started late hour costs this percentage of the booked hourly rate. */
+  rentLateFeePercent: number;
+  /** Longest single extension a customer can add (hours). */
+  rentExtendMaxHours: number;
   /** Self-drive documents, separated by ";" (shown on the car page). */
   rentDocuments: string;
   /** On only when a roadside-assistance contract exists; off shows the support line instead. */
@@ -211,6 +219,10 @@ export const DEFAULT_SETTINGS: Settings = {
   rentLimitedKmPerDay: 140,
   rentExtraKmRate: 12,
   rentDriverNightCharge: 250,
+  rentFuelChargePerEighth: 500,
+  rentLateGraceMinutes: 30,
+  rentLateFeePercent: 150,
+  rentExtendMaxHours: 48,
   rentDocuments: "Driving licence held for at least 1 year; Aadhaar or passport; Driver aged 21 or over",
   rentRoadsideAssistance: false,
   groupLocalKmPerDay: 80,
@@ -307,6 +319,10 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   rentLimitedKmPerDay: { type: "number", min: 10, max: 2000, integer: true },
   rentExtraKmRate: money(500),
   rentDriverNightCharge: money(5000),
+  rentFuelChargePerEighth: money(5000),
+  rentLateGraceMinutes: { type: "number", min: 0, max: 240, integer: true },
+  rentLateFeePercent: { type: "number", min: 100, max: 500, integer: true },
+  rentExtendMaxHours: { type: "number", min: 1, max: 168, integer: true },
   rentDocuments: { type: "text", min: 3, max: 300 },
   rentRoadsideAssistance: { type: "boolean" },
   groupLocalKmPerDay: { type: "number", min: 10, max: 500, integer: true },

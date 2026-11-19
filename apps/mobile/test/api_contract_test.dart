@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quikfly/api/api.dart';
 import 'package:quikfly/api/models.dart';
+import 'package:quikfly/api/rental_models.dart';
 import 'package:quikfly/api/support_models.dart';
 import 'package:quikfly/core/env.dart';
 import 'package:quikfly/core/format.dart';
@@ -258,6 +259,40 @@ void main() {
     expect(cb.isCallback, isTrue);
     expect(cb.preferredTime, 'evening');
     expect(cb.ref, 'Test holiday');
+  });
+
+  test('self-drive rental: checklist, extension, return', () async {
+    final cars = await api.cars();
+    String localIn(int minutes) => DateTime.now().toUtc().add(Duration(minutes: 330 + minutes)).toIso8601String().substring(0, 16);
+    final q = await api.quote({'service': 'rent', 'carId': cars.first.id, 'mode': 'self', 'start': localIn(15), 'end': localIn(15 + 360), 'kmPlan': 'limited', 'protection': 'standard', 'doorstep': false});
+    final b = await api.createBooking(service: ServiceKey.rent, title: 'App contract rental', subtitle: 'Lifecycle', payment: PaymentMethod.upi, lines: const [], quoteId: q.id);
+    expect(b.rentalState, 'booked');
+    final r = await api.rental(b.id);
+    expect(r.state, 'booked');
+    expect(r.photos['pickup'], isEmpty);
+    // Production: parse only, then cancel (no returned cars in the real staff queue).
+    if (apiUrl.contains('workers.dev')) {
+      await api.cancelBooking(b.id);
+      return;
+    }
+    final jpeg = [0xff, 0xd8, 0xff, 0xe0, ...List.filled(256, 7)];
+    for (final side in rentalPhotoSides.keys) {
+      await api.uploadRentalPhoto(b.id, 'pickup', side, jpeg);
+    }
+    final started = await api.startRental(b.id, 41000, 8);
+    expect(started.state, 'on_trip');
+    expect(started.pickup?.odometerKm, 41000);
+    final ext = await api.extensionQuote(b.id, 2);
+    expect(ext.total, greaterThan(0));
+    final extended = await api.extendRental(b.id, 2);
+    expect(extended.endsAt, ext.endsAt);
+    expect(extended.extendedHours, 2);
+    for (final side in rentalPhotoSides.keys) {
+      await api.uploadRentalPhoto(b.id, 'return', side, jpeg);
+    }
+    final back = await api.endRental(b.id, 41150, 7);
+    expect(back.state, 'returned');
+    expect(back.dropoff?.fuel, 7);
   });
 
   test('credits summary parses', () async {

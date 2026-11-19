@@ -298,7 +298,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                 KeyValue(
                     'Refundable deposit',
                     b.status == BookingStatus.completed
-                        ? '${inr(b.deposit)} ${b.payment == 'wallet' ? 'returned to wallet' : 'due back'}'
+                        ? '${inr(b.refundAmount ?? b.deposit)} ${b.payment == 'wallet' ? 'returned to wallet' : 'due back'}'
                         : '${inr(b.deposit)} (back after return)'),
               if (b.status == BookingStatus.cancelled && b.cancelFee > 0)
                 KeyValue('Cancellation fee', '${inr(b.cancelFee)}${b.payment == 'wallet' ? ' (kept)' : ' (demo: not collected)'}'),
@@ -314,6 +314,16 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                   child: b.startsAt!.subtract(const Duration(minutes: Rules.rideStartWindowMinutes)).isAfter(DateTime.now())
                       ? Text('Driver assigned ${Rules.rideStartWindowMinutes} min before pickup; start the ride here then.', style: TextStyle(color: c.fgMuted, fontSize: 12.5))
                       : GoldButton(label: 'Start ride', onPressed: () => context.push('/ride/${b.service == ServiceKey.bike ? 'bike' : 'car'}?ride=${b.rideId}&booking=${b.id}')),
+                ),
+              // Self-drive: the pickup/return checklist, extensions and the deposit settlement.
+              if (b.rentalState != null && b.status != BookingStatus.cancelled)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: GoldButton(
+                    label: switch (b.rentalState) { 'booked' => 'Start rental', 'on_trip' => 'End or extend rental', _ => 'Rental details' },
+                    icon: Icons.key_outlined,
+                    onPressed: () => context.push('/rental/${b.id}'),
+                  ),
                 ),
               // Cancelled bookings have no invoice and nothing left to cancel.
               if (b.status != BookingStatus.cancelled)

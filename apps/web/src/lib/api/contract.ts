@@ -3,7 +3,7 @@ import type {
   ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
   WalletTransaction, AppNotification, CreditSummary,
 } from "@quikfly/shared";
-import type { CallbackTime, PublicTicket, RideCancelReason, SupportTicket, SupportTopic, VendorApplication, VendorDocument, VendorSection } from "@quikfly/shared";
+import type { CallbackTime, FareLine, PublicTicket, Rental, RentalPhotoSide, RentalStage, RideCancelReason, SupportTicket, SupportTopic, VendorApplication, VendorDocument, VendorSection } from "@quikfly/shared";
 
 /**
  * The single contract between the UI and the backend.
@@ -149,6 +149,23 @@ export interface QuikflyApi {
   tickets: {
     /** GET /tickets/:token (public): what a bus m-ticket's QR code shows. */
     get(token: string): Promise<PublicTicket>;
+  };
+  /** Self-drive rentals: the pickup and return checklist and extensions (packages/shared/src/rental.ts). */
+  rental: {
+    /** GET /bookings/:id/rental */
+    get(bookingId: string): Promise<Rental>;
+    /** PUT /bookings/:id/rental/photos/:stage/:side (a JPEG the browser has shrunk) */
+    uploadPhoto(bookingId: string, stage: RentalStage, side: RentalPhotoSide, image: Blob): Promise<Rental>;
+    /** GET /bookings/:id/rental/photos/:stage/:side as an object URL; null when there's none (or in demo mode). */
+    photoUrl(bookingId: string, stage: RentalStage, side: RentalPhotoSide): Promise<string | null>;
+    /** POST /bookings/:id/rental/start */
+    start(bookingId: string, reading: { odometerKm: number; fuel: number }): Promise<Rental>;
+    /** GET /bookings/:id/rental/extension?hours= */
+    extensionQuote(bookingId: string, hours: number): Promise<{ lines: FareLine[]; total: number; endsAt: string }>;
+    /** POST /bookings/:id/rental/extend */
+    extend(bookingId: string, hours: number): Promise<{ rental: Rental; lines: FareLine[]; total: number }>;
+    /** POST /bookings/:id/rental/return */
+    end(bookingId: string, reading: { odometerKm: number; fuel: number }): Promise<Rental>;
   };
   /** Customer support: callback requests (anyone) and tickets (signed in). */
   support: {

@@ -23,6 +23,7 @@ function useFilters(): [BookingFilters, (patch: Partial<BookingFilters>) => void
     service: (params.get("service") as ServiceKey) || undefined,
     from: params.get("from") || undefined,
     to: params.get("to") || undefined,
+    rental: params.get("rental") === "returned" ? "returned" : undefined,
     page: Number(params.get("page")) || 1,
   };
   const set = (patch: Partial<BookingFilters>) => {
@@ -40,12 +41,18 @@ function BookingsList() {
   useEffect(() => setQ(f.q ?? ""), [f.q]);
   const key = JSON.stringify(f);
   const { data, error, loading, reload } = useLoad(() => adminApi.bookings.search(f), [key]);
-  const filtered = !!(f.q || f.status || f.service || f.from || f.to);
+  const filtered = !!(f.q || f.status || f.service || f.from || f.to || f.rental);
 
   return (
     <>
       <PageHeader title="Bookings" sub="Every booking across all services, newest first. Open one to cancel with a refund or mark it completed." />
 
+      {f.rental === "returned" && (
+        <p className="text-sm mb-3 flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-fg">Returned cars waiting for a deposit settlement</span>
+          <button type="button" className="text-accent hover:underline" onClick={() => setF({ rental: undefined })}>Show all bookings</button>
+        </p>
+      )}
       {/* Filters: one row above the list they scope */}
       <form className="card p-3 mb-4 grid gap-2 grid-cols-2 lg:grid-cols-4 items-end" onSubmit={(e) => { e.preventDefault(); setF({ q: q.trim() || undefined }); }}>
         <div className="relative col-span-2">

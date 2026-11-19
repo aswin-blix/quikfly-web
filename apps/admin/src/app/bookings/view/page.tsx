@@ -11,6 +11,7 @@ import { adminApi } from "@/lib/api";
 import { SERVICE_LABEL, STATUS_STYLE, dateTime, inr } from "@/lib/format";
 import { RequireAdmin, useSession } from "@/lib/session";
 import { PartnerAssign } from "@/components/PartnerAssign";
+import { RentalReview } from "@/components/RentalReview";
 import { useLoad } from "@/lib/useLoad";
 
 const KIND_LABEL: Record<string, string> = { payment: "Paid from wallet", refund: "Refunded to wallet", welcome: "Welcome credit", referral: "Referral", opening: "Opening balance" };
@@ -43,7 +44,7 @@ function Detail({ id }: { id: string }) {
         sub={<>{SERVICE_LABEL[b.service]} · <span className="font-mono">{b.id}</span> · booked {dateTime(b.createdAt)}</>}
         actions={manage && (
           <>
-            <Button onClick={() => setDialog("complete")}><CheckCircle2 size={16} /> Mark completed</Button>
+            {b.rentalState !== "returned" && <Button onClick={() => setDialog("complete")}><CheckCircle2 size={16} /> Mark completed</Button>}
             <Button variant="danger" onClick={() => setDialog("cancel")}><XCircle size={16} /> Cancel booking</Button>
           </>
         )}
@@ -51,7 +52,8 @@ function Detail({ id }: { id: string }) {
       {notice && <p className="text-sm text-success mb-4" role="status">{notice}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <section className="card p-5 lg:col-span-2" aria-labelledby="sum">
+        <div className="lg:col-span-2 grid gap-3 content-start">
+        <section className="card p-5" aria-labelledby="sum">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 id="sum" className="font-semibold text-strong">Booking</h2>
             <Badge className={STATUS_STYLE[b.status].cls}>{STATUS_STYLE[b.status].label}</Badge>
@@ -68,6 +70,8 @@ function Detail({ id }: { id: string }) {
             <div className="flex justify-between items-baseline gap-3"><span className="text-muted">Paid</span><span className="text-xl font-semibold text-strong tabular-nums">{inr(b.amount)} <span className="text-xs text-subtle font-normal uppercase">{b.payment}</span></span></div>
           </div>
         </section>
+        {b.rentalState && <RentalReview bookingId={b.id} canManage={can("bookings.manage")} onSettled={() => { reload(); setNotice("Deposit settled and booking completed."); }} />}
+        </div>
 
         <div className="grid gap-3 content-start">
           <PartnerAssign detail={data} canManage={can("bookings.manage")} onChange={setData} />
@@ -96,7 +100,7 @@ function Detail({ id }: { id: string }) {
               <ul className="grid gap-2 text-sm">
                 {history.map((h) => (
                   <li key={h.id}>
-                    <span className="text-fg">{h.action === "booking.cancel" ? "Cancelled" : h.action === "booking.complete" ? "Marked completed" : h.action}</span>
+                    <span className="text-fg">{h.action === "booking.cancel" ? "Cancelled" : h.action === "booking.complete" ? "Marked completed" : h.action === "rental.settle" ? "Deposit settled" : h.action}</span>
                     <span className="text-subtle"> by {h.admin?.name ?? "script"} · {dateTime(h.createdAt)}</span>
                     {typeof (h.detail as { reason?: string })?.reason === "string" && <span className="block text-xs text-muted">“{(h.detail as { reason: string }).reason}”</span>}
                   </li>

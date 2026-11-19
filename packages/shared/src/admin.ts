@@ -109,6 +109,8 @@ export interface BookingFilters {
   /** India-time dates, YYYY-MM-DD, inclusive. */
   from?: string;
   to?: string;
+  /** "returned": self-drive cars the customer has returned, waiting for staff to settle the deposit. */
+  rental?: "returned";
   page?: number;
 }
 
@@ -141,6 +143,7 @@ export interface AdminStats {
   byService: { service: ServiceKey; bookings: number; revenue: number }[];
   /** One entry per day in the range, oldest first (YYYY-MM-DD, India time). */
   byDay: { date: string; bookings: number; revenue: number; cancelled: number }[];
-  queues: { pendingLicences: number; pendingDeletions: number };
+  /** returnsToSettle: self-drive cars returned by the customer, waiting for staff to settle the deposit. */
+  queues: { pendingLicences: number; pendingDeletions: number; returnsToSettle: number };
   recent: AdminBooking[];
 }

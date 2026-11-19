@@ -1,4 +1,5 @@
 "use client";
+import { RentalPanel } from "@/components/RentalPanel";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, BadgePercent, Building2, CarTaxiFront, ChevronDown, Coins, CreditCard, FileText, Info, LifeBuoy, Lock, QrCode, RotateCcw, Route, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
@@ -516,10 +517,11 @@ export function BookingsScreen() {
                           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                             {b.lines.map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-subtle">{k}</dt><dd className="text-right">{v}</dd></div>)}
                             {b.startsAt && !b.lines.some(([k]) => k === "Pickup time") && <div className="flex justify-between gap-3"><dt className="text-subtle">Starts</dt><dd className="text-right">{prettyDateTime(b.startsAt)}</dd></div>}
-                            {b.deposit > 0 && b.status !== "cancelled" && <div className="flex justify-between gap-3"><dt className="text-subtle">Refundable deposit</dt><dd className="text-right">{b.status === "completed" ? `${inr(b.deposit)} ${b.payment === "wallet" ? "returned to wallet" : "due back"}` : `${inr(b.deposit)} (back after return)`}</dd></div>}
+                            {b.deposit > 0 && b.status !== "cancelled" && <div className="flex justify-between gap-3"><dt className="text-subtle">Refundable deposit</dt><dd className="text-right">{b.status === "completed" ? `${inr(b.refundAmount ?? b.deposit)} ${b.payment === "wallet" ? "returned to wallet" : "due back"}` : `${inr(b.deposit)} (back after return)`}</dd></div>}
                             {b.status === "cancelled" && b.cancelFee > 0 && <div className="flex justify-between gap-3"><dt className="text-subtle">Cancellation fee</dt><dd className="text-right">{inr(b.cancelFee)}{b.payment === "wallet" ? " (kept)" : " (demo: not collected)"}</dd></div>}
                             {b.status === "cancelled" && b.refundAmount !== null && <div className="flex justify-between gap-3"><dt className="text-subtle">{b.payment === "wallet" ? "Refunded to wallet" : "Refund due"}</dt><dd className="text-right">{b.refundAmount ? inr(b.refundAmount) : "Nothing (cancelled too late)"}</dd></div>}
                           </dl>
+                          {b.rentalState && b.status !== "cancelled" && <RentalPanel booking={b} />}
                           {b.rescheduledAt && b.status === "confirmed" && <p className="text-xs text-subtle mt-3">Changed to this bus on {prettyDateTime(b.rescheduledAt)}. A ticket can be changed once.</p>}
                           {b.status !== "cancelled" && (
                             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">

@@ -1,6 +1,6 @@
 // The admin panel's only door to the backend. Screens call `adminApi`, never fetch().
 // Endpoints are listed in apps/api/README.md (Admin section).
-import type { AdminSupportTicket, SupportStatus } from "@quikfly/shared";
+import type { AdminRental, AdminSupportTicket, RentalPhotoSide, RentalSettlement, RentalStage, SupportStatus } from "@quikfly/shared";
 import type {
   AdminBooking, AdminBookingDetail, AdminLoginResult, AdminStats, AdminUser, AuditEntry, BookingFilters, CatalogItem, CatalogKind, LicenceQueueStatus,
   LicenceReview, Page, Settings, AdminVendorDetail, AdminPayout, AssignableVehicle, FleetReviewItem, VehicleDocument, VendorDocument, VendorSection, VendorStatus, VendorSummary,
@@ -88,6 +88,10 @@ export const adminApi = {
     cancel: (id: string, reason: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/cancel`, { reason }),
     complete: (id: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/complete`),
     assignVendor: (id: string, vehicleId: string | null) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/vendor`, { vehicleId }),
+    rental: (id: string) => req<AdminRental>("GET", `/admin/bookings/${encodeURIComponent(id)}/rental`),
+    rentalPhoto: (id: string, stage: RentalStage, side: RentalPhotoSide) => photo(`/admin/bookings/${encodeURIComponent(id)}/rental/photos/${stage}/${side}`),
+    settlementPreview: (id: string, damage: number) => req<RentalSettlement>("GET", `/admin/bookings/${encodeURIComponent(id)}/rental/settlement${qs({ damage })}`),
+    settle: (id: string, damage: number, damageNote: string) => req<AdminRental>("POST", `/admin/bookings/${encodeURIComponent(id)}/rental/settle`, { damage, damageNote }),
   },
   support: {
     list: (status: SupportStatus) => req<AdminSupportTicket[]>("GET", `/admin/support${qs({ status })}`),

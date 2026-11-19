@@ -431,7 +431,7 @@ class TravelVehicle {
 class Booking {
   const Booking(this.id, this.service, this.title, this.subtitle, this.amount, this.status, this.createdAt, this.payment, this.lines,
       {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0, this.rideId, this.tripId, this.creditsUsed = 0,
-      this.discount = 0, this.seats = const [], this.ticketToken, this.rescheduledAt});
+      this.discount = 0, this.seats = const [], this.ticketToken, this.rescheduledAt, this.rentalState});
   final String id, title, subtitle, payment;
   final ServiceKey service;
   final int amount;
@@ -473,6 +473,9 @@ class Booking {
   /// When a bus booking moved to another bus or date (allowed once).
   final DateTime? rescheduledAt;
 
+  /// Self-drive bookings: booked, on_trip, returned or settled (details from GET /bookings/:id/rental); null otherwise.
+  final String? rentalState;
+
   /// A booking line by label, e.g. 'Seats'.
   String? line(String label) => lines.where((l) => l.$1 == label).firstOrNull?.$2;
 
@@ -498,6 +501,7 @@ class Booking {
         seats: ((j['seats'] as List?) ?? const []).map((s) => BookingSeat.fromJson(s as Json)).toList(),
         ticketToken: j['ticketToken'] as String?,
         rescheduledAt: j['rescheduledAt'] == null ? null : DateTime.tryParse('${j['rescheduledAt']}')?.toLocal(),
+        rentalState: j['rentalState'] as String?,
       );
 }
 
@@ -650,6 +654,8 @@ class Settings {
   int get rentProtectionPeacePerDay => _i('rentProtectionPeacePerDay', 399);
   int get rentUnlimitedKmExtraPercent => _i('rentUnlimitedKmExtraPercent', 25);
   int get rentDepositRefundHours => _i('rentDepositRefundHours', 48);
+  /// Longest single rental extension (hours).
+  int get rentExtendMaxHours => _i('rentExtendMaxHours', 48);
   /// Bus changes: one move to another bus or date until this many hours before departure, for this fee plus any fare difference.
   int get busRescheduleHours => _i('busRescheduleHours', 6);
   int get busRescheduleFee => _i('busRescheduleFee', 0);

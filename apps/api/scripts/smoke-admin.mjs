@@ -265,6 +265,39 @@ if (balance0 >= rq.total) {
 }
 await expect("restore the rent policy", call("PATCH", "/admin/settings", { cancelPolicyRent: rentPolicy0 }, T), 200, (j) => j.cancelPolicyRent === rentPolicy0);
 
+// ── Self-drive rental: the customer's checklist, then staff settle the deposit ──
+{
+  const localIn = (minutes) => new Date(Date.now() + (330 + minutes) * 60_000).toISOString().slice(0, 16);
+  const q = (await call("POST", "/quotes", { ...rentReq, start: localIn(10), end: localIn(10 + 6 * 60) })).json;
+  const rb = (await call("POST", "/bookings", { service: "rent", title: "Smoke settle", subtitle: "Lifecycle", payment: "upi", lines: [], quoteId: q.id }, C2)).json;
+  const path = `/bookings/${rb.id}/rental`;
+  for (const s of ["front", "back", "left", "right", "odometer"]) await upload(`${path}/photos/pickup/${s}`, JPEG, C2);
+  await call("POST", `${path}/start`, { odometerKm: 30000, fuel: 8 }, C2);
+  await expect("settling waits for the return", call("GET", `/admin/bookings/${rb.id}/rental/settlement`, null, T), 409);
+  for (const s of ["front", "back", "left", "right", "odometer"]) await upload(`${path}/photos/return/${s}`, JPEG, C2);
+  await expect("customer returns the car (200 km, 2/8 less fuel)", call("POST", `${path}/return`, { odometerKm: 30200, fuel: 6 }, C2), 200, (j) => j.state === "returned");
+  await expect("dashboard counts returns to settle", call("GET", "/admin/stats?days=1", null, T), 200, (j) => j.queues.returnsToSettle >= 1);
+  await expect("staff see the rental with photos", call("GET", `/admin/bookings/${rb.id}/rental`, null, T), 200,
+    (j) => j.state === "returned" && j.photos.return.length === 5 && j.customerName && j.pickup.odometerKm === 30000);
+  const photo = await fetch(`${BASE}/admin/bookings/${rb.id}/rental/photos/pickup/odometer`, { headers: { Authorization: `Bearer ${T}` } });
+  check("staff can open a checklist photo", photo.status === 200);
+  const extraKm = Math.max(0, 200 - s0.rentLimitedKmPerDay);
+  const expected = extraKm * s0.rentExtraKmRate + 2 * s0.rentFuelChargePerEighth;
+  await expect("settlement preview: extra km and fuel", call("GET", `/admin/bookings/${rb.id}/rental/settlement`, null, T), 200,
+    (j) => j.kmDriven === 200 && j.extraKm === extraKm && j.fuelShort === 2 && j.lateHours === 0 && j.deductions === expected);
+  await expect("plain completion is refused for a returned car", call("POST", `/admin/bookings/${rb.id}/complete`, null, T), 409);
+  await expect("a damage charge needs a note", call("POST", `/admin/bookings/${rb.id}/rental/settle`, { damage: 300 }, T), 400);
+  const total = expected + 300;
+  await expect("settle with a damage charge", call("POST", `/admin/bookings/${rb.id}/rental/settle`, { damage: 300, damageNote: "Scratch on rear bumper" }, T), 200,
+    (j) => j.state === "settled" && j.settlement.deductions === total && j.settlement.depositReturned === Math.max(0, rb.deposit - total)
+      && j.settlement.due === Math.max(0, total - rb.deposit) && j.settlement.lines.some((l) => l.label === "Damage" && l.amount === 300) && j.settlement.damageNote === "Scratch on rear bumper");
+  await expect("the booking is completed with what came back", call("GET", `/admin/bookings/${rb.id}`, null, T), 200,
+    (j) => j.booking.status === "completed" && j.booking.refundAmount === Math.max(0, rb.deposit - total) && j.booking.rentalState === "settled"
+      && j.history.some((h) => h.action === "rental.settle" && h.detail.deductions === total));
+  await expect("settling twice is refused", call("POST", `/admin/bookings/${rb.id}/rental/settle`, { damage: 0 }, T), 409);
+  await expect("the customer sees the settlement", call("GET", path, null, C2), 200, (j) => j.settlement?.deductions === total);
+}
+
 // ── Ride rules (MVAG 2025): surge cap and the rider cancellation fee ──
 await expect("a surge cap above 3× is refused", call("PATCH", "/admin/settings", { surgeCap: 5 }, T), 400);
 await expect("surge ×3 with a ×1.5 cap, all day", call("PATCH", "/admin/settings", { surgeMultiplier: 3, surgeCap: 1.5, surgeHours: "0-23" }, T), 200, (j) => j.surgeCap === 1.5);
@@ -633,6 +666,7 @@ await call("POST", "/me/delete", { otp: OTP }, PV);
 if (LOCAL) {
   // Roles
   const content = await expect("login: content role", login(CONTENT), 200, (j) => j.admin.role === "content");
+  await expect("content can't settle a rental", call("POST", "/admin/bookings/QFNONE/rental/settle", { damage: 0 }, content.token), 403);
   await expect("content can see the dashboard", call("GET", "/admin/stats", null, content.token), 200);
   await expect("content can read settings", call("GET", "/admin/settings", null, content.token), 200);
   await expect("content can't change settings", call("PATCH", "/admin/settings", { licenceAutoApprove: true }, content.token), 403);

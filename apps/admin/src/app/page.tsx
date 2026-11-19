@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, IdCard, UserMinus } from "lucide-react";
+import { ArrowRight, IdCard, KeyRound, UserMinus } from "lucide-react";
 import type { AdminStats } from "@quikfly/shared";
 import { BarList, ColumnChart } from "@/components/charts";
 import { Badge, Empty, ErrorBox, PageHeader, Segmented } from "@/components/ui";
@@ -92,6 +92,8 @@ function Dashboard({ s }: { s: AdminStats }) {
         <Queue icon={IdCard} label="Licences to review" count={s.queues.pendingLicences}
           href={LIVE_ROUTES.has("/licences") && can("licences.review") ? "/licences" : undefined} />
         <Queue icon={UserMinus} label="Accounts waiting to be deleted" count={s.queues.pendingDeletions} />
+        <Queue icon={KeyRound} label="Returned cars to settle" count={s.queues.returnsToSettle}
+          href={can("bookings.manage") ? "/bookings?rental=returned" : undefined} />
         <div className="card p-4">
           <p className="text-sm text-muted">Held in customer wallets</p>
           <p className="text-xl font-semibold text-strong mt-1 tabular-nums">{inr(t.walletBalance)}</p>

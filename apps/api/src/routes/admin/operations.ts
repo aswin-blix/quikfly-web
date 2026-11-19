@@ -1,13 +1,14 @@
 // Operations endpoints for staff: /v1/admin/bookings, /v1/admin/licences and /v1/admin/vendors.
 import { staffClose, staffReply, supportQueue, supportTicket } from "../../services/support";
 import { Hono } from "hono";
-import { ADMIN_RULES, BOOKING_STATUSES, LICENCE_QUEUE_STATUSES, PATTERNS, SUPPORT_RULES, VENDOR_DOCUMENTS, VENDOR_SECTIONS, VENDOR_STATUSES, type BookingFilters } from "@quikfly/shared";
+import { ADMIN_RULES, BOOKING_STATUSES, LICENCE_QUEUE_STATUSES, PATTERNS, RENTAL_PHOTO_SIDES, RENTAL_RULES, RENTAL_STAGES, SUPPORT_RULES, VENDOR_DOCUMENTS, VENDOR_SECTIONS, VENDOR_STATUSES, type BookingFilters } from "@quikfly/shared";
 import { SERVICE_KEYS } from "../../config";
 import type { AppEnv } from "../../env";
 import { badRequest } from "../../lib/errors";
 import { jsonBody, text } from "../../lib/validate";
 import { requireAdmin } from "../../middleware/admin";
 import { adminCancel, adminComplete, bookingDetail, searchBookings } from "../../services/admin/bookings";
+import { adminRental, rentalPhoto, settleRental, settlementPreview } from "../../services/rentals";
 import { licenceQueue, reviewLicence } from "../../services/admin/licences";
 import { finishReview, markSticker, reviewSection, vendorDetail, vendorDocument, vendorQueue } from "../../services/admin/vendors";
 import { assignBookingVendor, assignableVehicles, decidePayout, payoutQueue } from "../../services/admin/partner-money";
@@ -37,6 +38,7 @@ export const adminBookings = new Hono<AppEnv>()
       service: pick(q.service, SERVICE_KEYS, "service"),
       from: date(q.from, "from"),
       to: date(q.to, "to"),
+      rental: q.rental === "returned" ? "returned" : undefined,
       page: Math.max(1, parseInt(q.page ?? "1", 10) || 1),
     };
     return c.json(await searchBookings(c.env.DB, f));
@@ -53,7 +55,26 @@ export const adminBookings = new Hono<AppEnv>()
   .post("/:id/cancel", requireAdmin("bookings.manage"), async (c) =>
     c.json(await adminCancel(c.env.DB, c.var.admin.id, c.req.param("id"), reason(await jsonBody(c)))))
   .post("/:id/complete", requireAdmin("bookings.manage"), async (c) =>
-    c.json(await adminComplete(c.env.DB, c.var.admin.id, c.req.param("id"))));
+    c.json(await adminComplete(c.env.DB, c.var.admin.id, c.req.param("id"))))
+  // Self-drive rental: readings, photos, extensions, settlement
+  .get("/:id/rental", requireAdmin("bookings.view"), async (c) => c.json(await adminRental(c.env.DB, c.req.param("id"))))
+  .get("/:id/rental/photos/:stage/:side", requireAdmin("bookings.view"), async (c) => {
+    const stage = c.req.param("stage"), side = c.req.param("side");
+    if (!(RENTAL_STAGES as readonly string[]).includes(stage) || !(RENTAL_PHOTO_SIDES as readonly string[]).includes(side)) throw badRequest("Unknown photo.");
+    return rentalPhoto(c.env.DB, c.env.DOCS, null, c.req.param("id"), stage as (typeof RENTAL_STAGES)[number], side as (typeof RENTAL_PHOTO_SIDES)[number]);
+  })
+  // ?damage=₹ → the settlement that would be recorded (nothing changes)
+  .get("/:id/rental/settlement", requireAdmin("bookings.manage"), async (c) => {
+    const damage = Math.max(0, Math.min(RENTAL_RULES.damageMax, Math.round(Number(c.req.query("damage") ?? 0)) || 0));
+    return c.json((await settlementPreview(c.env.DB, c.req.param("id"), damage)).settlement);
+  })
+  // { damage, damageNote? } → deductions recorded, the rest of the deposit refunded, booking completed (audited)
+  .post("/:id/rental/settle", requireAdmin("bookings.manage"), async (c) => {
+    const body = await jsonBody(c);
+    const damage = typeof body.damage === "number" ? body.damage : 0;
+    const note = typeof body.damageNote === "string" ? body.damageNote.trim().slice(0, RENTAL_RULES.damageNoteMax) : null;
+    return c.json(await settleRental(c.env.DB, c.var.admin.id, c.req.param("id"), { damage, damageNote: note || null }));
+  });
 
 export const adminLicences = new Hono<AppEnv>()
   // ?status=pending (default) | rejected | verified

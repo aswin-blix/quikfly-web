@@ -1,12 +1,12 @@
 // Dashboard numbers. Days are counted in India time (BUSINESS_UTC_OFFSET_MIN), like fares.
-import type { AdminBooking, AdminStats, ServiceKey } from "@quikfly/shared";
+import type { AdminBooking, AdminStats, RentalState, ServiceKey } from "@quikfly/shared";
 import { BUSINESS_UTC_OFFSET_MIN } from "../../config";
 
 export interface AdminBookingRow {
   id: string; service: ServiceKey; title: string; subtitle: string; amount: number; status: AdminBooking["status"];
   payment: AdminBooking["payment"]; lines: string; created_at: string;
   starts_at: string | null; refund_amount: number | null; deposit: number; cancel_reason: string | null; cancel_fee: number; ride_id: string | null; trip_id: string | null; credits_used: number;
-  discount?: number; rescheduled_at?: string | null; ticket_token?: string | null;
+  discount?: number; rescheduled_at?: string | null; ticket_token?: string | null; rental_state?: RentalState | null;
   user_id: string; customer_name: string; customer_phone: string;
 }
 
@@ -16,7 +16,7 @@ export const toAdminBooking = (r: AdminBookingRow): AdminBooking => ({
   startsAt: r.starts_at ?? null, refundAmount: r.refund_amount ?? null, deposit: r.deposit ?? 0,
   cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0, rideId: r.ride_id ?? null, tripId: r.trip_id ?? null,
   creditsUsed: r.credits_used ?? 0, discount: r.discount ?? 0, seats: [],
-  ticketToken: r.ticket_token ?? null, rescheduledAt: r.rescheduled_at ?? null,
+  ticketToken: r.ticket_token ?? null, rescheduledAt: r.rescheduled_at ?? null, rentalState: r.rental_state ?? null,
   customer: { id: r.user_id, name: r.customer_name, phone: r.customer_phone },
 });
 
@@ -51,17 +51,18 @@ export async function dashboardStats(db: D1Database, days: number): Promise<Admi
        FROM bookings WHERE created_at >= ? GROUP BY date ORDER BY date`,
     ).bind(since),
     db.prepare(
-      `SELECT SUM(licence_status = 'pending' AND deleted_at IS NULL) AS pending_licences, SUM(deleted_at IS NOT NULL) AS pending_deletions FROM users`,
+      `SELECT SUM(licence_status = 'pending' AND deleted_at IS NULL) AS pending_licences, SUM(deleted_at IS NOT NULL) AS pending_deletions,
+              (SELECT COUNT(*) FROM rentals WHERE return_at IS NOT NULL AND settlement IS NULL) AS returns_to_settle FROM users`,
     ),
     db.prepare(
-      `SELECT b.*, u.name AS customer_name, u.phone AS customer_phone FROM bookings b JOIN users u ON u.id = b.user_id
+      `SELECT b.*, u.name AS customer_name, u.phone AS customer_phone, (SELECT CASE WHEN settlement IS NOT NULL THEN 'settled' WHEN return_at IS NOT NULL THEN 'returned' WHEN pickup_at IS NOT NULL THEN 'on_trip' ELSE 'booked' END FROM rentals WHERE booking_id = b.id) AS rental_state FROM bookings b JOIN users u ON u.id = b.user_id
        ORDER BY b.created_at DESC LIMIT 8`,
     ),
   ]);
 
   const t = totals.results[0] as { bookings: number; revenue: number; cancelled: number | null };
   const c = customers.results[0] as { new_customers: number | null; customers: number; wallet: number };
-  const q = queues.results[0] as { pending_licences: number | null; pending_deletions: number | null };
+  const q = queues.results[0] as { pending_licences: number | null; pending_deletions: number | null; returns_to_settle: number | null };
 
   // Fill in days with no bookings so charts have a bar per day.
   const dayRows = new Map((byDay.results as AdminStats["byDay"]).map((d) => [d.date, d]));
@@ -79,7 +80,7 @@ export async function dashboardStats(db: D1Database, days: number): Promise<Admi
     },
     byService: byService.results as AdminStats["byService"],
     byDay: allDays,
-    queues: { pendingLicences: q.pending_licences ?? 0, pendingDeletions: q.pending_deletions ?? 0 },
+    queues: { pendingLicences: q.pending_licences ?? 0, pendingDeletions: q.pending_deletions ?? 0, returnsToSettle: q.returns_to_settle ?? 0 },
     recent: (recent.results as AdminBookingRow[]).map(toAdminBooking),
   };
 }
