@@ -47,7 +47,10 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/me/phone/otp` | `{ phone }`: checks the new number is free (OTP is the demo code) |
 | POST 🔒 | `/me/phone` | `{ phone, otp }` → user with the new number |
 | POST 🔒 | `/me/logout-all` | ends every session for the account |
-| POST 🔒 | `/me/delete` | `{ otp }`: schedules deletion (30-day grace), ends all sessions |
+| POST 🔒 | `/me/delete` | `{ otp }`: schedules deletion (30-day grace), ends all sessions. After the grace period the cron erases the account (see Privacy below) |
+| GET | `/privacy` | the privacy notice (`PrivacyNotice`: `version`, `updated`, `summary`, `sections`, `contact` = the Grievance Officer from Settings). Text in `packages/shared/src/privacy.ts` |
+| POST 🔒 | `/me/consent` | `{ version }` → user with `privacyConsent` set; 400 unless it's the current `PRIVACY_NOTICE.version`. Every consent is kept in `privacy_consents` |
+| GET 🔒 | `/me/export` | everything held about the account (`DataExport`: `{ exportedAt, noticeVersion, data: { table: rows } }`), sent as a `quikfly-data-YYYY-MM-DD.json` attachment, `no-store`. Session hashes and share tokens are left out; document photo keys become "on file" |
 | POST 🔒 | `/me/referral` | `{ code }`: once per account; both users get ₹100 (`REFERRAL_BONUS`) |
 | PUT 🔒 | `/me/licence` | `{ number, expiry }`: driving licence for self-drive; `pending` until an admin approves or rejects it (`licence.note` holds the reason), or `verified` at once when the `licenceAutoApprove` setting is on |
 | GET / POST 🔒 | `/me/places` | saved places; POST `{ kind: home\|work\|other, placeId, label? }` (Home and Work replace) |
@@ -198,6 +201,8 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 **Service and feature switches** (`packages/shared/src/switches.ts`, owner-only settings `service*`, `servicePausedMessage`, `feature*`). `switchError()` is checked by `POST /quotes`, ride quotes and `POST /rides`, `POST /bookings` and `POST /me/referral`; a refusal is **409 with the customer-facing message** (the owner's paused message for a paused service). Bookings made before a switch went off carry on; scheduled rides still start. SOS and trip sharing have no switch.
 
 **Partner trips and money** (`services/partner-trips.ts`): `POST /rides` gives a cab ride (or the Auto option) to a free live partner vehicle of that type with an approved driver, least recently used first, else a simulated driver; the booking carries `vendor_id`/`vendor_vehicle_id`/`vendor_driver_id`. Staff assign group-travel bookings. On completion the trip settles in the same batch (`vendor_trips`, `vendor_ledger`): fare without GST (`gstRate`), less `vendorCommissionPercent` (max 20) and 0.1% TDS (`TDS_194O_PERCENT`); coupons and credits are QuikFly's cost; for cash the driver's collection is a negative ledger row. Amounts in paise. No payment gateway: payouts are paid by staff and recorded with the reference; partner payments are simulated.
+
+**Privacy** (`services/privacy.ts`, `scheduled.ts` → `privacySweep`; full write-up in [docs/privacy.md](../../docs/privacy.md)): every cron run closes accounts unused for the `inactivityEraseDays` setting (0 = off; `last_active_at` is touched at sign-in and at most daily, `ACTIVITY_TOUCH_HOURS`), with a `privacy.inactive` notification, skipping wallet money, confirmed bookings and partners past draft. It then erases up to `ERASE_BATCH` accounts deleted more than `DELETION_GRACE_DAYS` ago: R2 documents deleted, personal lists and tickets deleted, the user row anonymised (`erased_at`; phone becomes `erased:<id>`), bookings and money records kept. Both reads use partial indexes, so a run with nothing to do costs almost nothing.
 
 **Partner document expiry** (`scheduled.ts` → `documentExpiry`): once per document and validity date, a `vendor.document` notification when an RC, insurance or driving licence is within `vendorExpiryWarnDays`; on the expiry date the vehicle or driver is blocked with reason `Expired: …` (the driver comes off their vehicle) until staff accept a renewal.
 

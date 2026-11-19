@@ -74,7 +74,7 @@ export function privacyNotice(s: Settings): PrivacyNotice {
       "We use your mobile number to sign you in, and your trips, bookings and payments to run them.",
       "Your driver, bus operator or partner sees only what the trip needs, like your name and pickup.",
       "We don't sell your data or show you ads based on it.",
-      "Download your data or delete your account any time from Account → Privacy.",
+      "Download your data any time from Account → Privacy & data, or delete your account from Account → Login & security.",
       `QuikFly accounts are for people aged ${LIMITS.minAge} and over.`,
     ],
     sections: [
@@ -128,9 +128,9 @@ export function privacyNotice(s: Settings): PrivacyNotice {
       {
         title: "Your rights",
         points: [
-          "See your data: download a copy from Account → Privacy.",
+          "See your data: download a copy from Account → Privacy & data.",
           "Correct it: edit your profile, travellers, places and contacts in Account.",
-          "Withdraw consent and erase it: delete your account from Account → Privacy. Bookings already made are completed or refunded first.",
+          "Withdraw consent and erase your data: delete your account from Account → Login & security. Cancel bookings you no longer need first.",
           "Nominate someone to act for you if you die or can't act yourself: write to the Grievance Officer.",
           "Complain: write to the Grievance Officer below. We reply within 30 days. If you're not satisfied, you can complain to the Data Protection Board of India.",
         ],
