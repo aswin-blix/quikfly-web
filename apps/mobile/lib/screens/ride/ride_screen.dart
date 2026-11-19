@@ -393,6 +393,8 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
+    // Signing in or buying a QuikFly Pass changes the surge: quote again.
+    ref.listen(userProvider.select((u) => u?.passUntil), (_, _) => _loadQuotes());
     final places = ref.watch(configProvider).value?.places ?? const <Place>[];
     // Places arrive with /config: pre-fill a sensible pickup once they do.
     if (_pickup == null && places.isNotEmpty) _pickup = places[places.length > 2 ? 2 : 0];
@@ -646,6 +648,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         const SizedBox(height: 16),
         _label('Choose a ride · ${_quotes!.first.distanceKm} km · ~${_quotes!.first.durationMin} min'),
         if (_quotes!.first.surge > 1) _surgeNote(_quotes!.first.surge),
+        if (_quotes!.first.passSaving > 0) _passNote(),
         for (final q in _quotes!)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -672,7 +675,10 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
                   ]),
                 ),
                 const SizedBox(width: 8),
-                Text(inr(q.fare), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text(inr(q.fare), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+                  if (q.passSaving > 0) Text('−${inr(q.passSaving)} surge', style: TextStyle(color: c.success, fontSize: 11)),
+                ]),
               ]),
             ),
           ),
@@ -725,27 +731,41 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   /// MVAG 2025: show the surge before booking.
 
   Widget _surgeNote(double surge) {
-
     final c = context.qf;
-
     final s = ref.watch(configProvider).value?.settings ?? const Settings({});
-
+    String x(double v) => v.toStringAsFixed(v % 1 == 0 ? 0 : 1);
     return Container(
-
       margin: const EdgeInsets.only(bottom: 8),
-
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-
       decoration: BoxDecoration(color: c.warning.withValues(alpha: 0.1), border: Border.all(color: c.warning.withValues(alpha: 0.3)), borderRadius: BorderRadius.circular(10)),
-
-      child: Text('Busy hours: these fares include a ×${surge.toStringAsFixed(surge % 1 == 0 ? 0 : 1)} surge (never more than ×${s.surgeCap.toStringAsFixed(s.surgeCap % 1 == 0 ? 0 : 1)}). Surge hours: ${s.surgeHours}.',
-
-          style: TextStyle(color: c.warning, fontSize: 12.5)),
-
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Busy hours: these fares include a ×${x(surge)} surge (never more than ×${x(s.surgeCap)}). Surge hours: ${s.surgeHours}.',
+            style: TextStyle(color: c.warning, fontSize: 12.5)),
+        if (s.passOnSale)
+          GestureDetector(
+            onTap: () => context.push('/account/wallet'),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Skip surge with QuikFly Pass (${inr(s.passPrice)} for ${s.passDays} days) ›',
+                  style: TextStyle(color: c.warning, fontSize: 12.5, fontWeight: FontWeight.w700, decoration: TextDecoration.underline, decorationColor: c.warning)),
+            ),
+          ),
+      ]),
     );
-
   }
 
+  /// Shown instead of the surge note when the rider's QuikFly Pass took the surge off.
+  Widget _passNote() {
+    final c = context.qf;
+    final s = ref.watch(configProvider).value?.settings ?? const Settings({});
+    final surge = s.effectiveSurge.toStringAsFixed(s.effectiveSurge % 1 == 0 ? 0 : 1);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: c.success.withValues(alpha: 0.1), border: Border.all(color: c.success.withValues(alpha: 0.3)), borderRadius: BorderRadius.circular(10)),
+      child: Text('Busy hours, but your QuikFly Pass takes the ×$surge surge off these fares.', style: TextStyle(color: c.success, fontSize: 12.5)),
+    );
+  }
 
   Widget _label(String s) => Padding(
         padding: const EdgeInsets.only(bottom: 8),

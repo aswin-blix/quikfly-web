@@ -5,7 +5,7 @@ import type { CreditEntry, CreditKind, CreditSummary, EmergencyContact, Ride, Sa
 export const MOCK_OTP = "1234";
 /** Demo mode has no admin to review licences; a submitted one turns verified after this long. */
 export const MOCK_LICENCE_REVIEW_SECONDS = 20;
-import { DEFAULT_SETTINGS } from "@quikfly/shared";
+import { DEFAULT_SETTINGS, passCovers } from "@quikfly/shared";
 /** Demo mode uses the default settings (it has no admin panel). */
 export const NEW_USER_WALLET = DEFAULT_SETTINGS.welcomeCredit;
 
@@ -39,8 +39,10 @@ export const fail = (message: string): never => { throw new Error(message); };
 export function currentUser(): User {
   const u = load<User | null>(KEYS.user, null);
   if (!u || load<string | null>(KEYS.deletedAt, null)) fail("Please sign in to continue.");
-  return { ...u!, creditBalance: creditBalance() };
+  return { ...u!, creditBalance: creditBalance(), passUntil: passCovers(u!.passUntil) ? u!.passUntil : null };
 }
+/** The signed-in demo user, or null (for endpoints that work signed out too). */
+export const signedInUser = () => (load<User | null>(KEYS.user, null) && !load<string | null>(KEYS.deletedAt, null) ? currentUser() : null);
 export const saveUser = (u: User) => save(KEYS.user, u);
 export function patchUser(patch: Partial<User>): User {
   const u = { ...currentUser(), ...patch };

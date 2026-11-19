@@ -20,6 +20,8 @@ export interface User {
   walletBalance: number;
   /** Unexpired QuikFly Credits (₹), separate from the wallet: see credits.ts. */
   creditBalance: number;
+  /** When the rider's QuikFly Pass ends (ISO), while one is running; null otherwise. */
+  passUntil: string | null;
   email: string | null;
   gender: Gender | null;
   /** YYYY-MM-DD */
@@ -217,6 +219,8 @@ export interface FareQuote {
   etaMin: number;
   /** Surge in this fare (1 = none). Shown to the rider before booking (MVAG 2025). */
   surge: number;
+  /** ₹ the rider's QuikFly Pass took off this fare (the surge it waived); absent or 0 = none. */
+  passSaving?: number;
 }
 
 export interface Driver {

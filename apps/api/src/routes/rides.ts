@@ -3,7 +3,8 @@ import { PAYMENT_METHODS } from "@quikfly/shared";
 import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
 import { jsonBody, matches, oneOf, optStr, str } from "../lib/validate";
-import { requireUser } from "../middleware/auth";
+import { bearerToken, requireUser } from "../middleware/auth";
+import { userForToken } from "../services/auth";
 import { bookRide, cancelRide, getRide, quoteRides, startRide } from "../services/rides";
 import { shareRide } from "../services/share";
 
@@ -23,9 +24,12 @@ const stopIds = (body: Record<string, unknown>) => {
 };
 
 export const rides = new Hono<AppEnv>()
+  // Open to everyone; a signed-in rider with a QuikFly Pass sees fares without the surge.
   .post("/quote", async (c) => {
     const body = await jsonBody(c);
-    return c.json(await quoteRides(c.env.DB, oneOf(body, "service", ["bike", "car"] as const), str(body, "pickupId"), str(body, "dropId"), scheduledFor(body), stopIds(body)));
+    const token = bearerToken(c);
+    const user = token ? await userForToken(c.env.DB, token) : null;
+    return c.json(await quoteRides(c.env.DB, oneOf(body, "service", ["bike", "car"] as const), str(body, "pickupId"), str(body, "dropId"), scheduledFor(body), stopIds(body), user?.id));
   })
   .get("/:id", requireUser, async (c) => c.json(await getRide(c.env.DB, c.var.user.id, c.req.param("id"))))
   // Scheduled rides: start near pickup time (driver assigned, live trip begins).

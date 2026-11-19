@@ -370,6 +370,41 @@ const plainRide = (await call("POST", "/rides", rideInput, tokenB)).json;
 await expect("without useCredits nothing is taken", call("POST", "/bookings", newBooking({ service: "car", rideId: plainRide.id }), tokenB), 201,
   (j) => j.creditsUsed === 0 && j.amount === plainRide.quote.fare);
 
+// QuikFly Pass: a fresh customer buys it from the wallet; rides at a surge hour lose the surge.
+{
+  const peakHour = (st.surgeHours.match(/(\d{1,2})\s*-/) ?? [])[1];
+  const passOn = st.featureRidePass && peakHour !== undefined && Math.min(st.surgeMultiplier, st.surgeCap) > 1;
+  const phoneP = "8" + String(Date.now() + 7).slice(-9);
+  const tokenP = (await call("POST", "/auth/verify", { phone: phoneP, otp: OTP })).json?.token ?? "";
+  await call("PATCH", "/me", { name: "Smoke Pass" }, tokenP);
+  await expect("POST /me/pass needs sign-in", call("POST", "/me/pass", null, false), 401);
+  await expect("a new customer has no pass", call("GET", "/auth/me", null, tokenP), 200, (j) => j.passUntil === null);
+  if (!passOn) {
+    await expect("no surge to waive: the pass isn't sold", call("POST", "/me/pass", null, tokenP), 409, (j) => !!j.message);
+  } else {
+    const peakAt = `${dayOffset(2)}T${String(peakHour).padStart(2, "0")}:00`;
+    const peakReq = { service: "car", pickupId: a.id, dropId: b.id, scheduledFor: peakAt };
+    const anon = (await call("POST", "/rides/quote", peakReq, false)).json;
+    check("a surge-hour fare has surge and no saving", anon?.[0]?.surge > 1 && !anon[0].passSaving, JSON.stringify(anon?.[0]));
+    const bought = await expect("POST /me/pass buys a pass from the wallet", call("POST", "/me/pass", null, tokenP), 201,
+      (j) => Math.abs(Date.parse(j.passUntil) - Date.now() - st.passDays * 86_400_000) < 300_000);
+    await expect("GET /auth/me carries passUntil and the lower wallet", call("GET", "/auth/me", null, tokenP), 200,
+      (j) => j.passUntil === bought.passUntil && j.walletBalance === st.welcomeCredit - st.passPrice);
+    await expect("the pass is in the wallet history", call("GET", "/me/wallet", null, tokenP), 200,
+      (j) => j[0].kind === "payment" && j[0].amount === -st.passPrice && /QuikFly Pass/.test(j[0].note) && j[0].bookingId === null);
+    const waived = await expect("with the pass, surge-hour fares have no surge", call("POST", "/rides/quote", peakReq, tokenP), 200,
+      (j) => j.every((q, i) => q.surge === 1 && q.passSaving > 0 && q.fare + q.passSaving === anon[i].fare));
+    await expect("without a token the same quote still has surge", call("POST", "/rides/quote", peakReq, false), 200, (j) => j[0].surge > 1);
+    const passRide = await expect("a ride booked with the pass is priced without surge", call("POST", "/rides", { ...rideInput, scheduledFor: peakAt, payment: "upi" }, tokenP), 201,
+      (j) => j.quote.surge === 1 && j.quote.fare === waived.find((q) => q.option.id === rideInput.optionId).fare && j.quote.passSaving > 0);
+    await call("POST", `/rides/${passRide.id}/cancel`, null, tokenP);
+    await expect("buying again adds the days after the running pass", call("POST", "/me/pass", null, tokenP), 201,
+      (j) => Date.parse(j.passUntil) - Date.parse(bought.passUntil) === st.passDays * 86_400_000);
+    await expect("both passes were paid for", call("GET", "/auth/me", null, tokenP), 200, (j) => j.walletBalance === st.welcomeCredit - 2 * st.passPrice);
+  }
+  await call("POST", "/auth/logout", null, tokenP);
+}
+
 // Coupon limits per customer: QUIKFLY50 works 3 times for a cab, then stops
 const limited = cfg.offers.find((o) => o.code === "QUIKFLY50");
 for (let i = 1; i <= limited.perUserLimit; i++) {

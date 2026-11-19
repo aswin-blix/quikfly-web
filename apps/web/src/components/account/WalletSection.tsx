@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Coins, Gift, Wallet } from "lucide-react";
+import { PassCard } from "./PassCard";
 import type { CreditSummary, WalletTransaction } from "@quikfly/shared";
 import { CREDIT_KIND_LABEL, REFUND_TIMINGS, WALLET_KIND_LABEL } from "@/lib/account";
 import { useSettings } from "../ConfigProvider";
@@ -41,6 +42,8 @@ export function WalletSection() {
         </div>
         <p className="text-xs text-subtle mt-3">Adding money is available once online payments go live.</p>
       </Section>
+
+      <PassCard />
 
       <Section title="QuikFly Credits" sub={`Earned back on completed trips. Credits pay up to ${settings.creditsMaxRedeemPercent}% of a booking, expire ${settings.creditsExpiryDays} days after you get them, and can't be withdrawn.`}>
         <div className="rounded-2xl border border-line p-5 flex items-center gap-4">

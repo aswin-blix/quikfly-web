@@ -97,17 +97,22 @@ export function surgeAt(settings: Settings, hour: number) {
 /**
  * Fares for every option of one service from `a` to `b`, through any `stops` in order. Distance
  * is the sum of the legs; each stop adds `rideStopMinutes` of waiting, charged per minute.
- * `hour` is the India-time hour.
+ * `hour` is the India-time hour. `waiveSurge` (a QuikFly Pass) prices without the surge and
+ * says how much that saved.
  */
-export function rideQuotes(options: RideOption[], a: Place, b: Place, settings: Settings, hour: number, stops: Place[] = []): FareQuote[] {
+export function rideQuotes(options: RideOption[], a: Place, b: Place, settings: Settings, hour: number, stops: Place[] = [], waiveSurge = false): FareQuote[] {
   const points = [a, ...stops, b];
   const mapUnits = points.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - points[i].x, p.y - points[i].y), 0);
   const distanceKm = Math.max(RIDE_SIM.minDistanceKm, Math.round(mapUnits * RIDE_SIM.kmPerMapUnit * 10) / 10);
-  const surge = surgeAt(settings, hour);
+  const peak = surgeAt(settings, hour);
+  const surge = waiveSurge ? 1 : peak;
   return options.map((option, i) => {
     const durationMin = Math.round((distanceKm / RIDE_SIM.speedKmh[option.service]) * 60) + RIDE_SIM.pickupBufferMin + stops.length * settings.rideStopMinutes;
-    const fare = Math.round((option.baseFare + option.perKm * distanceKm + option.perMin * durationMin) * surge);
-    return { option, fare, distanceKm, durationMin, etaMin: 2 + ((i * 3 + Math.round(distanceKm)) % 6), surge };
+    const raw = option.baseFare + option.perKm * distanceKm + option.perMin * durationMin;
+    const fare = Math.round(raw * surge);
+    const quote: FareQuote = { option, fare, distanceKm, durationMin, etaMin: 2 + ((i * 3 + Math.round(distanceKm)) % 6), surge };
+    if (waiveSurge && peak > 1) quote.passSaving = Math.round(raw * peak) - fare;
+    return quote;
   });
 }
 

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useHideBottomNav } from "./BottomNav";
 import { ArrowUpDown, Clock, Coins, MapPin, Navigation, Phone, Plus, Share2, Siren, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { RIDE_CANCEL_REASONS, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, creditsEarned, creditsUsable, isNightHour, rideCancelFee } from "@quikfly/shared";
+import { PASS_NAME, RIDE_CANCEL_REASONS, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, creditsEarned, creditsUsable, effectiveSurge, isNightHour, passSaleError, rideCancelFee } from "@quikfly/shared";
 import type { FareQuote, PaymentMethod, Place, Ride, RideCancelReason, SavedPlace } from "@quikfly/shared";
 import { trackUrl } from "@/lib/account";
 import { Link } from "@/lib/nav";
@@ -128,7 +128,8 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
     }, (e: Error) => { if (live) { setQuotes(null); setLoadingQuotes(false); toast(e.message, "err"); } });
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickup, drop, service, scheduledFor, stopKey, toast]);
+    // Re-quote when signing in or buying a QuikFly Pass changes the surge.
+  }, [pickup, drop, service, scheduledFor, stopKey, toast, user?.passUntil]);
 
   // Starting a scheduled ride from My Trips: assign the driver now and run the live trip.
   const resumeKey = resume ? `${resume.rideId}:${resume.bookingId}` : "";
@@ -322,6 +323,14 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
                 {quotes[0].surge > 1 && (
                   <p className="text-xs text-warning border border-warning/30 bg-warning/10 rounded-lg px-3 py-2" role="note">
                     Busy hours: these fares include a ×{quotes[0].surge} surge (never more than ×{settings.surgeCap}). Surge hours today: {settings.surgeHours}.
+                    {!passSaleError(settings) && (
+                      <> <Link href="/account?tab=wallet#pass" className="underline font-medium">Skip surge with {PASS_NAME}</Link> ({inr(settings.passPrice)} for {settings.passDays} days).</>
+                    )}
+                  </p>
+                )}
+                {!!quotes[0].passSaving && (
+                  <p className="text-xs text-success border border-success/30 bg-success/10 rounded-lg px-3 py-2" role="note">
+                    Busy hours, but your {PASS_NAME} takes the ×{effectiveSurge(settings)} surge off these fares.
                   </p>
                 )}
                 {quotes.map((q, i) => (
@@ -335,7 +344,10 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
                       </p>
                       <p className="text-xs text-muted">{q.etaMin} min away · {q.option.description}</p>
                     </div>
-                    <p className="font-bold text-lg">{inr(q.fare)}</p>
+                    <div className="text-right">
+                      <p className="font-bold text-lg">{inr(q.fare)}</p>
+                      {!!q.passSaving && <p className="text-[11px] text-success">−{inr(q.passSaving)} surge</p>}
+                    </div>
                   </motion.button>
                 ))}
                 <div className="flex gap-2 pt-1">

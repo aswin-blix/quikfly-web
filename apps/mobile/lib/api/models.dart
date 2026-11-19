@@ -65,6 +65,7 @@ class User {
     required this.phone,
     required this.walletBalance,
     this.creditBalance = 0,
+    this.passUntil,
     this.email,
     this.gender,
     this.dob,
@@ -80,6 +81,9 @@ class User {
 
   /// Unexpired QuikFly Credits (separate from the wallet; see core/credits.dart).
   final int creditBalance;
+
+  /// When the rider's QuikFly Pass ends, while one is running (no surge on rides until then).
+  final DateTime? passUntil;
   final String? email, dob;
   final Gender? gender;
   final bool profileComplete, referred, autoShareNightRides;
@@ -94,6 +98,7 @@ class User {
         phone: (j['phone'] as String?) ?? '',
         walletBalance: _int(j['walletBalance']),
         creditBalance: j['creditBalance'] == null ? 0 : _int(j['creditBalance']),
+        passUntil: j['passUntil'] == null ? null : DateTime.parse(j['passUntil'] as String).toLocal(),
         email: j['email'] as String?,
         gender: Gender.values.where((g) => g.name == j['gender']).firstOrNull,
         dob: j['dob'] as String?,
@@ -206,15 +211,19 @@ class RideOption {
 }
 
 class FareQuote {
-  const FareQuote(this.option, this.fare, this.distanceKm, this.durationMin, this.etaMin, {this.surge = 1});
+  const FareQuote(this.option, this.fare, this.distanceKm, this.durationMin, this.etaMin, {this.surge = 1, this.passSaving = 0});
   final RideOption option;
   final int fare, durationMin, etaMin;
+
+  /// ₹ the rider's QuikFly Pass took off this fare (the surge it waived); 0 = none.
+  final int passSaving;
 
   /// Surge in this fare (1 = none), shown before booking (MVAG 2025).
   final double distanceKm, surge;
   factory FareQuote.fromJson(Json j) => FareQuote(
       RideOption.fromJson(j['option'] as Json), _int(j['fare']), _num(j['distanceKm']), _int(j['durationMin']), _int(j['etaMin']),
-      surge: j['surge'] == null ? 1 : _num(j['surge']));
+      surge: j['surge'] == null ? 1 : _num(j['surge']),
+      passSaving: j['passSaving'] == null ? 0 : _int(j['passSaving']));
 }
 
 class Driver {
@@ -558,6 +567,7 @@ class Settings {
   bool get featureSelfDrive => _b('featureSelfDrive');
   bool get featureTripOffers => _b('featureTripOffers');
   bool get featureReferral => _b('featureReferral');
+  bool get featureRidePass => _b('featureRidePass');
 
   /// Partner registration (QuikFly Partner app).
   int get vendorJoiningFee => _i('vendorJoiningFee', 1000);
@@ -578,7 +588,16 @@ class Settings {
   int get rentUnlimitedKmExtraPercent => _i('rentUnlimitedKmExtraPercent', 25);
   int get rentDepositRefundHours => _i('rentDepositRefundHours', 48);
   double get surgeCap => (_raw['surgeCap'] as num?)?.toDouble() ?? 2;
+  double get surgeMultiplier => (_raw['surgeMultiplier'] as num?)?.toDouble() ?? 1.2;
   String get surgeHours => _s('surgeHours', '8-10, 17-20');
+
+  /// The surge actually applied (never above the cap), like effectiveSurge() in packages/shared.
+  double get effectiveSurge => surgeMultiplier.clamp(1, surgeCap < 1 ? 1 : surgeCap).toDouble();
+
+  /// QuikFly Pass (packages/shared/src/pass.ts): price, length, and whether it's on sale.
+  int get passPrice => _i('passPrice', 99);
+  int get passDays => _i('passDays', 30);
+  bool get passOnSale => featureRidePass && effectiveSurge > 1 && surgeHours.trim().isNotEmpty;
   int get rideCancelFeePercent => _i('rideCancelFeePercent', 10);
   int get rideCancelFeeCap => _i('rideCancelFeeCap', 100);
   int get rideCancelFreeMinutes => _i('rideCancelFreeMinutes', 2);

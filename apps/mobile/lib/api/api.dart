@@ -173,6 +173,9 @@ class QuikFlyApi {
   Future<List<WalletTransaction>> wallet() => _get('/me/wallet', _listOf(WalletTransaction.fromJson));
   Future<CreditSummary> credits() => _get('/me/credits', (d) => CreditSummary.fromJson(d as Json));
 
+  /// Buys a QuikFly Pass from the wallet; returns when the pass now ends.
+  Future<DateTime> buyPass() => _post('/me/pass', (d) => DateTime.parse((d as Json)['passUntil'] as String).toLocal());
+
   // ── Notifications ──
   Future<({List<AppNotification> items, int unread})> notifications() => _get('/me/notifications', (d) {
         final j = d as Json;

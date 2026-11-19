@@ -26,6 +26,8 @@ export interface Settings {
   featureSelfDrive: boolean;
   featureTripOffers: boolean;
   featureReferral: boolean;
+  /** QuikFly Pass on sale (passes already bought keep working when this is off). */
+  featureRidePass: boolean;
 
   /** Verify a submitted driving licence at once instead of waiting for an admin (unattended demos). */
   licenceAutoApprove: boolean;
@@ -41,6 +43,10 @@ export interface Settings {
   surgeHours: string;
   /** Surge never goes above this (MVAG 2025: 2× the base fare; some states ask for less). */
   surgeCap: number;
+
+  /** QuikFly Pass (pass.ts): paid from the wallet, waives the ride surge for this many days. */
+  passPrice: number;
+  passDays: number;
 
   /** Rider cancellation fee without a valid reason: % of the fare, capped (MVAG 2025: 10%, ₹100). */
   rideCancelFeePercent: number;
@@ -159,12 +165,15 @@ export const DEFAULT_SETTINGS: Settings = {
   featureSelfDrive: true,
   featureTripOffers: true,
   featureReferral: true,
+  featureRidePass: true,
   licenceAutoApprove: false,
   welcomeCredit: 500,
   referralBonus: 100,
   surgeMultiplier: 1.2,
   surgeHours: "8-10, 17-20",
   surgeCap: 2,
+  passPrice: 99,
+  passDays: 30,
   rideCancelFeePercent: 10,
   rideCancelFeeCap: 100,
   rideCancelFreeMinutes: 2,
@@ -248,12 +257,15 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   featureSelfDrive: { type: "boolean" },
   featureTripOffers: { type: "boolean" },
   featureReferral: { type: "boolean" },
+  featureRidePass: { type: "boolean" },
   licenceAutoApprove: { type: "boolean" },
   welcomeCredit: money(5000),
   referralBonus: money(5000),
   surgeMultiplier: { type: "number", min: 1, max: 3 },
   surgeHours: { type: "text", max: 60, pattern: SURGE_HOURS, hint: 'Hour ranges like "8-10, 17-20" (0–23), or empty for no surge.' },
   surgeCap: { type: "number", min: 1, max: 3 },
+  passPrice: money(2000),
+  passDays: { type: "number", min: 1, max: 365, integer: true },
   rideCancelFeePercent: percent,
   rideCancelFeeCap: money(1000),
   rideCancelFreeMinutes: { type: "number", min: 0, max: 30, integer: true },
