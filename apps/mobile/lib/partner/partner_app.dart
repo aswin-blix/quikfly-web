@@ -33,7 +33,13 @@ void setVendor(WidgetRef ref, VendorApplication a) => ref.invalidate(vendorProvi
 final partnerRouter = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, _) => const PartnerHomeScreen()),
-    GoRoute(path: '/login', builder: (_, _) => const LoginScreen(showReferral: false)),
+    GoRoute(
+      path: '/login',
+      builder: (_, _) => const LoginScreen(
+        showReferral: false,
+        intro: "Sign in to put your vehicle on QuikFly and manage it from your phone. New here? We'll start your partner application after the OTP.",
+      ),
+    ),
     GoRoute(path: '/section/:id', builder: (_, s) => SectionScreen(section: s.pathParameters['id']!)),
     GoRoute(path: '/vehicles/new', builder: (_, _) => const SectionScreen(section: 'vehicle', vehicleId: 'new')),
     GoRoute(path: '/vehicle/:id', builder: (_, s) => VehicleScreen(id: s.pathParameters['id']!)),
