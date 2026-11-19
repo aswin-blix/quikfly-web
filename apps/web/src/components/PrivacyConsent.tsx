@@ -23,7 +23,7 @@ export function PrivacyConsent() {
   const agree = () => run(async () => setUser(await api.account.consent(PRIVACY_NOTICE.version)));
 
   return (
-    <Modal open onClose={() => undefined} title="Your privacy">
+    <Modal open title="Your privacy">
       <div className="space-y-4">
         <p className="flex items-center gap-2 text-strong font-medium"><ShieldCheck size={18} className="text-gold" />Before you continue, here&apos;s how QuikFly uses your data:</p>
         <ul className="list-disc pl-5 space-y-1.5 text-sm text-soft">{privacyNotice(settings).summary.map((p) => <li key={p}>{p}</li>)}</ul>

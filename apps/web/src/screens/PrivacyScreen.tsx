@@ -15,7 +15,8 @@ export function PrivacyScreen() {
     <>
       <PageHeader crumbs={[["Home", "/"], ["Privacy notice"]]} title="Privacy notice" icon={<ShieldCheck className="text-gold" size={36} />}
         sub={`How QuikFly handles your personal data. Last updated ${longDate(notice.updated)}.`} />
-      <section className="max-w-3xl mx-auto px-4 pb-16 space-y-5">
+      <section className="max-w-7xl mx-auto px-4 pb-16">
+        <div className="max-w-3xl space-y-5">
         <div className="panel p-5 sm:p-6">
           <p className="label !text-gold">In short</p>
           <ul className="mt-3 space-y-2 list-disc pl-5 text-soft">{notice.summary.map((p) => <li key={p}>{p}</li>)}</ul>
@@ -36,6 +37,7 @@ export function PrivacyScreen() {
             <p className="flex items-start gap-2 text-soft"><MapPin size={16} className="shrink-0 mt-0.5 text-gold" />{c.company}, {c.address}</p>
           </div>
           <p className="text-sm text-muted mt-5">Signed in? Download your data or delete your account from <Link href="/account?tab=privacy" className="text-gold">Account → Privacy &amp; data</Link>.</p>
+        </div>
         </div>
       </section>
     </>
