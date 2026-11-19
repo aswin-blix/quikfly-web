@@ -6,6 +6,8 @@ import { Bell, ChevronDown, CircleCheck, Download, HelpCircle, LayoutGrid, Ticke
 import { AppProvider, useApp } from "./AppProvider";
 import { LoginModal } from "./LoginModal";
 import { PrivacyConsent } from "./PrivacyConsent";
+import { LanguageMenu } from "./LanguageMenu";
+import { LanguageProvider, useT } from "./LanguageProvider";
 import { BottomNav, BottomNavProvider } from "./BottomNav";
 import { ServicesSheet } from "./ServicesSheet";
 import { ThemeProvider } from "./ThemeProvider";
@@ -28,6 +30,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <MotionConfig reducedMotion="user">
       <ThemeProvider>
       <AppProvider>
+      <LanguageProvider>
       <BottomNavProvider>
         <Header onOpenServices={openServices} />
         <main className="min-h-[70vh]"><PausedGate path={path}>{children}</PausedGate></main>
@@ -38,6 +41,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <PrivacyConsent />
         <Toasts />
       </BottomNavProvider>
+      </LanguageProvider>
       </AppProvider>
       </ThemeProvider>
     </MotionConfig>
@@ -56,6 +60,7 @@ export function PageTransition({ children, k }: { children: React.ReactNode; k?:
 function Header({ onOpenServices }: { onOpenServices: () => void }) {
   const path = usePath();
   const { user, requireAuth, signOut, bookings, toast, unread } = useApp();
+  const t = useT();
   const [hidden, setHidden] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { scrollY } = useScroll();
@@ -76,14 +81,14 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
       className={cx("no-print sticky top-0 z-40 transition-colors duration-300", scrolled ? "bg-ink/85 backdrop-blur-xl border-b border-fg/5" : "bg-transparent")}>
       {DEMO_OTP && (
         <div className="text-center text-[11px] tracking-wide py-1 bg-gold/10 text-gold-pale border-b border-gold/10">
-          {DEMO_MODE ? "DEMO MODE · sample data" : "PREVIEW"} · login OTP is <b>{DEMO_OTP}</b>
+          {t(DEMO_MODE ? "bannerDemo" : "bannerPreview")} · {t("bannerOtp")} <b>{DEMO_OTP}</b>
         </div>
       )}
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-3">
-        <Link href="/" className="shrink-0" aria-label="QuikFly home">
+        <Link href="/" className="shrink-0" aria-label={t("navLogoHome")}>
           <img src="/assets/logo.svg" alt="QuikFly" width={2059} height={495} className="h-10 sm:h-11 w-auto" />
         </Link>
-        <nav className="hidden xl:flex items-center ml-4" aria-label="Services">
+        <nav className="hidden xl:flex items-center ml-4" aria-label={t("navServices")}>
           {open.map((s) => (
             <Link key={s.key} href={s.href}
               className={cx("relative px-3 py-2 text-sm rounded-lg transition-colors", activeKey === s.key ? "text-gold" : "text-soft hover:text-strong")}>
@@ -91,12 +96,13 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
               <span className="relative">{s.nav}</span>
             </Link>
           ))}
-          <Link href="/offers" className={cx("px-3 py-2 text-sm", path === "/offers" ? "text-gold" : "text-soft hover:text-strong")}>Offers</Link>
+          <Link href="/offers" className={cx("px-3 py-2 text-sm", path === "/offers" ? "text-gold" : "text-soft hover:text-strong")}>{t("navOffers")}</Link>
         </nav>
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          <LanguageMenu compact />
           <ThemeToggle />
           {user && (
-            <Link href="/notifications" aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"} className="relative p-2 rounded-lg text-soft hover:bg-fg/5">
+            <Link href="/notifications" aria-label={unread ? t("navNotificationsUnread", { count: unread }) : t("navNotifications")} className="relative p-2 rounded-lg text-soft hover:bg-fg/5">
               <Bell size={18} />
               <AnimatePresence>
                 {unread > 0 && (
@@ -107,9 +113,9 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
             </Link>
           )}
           {/* Below lg these live in the bottom bar (BottomNav). */}
-          <Link href="/help" className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5"><HelpCircle size={17} />Help</Link>
+          <Link href="/help" className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5"><HelpCircle size={17} />{t("navHelp")}</Link>
           <Link href="/bookings" className="relative hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5">
-            <Ticket size={18} /><span>My Trips</span>
+            <Ticket size={18} /><span>{t("navMyTrips")}</span>
             <AnimatePresence>
               {live > 0 && (
                 <motion.span key={live} initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
@@ -119,8 +125,8 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
           </Link>
           {user ? (
             <div className="hidden lg:flex items-center gap-2">
-              <Link href="/account?tab=wallet" title="Wallet" className="hidden lg:flex items-center gap-1.5 text-xs text-gold-pale bg-gold/10 px-2.5 py-1.5 rounded-lg hover:bg-gold/20"><Wallet size={14} />{inr(user.walletBalance)}</Link>
-              <Link href="/account" title="My account"
+              <Link href="/account?tab=wallet" title={t("navWallet")} className="hidden lg:flex items-center gap-1.5 text-xs text-gold-pale bg-gold/10 px-2.5 py-1.5 rounded-lg hover:bg-gold/20"><Wallet size={14} />{inr(user.walletBalance)}</Link>
+              <Link href="/account" title={t("navMyAccount")}
                 className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border border-line hover:border-gold/50 text-sm">
                 <span className="w-7 h-7 rounded-full btn-gold grid place-items-center text-xs">{user.name[0]?.toUpperCase()}</span>
                 <span className="hidden sm:inline max-w-24 truncate">{user.name}</span><ChevronDown size={14} className="text-subtle" />
@@ -129,13 +135,13 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
           ) : (
             <div className="hidden lg:block">
               <GoldButton className="!py-2 !px-4 text-sm" onClick={() => requireAuth(() => undefined)}>
-                <UserIcon size={16} /> Login
+                <UserIcon size={16} /> {t("navLogin")}
               </GoldButton>
             </div>
           )}
           {/* lg–xl: no room for the service links, so open the services sheet instead. */}
           <button type="button" className="hidden lg:grid xl:hidden place-items-center w-10 h-10 rounded-lg text-soft hover:bg-fg/5 hover:text-gold"
-            onClick={onOpenServices} aria-label="All services" aria-haspopup="dialog"><LayoutGrid size={20} /></button>
+            onClick={onOpenServices} aria-label={t("navAllServices")} aria-haspopup="dialog"><LayoutGrid size={20} /></button>
         </div>
       </div>
     </motion.header>
@@ -144,26 +150,28 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
 
 function Footer() {
   const open = useOpenServices();
+  const t = useT();
   return (
     <footer className="no-print mt-24 border-t border-line bg-coal/40">
       <div className="max-w-7xl mx-auto px-4 py-14 grid sm:grid-cols-2 lg:grid-cols-5 gap-10 text-sm">
         <div className="lg:col-span-2">
           <img src="/assets/logo.svg" alt="QuikFly" width={2059} height={495} className="h-14 w-auto" />
-          <p className="text-muted mt-4 max-w-sm">Rides, buses, holidays and rentals in one app. One login, one wallet, every journey.</p>
+          <p className="text-muted mt-4 max-w-sm">{t("footerTagline")}</p>
           <div className="flex gap-3 mt-5">
             <a href={ANDROID_APP.downloadUrl} download className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gold/50 text-xs text-gold hover:bg-gold/10">
-              <Download size={14} />Android app (APK)
+              <Download size={14} />{t("footerAndroid")}
             </a>
-            <span className="px-3 py-2 rounded-lg border border-line text-xs text-muted">iPhone: coming later</span>
+            <span className="px-3 py-2 rounded-lg border border-line text-xs text-muted">{t("footerIphone")}</span>
           </div>
+          <LanguageMenu className="mt-4 w-fit" />
         </div>
-        <FooterCol title="Services" links={open.map((s) => [s.action, s.href])} />
-        <FooterCol title="Company" links={[["Offers", "/offers"], ["Become a partner", "/partner"], ["My trips", "/bookings"]]} />
-        <FooterCol title="Support" links={[["Help centre", "/help"], ["Safety", "/help"], ["Cancellation & refunds", "/help"], ["Privacy notice", "/privacy"]]} />
+        <FooterCol title={t("navServices")} links={open.map((s) => [s.action, s.href])} />
+        <FooterCol title={t("footerCompany")} links={[[t("navOffers"), "/offers"], [t("linkBecomePartner"), "/partner"], [t("linkMyTrips"), "/bookings"]]} />
+        <FooterCol title={t("footerSupport")} links={[[t("linkHelpCentre"), "/help"], [t("footerSafety"), "/help"], [t("footerCancellation"), "/help"], [t("linkPrivacyNotice"), "/privacy"]]} />
       </div>
       <div className="border-t border-line">
         <p className="max-w-7xl mx-auto px-4 py-5 text-xs text-subtle flex flex-wrap justify-between gap-2">
-          <span>© {new Date().getFullYear()} QuikFly. All rights reserved.</span><span>Made in Chennai · Designed &amp; built by <a href={AUTHOR.url} target="_blank" rel="noopener author" className="text-muted hover:text-gold transition-colors underline-offset-4 hover:underline">{AUTHOR.name}</a></span>
+          <span>{t("footerRights", { year: new Date().getFullYear() })}</span><span>{t("footerMadeBy")} <a href={AUTHOR.url} target="_blank" rel="noopener author" className="text-muted hover:text-gold transition-colors underline-offset-4 hover:underline">{AUTHOR.name}</a></span>
         </p>
       </div>
     </footer>

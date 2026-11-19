@@ -4,14 +4,16 @@
 // for it too, so this is about not offering what can't be booked.
 import { PauseCircle } from "lucide-react";
 import { serviceOn, type ServiceKey } from "@quikfly/shared";
-import { SERVICES, type ServiceMeta } from "@/lib/services";
+import { localizeService, SERVICES, type ServiceMeta } from "@/lib/services";
+import { useT } from "./LanguageProvider";
 import { useSettings } from "./ConfigProvider";
 import { GhostLink } from "./ui";
 
-/** Services open for new bookings, in menu order. */
+/** Services open for new bookings, in menu order, with texts in the visitor's language. */
 export function useOpenServices(): ServiceMeta[] {
   const settings = useSettings();
-  return SERVICES.filter((s) => serviceOn(settings, s.key));
+  const t = useT();
+  return SERVICES.filter((s) => serviceOn(settings, s.key)).map((s) => localizeService(s, t));
 }
 
 /** A function telling whether a service is open (for links between services). */

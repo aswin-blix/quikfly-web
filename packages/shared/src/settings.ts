@@ -30,6 +30,8 @@ export interface Settings {
   featureRidePass: boolean;
   /** Women-only ride types (Bike Pink) offered to women riders. */
   featureWomenOnlyRides: boolean;
+  /** The language menu (English, Tamil, Hindi) on the website and in the apps. Off until every screen is translated and reviewed. */
+  featureLanguages: boolean;
 
   /** Verify a submitted driving licence at once instead of waiting for an admin (unattended demos). */
   licenceAutoApprove: boolean;
@@ -189,6 +191,7 @@ export const DEFAULT_SETTINGS: Settings = {
   featureReferral: true,
   featureRidePass: true,
   featureWomenOnlyRides: true,
+  featureLanguages: false,
   licenceAutoApprove: false,
   welcomeCredit: 500,
   referralBonus: 100,
@@ -296,6 +299,7 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   featureReferral: { type: "boolean" },
   featureRidePass: { type: "boolean" },
   featureWomenOnlyRides: { type: "boolean" },
+  featureLanguages: { type: "boolean" },
   licenceAutoApprove: { type: "boolean" },
   welcomeCredit: money(5000),
   referralBonus: money(5000),

@@ -1,0 +1,9 @@
+# Strings live once for the website and both apps: packages/shared/i18n/app_<lang>.arb
+# (English is the template). `flutter pub get` / build regenerates lib/l10n/ from them.
+arb-dir: ../../packages/shared/i18n
+template-arb-file: app_en.arb
+output-dir: lib/l10n
+output-localization-file: app_localizations.dart
+output-class: L
+nullable-getter: false
+untranslated-messages-file: build/untranslated.txt

@@ -669,6 +669,9 @@ class Settings {
   bool get featureRidePass => _b('featureRidePass');
   bool get featureWomenOnlyRides => _b('featureWomenOnlyRides');
 
+  /// The language menu; off (hidden) when an older API doesn't send it.
+  bool get featureLanguages => (_raw['featureLanguages'] as bool?) ?? false;
+
   /// Partner registration (QuikFly Partner app).
   int get vendorJoiningFee => _i('vendorJoiningFee', 1000);
   int get vendorMaxVehicleAgeYears => _i('vendorMaxVehicleAgeYears', 8);

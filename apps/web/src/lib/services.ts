@@ -25,3 +25,12 @@ export const SERVICES: ServiceMeta[] = [
 ];
 
 export const serviceByKey = (k: ServiceKey) => SERVICES.find((s) => s.key === k)!;
+
+/** The ARB key prefix of each service's texts (serviceBikeTitle, serviceBikeAction, ...). */
+const TEXT_KEY: Record<ServiceKey, string> = { bike: "Bike", car: "Car", bus: "Bus", tours: "Tours", rent: "Rent", rentals: "Rentals" };
+
+/** The service with its texts in the visitor's language (t from useT()). */
+export function localizeService(s: ServiceMeta, t: (key: string) => string): ServiceMeta {
+  const k = `service${TEXT_KEY[s.key]}`;
+  return { ...s, title: t(`${k}Title`), action: t(`${k}Action`), nav: t(`${k}Nav`), tagline: t(`${k}Tagline`), blurb: t(`${k}Blurb`) };
+}

@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { BadgePercent, CircleUser, House, LayoutGrid, Ticket, type LucideIcon } from "lucide-react";
 import { useApp } from "./AppProvider";
 import { AccountSheet } from "./AccountSheet";
+import { useT } from "./LanguageProvider";
 import { cx } from "@/lib/format";
 import { Link, usePath } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
@@ -43,6 +44,7 @@ interface Tab { key: TabKey; label: string; icon: LucideIcon; href?: string; onS
 export function BottomNav({ servicesOpen, onOpenServices }: { servicesOpen: boolean; onOpenServices: () => void }) {
   const path = usePath();
   const { user, bookings, requireAuth, toast } = useApp();
+  const t = useT();
   const { hidden } = useContext(HideCtx);
   const [accountOpen, setAccountOpen] = useState(false);
   const visible = !hidden && !HIDDEN_ON.includes(path);
@@ -59,13 +61,13 @@ export function BottomNav({ servicesOpen, onOpenServices }: { servicesOpen: bool
   }, [visible]);
 
   const tabs: Tab[] = [
-    { key: "home", label: "Home", icon: House, href: "/" },
-    { key: "services", label: "Services", icon: LayoutGrid, onSelect: onOpenServices },
-    { key: "offers", label: "Offers", icon: BadgePercent, href: "/offers" },
-    { key: "trips", label: "My Trips", icon: Ticket, href: "/bookings", badge: live },
+    { key: "home", label: t("navHome"), icon: House, href: "/" },
+    { key: "services", label: t("navServices"), icon: LayoutGrid, onSelect: onOpenServices },
+    { key: "offers", label: t("navOffers"), icon: BadgePercent, href: "/offers" },
+    { key: "trips", label: t("navMyTrips"), icon: Ticket, href: "/bookings", badge: live },
     user
-      ? { key: "account", label: "Account", icon: CircleUser, onSelect: () => setAccountOpen(true), avatar: user.name[0]?.toUpperCase() }
-      : { key: "account", label: "Login", icon: CircleUser, onSelect: () => requireAuth(() => undefined) },
+      ? { key: "account", label: t("navAccount"), icon: CircleUser, onSelect: () => setAccountOpen(true), avatar: user.name[0]?.toUpperCase() }
+      : { key: "account", label: t("navLogin"), icon: CircleUser, onSelect: () => requireAuth(() => undefined) },
   ];
 
   const active: TabKey | null =
@@ -81,7 +83,7 @@ export function BottomNav({ servicesOpen, onOpenServices }: { servicesOpen: bool
     <>
       <AnimatePresence>
         {visible && (
-          <motion.nav key="bottom-nav" aria-label="Main"
+          <motion.nav key="bottom-nav" aria-label={t("navMain")}
             initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ duration: 0.25, ease: "easeOut" }}
             className="no-print lg:hidden fixed inset-x-0 bottom-0 z-40 border-t border-line bg-ink/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
             <ul className="grid grid-cols-5 max-w-xl mx-auto h-[var(--bottom-nav-height)]">
@@ -114,6 +116,7 @@ export function BottomNav({ servicesOpen, onOpenServices }: { servicesOpen: bool
 
 function TabContent({ tab, active }: { tab: Tab; active: boolean }) {
   const Icon = tab.icon;
+  const t = useT();
   return (
     <>
       <span className="relative grid place-items-center w-14 h-8">
@@ -126,7 +129,7 @@ function TabContent({ tab, active }: { tab: Tab; active: boolean }) {
           : <Icon size={22} strokeWidth={active ? 2.3 : 1.8} className="relative" />}
         {!!tab.badge && (
           <span className="absolute top-0 right-2.5 min-w-4 h-4 px-1 rounded-full bg-brand text-on-brand text-[10px] font-bold grid place-items-center"
-            aria-label={`${tab.badge} upcoming`}>{tab.badge}</span>
+            aria-label={t("navUpcoming", { count: tab.badge })}>{tab.badge}</span>
         )}
       </span>
       <span className={cx("text-[11px] leading-none", active ? "font-semibold" : "font-medium")}>{tab.label}</span>

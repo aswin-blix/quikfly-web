@@ -12,12 +12,13 @@
     "dev:web": "npm run dev -w @quikfly/web",
     "dev:admin": "npm run dev -w @quikfly/admin",
     "build": "npm run build -w @quikfly/api && npm run build -w @quikfly/web && npm run build -w @quikfly/admin",
-    "typecheck": "npm run typecheck -w @quikfly/shared && npm run typecheck -w @quikfly/api && npm run typecheck -w @quikfly/web && npm run typecheck -w @quikfly/admin",
+    "typecheck": "node scripts/i18n-check.mjs && npm run typecheck -w @quikfly/shared && npm run typecheck -w @quikfly/api && npm run typecheck -w @quikfly/web && npm run typecheck -w @quikfly/admin",
     "db:migrate:local": "npm run db:migrate:local -w @quikfly/api",
     "smoke": "npm run smoke -w @quikfly/api",
     "smoke:admin": "npm run smoke:admin -w @quikfly/api",
     "deploy": "npm run deploy -w @quikfly/api && npm run deploy -w @quikfly/web && npm run deploy -w @quikfly/admin",
-    "db:migrate:remote": "npm run db:migrate:remote -w @quikfly/api"
+    "db:migrate:remote": "npm run db:migrate:remote -w @quikfly/api",
+    "i18n:check": "node scripts/i18n-check.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

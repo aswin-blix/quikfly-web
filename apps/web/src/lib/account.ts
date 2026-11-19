@@ -2,9 +2,6 @@
 // Business rules (limits, patterns) live in @quikfly/shared; amounts the owner can change
 // (welcome credit, referral bonus, safety line) come from the API settings (useSettings()).
 import type { WalletTxnKind, CreditKind } from "@quikfly/shared";
-import { inr } from "./format";
-
-export const newUserWalletHint = (welcomeCredit: number) => (welcomeCredit ? `${inr(welcomeCredit)} welcome credit is in your wallet.` : "");
 
 /** India's national emergency number (the QuikFly safety line comes from settings). */
 export const EMERGENCY_NUMBER = "112";
@@ -40,18 +37,19 @@ export const WALLET_KIND_LABEL: Record<WalletTxnKind, string> = {
   opening: "Opening balance",
 };
 
+/** Account sections in menu order; `label` and `hint` are string keys (packages/shared/i18n). */
 export const ACCOUNT_SECTIONS = [
-  { id: "profile", label: "Profile", hint: "Name, email, gender, date of birth" },
-  { id: "wallet", label: "Wallet", hint: "Balance and history" },
-  { id: "refer", label: "Refer & earn", hint: "Invite friends, both get credit" },
-  { id: "places", label: "Saved places", hint: "Home, work and favourites" },
-  { id: "travellers", label: "Travellers", hint: "Fill bookings in one tap" },
-  { id: "safety", label: "Safety", hint: "Emergency contacts, trip sharing" },
-  { id: "licence", label: "Driving licence", hint: "Needed for self-drive" },
-  { id: "support", label: "Support", hint: "Tickets and callback requests" },
-  { id: "business", label: "Business / GST", hint: "GST details on invoices" },
-  { id: "privacy", label: "Privacy & data", hint: "Download your data, privacy notice" },
-  { id: "security", label: "Login & security", hint: "Number, devices, delete account" },
+  { id: "profile", label: "sectionProfile", hint: "sectionProfileHint" },
+  { id: "wallet", label: "sectionWallet", hint: "sectionWalletHint" },
+  { id: "refer", label: "linkReferEarn", hint: "sectionReferHint" },
+  { id: "places", label: "sectionPlaces", hint: "sectionPlacesHint" },
+  { id: "travellers", label: "sectionTravellers", hint: "sectionTravellersHint" },
+  { id: "safety", label: "sectionSafety", hint: "sectionSafetyHint" },
+  { id: "licence", label: "sectionLicence", hint: "sectionLicenceHint" },
+  { id: "support", label: "sectionSupport", hint: "sectionSupportHint" },
+  { id: "business", label: "sectionBusiness", hint: "sectionBusinessHint" },
+  { id: "privacy", label: "sectionPrivacy", hint: "sectionPrivacyHint" },
+  { id: "security", label: "sectionSecurity", hint: "sectionSecurityHint" },
 ] as const;
 
 export type AccountSectionId = (typeof ACCOUNT_SECTIONS)[number]["id"];
