@@ -11,4 +11,5 @@ export * from "./switches";
 export * from "./pass";
 export * from "./bus-changes";
 export * from "./holidays";
+export * from "./support";
 export * from "./vendor";

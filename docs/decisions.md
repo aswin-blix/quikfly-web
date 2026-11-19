@@ -4,6 +4,7 @@ Why the project is built the way it is. Add an entry when you make a trade-off, 
 
 | Date | Decision | Why | Revisit when |
 |---|---|---|---|
+| 2026-11-19 | **Support is in-app only**: callback requests and tickets live in D1 and staff answer in the admin panel; customers read replies in the app/website (plus a `support.reply` notification). WhatsApp is a plain `wa.me` link to a number in Settings, not the WhatsApp Business API | Free tier: no paid SMS/email/WhatsApp API. Callbacks need no login so anyone (holiday enquiries) can ask; 3 per phone per day keeps the queue clean without a CAPTCHA | A WhatsApp Business account or an email sender is set up (then replies can also go out there) |
 | 2026-11-16 | **Everything on free tiers** (no SMS, payment gateway, maps, Play Store fee, domain) | Dev stage; the goal is a live client demo at ₹0 | The client signs off |
 | 2026-11-16 | **Monorepo** (npm workspaces): `apps/web`, `apps/api`, `apps/mobile`, `packages/shared` | One API serves web and app; types are defined once | — |
 | 2026-11-16 | **API on Cloudflare Workers + Hono + D1** | Free, never sleeps (free Render-style hosts take 30–50 s to wake, which ruins a live demo), TypeScript shares types with web | Traffic outgrows the D1 free limits |

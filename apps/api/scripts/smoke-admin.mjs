@@ -609,6 +609,27 @@ if (pvUp.status === 409) {
 }
 await call("POST", "/me/delete", { otp: OTP }, PV);
 
+// Support: a customer's ticket reaches the staff queue; a staff reply notifies them; staff close it.
+{
+  const CS = (await call("POST", "/auth/verify", { phone: "71" + String(Date.now()).slice(-8), otp: OTP })).json?.token ?? "";
+  await call("PATCH", "/me", { name: "Smoke Support" }, CS);
+  const csMe = (await call("GET", "/auth/me", null, CS)).json;
+  const st = await expect("customer opens a ticket", call("POST", "/me/tickets", { topic: "refund", message: "Smoke: where is my refund?" }, CS), 201, (j) => j.status === "open");
+  await expect("GET /admin/support lists it with the customer", call("GET", "/admin/support", null, T), 200, (j) => j.some((t) => t.id === st.id && t.customerId === csMe.id && t.messages.length === 1));
+  await expect("a reply needs some text", call("POST", `/admin/support/${st.id}/reply`, { body: "ok" }, T), 400);
+  await expect("staff reply", call("POST", `/admin/support/${st.id}/reply`, { body: "Smoke: your refund is on its way." }, T), 200,
+    (j) => j.status === "answered" && j.messages.length === 2 && j.messages[1].author === "staff");
+  await expect("the customer sees the staff reply", call("GET", `/me/tickets/${st.id}`, null, CS), 200,
+    (j) => j.status === "answered" && j.messages[1].staffName && !("customerId" in j));
+  await expect("and is notified", call("GET", "/me/notifications", null, CS), 200, (j) => j.items.some((n) => n.kind === "support.reply"));
+  await expect("staff close it with a note", call("POST", `/admin/support/${st.id}/close`, { note: "Smoke: closing." }, T), 200, (j) => j.status === "closed" && j.messages.length === 3);
+  await expect("closing twice is refused", call("POST", `/admin/support/${st.id}/close`, {}, T), 409);
+  await expect("audit records support replies and closes", call("GET", `/admin/audit?entity=support&entityId=${st.id}`, null, T), 200,
+    (j) => j.items.some((e) => e.action === "support.reply") && j.items.some((e) => e.action === "support.close"));
+  await expect("an unknown ticket is 404", call("GET", "/admin/support/SPNOPE", null, T), 404);
+  await call("POST", "/me/delete", { otp: OTP }, CS);
+}
+
 if (LOCAL) {
   // Roles
   const content = await expect("login: content role", login(CONTENT), 200, (j) => j.admin.role === "content");
@@ -621,6 +642,7 @@ if (LOCAL) {
   await expect("content can't see bookings", call("GET", "/admin/bookings", null, content.token), 403);
   await expect("content can't review licences", call("GET", "/admin/licences", null, content.token), 403);
   await expect("content can't review partners", call("GET", "/admin/vendors", null, content.token), 403);
+  await expect("content can't answer support", call("GET", "/admin/support", null, content.token), 403);
 
   // Reset brings back the seed (local only: it would wipe real edits in production)
   const extra = (await call("POST", "/admin/catalog/city", { data: { name: "Smoke City" } }, T)).json;

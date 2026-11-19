@@ -1,11 +1,11 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useRef, useState } from "react";
-import { BedDouble, CalendarDays, Camera, Car, Check, Clock, Hotel, Palmtree, Plane, ShieldCheck, Star, Users, Utensils } from "lucide-react";
+import { BedDouble, CalendarDays, Camera, Car, Check, Clock, Hotel, Palmtree, PhoneCall, Plane, ShieldCheck, Star, Users, Utensils } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { SceneArt } from "@/components/SceneArt";
 import { Reveal, Tilt, TweenNumber } from "@/components/motion";
-import { Breadcrumbs, Counter, Empty, GoldButton, PageHeader, SectionTitle, Segmented, Spinner } from "@/components/ui";
+import { Breadcrumbs, Counter, Empty, GoldButton, Modal, PageHeader, SectionTitle, Segmented, Spinner } from "@/components/ui";
 import { useSettings } from "@/components/ConfigProvider";
 import { api } from "@/lib/api";
 import { cx, inr, prettyDate, todayISO } from "@/lib/format";
@@ -13,6 +13,7 @@ import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, useNav, useQuery } from "@/lib/nav";
 import { cancelPolicyText, childPrice, departureMonth, departureStatus, type DepartureView, type TourPackage, type TourTheme } from "@quikfly/shared";
 import { useTours } from "@/components/catalog-hooks";
+import { CallbackForm, WhatsAppButton } from "@/components/support/CallbackForm";
 
 const THEMES: [TourTheme | "all", string][] = [["all", "All"], ["beach", "Beaches"], ["hills", "Hill stations"], ["spiritual", "Spiritual"], ["women", "Women only"], ["seniors", "Seniors"], ["international", "International"], ["weekend", "Weekend"], ["heritage", "Heritage"]];
 
@@ -165,6 +166,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
   const TOURS = toursList ?? [];
   const settings = useSettings();
   const [pricing, setPricing] = useState(false);
+  const [callback, setCallback] = useState(false);
   const tour = TOURS.find((t) => t.slug === slug);
   const ref = useRef<HTMLDivElement>(null);
   const { setDraft, toast } = useApp();
@@ -311,6 +313,18 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
             <GoldButton className="w-full" loading={pricing} onClick={book} disabled={deps.length > 0 && !dep}>Book now</GoldButton>
             <p className="text-[11px] text-subtle text-center">Demo: no payment is taken</p>
           </motion.div>
+          <div className="panel p-5 mt-4">
+            <p className="font-medium text-strong">Questions about this trip?</p>
+            <p className="text-sm text-muted mt-1">Our holiday team can help with dates, rooms and changes.</p>
+            <div className="grid gap-2 mt-4">
+              <button type="button" onClick={() => setCallback(true)} className="rounded-xl px-5 py-3 border border-line hover:border-gold/60 inline-flex items-center justify-center gap-2 transition-colors"><PhoneCall size={18} className="text-gold" /> Request a callback</button>
+              <WhatsAppButton text={`Hi QuikFly, I have a question about the ${tour.title} holiday.`} />
+            </div>
+          </div>
+          <Modal open={callback} onClose={() => setCallback(false)} title="Request a callback">
+            <p className="text-sm text-muted mb-4">About {tour.title}. Leave your number and our holiday team will call you.</p>
+            <CallbackForm topic="holiday" about={tour.title} idPrefix="tour-cb" />
+          </Modal>
         </aside>
       </div>
 

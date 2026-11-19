@@ -1,10 +1,13 @@
-// Help centre: FAQs from GET /config grouped by category, plus the support line.
+// Help centre: FAQs from GET /config grouped by category, the support line, a callback request,
+// WhatsApp (when the owner set a number) and the customer's support tickets.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
+import 'support_screens.dart';
 
 class HelpScreen extends ConsumerStatefulWidget {
   const HelpScreen({super.key});
@@ -75,6 +78,18 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
                 ),
                 const Icon(Icons.call),
               ]),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => showCallbackSheet(context),
+              icon: const Icon(Icons.phone_callback_outlined, size: 18),
+              label: const Text('Request a callback'),
+            ),
+            const WhatsAppButton(text: 'Hi QuikFly, I need help with '),
+            OutlinedButton.icon(
+              onPressed: () => context.push('/support'),
+              icon: const Icon(Icons.chat_bubble_outline, size: 18),
+              label: const Text('My support tickets'),
             ),
           ]);
         },

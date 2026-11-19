@@ -2,7 +2,7 @@
 // licence, saved places, travellers, emergency contacts and wallet history.
 import { Hono } from "hono";
 import {
-  AUTO_SHARE_MODES, GENDERS, LIMITS, PATTERNS, RIDE_PIN, SAVED_PLACE_KINDS, ageFrom, compactCode, type ProfileUpdate,
+  AUTO_SHARE_MODES, GENDERS, LIMITS, PATTERNS, RIDE_PIN, SUPPORT_RULES, SUPPORT_TOPICS, SAVED_PLACE_KINDS, ageFrom, compactCode, type ProfileUpdate,
 } from "@quikfly/shared";
 import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
@@ -19,6 +19,7 @@ import {
 import { listTransactions } from "../services/wallet";
 import { creditSummary } from "../services/credits";
 import { buyPass } from "../services/pass";
+import { customerClose, customerReply, myTicket, myTickets, openTicket } from "../services/support";
 import { listNotifications, markRead, registerDevice, removeDevice } from "../services/notifications";
 
 type Json = Record<string, unknown>;
@@ -130,6 +131,20 @@ export const me = new Hono<AppEnv>()
   .get("/wallet", async (c) => c.json(await listTransactions(c.env.DB, c.var.user.id)))
   // QuikFly Credits: balance, the soonest expiry, and history (newest first).
   .get("/credits", async (c) => c.json(await creditSummary(c.env.DB, c.var.user.id)))
+  // Support tickets: a thread with QuikFly staff, optionally about one of the customer's bookings.
+  .get("/tickets", async (c) => c.json(await myTickets(c.env.DB, c.var.user.id)))
+  .post("/tickets", async (c) => {
+    const body = await jsonBody(c);
+    return c.json(await openTicket(c.env.DB, c.var.user, {
+      topic: oneOf(body, "topic", SUPPORT_TOPICS),
+      message: text(body, "message", SUPPORT_RULES.messageMin, SUPPORT_RULES.messageMax),
+      bookingId: optStr(body, "bookingId", 40),
+    }), 201);
+  })
+  .get("/tickets/:id", async (c) => c.json(await myTicket(c.env.DB, c.var.user.id, c.req.param("id"))))
+  .post("/tickets/:id/messages", async (c) =>
+    c.json(await customerReply(c.env.DB, c.var.user.id, c.req.param("id"), text(await jsonBody(c), "body", SUPPORT_RULES.messageMin, SUPPORT_RULES.messageMax))))
+  .post("/tickets/:id/close", async (c) => c.json(await customerClose(c.env.DB, c.var.user.id, c.req.param("id"))))
   // QuikFly Pass: paid from the wallet; returns when the pass now ends.
   .post("/pass", async (c) => c.json(await buyPass(c.env.DB, c.var.user.id), 201))
 

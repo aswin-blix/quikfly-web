@@ -1,6 +1,7 @@
 // Operations endpoints for staff: /v1/admin/bookings, /v1/admin/licences and /v1/admin/vendors.
+import { staffClose, staffReply, supportQueue, supportTicket } from "../../services/support";
 import { Hono } from "hono";
-import { ADMIN_RULES, BOOKING_STATUSES, LICENCE_QUEUE_STATUSES, PATTERNS, VENDOR_DOCUMENTS, VENDOR_SECTIONS, VENDOR_STATUSES, type BookingFilters } from "@quikfly/shared";
+import { ADMIN_RULES, BOOKING_STATUSES, LICENCE_QUEUE_STATUSES, PATTERNS, SUPPORT_RULES, VENDOR_DOCUMENTS, VENDOR_SECTIONS, VENDOR_STATUSES, type BookingFilters } from "@quikfly/shared";
 import { SERVICE_KEYS } from "../../config";
 import type { AppEnv } from "../../env";
 import { badRequest } from "../../lib/errors";
@@ -66,6 +67,21 @@ export const adminLicences = new Hono<AppEnv>()
   .post("/:userId/reject", requireAdmin("licences.review"), async (c) => {
     await reviewLicence(c.env.DB, c.var.admin.id, c.req.param("userId"), "reject", reason(await jsonBody(c)));
     return c.json({ status: "rejected" });
+  });
+
+// Customer support: callbacks and tickets. ?status=open (default) | answered | closed
+export const adminSupport = new Hono<AppEnv>()
+  .get("/", requireAdmin("support.manage"), async (c) =>
+    c.json(await supportQueue(c.env.DB, pick(c.req.query("status"), ["open", "answered", "closed"] as const, "status") ?? "open")))
+  .get("/:id", requireAdmin("support.manage"), async (c) => c.json(await supportTicket(c.env.DB, c.req.param("id"))))
+  // { body } — the customer sees it and is notified
+  .post("/:id/reply", requireAdmin("support.manage"), async (c) =>
+    c.json(await staffReply(c.env.DB, c.var.admin.id, c.req.param("id"), text(await jsonBody(c), "body", SUPPORT_RULES.messageMin, SUPPORT_RULES.messageMax))))
+  // { note? } — added to the thread when given
+  .post("/:id/close", requireAdmin("support.manage"), async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const note = typeof body.note === "string" && body.note.trim() ? text(body, "note", 3, SUPPORT_RULES.messageMax) : undefined;
+    return c.json(await staffClose(c.env.DB, c.var.admin.id, c.req.param("id"), note));
   });
 
 // Partner (vendor) applications from the QuikFly Partner app.

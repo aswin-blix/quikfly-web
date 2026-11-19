@@ -1,7 +1,7 @@
 "use client";
 // /account: phones see a list of sections (tap one to open it); desktops get a sidebar.
 // The open section is in the URL (?tab=), so it can be linked to and survives a reload.
-import { ArrowLeft, Briefcase, ChevronRight, Gift, IdCard, MapPin, ShieldCheck, UserRound, Users, Wallet, KeyRound } from "lucide-react";
+import { ArrowLeft, Briefcase, Headphones, ChevronRight, Gift, IdCard, MapPin, ShieldCheck, UserRound, Users, Wallet, KeyRound } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { BusinessSection } from "@/components/account/BusinessSection";
 import { LicenceBadge, LicenceSection } from "@/components/account/LicenceSection";
@@ -10,6 +10,7 @@ import { ProfileSection } from "@/components/account/ProfileSection";
 import { ReferSection } from "@/components/account/ReferSection";
 import { SafetySection } from "@/components/account/SafetySection";
 import { SecuritySection } from "@/components/account/SecuritySection";
+import { SupportSection } from "@/components/account/SupportSection";
 import { TravellersSection } from "@/components/account/TravellersSection";
 import { WalletSection } from "@/components/account/WalletSection";
 import { Empty, GoldButton } from "@/components/ui";
@@ -20,7 +21,7 @@ import { Link, qs, useQuery } from "@/lib/nav";
 
 const ICONS: Record<AccountSectionId, typeof UserRound> = {
   profile: UserRound, wallet: Wallet, refer: Gift, places: MapPin, travellers: Users,
-  safety: ShieldCheck, licence: IdCard, business: Briefcase, security: KeyRound,
+  safety: ShieldCheck, licence: IdCard, support: Headphones, business: Briefcase, security: KeyRound,
 };
 
 const CONTENT: Record<AccountSectionId, () => React.ReactNode> = {
@@ -31,6 +32,7 @@ const CONTENT: Record<AccountSectionId, () => React.ReactNode> = {
   travellers: () => <TravellersSection />,
   safety: () => <SafetySection />,
   licence: () => <LicenceSection />,
+  support: () => <SupportSection />,
   business: () => <BusinessSection />,
   security: () => <SecuritySection />,
 };

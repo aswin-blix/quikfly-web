@@ -369,6 +369,14 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                     child: Text('Changed to this bus on ${dateTime(b.rescheduledAt!)}. A ticket can be changed once.', style: TextStyle(color: c.fgSubtle, fontSize: 12)),
                   ),
               ],
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => context.push('/support/new?booking=${b.id}'),
+                  icon: const Icon(Icons.support_agent, size: 18),
+                  label: const Text('Get help with this booking'),
+                ),
+              ),
             ]),
           ),
         ),

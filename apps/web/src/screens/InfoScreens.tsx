@@ -1,14 +1,15 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
-import { BadgeCheck, BadgePercent, CarTaxiFront, CircleCheck, ClipboardList, Copy, Download, Handshake, Headphones, Mail, MessageCircle, Phone, Search } from "lucide-react";
+import { BadgeCheck, BadgePercent, CarTaxiFront, CircleCheck, ClipboardList, Copy, Download, Handshake, Headphones, Mail, MessageCircle, Phone, PhoneCall, Search } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { Reveal, Tilt } from "@/components/motion";
 import { Accordion, Empty, GhostLink, PageHeader } from "@/components/ui";
 import { inr } from "@/lib/format";
 import { Link } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
-import { VENDOR_VEHICLE_LABEL, VENDOR_VEHICLE_TYPES, type Faq } from "@quikfly/shared";
+import { VENDOR_VEHICLE_LABEL, VENDOR_VEHICLE_TYPES, whatsappLink, type Faq } from "@quikfly/shared";
+import { CallbackForm } from "@/components/support/CallbackForm";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { PARTNER_APP } from "@/lib/site";
 import { useOpenServices } from "@/components/ServiceGate";
@@ -135,6 +136,14 @@ export function HelpScreen() {
   const [query, setQuery] = useState("");
   const [cat, setCat] = useState<Faq["category"] | "All">("All");
   const shown = useMemo(() => FAQS.filter((f) => (cat === "All" || f.category === cat) && `${f.q} ${f.a}`.toLowerCase().includes(query.toLowerCase())), [FAQS, query, cat]);
+  const { user } = useApp();
+  const settings = useSettings();
+  const wa = whatsappLink(settings.whatsappNumber, "Hi QuikFly, I need help with ");
+  const contacts = [
+    { icon: Phone, label: "Call us", value: settings.companyPhone, href: `tel:${settings.companyPhone.replace(/[^\d+]/g, "")}` },
+    ...(wa ? [{ icon: MessageCircle, label: "WhatsApp", value: settings.whatsappNumber, href: wa }] : []),
+    { icon: Mail, label: "Email", value: settings.companyEmail, href: `mailto:${settings.companyEmail}` },
+  ].filter((c) => c.value);
 
   return (
     <>
@@ -154,18 +163,20 @@ export function HelpScreen() {
             : <div className="panel"><Empty icon={<Search size={36} />} text={`No answers for "${query}". Try another word or contact us.`} /></div>}
         </div>
         <aside className="space-y-3">
-          {[[Phone, "Call us 24×7", "1800 123 4567"], [MessageCircle, "WhatsApp", "+91 90000 12345"], [Mail, "Email", "support@quikfly.in"]].map(([I, t, v], i) => {
-            const Icon = I as typeof Phone;
-            return (
-              <Reveal key={t as string} delay={i * 0.08}>
-                <div className="panel p-5 flex items-center gap-4">
-                  <span className="w-11 h-11 rounded-xl bg-gold/10 text-gold grid place-items-center"><Icon size={20} /></span>
-                  <div><p className="text-sm text-muted">{t as string}</p><p className="font-semibold select-all">{v as string}</p></div>
-                </div>
-              </Reveal>
-            );
-          })}
-          <div className="panel p-5 text-sm text-muted">Have a booking issue? Open <Link href="/bookings" className="text-gold">My trips</Link> and choose the booking for faster help.</div>
+          {contacts.map(({ icon: Icon, label, value, href }, i) => (
+            <Reveal key={label} delay={i * 0.08}>
+              <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer" className="panel p-5 flex items-center gap-4 hover:border-gold/50 transition-colors">
+                <span className="w-11 h-11 rounded-xl bg-gold/10 text-gold grid place-items-center shrink-0"><Icon size={20} /></span>
+                <div className="min-w-0"><p className="text-sm text-muted">{label}</p><p className="font-semibold break-words">{value}</p></div>
+              </a>
+            </Reveal>
+          ))}
+          <div className="panel p-5">
+            <h2 className="font-display text-lg text-strong flex items-center gap-2"><PhoneCall size={18} className="text-gold" /> Request a callback</h2>
+            <p className="text-sm text-muted mt-1 mb-4">Leave your number and we&apos;ll call you.</p>
+            <CallbackForm idPrefix="help-cb" />
+          </div>
+          <div className="panel p-5 text-sm text-muted">Have a booking issue? {user ? <>Open a <Link href="/account?tab=support" className="text-gold">support ticket</Link>, or choose the booking in <Link href="/bookings" className="text-gold">My trips</Link> and tap Get help.</> : <>Sign in and open <Link href="/bookings" className="text-gold">My trips</Link>, then tap Get help on the booking.</>}</div>
         </aside>
       </section>
     </>

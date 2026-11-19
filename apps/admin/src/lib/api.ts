@@ -1,5 +1,6 @@
 // The admin panel's only door to the backend. Screens call `adminApi`, never fetch().
 // Endpoints are listed in apps/api/README.md (Admin section).
+import type { AdminSupportTicket, SupportStatus } from "@quikfly/shared";
 import type {
   AdminBooking, AdminBookingDetail, AdminLoginResult, AdminStats, AdminUser, AuditEntry, BookingFilters, CatalogItem, CatalogKind, LicenceQueueStatus,
   LicenceReview, Page, Settings, AdminVendorDetail, AdminPayout, AssignableVehicle, FleetReviewItem, VehicleDocument, VendorDocument, VendorSection, VendorStatus, VendorSummary,
@@ -87,6 +88,12 @@ export const adminApi = {
     cancel: (id: string, reason: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/cancel`, { reason }),
     complete: (id: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/complete`),
     assignVendor: (id: string, vehicleId: string | null) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/vendor`, { vehicleId }),
+  },
+  support: {
+    list: (status: SupportStatus) => req<AdminSupportTicket[]>("GET", `/admin/support${qs({ status })}`),
+    get: (id: string) => req<AdminSupportTicket>("GET", `/admin/support/${encodeURIComponent(id)}`),
+    reply: (id: string, body: string) => req<AdminSupportTicket>("POST", `/admin/support/${encodeURIComponent(id)}/reply`, { body }),
+    close: (id: string, note?: string) => req<AdminSupportTicket>("POST", `/admin/support/${encodeURIComponent(id)}/close`, note ? { note } : {}),
   },
   vendors: {
     list: (status: VendorStatus) => req<VendorSummary[]>("GET", `/admin/vendors${qs({ status })}`),

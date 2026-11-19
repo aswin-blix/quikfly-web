@@ -3,7 +3,7 @@ import type {
   ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
   WalletTransaction, AppNotification, CreditSummary,
 } from "@quikfly/shared";
-import type { PublicTicket, RideCancelReason, VendorApplication, VendorDocument, VendorSection } from "@quikfly/shared";
+import type { CallbackTime, PublicTicket, RideCancelReason, SupportTicket, SupportTopic, VendorApplication, VendorDocument, VendorSection } from "@quikfly/shared";
 
 /**
  * The single contract between the UI and the backend.
@@ -149,6 +149,21 @@ export interface QuikflyApi {
   tickets: {
     /** GET /tickets/:token (public): what a bus m-ticket's QR code shows. */
     get(token: string): Promise<PublicTicket>;
+  };
+  /** Customer support: callback requests (anyone) and tickets (signed in). */
+  support: {
+    /** POST /support/callbacks (signed-in requests are linked to the account). */
+    requestCallback(input: { name: string; phone: string; topic: SupportTopic; preferredTime: CallbackTime; message?: string; ref?: string }): Promise<SupportTicket>;
+    /** GET /me/tickets */
+    list(): Promise<SupportTicket[]>;
+    /** GET /me/tickets/:id (with the whole thread) */
+    get(id: string): Promise<SupportTicket>;
+    /** POST /me/tickets */
+    open(input: { topic: SupportTopic; message: string; bookingId?: string }): Promise<SupportTicket>;
+    /** POST /me/tickets/:id/messages */
+    reply(id: string, body: string): Promise<SupportTicket>;
+    /** POST /me/tickets/:id/close */
+    close(id: string): Promise<SupportTicket>;
   };
   /** Partner (vehicle owner) application and onboarding: the same /vendor endpoints as the QuikFly Partner app. */
   vendor: {

@@ -132,7 +132,7 @@ export interface CreditSummary {
 /** What a notification is about; the apps pick an icon and where tapping it goes. */
 export const NOTIFICATION_KINDS = [
   "booking.confirmed", "booking.cancelled", "booking.cancelled_by_staff", "booking.deposit_returned",
-  "licence.approved", "licence.rejected", "ride.reminder", "credits.earned", "booking.changed",
+  "licence.approved", "licence.rejected", "ride.reminder", "credits.earned", "booking.changed", "support.reply",
   "vendor.changes", "vendor.approved", "vendor.rejected", "vendor.active", "vendor.fleet", "vendor.document", "vendor.trip", "vendor.payout",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

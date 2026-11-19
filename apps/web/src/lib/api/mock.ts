@@ -11,6 +11,7 @@ import {
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
 import { mockVendor } from "./mock-vendor";
+import { mockSupport } from "./mock-support";
 import { KEYS, creditBalance, creditEntry, currentUser, fail, load, save, signedInUser, uid, wait, walletEntry, type MockRide } from "./mock-store";
 
 const creditExpiry = () => new Date(Date.now() + settings.creditsExpiryDays * 86_400_000).toISOString();
@@ -431,6 +432,7 @@ export const mockApi: QuikflyApi = {
   },
 
   vendor: mockVendor,
+  support: mockSupport,
 
   tickets: {
     async get(token) {

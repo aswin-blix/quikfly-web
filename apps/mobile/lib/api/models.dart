@@ -709,6 +709,8 @@ class Settings {
   String get companyGstin => _s('companyGstin', '');
   String get companyEmail => _s('companyEmail', 'support@quikfly.in');
   String get companyPhone => _s('companyPhone', '1800 123 4567');
+  /// WhatsApp chat number for customers; empty = no WhatsApp button.
+  String get whatsappNumber => _s('whatsappNumber', '');
 
   /// GST rate (%) for a service, as on invoices.
   int gstRate(ServiceKey s) => switch (s) {

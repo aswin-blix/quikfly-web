@@ -4,6 +4,7 @@
 import 'package:dio/dio.dart';
 import '../core/env.dart';
 import 'models.dart';
+import 'support_models.dart';
 import 'vendor_models.dart';
 
 export 'vendor_models.dart';
@@ -83,6 +84,17 @@ class QuikFlyApi {
   }
 
   VendorApplication _vendor(dynamic d) => VendorApplication.fromJson(d as Json);
+
+  // ── Support: callbacks (signed-in ones are linked to the account) and tickets ──
+  SupportTicket _ticket(dynamic d) => SupportTicket.fromJson(d as Json);
+  Future<SupportTicket> requestCallback({required String name, required String phone, required String topic, required String preferredTime, String? message, String? ref}) =>
+      _post('/support/callbacks', _ticket, {'name': name, 'phone': phone, 'topic': topic, 'preferredTime': preferredTime, 'message': ?message, 'ref': ?ref});
+  Future<List<SupportTicket>> tickets() => _get('/me/tickets', (d) => [for (final t in d as List) SupportTicket.fromJson(t as Json)]);
+  Future<SupportTicket> ticket(String id) => _get('/me/tickets/$id', _ticket);
+  Future<SupportTicket> openTicket(String topic, String message, {String? bookingId}) =>
+      _post('/me/tickets', _ticket, {'topic': topic, 'message': message, 'bookingId': ?bookingId});
+  Future<SupportTicket> replyTicket(String id, String body) => _post('/me/tickets/$id/messages', _ticket, {'body': body});
+  Future<SupportTicket> closeTicket(String id) => _post('/me/tickets/$id/close', _ticket);
 
   /// The partner application, or null before one is started.
   Future<VendorApplication?> vendorApplication() => _get('/vendor', _vendorOrNull);
