@@ -8,6 +8,7 @@ import '../core/format.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
+import 'help_button.dart';
 import 'home_screen.dart' show partnerSettings;
 import 'partner_app.dart';
 
@@ -42,7 +43,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> with _Step {
     final c = context.qf;
     final fee = ref.watch(vendorProvider).value?.fee ?? 0;
     return Scaffold(
-      appBar: AppBar(title: const Text('Payment')),
+      appBar: AppBar(title: const Text('Payment'), actions: const [PartnerHelpButton()]),
       body: ScreenList(children: [
         Panel(highlighted: true, child: Column(children: [
           Text('Joining fee', style: TextStyle(color: c.fgMuted)),
@@ -95,7 +96,7 @@ class _AgreementScreenState extends ConsumerState<AgreementScreen> with _Step {
           ]),
         );
     return Scaffold(
-      appBar: AppBar(title: const Text('Partner & vehicle agreement')),
+      appBar: AppBar(title: const Text('Partner & vehicle agreement'), actions: const [PartnerHelpButton()]),
       body: ScreenList(children: [
         Text('Between you and ${s.companyName}', style: TextStyle(color: c.fgMuted)),
         const SizedBox(height: 12),
@@ -144,7 +145,7 @@ class _StickerScreenState extends ConsumerState<StickerScreen> with _Step {
     final requested = a?.stickerRequestedAt != null;
     final done = a?.stickerDoneAt != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Vehicle sticker & paint')),
+      appBar: AppBar(title: const Text('Vehicle sticker & paint'), actions: const [PartnerHelpButton()]),
       body: ScreenList(children: [
         Panel(child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(Icons.format_paint_outlined, color: c.accent, size: 30),
