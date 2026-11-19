@@ -1,7 +1,7 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useRef, useState } from "react";
-import { BedDouble, CalendarDays, Camera, Car, Check, Clock, Hotel, Palmtree, Plane, ShieldCheck, Star, Utensils } from "lucide-react";
+import { BedDouble, CalendarDays, Camera, Car, Check, Clock, Hotel, Palmtree, Plane, ShieldCheck, Star, Users, Utensils } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { SceneArt } from "@/components/SceneArt";
 import { Reveal, Tilt, TweenNumber } from "@/components/motion";
@@ -99,6 +99,13 @@ export function HolidaysScreen() {
       </section>
     </>
   );
+}
+
+/** How the trip travels: flights, the group's own transport (group departures), or a private cab. */
+function transportFact(t: TourPackage): [typeof Hotel, string] {
+  if (t.includes.some((i) => /flight/i.test(i))) return [Plane, "Flights included"];
+  if (t.departures?.length) return [Users, "Group transport"];
+  return [Car, "Private cab"];
 }
 
 const monthLabel = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -208,7 +215,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
     nav.push("/checkout");
   }
 
-  const facts: [typeof Hotel, string][] = [[Clock, `${tour.days} days / ${tour.nights} nights`], [BedDouble, `${tour.hotelStars}★ hotels`], [Utensils, tour.meals], [tour.includes.some((i) => /flight/i.test(i)) ? Plane : Car, tour.includes.some((i) => /flight/i.test(i)) ? "Flights included" : "Private cab"], [Camera, "Sightseeing"]];
+  const facts: [typeof Hotel, string][] = [[Clock, `${tour.days} days / ${tour.nights} nights`], [BedDouble, `${tour.hotelStars}★ hotels`], [Utensils, tour.meals], transportFact(tour), [Camera, "Sightseeing"]];
 
   return (
     <div ref={ref}>

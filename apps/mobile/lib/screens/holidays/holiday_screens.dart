@@ -2,6 +2,7 @@
 // itinerary, inclusions and policies, travellers and a live total from POST /quotes.
 // Mirrors the website's HolidayScreens.
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
@@ -49,6 +50,16 @@ class _HolidaysScreenState extends ConsumerState<HolidaysScreen> {
   int? _budget;
   var _sort = _Sort.popular;
 
+  /// Group departures: month ("yyyy-MM") and departure-city filters (as on the website).
+  /// Any-date packages match any month but no city.
+  String? _month, _city;
+
+  bool _depMatch(TourPackage t) {
+    if (_month == null && _city == null) return true;
+    if (t.departures.isEmpty) return _city == null;
+    return t.departures.any((d) => (_month == null || d.date.startsWith(_month!)) && (_city == null || d.fromCity == _city));
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.qf;
@@ -62,7 +73,10 @@ class _HolidaysScreenState extends ConsumerState<HolidaysScreen> {
           final top = all.isEmpty ? 0 : all.map((t) => t.price).reduce((a, b) => a > b ? a : b);
           final bottom = all.isEmpty ? 0 : all.map((t) => t.price).reduce((a, b) => a < b ? a : b);
           final budget = _budget ?? top;
-          final shown = all.where((t) => (_theme == 'all' || t.themes.contains(_theme)) && _dur.has(t.days) && t.price <= budget).toList()
+          final deps = [for (final t in all) ...t.departures];
+          final months = {for (final d in deps) d.date.substring(0, 7)}.toList()..sort();
+          final cities = {for (final d in deps) d.fromCity}.toList()..sort();
+          final shown = all.where((t) => (_theme == 'all' || t.themes.contains(_theme)) && _dur.has(t.days) && t.price <= budget && _depMatch(t)).toList()
             ..sort((a, b) => switch (_sort) {
                   _Sort.price => a.price.compareTo(b.price),
                   _Sort.duration => a.days.compareTo(b.days),
@@ -100,6 +114,31 @@ class _HolidaysScreenState extends ConsumerState<HolidaysScreen> {
                     ),
                 ]),
               ),
+              if (months.isNotEmpty || cities.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Wrap(spacing: 16, runSpacing: 4, children: [
+                  DropdownButton<String?>(
+                    value: _month,
+                    hint: const Text('Any month'),
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('Any month')),
+                      for (final m in months) DropdownMenuItem(value: m, child: Text(DateFormat('MMMM y').format(DateTime.parse('$m-01')))),
+                    ],
+                    onChanged: (v) => setState(() => _month = v),
+                  ),
+                  DropdownButton<String?>(
+                    value: _city,
+                    hint: const Text('Any departure city'),
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('Any departure city')),
+                      for (final c in cities) DropdownMenuItem(value: c, child: Text('From $c')),
+                    ],
+                    onChanged: (v) => setState(() => _city = v),
+                  ),
+                ]),
+              ],
               if (top > bottom) ...[
                 const SizedBox(height: 6),
                 Row(children: [
@@ -130,7 +169,7 @@ class _HolidaysScreenState extends ConsumerState<HolidaysScreen> {
               ]),
               const SizedBox(height: 8),
               if (shown.isEmpty)
-                const EmptyState(icon: Icons.beach_access, title: 'No packages match', message: 'Try a bigger budget or another theme.')
+                const EmptyState(icon: Icons.beach_access, title: 'No packages match', message: 'Try a bigger budget, another theme or any month.')
               else
                 GridView.count(
                   shrinkWrap: true,
@@ -346,7 +385,12 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
                     (Icons.schedule, '${t.days} days / ${t.nights} nights'),
                     (Icons.hotel, '${t.hotelStars}★ hotels'),
                     (Icons.restaurant, t.meals),
-                    (flights ? Icons.flight : Icons.local_taxi, flights ? 'Flights included' : 'Private cab'),
+                    // Flights, the group's own transport (group departures), or a private cab.
+                    flights
+                        ? (Icons.flight, 'Flights included')
+                        : t.departures.isNotEmpty
+                            ? (Icons.groups_outlined, 'Group transport')
+                            : (Icons.local_taxi, 'Private cab'),
                     (Icons.photo_camera_outlined, 'Sightseeing'),
                   ])
                     Chip(avatar: Icon(i, size: 16, color: c.accent), label: Text(l)),
