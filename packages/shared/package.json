@@ -2,10 +2,11 @@
   "name": "@quikfly/shared",
   "version": "0.1.0",
   "private": true,
-  "description": "Domain types and catalog seed data shared by the QuikFly API and website.",
+  "description": "Domain types, catalog seed data and UI strings (i18n/app_<lang>.arb) shared by the QuikFly API, website and apps.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./i18n/*": "./i18n/*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

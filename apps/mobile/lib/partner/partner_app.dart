@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../api/api.dart';
+import '../core/language.dart';
 import '../screens/account/notifications_screen.dart';
 import '../screens/account/privacy_screens.dart';
 import '../screens/auth/login_screen.dart';
@@ -102,6 +103,9 @@ class _PartnerAppState extends ConsumerState<PartnerApp> with WidgetsBindingObse
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: ref.watch(themeModeProvider),
+      locale: ref.watch(appLocaleProvider),
+      localizationsDelegates: localizationsDelegates,
+      supportedLocales: supportedLocales,
       routerConfig: partnerRouter,
       builder: (_, child) => PrivacyGate(child: child!),
     );

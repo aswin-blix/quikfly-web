@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../core/language.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/logo.dart';
@@ -126,6 +127,7 @@ class AccountScreen extends ConsumerWidget {
                 onSelectionChanged: (s) => ref.read(themeModeProvider.notifier).set(s.first),
               ),
             ),
+            if (ref.watch(languagesEnabledProvider)) const LanguagePicker(),
             link(Icons.local_offer_outlined, 'Offers & coupons', '/offers'),
             link(Icons.help_outline, 'Help centre', '/help'),
             link(Icons.policy_outlined, 'Privacy notice', '/privacy'),

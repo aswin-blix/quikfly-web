@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api/api.dart';
 import '../core/format.dart';
+import '../core/language.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
@@ -416,6 +417,7 @@ class PartnerAccountScreen extends ConsumerWidget {
               onTap: () => launchUrl(Uri(scheme: 'tel', path: settings.companyPhone.replaceAll(' ', ''))),
             ),
             Divider(height: 1, color: c.border),
+            if (ref.watch(languagesEnabledProvider)) ...[const LanguagePicker(), Divider(height: 1, color: c.border)],
             ListTile(leading: const Icon(Icons.privacy_tip_outlined), title: const Text('Privacy & data'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/privacy/data')),
             Divider(height: 1, color: c.border),
             ListTile(

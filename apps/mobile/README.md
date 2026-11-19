@@ -76,6 +76,10 @@ assets/                fonts (Outfit static weights, Archivo Black), images/ (lo
 - Every screen works at 390 px wide and on tablets (content is capped at 720 px), in light and dark mode.
 - Simulations are labelled honestly ("Demo: no SMS is sent").
 
+## Languages
+
+`l10n.yaml` generates `lib/l10n` (`L.of(context).key`) from `packages/shared/i18n/app_<lang>.arb`, the same strings as the website; `flutter build` regenerates it, but after editing the `.arb` files run `flutter gen-l10n` before analyze or tests (`test/l10n_test.dart` checks). `core/language.dart` keeps the chosen language (`quikfly.lang`) and gives MaterialApp its locale; the `LanguagePicker` (Account, Partner account) and Tamil/Hindi appear only while the owner's `featureLanguages` setting is on. Screens move their text into the catalog at the feature freeze (docs/roadmap.md).
+
 ## Icons and fonts
 
 - Launcher icon: edit `assets/icon/icon.png` (full icon) and `icon-foreground.png` (adaptive foreground, mark inside the centre 60 %), then `dart run flutter_launcher_icons`.

@@ -4,19 +4,21 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { Gift } from "lucide-react";
 import { LIMITS, PATTERNS } from "@quikfly/shared";
-import { newUserWalletHint } from "@/lib/account";
 import { useSettings } from "./ConfigProvider";
 import { api, DEMO_OTP } from "@/lib/api";
 import { cx, inr } from "@/lib/format";
 import { useApp } from "./AppProvider";
+import { useT } from "./LanguageProvider";
+import { Link } from "@/lib/nav";
 import { GoldButton, Modal } from "./ui";
 
 type Step = "phone" | "otp" | "profile";
-const TITLES: Record<Step, string> = { phone: "Login or sign up", otp: "Verify OTP", profile: "Complete your profile" };
+const TITLES: Record<Step, string> = { phone: "loginTitle", otp: "loginOtpTitle", profile: "loginProfileTitle" };
 
 export function LoginModal() {
   const { loginOpen, closeLogin, setUser, toast } = useApp();
   const settings = useSettings();
+  const t = useT();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -38,7 +40,7 @@ export function LoginModal() {
 
   const send = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!PATTERNS.phone.test(phone)) return setErr("Enter a valid 10-digit mobile number");
+    if (!PATTERNS.phone.test(phone)) return setErr(t("loginErrPhone"));
     run(async () => { await api.auth.sendOtp(phone); setStep("otp"); });
   };
 
@@ -47,9 +49,9 @@ export function LoginModal() {
     run(async () => {
       const r = await api.auth.verifyOtp(`+91 ${phone}`, otp);
       setUser(r.user);
-      if (r.restored) toast("Welcome back! Your account deletion was cancelled.");
+      if (r.restored) toast(t("loginRestored"));
       if (r.isNew) return setStep("profile");
-      if (!r.restored) toast(`Welcome back, ${r.user.name}!`);
+      if (!r.restored) toast(t("loginWelcomeBack", { name: r.user.name }));
       close(true);
     });
   };
@@ -57,8 +59,8 @@ export function LoginModal() {
   const finish = (e: React.FormEvent) => {
     e.preventDefault();
     const n = name.trim();
-    if (n.length < LIMITS.nameMin) return setErr("Please enter your name");
-    if (email && !PATTERNS.email.test(email.trim())) return setErr("Enter a valid email or leave it empty");
+    if (n.length < LIMITS.nameMin) return setErr(t("loginErrName"));
+    if (email && !PATTERNS.email.test(email.trim())) return setErr(t("loginErrEmail"));
     run(async () => {
       let user = await api.account.update({ name: n, ...(email.trim() ? { email: email.trim() } : {}) });
       setUser(user);
@@ -66,28 +68,28 @@ export function LoginModal() {
         try {
           user = await api.account.applyReferral(code.trim());
           setUser(user);
-          toast(`Referral applied: ${inr(settings.referralBonus)} added to your wallet`);
+          toast(t("loginReferralApplied", { amount: inr(settings.referralBonus) }));
         } catch (e) {
           // The profile is saved; let them fix the code or skip it.
           setCode(""); setShowCode(true);
-          throw new Error(`${(e as Error).message} You can try another code or continue without one.`);
+          throw new Error(`${(e as Error).message} ${t("loginReferralRetry")}`);
         }
       }
-      toast(`Welcome to QuikFly, ${user.name}! ${newUserWalletHint(settings.welcomeCredit)}`.trim());
+      toast(`${t("loginWelcomeNew", { name: user.name })} ${settings.welcomeCredit ? t("loginWalletCredit", { amount: inr(settings.welcomeCredit) }) : ""}`.trim());
       close(true);
     });
   };
 
   return (
     // Sign-up can't be dismissed half-way: the account exists, so closing just finishes later.
-    <Modal open={loginOpen} onClose={() => close(step === "profile")} title={TITLES[step]}>
+    <Modal open={loginOpen} onClose={() => close(step === "profile")} title={t(TITLES[step])}>
       <AnimatePresence mode="wait" initial={false}>
         <motion.div key={step} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.25 }}>
           {step === "phone" && (
             <form onSubmit={send} className="space-y-4">
-              <p className="text-sm text-muted">One account for rides, buses, holidays and rentals. New here? We&apos;ll create your account after the OTP.</p>
+              <p className="text-sm text-muted">{t("loginIntro")}</p>
               <div>
-                <label className="label" htmlFor="lp">Mobile number</label>
+                <label className="label" htmlFor="lp">{t("loginMobile")}</label>
                 <div className="flex mt-1.5 gap-2">
                   <span className="field !w-auto text-muted">+91</span>
                   <input id="lp" className="field" inputMode="numeric" autoComplete="tel-national" maxLength={10} placeholder="98765 43210" autoFocus
@@ -95,44 +97,44 @@ export function LoginModal() {
                 </div>
               </div>
               {err && <p className="text-danger text-sm">{err}</p>}
-              <GoldButton className="w-full" loading={busy}>Send OTP</GoldButton>
-              <p className="text-[11px] text-subtle text-center">By continuing you agree to QuikFly&apos;s Terms & Privacy Policy.</p>
+              <GoldButton className="w-full" loading={busy}>{t("loginSendOtp")}</GoldButton>
+              <p className="text-[11px] text-subtle text-center"><Link href="/privacy" className="hover:text-gold underline-offset-2 hover:underline" onClick={() => close(false)}>{t("loginPrivacy")}</Link></p>
             </form>
           )}
 
           {step === "otp" && (
             <form onSubmit={verify} className="space-y-4">
-              <p className="text-sm text-muted">Enter the 4-digit code sent to +91 {phone}. <button type="button" className="text-gold" onClick={() => { setStep("phone"); setOtp(""); }}>Change</button></p>
+              <p className="text-sm text-muted">{t("loginCodeSent", { phone: `+91 ${phone}` })} <button type="button" className="text-gold" onClick={() => { setStep("phone"); setOtp(""); }}>{t("loginChange")}</button></p>
               <OtpInput value={otp} onChange={setOtp} />
-              {DEMO_OTP && <p className="text-xs text-gold-pale/80">Demo: use OTP <b>{DEMO_OTP}</b></p>}
+              {DEMO_OTP && <p className="text-xs text-gold-pale/80">{t("loginDemoOtp", { otp: DEMO_OTP })}</p>}
               {err && <motion.p initial={{ x: -8 }} animate={{ x: [8, -6, 4, 0] }} className="text-danger text-sm">{err}</motion.p>}
-              <GoldButton className="w-full" loading={busy} disabled={otp.length !== 4}>Verify & continue</GoldButton>
+              <GoldButton className="w-full" loading={busy} disabled={otp.length !== 4}>{t("loginVerify")}</GoldButton>
             </form>
           )}
 
           {step === "profile" && (
             <form onSubmit={finish} className="space-y-4">
-              <p className="text-sm text-muted">You&apos;re in! Tell us your name so drivers and bus operators know who to look for.</p>
+              <p className="text-sm text-muted">{t("loginYoureIn")}</p>
               <div>
-                <label className="label" htmlFor="sn">Full name</label>
-                <input id="sn" className="field mt-1.5" autoComplete="name" placeholder="e.g. Priya Raman" autoFocus value={name}
+                <label className="label" htmlFor="sn">{t("loginFullName")}</label>
+                <input id="sn" className="field mt-1.5" autoComplete="name" placeholder={t("loginNameExample")} autoFocus value={name}
                   maxLength={LIMITS.nameMax} onChange={(e) => setName(e.target.value)} />
               </div>
               <div>
-                <label className="label" htmlFor="se">Email <span className="normal-case tracking-normal text-subtle">(optional, for tickets and invoices)</span></label>
+                <label className="label" htmlFor="se">{t("loginEmailOptional")} <span className="normal-case tracking-normal text-subtle">· {t("loginEmailHint")}</span></label>
                 <input id="se" type="email" className="field mt-1.5" autoComplete="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
               {!settings.featureReferral ? null : showCode ? (
                 <div>
-                  <label className="label" htmlFor="sc">Referral code</label>
+                  <label className="label" htmlFor="sc">{t("loginReferralCode")}</label>
                   <input id="sc" className="field mt-1.5 uppercase" placeholder="e.g. QF7K2M9P" value={code} onChange={(e) => setCode(e.target.value)} />
-                  <p className="text-xs text-muted mt-1">You and your friend each get {inr(settings.referralBonus)} in your wallets.</p>
+                  <p className="text-xs text-muted mt-1">{t("loginReferralBonus", { amount: inr(settings.referralBonus) })}</p>
                 </div>
               ) : (
-                <button type="button" onClick={() => setShowCode(true)} className="text-sm text-gold flex items-center gap-1.5"><Gift size={15} />Have a referral code?</button>
+                <button type="button" onClick={() => setShowCode(true)} className="text-sm text-gold flex items-center gap-1.5"><Gift size={15} />{t("loginHaveCode")}</button>
               )}
               {err && <p className="text-danger text-sm">{err}</p>}
-              <GoldButton className="w-full" loading={busy}>Create my account</GoldButton>
+              <GoldButton className="w-full" loading={busy}>{t("loginCreate")}</GoldButton>
             </form>
           )}
         </motion.div>

@@ -6,14 +6,16 @@ import { cx } from "@/lib/format";
 import { Link, usePath } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
 import { useOpenServices } from "./ServiceGate";
+import { useT } from "./LanguageProvider";
 
 export function ServicesSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const path = usePath();
   const current = SERVICES.find((s) => path.startsWith(s.href))?.key;
   const openServices = useOpenServices();
+  const t = useT();
 
   return (
-    <Modal open={open} onClose={onClose} title="What would you like to book?">
+    <Modal open={open} onClose={onClose} title={t("servicesSheetTitle")}>
       <ul className="grid grid-cols-2 gap-3">
         {openServices.map((s) => (
           <li key={s.key}>
@@ -33,8 +35,8 @@ export function ServicesSheet({ open, onClose }: { open: boolean; onClose: () =>
       </ul>
 
       <div className="mt-5 rounded-2xl border border-line divide-y divide-line">
-        <SheetLink href="/help" icon={<HelpCircle size={18} />} label="Help centre" onClick={onClose} />
-        <SheetLink href="/partner" icon={<Handshake size={18} />} label="Drive or list your fleet with QuikFly" onClick={onClose} />
+        <SheetLink href="/help" icon={<HelpCircle size={18} />} label={t("linkHelpCentre")} onClick={onClose} />
+        <SheetLink href="/partner" icon={<Handshake size={18} />} label={t("servicesSheetPartner")} onClick={onClose} />
       </div>
     </Modal>
   );

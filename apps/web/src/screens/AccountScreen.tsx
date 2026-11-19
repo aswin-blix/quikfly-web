@@ -19,6 +19,7 @@ import { ACCOUNT_SECTIONS, type AccountSectionId } from "@/lib/account";
 import { useSettings } from "@/components/ConfigProvider";
 import { cx, inr } from "@/lib/format";
 import { Link, qs, useQuery } from "@/lib/nav";
+import { useT } from "@/components/LanguageProvider";
 
 const ICONS: Record<AccountSectionId, typeof UserRound> = {
   profile: UserRound, wallet: Wallet, refer: Gift, places: MapPin, travellers: Users,
@@ -46,6 +47,7 @@ export function AccountScreen() {
   const q = useQuery();
   const raw = q.get("tab");
   const settings = useSettings();
+  const t = useT();
   const tab = isSection(raw) && (raw !== "refer" || settings.featureReferral) ? raw : null;
   const active: AccountSectionId = tab ?? "profile";
 
@@ -53,8 +55,8 @@ export function AccountScreen() {
     return (
       <div className="max-w-xl mx-auto px-4 py-20">
         <div className="panel">
-          <Empty icon={<UserRound size={40} />} text="Sign in to manage your profile, wallet, saved places and safety settings."
-            action={<GoldButton onClick={() => requireAuth(() => undefined)}>Login or sign up</GoldButton>} />
+          <Empty icon={<UserRound size={40} />} text={t("accountSignInPrompt")}
+            action={<GoldButton onClick={() => requireAuth(() => undefined)}>{t("loginTitle")}</GoldButton>} />
         </div>
       </div>
     );
@@ -73,7 +75,7 @@ export function AccountScreen() {
               <p className="text-sm text-gold mt-0.5 flex items-center gap-1"><Wallet size={14} />{inr(user.walletBalance)}</p>
             </div>
           </div>
-          <nav className="panel p-2" aria-label="Account sections">
+          <nav className="panel p-2" aria-label={t("navAccount")}>
             {ACCOUNT_SECTIONS.filter((s) => s.id !== "refer" || settings.featureReferral).map((s) => {
               const Icon = ICONS[s.id];
               const on = active === s.id;
@@ -82,8 +84,8 @@ export function AccountScreen() {
                   className={cx("flex items-center gap-3 rounded-xl px-3 py-3 transition-colors", on ? "lg:bg-gold/10 lg:text-gold" : "hover:bg-fg/5")}>
                   <Icon size={18} className="text-gold shrink-0" />
                   <span className="flex-1 min-w-0">
-                    <span className="block text-sm font-medium text-strong">{s.label}</span>
-                    <span className="block text-xs text-subtle truncate">{s.id === "licence" ? null : s.hint}</span>
+                    <span className="block text-sm font-medium text-strong">{t(s.label)}</span>
+                    <span className="block text-xs text-subtle truncate">{s.id === "licence" ? null : t(s.hint)}</span>
                     {s.id === "licence" && <span className="block mt-1"><LicenceBadge user={user} /></span>}
                   </span>
                   <ChevronRight size={16} className="text-subtle" />
@@ -91,12 +93,12 @@ export function AccountScreen() {
               );
             })}
           </nav>
-          <button type="button" onClick={() => { signOut(); toast("Signed out"); }}
-            className="w-full panel py-3 text-sm font-semibold text-danger hover:bg-danger/10 transition-colors">Sign out</button>
+          <button type="button" onClick={() => { signOut(); toast(t("accountSignedOut")); }}
+            className="w-full panel py-3 text-sm font-semibold text-danger hover:bg-danger/10 transition-colors">{t("accountSignOut")}</button>
         </aside>
 
         <div className={cx("min-w-0", !tab && "hidden lg:block")}>
-          <Link href="/account" className="lg:hidden inline-flex items-center gap-1 text-sm text-muted hover:text-strong mb-4"><ArrowLeft size={16} />Account</Link>
+          <Link href="/account" className="lg:hidden inline-flex items-center gap-1 text-sm text-muted hover:text-strong mb-4"><ArrowLeft size={16} />{t("navAccount")}</Link>
           {CONTENT[active]()}
         </div>
       </div>

@@ -33,6 +33,7 @@ apps/mobile/      Flutter Android apps (read apps/mobile/README.md): the custome
                   owners (flavor partner, lib/main_partner.dart, screens in lib/partner/). Same endpoints as the website:
   lib/api/        api.dart (one method per endpoint) · models.dart (Dart copy of packages/shared types + Rules)
   lib/theme/      tokens.dart mirrors apps/web tokens.css · lib/screens/ one folder per area · test/api_contract_test.dart
+packages/shared/i18n/ app_en.arb (template), app_ta.arb, app_hi.arb: UI strings for the website (useT()) and both apps (L.of(context))
 brand/           quikfly-logo.svg: the one logo. After changing it run `node scripts/logo.mjs` (copies to web/admin, renders the app PNG)
 packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation patterns, limits),
                   catalog.ts (SEED data only) + catalog-kinds.ts (13 kinds, fields, validation), settings.ts
@@ -85,6 +86,7 @@ cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://1
 - A plain `next build` of the website talks to the **production** API (`.env.production`). Building to test locally? Pass `NEXT_PUBLIC_API_URL` for the local API, or test submissions would hit production.
 - New `Settings` fields can be missing for a minute after a deploy (old API, new website). Code reading them must not crash on `undefined`.
 - Run the production smoke test once per deploy; every run leaves bookings, tickets and callbacks on production.
+- Languages (see docs/roadmap.md): until the feature freeze, UI text may stay hard-coded; text already in `packages/shared/i18n` is changed there (all three files). After editing the `.arb` files run `flutter gen-l10n` in apps/mobile (`test/l10n_test.dart` fails otherwise). `npm run typecheck` warns about untranslated strings; `npm run i18n:strict` must pass before `featureLanguages` is turned on.
 - The logo is transparent and suits both themes: never put it on a badge or background (`test/logo_test.dart` checks the app). Edit only `brand/quikfly-logo.svg`, then run `node scripts/logo.mjs`.
 - Personal data needs a privacy thought: a new table with `user_id` must be added to `exportData()` and handled in `eraseAccounts()` (`services/privacy.ts`), and new kinds of data belong in the notice (`packages/shared/src/privacy.ts`). See [docs/privacy.md](docs/privacy.md).
 - The customer app (QuikFly) never gets partner screens; partner flows live in the Partner app and on the website.
