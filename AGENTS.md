@@ -79,3 +79,7 @@ cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://1
 - Free plan: at most 50 D1 queries per request. Keep loops of statements out of request paths (the catalog seed is one `json_each` insert for this reason).
 - `next dev` errors on detail pages that weren't pre-built (new admin-created holidays/cars). Test those on a build served with `npx wrangler dev` in `apps/web`.
 - React lists derived from API data with `useMemo` must list that data in the dependencies, or they stay empty after it loads.
+- A plain `next build` of the website talks to the **production** API (`.env.production`). Building to test locally? Pass `NEXT_PUBLIC_API_URL` for the local API, or test submissions would hit production.
+- New `Settings` fields can be missing for a minute after a deploy (old API, new website). Code reading them must not crash on `undefined`.
+- Run the production smoke test once per deploy; every run leaves bookings, tickets and callbacks on production.
+- The customer app (QuikFly) never gets partner screens; partner flows live in the Partner app and on the website.
