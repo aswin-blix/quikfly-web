@@ -67,6 +67,10 @@ The header has a sun/moon toggle. The first visit follows the device setting; on
 - The demo map (`CityMap.tsx`) reads its own `--map-*` tokens. The holiday illustrations (`SceneArt.tsx`) are artwork and keep fixed colours.
 - Theme logic is in `src/lib/theme.ts` (no React), React state in `components/ThemeProvider.tsx` (`useTheme()`), and the button in `components/ThemeToggle.tsx`. If you change `--bg`, update `THEME_COLORS` in `theme.ts` to match (browser chrome colour).
 
+## Languages (English, Tamil, Hindi)
+
+Strings live in `packages/shared/i18n/app_<lang>.arb`, shared with the apps (English is the template; Turbopack imports `.arb` as JSON, see `next.config.ts`). Screens call `t("key", { name })` from `useT()` (`components/LanguageProvider.tsx`, wrapped inside `AppProvider` in `shell.tsx`); a key missing in Tamil or Hindi shows English. `LanguageMenu` (header and footer) saves the choice in this browser (`quikfly.lang`) and sets `<html lang>`. Everything stays English and the menu is hidden while the owner's `featureLanguages` setting is off. Fonts: Noto Sans Tamil and Noto Sans Devanagari (loaded only when those letters appear). Translated so far: the shell, login, account list and privacy screens; the rest follows at the feature freeze (docs/roadmap.md).
+
 ## Run
 
 Install once from the repo root (`npm install`), which links the shared package. Then, from `apps/web`:

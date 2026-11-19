@@ -18,8 +18,9 @@
   --on-brand: #120d00;
 
   /* Typography */
-  --font-body: "Outfit", ui-sans-serif, system-ui, sans-serif;
-  --font-heading: "Archivo Black", "Outfit", sans-serif;
+  /* Noto Sans Tamil / Devanagari cover தமிழ் and हिन्दी (Outfit has Latin only); they load only when those letters appear. */
+  --font-body: "Outfit", "Noto Sans Tamil", "Noto Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Archivo Black", "Outfit", "Noto Sans Tamil", "Noto Sans Devanagari", sans-serif;
 
   /* Shape */
   --radius-panel: 1.25rem;

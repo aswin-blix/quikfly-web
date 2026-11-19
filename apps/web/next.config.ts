@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   output: "export",
   images: { unoptimized: true },
   // UI strings are Flutter ARB files (JSON) in packages/shared/i18n, shared with the apps.
-  turbopack: { rules: { "*.arb": { loaders: [], as: "*.json" } } },
+  turbopack: { rules: { "*.arb": { type: "json" } } },
 };
 
 export default nextConfig;

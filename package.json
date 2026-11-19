@@ -18,7 +18,8 @@
     "smoke:admin": "npm run smoke:admin -w @quikfly/api",
     "deploy": "npm run deploy -w @quikfly/api && npm run deploy -w @quikfly/web && npm run deploy -w @quikfly/admin",
     "db:migrate:remote": "npm run db:migrate:remote -w @quikfly/api",
-    "i18n:check": "node scripts/i18n-check.mjs"
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "i18n:strict": "node scripts/i18n-check.mjs --strict"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

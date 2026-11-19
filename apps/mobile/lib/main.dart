@@ -1,6 +1,7 @@
 // QuikFly Android app. Same REST API as the website (apps/api); see apps/mobile/README.md.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/language.dart';
 import 'router.dart';
 import 'screens/account/privacy_screens.dart';
 import 'state/providers.dart';
@@ -44,6 +45,9 @@ class _QuikFlyAppState extends ConsumerState<QuikFlyApp> with WidgetsBindingObse
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: ref.watch(themeModeProvider),
+      locale: ref.watch(appLocaleProvider),
+      localizationsDelegates: localizationsDelegates,
+      supportedLocales: supportedLocales,
       routerConfig: router,
       builder: (_, child) => PrivacyGate(child: child!),
     );
