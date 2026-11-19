@@ -36,8 +36,8 @@ function LoginForm() {
     <div className="min-h-dvh grid place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
-          <p className="text-2xl font-semibold text-strong tracking-tight">Quik<span className="text-accent">Fly</span> <span className="text-subtle font-normal">Admin</span></p>
-          <p className="text-sm text-muted mt-1">Staff sign-in</p>
+          <img src="/assets/logo.svg" alt="QuikFly" width={2059} height={495} className="h-14 w-auto mx-auto" />
+          <p className="text-sm text-muted mt-2">Admin · staff sign-in</p>
         </div>
         <form onSubmit={submit} className="card p-6 grid gap-4" noValidate>
           <Field label="Work email" htmlFor="email">

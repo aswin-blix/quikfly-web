@@ -81,7 +81,7 @@ assets/                fonts (Outfit static weights, Archivo Black), images/ (lo
 - Launcher icon: edit `assets/icon/icon.png` (full icon) and `icon-foreground.png` (adaptive foreground, mark inside the centre 60 %), then `dart run flutter_launcher_icons`.
 - Outfit is shipped as static weights (400/500/600/700) cut from the variable font with `fonttools varLib.instancer`, because Flutter doesn't map `FontWeight` onto a variable font's axis.
 - `lib/core/cancellation.dart` is a Dart copy of `packages/shared/src/cancellation.ts`: it previews the refund before cancelling; the API decides the amount.
-- The logo is made for dark backgrounds; `AppLogo` puts it on a dark badge in light mode until a light-mode logo file exists.
+- `assets/images/logo.png` is rendered from `brand/quikfly-logo.svg` by `node scripts/logo.mjs` (transparent; Flutter's SVG support drops the logo's glow filters, so the apps use a sharp PNG). `AppLogo` shows it bare in both themes, never on a badge or background (`test/logo_test.dart`).
 
 ## Release (signed APK)
 
