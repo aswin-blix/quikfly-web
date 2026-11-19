@@ -593,10 +593,11 @@ class _SafetyState extends ConsumerState<_Safety> with _Action {
   final _name = TextEditingController();
   final _phone = TextEditingController();
   final _relation = TextEditingController();
+  final _pin = TextEditingController();
 
   @override
   void dispose() {
-    for (final x in [_name, _phone, _relation]) {
+    for (final x in [_name, _phone, _relation, _pin]) {
       x.dispose();
     }
     super.dispose();
@@ -658,28 +659,94 @@ class _SafetyState extends ConsumerState<_Safety> with _Action {
       const SizedBox(height: 20),
       const SectionTitle('Safety preferences'),
       Panel(
-        padding: EdgeInsets.zero,
-        child: SwitchListTile(
-          title: const Text('Share night rides automatically'),
-          subtitle: Text(contacts.isEmpty
-              ? 'Add an emergency contact first.'
-              : 'Rides between ${Rules.nightHours.$1}:00 and ${Rules.nightHours.$2}:00 are shared with your contacts (demo: no SMS sent).'),
-          value: user.autoShareNightRides,
-          onChanged: contacts.isEmpty && !user.autoShareNightRides
-              ? null
-              : (on) => run(() async {
-                    final u = await ref.read(apiProvider).updateProfile({'autoShareNightRides': on});
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Share my trip automatically', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final (mode, label) in const [('off', 'Off'), ('night', 'Night rides'), ('always', 'Every ride')])
+              ChoiceChip(
+                label: Text(label),
+                selected: user.autoShareRides == mode,
+                onSelected: busy || (contacts.isEmpty && mode != 'off')
+                    ? null
+                    : (_) => run(() async {
+                          final u = await ref.read(apiProvider).updateProfile({'autoShareRides': mode});
+                          ref.read(sessionProvider.notifier).setUser(u);
+                          if (mounted) {
+                            toast(this.context, mode == 'always' ? 'Every ride will be shared automatically' : mode == 'night' ? 'Night rides will be shared automatically' : 'Auto-share turned off');
+                          }
+                        }),
+              ),
+          ]),
+          const SizedBox(height: 8),
+          Text(
+            contacts.isEmpty
+                ? 'Add an emergency contact first.'
+                : 'Your contacts get a live trip link as soon as a driver is assigned'
+                    '${user.autoShareRides == 'night' ? ' (rides between ${Rules.nightHours.$1}:00 and ${Rules.nightHours.$2}:00)' : user.autoShareRides == 'always' ? ' (every ride)' : ''}. Demo: no SMS is sent.',
+            style: TextStyle(color: c.fgMuted, fontSize: 12.5),
+          ),
+          Divider(color: c.border, height: 28),
+          const Text('Ride PIN', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text('Use your own 4-digit PIN instead of a new code each ride. Tell it to the driver to start the trip.', style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
+          const SizedBox(height: 10),
+          if (user.ridePin != null)
+            Row(children: [
+              Text(user.ridePin!, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 6)),
+              const Spacer(),
+              TextButton(
+                onPressed: busy
+                    ? null
+                    : () => run(() async {
+                          final u = await ref.read(apiProvider).updateProfile({'ridePin': null});
+                          ref.read(sessionProvider.notifier).setUser(u);
+                          if (mounted) toast(this.context, 'Back to a new code every ride');
+                        }),
+                child: const Text('Use a new code each ride'),
+              ),
+            ])
+          else
+            Row(children: [
+              SizedBox(
+                width: 120,
+                child: TextField(
+                  controller: _pin,
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  obscureText: false,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(letterSpacing: 6, fontWeight: FontWeight.w700),
+                  decoration: const InputDecoration(hintText: '••••', counterText: ''),
+                ),
+              ),
+              const SizedBox(width: 12),
+              GoldButton(
+                expand: false,
+                label: 'Set PIN',
+                loading: busy,
+                onPressed: () {
+                  if (!Rules.ridePin.hasMatch(_pin.text.trim())) {
+                    setState(() => error = 'A ride PIN is 4 digits.');
+                    return;
+                  }
+                  run(() async {
+                    final u = await ref.read(apiProvider).updateProfile({'ridePin': _pin.text.trim()});
                     ref.read(sessionProvider.notifier).setUser(u);
-                    if (mounted) toast(this.context, on ? 'Night rides will be shared automatically' : 'Auto-share turned off');
-                  }),
-        ),
+                    _pin.clear();
+                    if (mounted) toast(this.context, 'Your ride PIN is set');
+                  });
+                },
+              ),
+            ]),
+        ]),
       ),
       const SizedBox(height: 20),
       const SectionTitle('During every ride'),
       for (final (i, t) in const [
         (Icons.sos, 'SOS button on the ride screen: call 112, our safety line or alert your contacts'),
         (Icons.share_location, 'Share a live trip link with anyone'),
-        (Icons.pin, 'Ride OTP: your driver starts only after you share it'),
+        (Icons.pin, 'Ride OTP (or your own ride PIN): your driver starts only after you share it'),
       ])
         ListTile(contentPadding: EdgeInsets.zero, leading: Icon(i, color: c.accent), title: Text(t)),
     ]);
