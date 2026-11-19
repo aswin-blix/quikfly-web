@@ -56,10 +56,10 @@ lib/
   router.dart          every screen's path: tab shell (/, /offers, /trips, /account) + full-screen routes
   core/                env.dart (dart-defines) · format.dart (₹, dates, phone) · services.dart (the six services)
   theme/               tokens.dart (colours, fonts, radii; mirrors apps/web tokens.css) · theme.dart (Material themes from tokens)
-  api/                 api.dart (one method per endpoint, ApiException) · models.dart (mirrors packages/shared types + Rules) · vendor_models.dart · support_models.dart
+  api/                 api.dart (one method per endpoint, ApiException) · models.dart (mirrors packages/shared types + Rules) · vendor_models.dart · support_models.dart · rental_models.dart
   state/               providers.dart (api, /config, session, theme mode) · catalog.dart (tours, cars, vehicles, bookings)
   widgets/             ui.dart (Panel, GoldButton, ErrorBox, EmptyState, Skeleton, Pill, KeyValue, toast, confirm, ScreenList) · art.dart · logo.dart · offer_card.dart
-  screens/             auth, home, offers, trips (+ bus m-ticket with QR), account (hub + account_sections, notifications inbox opened from the Home bell), help (+ support_screens: tickets, thread, new ticket, callback sheet, WhatsApp button), ride (+ place search),
+  screens/             auth, home, offers, trips (+ bus m-ticket with QR, self-drive rental and its photo checklist in rental_screen.dart), account (hub + account_sections, notifications inbox opened from the Home bell), help (+ support_screens: tickets, thread, new ticket, callback sheet, WhatsApp button), ride (+ place search),
                        bus, holidays, checkout (checkout, confirmed, invoice), rent (cars, group travel), not_found
   state/checkout.dart  CheckoutDraft (what a service screen hands to checkout) + LiveQuote (debounced POST /quotes)
   widgets/             also city_map.dart (painted demo map), safety_sheet.dart, licence_panel.dart, counter.dart
