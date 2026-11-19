@@ -22,7 +22,8 @@ The customer website for all six QuikFly services. All data and every price come
 | `/trip?id=` | Trip summary: the bookings of one trip on a timeline, each with its own invoice, and the trip total (printable) | — |
 | `/account?tab=wallet` | Wallet balance and history, QuikFly Pass (buy or add days from the wallet; `#pass`, linked from the ride panel's surge note), plus QuikFly Credits: balance, next expiry, earn rates per service and credits history | Uber One |
 | `/notifications` | Inbox: booking confirmed, cancellations and refunds, deposit returned, licence decisions, ride reminders; opening it marks all read. The header bell shows the unread count (checked every minute while the tab is visible) | Uber / Ola |
-| `/bookings` | My trips: Upcoming / Past / Cancelled, expandable details, cancel (shows the refund the service's cancellation policy gives before confirming; policies come from settings via `cancelPolicyText` in `@quikfly/shared`) | — |
+| `/bookings` | My trips: Upcoming / Past / Cancelled, expandable details, bus tickets: m-Ticket, Change bus (bus search with `change=<id>`, once, difference shown before confirming) and Cancel some seats (refund preview), cancel (shows the refund the service's cancellation policy gives before confirming; policies come from settings via `cancelPolicyText` in `@quikfly/shared`) | — |
+| `/ticket?t=` | Public bus m-ticket (no login, kept out of search): status, trip, seats with first names, PNR and a QR code (`qrcode`, dark on white in both themes) that opens this same page for a conductor | KSRTC/IntrCity QR tickets |
 | `/offers`, `/partner`, `/help` | Coupons; how vehicle owners join (steps, vehicles, documents from settings) with a download button for the QuikFly Partner app (latest GitHub Release; `PARTNER_APP` in `lib/site.ts`, null shows "coming soon"); help centre FAQ | Red Taxi Vendor |
 
 Demo login OTP: **1234**. Demo coupons are listed on `/offers`.
