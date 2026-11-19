@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quikfly/api/api.dart';
 import 'package:quikfly/api/models.dart';
+import 'package:quikfly/api/support_models.dart';
 import 'package:quikfly/core/env.dart';
 import 'package:quikfly/core/format.dart';
 
@@ -238,6 +239,25 @@ void main() {
     await api.cancelRide(ride.id);
     final back = await api.updateProfile({'ridePin': null, 'autoShareRides': 'off'});
     expect(back.ridePin, isNull);
+  });
+
+  test('support tickets: open, reply, close (and a callback)', () async {
+    final list = await api.tickets();
+    expect(list.every((t) => supportTopics.containsKey(t.topic)), isTrue);
+    expect(whatsappLink('90000 12345', 'Hi')?.toString(), 'https://wa.me/919000012345?text=Hi');
+    // Production: parse only (no tickets in the real staff queue).
+    if (apiUrl.contains('workers.dev')) return;
+    final t = await api.openTicket('refund', 'App contract test: where is my refund?');
+    expect(t.status, 'open');
+    expect(t.messages.single.fromStaff, isFalse);
+    final r = await api.replyTicket(t.id, 'Adding a little more detail.');
+    expect(r.messages.length, 2);
+    expect((await api.ticket(t.id)).messages.length, 2);
+    expect((await api.closeTicket(t.id)).closed, isTrue);
+    final cb = await api.requestCallback(name: 'App Contract Test', phone: phone, topic: 'holiday', preferredTime: 'evening', ref: 'Test holiday');
+    expect(cb.isCallback, isTrue);
+    expect(cb.preferredTime, 'evening');
+    expect(cb.ref, 'Test holiday');
   });
 
   test('credits summary parses', () async {

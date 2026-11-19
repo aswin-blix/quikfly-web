@@ -16,6 +16,7 @@ import '../../widgets/art.dart';
 import '../../widgets/counter.dart';
 import '../../widgets/ui.dart';
 import '../bus/bus_screens.dart' show DateField;
+import '../help/support_screens.dart' show WhatsAppButton, showCallbackSheet;
 import '../home/home_screen.dart' show TourTile;
 
 const _themes = [('all', 'All'), ('beach', 'Beaches'), ('hills', 'Hill stations'), ('spiritual', 'Spiritual'), ('women', 'Women only'), ('seniors', 'Seniors'), ('international', 'International'), ('weekend', 'Weekend'), ('heritage', 'Heritage')];
@@ -476,6 +477,21 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
                     const SizedBox(height: 6),
                     Text('Demo: no payment is taken',
                         textAlign: TextAlign.center, style: TextStyle(color: c.fgSubtle, fontSize: 11.5)),
+                  ]),
+                ),
+                const SizedBox(height: 12),
+                Panel(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    const Text('Questions about this trip?', style: TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 4),
+                    Text('Our holiday team can help with dates, rooms and changes.', style: TextStyle(color: c.fgMuted, fontSize: 13)),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: () => showCallbackSheet(context, topic: 'holiday', about: t.title),
+                      icon: const Icon(Icons.phone_callback_outlined, size: 18),
+                      label: const Text('Request a callback'),
+                    ),
+                    WhatsAppButton(text: 'Hi QuikFly, I have a question about the ${t.title} holiday.'),
                   ]),
                 ),
                 if (similar.isNotEmpty) ...[

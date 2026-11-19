@@ -16,6 +16,7 @@ import 'widgets/service_gate.dart';
 import 'screens/checkout/invoice_screen.dart';
 import 'screens/not_found.dart';
 import 'screens/help/help_screen.dart';
+import 'screens/help/support_screens.dart';
 import 'screens/holidays/holiday_screens.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/offers/offers_screen.dart';
@@ -42,6 +43,9 @@ final router = GoRouter(
     ),
     GoRoute(path: '/login', parentNavigatorKey: _rootKey, builder: (_, _) => const LoginScreen()),
     GoRoute(path: '/help', parentNavigatorKey: _rootKey, builder: (_, _) => const HelpScreen()),
+    GoRoute(path: '/support', parentNavigatorKey: _rootKey, builder: (_, _) => const SupportListScreen()),
+    GoRoute(path: '/support/new', parentNavigatorKey: _rootKey, builder: (_, s) => NewTicketScreen(bookingId: s.uri.queryParameters['booking'])),
+    GoRoute(path: '/support/:id', parentNavigatorKey: _rootKey, builder: (_, s) => SupportThreadScreen(id: s.pathParameters['id']!)),
     GoRoute(
       path: '/ride/:service',
       parentNavigatorKey: _rootKey,

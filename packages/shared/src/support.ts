@@ -61,8 +61,9 @@ export const SUPPORT_RULES = {
 } as const;
 
 /** A wa.me click-to-chat link for `number` (10-digit Indian numbers get +91), or null when the number isn't usable. */
-export function whatsappLink(number: string, text: string): string | null {
-  let digits = number.replace(/\D/g, "");
+export function whatsappLink(number: string | null | undefined, text: string): string | null {
+  // Missing when an older API's settings are loaded (e.g. mid-deploy): no link, no crash.
+  let digits = (number ?? "").replace(/\D/g, "");
   if (digits.length === 10) digits = `91${digits}`;
   if (digits.length < 11 || digits.length > 15) return null;
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;

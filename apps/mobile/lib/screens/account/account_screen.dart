@@ -104,6 +104,7 @@ class AccountScreen extends ConsumerWidget {
                 _ => 'Add',
               }),
               if (ref.watch(configProvider).value?.settings.featureReferral ?? true) link(Icons.card_giftcard, 'Refer & earn', '/account/refer'),
+              link(Icons.support_agent, 'Support tickets', '/support'),
               link(Icons.settings_outlined, 'Account settings', '/account/settings'),
             ]),
           ],

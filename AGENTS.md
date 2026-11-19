@@ -36,7 +36,7 @@ packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation
                   catalog.ts (SEED data only) + catalog-kinds.ts (13 kinds, fields, validation), settings.ts
                   (runtime Settings, defaults, rules), pricing.ts (all price maths + bus/ride simulation),
                   cancellation.ts (refund tiers per service: the API applies them, the apps preview them),
-                  admin.ts (roles, PERMISSIONS, admin shapes)
+                  admin.ts (roles, PERMISSIONS, admin shapes), support.ts (support topics, callback times, limits, whatsappLink)
 ```
 
 ## Commands (repo root)

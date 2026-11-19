@@ -18,6 +18,7 @@ IconData _icon(String kind) => switch (kind) {
       'licence.rejected' => Icons.badge_outlined,
       'ride.reminder' => Icons.schedule,
       'credits.earned' => Icons.toll_outlined,
+      'support.reply' => Icons.support_agent,
       _ => Icons.notifications_none,
     };
 
@@ -59,6 +60,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     highlighted: n.readAt == null,
                     onTap: n.kind == 'credits.earned'
                         ? () => context.push('/account/wallet')
+                        : n.kind == 'support.reply'
+                        ? () => context.push('/support')
                         : n.bookingId != null
                         ? () => context.go('/trips')
                         : n.kind.startsWith('licence')
