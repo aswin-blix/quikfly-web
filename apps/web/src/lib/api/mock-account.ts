@@ -1,7 +1,7 @@
 // Mock (demo mode) versions of the account endpoints. Same rules as the API,
 // using the shared limits and patterns, but stored in this browser only.
 import {
-  CATALOG_SEED, DEFAULT_SETTINGS, DELETION_GRACE_DAYS, LIMITS, PASS_NAME, PATTERNS, compactCode, passEnd, passSaleError,
+  CATALOG_SEED, DEFAULT_SETTINGS, DELETION_GRACE_DAYS, LIMITS, PASS_NAME, PATTERNS, RIDE_PIN, compactCode, passEnd, passSaleError,
   type EmergencyContact, type SavedPlace, type Traveller, type User,
 } from "@quikfly/shared";
 import type { QuikflyApi } from "./contract";
@@ -19,7 +19,7 @@ function newUser(phone: string): User {
   return {
     id: uid("U"), name: "Guest", phone, walletBalance: 0, creditBalance: 0, passUntil: null, email: null, gender: null, dob: null, profileComplete: false,
     referralCode: "QF" + Math.random().toString(36).slice(2, 8).toUpperCase(), referred: false,
-    licence: { status: "none", number: null, expiry: null, note: null }, gst: null, autoShareNightRides: false,
+    licence: { status: "none", number: null, expiry: null, note: null }, gst: null, autoShareNightRides: false, autoShareRides: "off", ridePin: null,
   };
 }
 
@@ -68,7 +68,10 @@ export const mockAccount: QuikflyApi["account"] = {
     if (p.gst !== undefined) {
       next.gst = p.gst ? { gstin: PATTERNS.gstin.test(compactCode(p.gst.gstin)) ? compactCode(p.gst.gstin) : fail("Enter a valid 15-character GSTIN."), name: p.gst.name } : null;
     }
-    if (p.autoShareNightRides !== undefined) next.autoShareNightRides = p.autoShareNightRides;
+    // Safety Preferences, like the API: the old night-only flag maps to "night" / "off".
+    const mode = p.autoShareRides ?? (p.autoShareNightRides === undefined ? undefined : p.autoShareNightRides ? "night" : "off");
+    if (mode !== undefined) { next.autoShareRides = mode; next.autoShareNightRides = mode !== "off"; }
+    if (p.ridePin !== undefined) next.ridePin = p.ridePin === null ? null : RIDE_PIN.test(p.ridePin) ? p.ridePin : fail("A ride PIN is 4 digits.");
     saveUser(next);
     return withLicenceStatus(next);
   },

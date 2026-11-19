@@ -6,7 +6,7 @@ import type { QuikflyApi } from "./contract";
 import {
   BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
-  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
+  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, isWomenOnly, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
@@ -130,21 +130,27 @@ export const mockApi: QuikflyApi = {
       const hour = scheduledFor ? parseInt(scheduledFor.slice(11, 13), 10) : new Date().getHours();
       // A signed-in rider whose QuikFly Pass covers the pickup time pays no surge (like the API).
       const waive = passCovers(signedInUser()?.passUntil, scheduledFor ? Date.parse(localToIso(scheduledFor)) : Date.now());
-      return rideQuotes(seed.rideOption.filter((o) => o.service === service), placeById(pickupId), placeById(dropId), settings, hour, stopIds.map(placeById), waive);
+      // Women-only ride types only for signed-in women riders (like the API).
+      const woman = settings.featureWomenOnlyRides && signedInUser()?.gender === "female";
+      const options = seed.rideOption.filter((o) => o.service === service && (woman || !isWomenOnly(o)));
+      return rideQuotes(options, placeById(pickupId), placeById(dropId), settings, hour, stopIds.map(placeById), waive);
     },
     async book({ optionId, pickupId, dropId, payment, scheduledFor, stopIds = [] }) {
       await wait(scheduledFor ? 900 : 2600); // "searching for drivers" only for ride-now
       const option = byId(seed.rideOption, optionId, "ride type");
+      const rider = currentUser();
+      if (isWomenOnly(option) && rider.gender !== "female") fail("This ride type is for women riders. Set your gender in your profile, or pick another ride type.");
       const quote = (await mockApi.rides.quote(option.service, pickupId, dropId, scheduledFor, stopIds)).find((q) => q.option.id === optionId)!;
       const s = Date.now();
-      const { id: _id, ...driver } = pick(seed.driver, s);
+      const roster = isWomenOnly(option) ? seed.driver.filter((d) => d.gender === "female") : seed.driver;
+      const { id: _id, gender: _gender, ...driver } = pick(roster, s);
       const ride = {
         id: uid("RD"),
         quote,
         pickup: placeById(pickupId),
         drop: placeById(dropId),
         payment,
-        otp: String(1000 + (s % 9000)),
+        otp: rider.ridePin ?? String(1000 + (s % 9000)),
         driver: {
           ...driver,
           vehicle: pick(option.models, s >> 2),
