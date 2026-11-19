@@ -101,6 +101,7 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
       { key: "perKm", label: "Per km", type: "number", min: 0, max: 500, hint: "In rupees" },
       { key: "perMin", label: "Per minute", type: "number", min: 0, max: 100, hint: "In rupees" },
       { key: "models", label: "Vehicle models", type: "list", maxLength: 60, hint: "One per line; a driver arrives in one of these" },
+      { key: "riders", label: "Riders", type: "select", options: ["everyone", "women"], optional: true, hint: '"women": only women riders see it, and a woman captain drives' },
     ],
     title: (d) => String(d.name), detail: (d) => `${d.service === "car" ? "Cab" : "Bike/auto"} · ${inr(d.baseFare)} + ${inr(d.perKm)}/km + ${inr(d.perMin)}/min`,
   },
@@ -110,6 +111,7 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
     fields: [
       name(), rating, { key: "trips", label: "Trips completed", type: "int", min: 0, max: 1_000_000 },
       { key: "phone", label: "Phone", type: "text", maxLength: 20, pattern: /^\+?[\d\s-]{8,20}$/, hint: "e.g. +91 98400 12345" },
+      { key: "gender", label: "Gender", type: "select", options: ["female", "male"], optional: true, hint: 'Women-only rides go to "female" drivers' },
     ],
     title: (d) => String(d.name), detail: (d) => `${d.rating}★ · ${Number(d.trips).toLocaleString("en-IN")} trips · ${d.phone}`,
   },

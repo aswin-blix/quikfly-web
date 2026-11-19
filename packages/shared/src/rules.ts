@@ -45,6 +45,17 @@ export const NIGHT_HOURS: [number, number] = [22, 6];
 /** Simulated ride timings, used by the ride screen and the shared-trip page. */
 export const RIDE_SIMULATION = { arriveMs: 9000, tripMs: 12000 };
 
+/** A rider's own ride PIN: exactly 4 digits. */
+export const RIDE_PIN = /^\d{4}$/;
+
+/** Is this ride type for women riders only (B8)? */
+export const isWomenOnly = (o: { riders?: string }) => o.riders === "women";
+
+/** Should this ride be shared with emergency contacts automatically, given the rider's Safety Preferences? */
+export function autoSharesAt(mode: "off" | "night" | "always" | undefined, hour: number) {
+  return mode === "always" || (mode === "night" && isNightHour(hour));
+}
+
 export const PATTERNS = {
   phone: /^[6-9]\d{9}$/,
   email: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/,

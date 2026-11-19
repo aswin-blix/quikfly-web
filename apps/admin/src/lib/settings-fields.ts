@@ -44,6 +44,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "featureTripOffers", type: "toggle", label: "Add a cab to a trip", help: "Off: no ride offer after a bus or holiday booking." },
       { key: "featureReferral", type: "toggle", label: "Refer and earn", help: "Off: the referral section is hidden and codes can't be used." },
       { key: "featureRidePass", type: "toggle", label: "QuikFly Pass on sale", help: "Off: the pass can't be bought. Passes already bought keep waiving surge until they end." },
+      { key: "featureWomenOnlyRides", type: "toggle", label: "Women-only rides", help: "Bike Pink and other ride types marked for women riders, with women captains. Off: they're hidden and can't be booked." },
     ],
   },
   {

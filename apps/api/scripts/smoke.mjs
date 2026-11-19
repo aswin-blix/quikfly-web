@@ -362,9 +362,33 @@ await expect("PATCH /me rejects a bad GSTIN", call("PATCH", "/me", { gst: { gsti
 await expect("PATCH /me saves profile fields", call("PATCH", "/me", {
   email: "Smoke@Example.com", gender: "other", dob: "1995-06-15", gst: { gstin: "33abcde1234f1z5", name: "Smoke Co" }, autoShareNightRides: true,
 }), 200, (j) => j.email === "smoke@example.com" && j.gender === "other" && j.dob === "1995-06-15"
-  && j.gst?.gstin === "33ABCDE1234F1Z5" && j.autoShareNightRides === true);
+  && j.gst?.gstin === "33ABCDE1234F1Z5" && j.autoShareNightRides === true && j.autoShareRides === "night");
 await expect("PATCH /me with null clears a field", call("PATCH", "/me", { gst: null, autoShareNightRides: false }), 200,
   (j) => j.gst === null && j.autoShareNightRides === false);
+
+// Safety Preferences and women-only rides (B8): a woman rider sees Bike Pink and gets a woman captain and her own PIN.
+{
+  const tokW = (await call("POST", "/auth/verify", { phone: "73" + String(Date.now()).slice(-8), otp: OTP })).json?.token ?? "";
+  await call("PATCH", "/me", { name: "Smoke Woman", gender: "female" }, tokW);
+  await expect("Safety Preferences: share every ride", call("PATCH", "/me", { autoShareRides: "always" }, tokW), 200, (j) => j.autoShareRides === "always" && j.autoShareNightRides === true);
+  await expect("an unknown share mode is refused", call("PATCH", "/me", { autoShareRides: "sometimes" }, tokW), 400);
+  await expect("a ride PIN must be 4 digits", call("PATCH", "/me", { ridePin: "12a4" }, tokW), 400, (j) => /4 digits/.test(j.message));
+  await expect("set a ride PIN", call("PATCH", "/me", { ridePin: "4826" }, tokW), 200, (j) => j.ridePin === "4826");
+  const pink = cfg.rideOptions.find((o) => o.riders === "women");
+  const bikeQuote = (auth) => call("POST", "/rides/quote", { service: "bike", pickupId: a.id, dropId: b.id }, auth);
+  if (!pink || !cfg.settings.featureWomenOnlyRides) console.log("SKIP  no women-only ride type on sale");
+  else {
+    await expect("women riders see the women-only ride type", bikeQuote(tokW), 200, (j) => j.some((q) => q.option.id === pink.id));
+    await expect("signed-out quotes don't offer it", bikeQuote(false), 200, (j) => j.length > 0 && !j.some((q) => q.option.id === pink.id));
+    await expect("other riders don't see it", bikeQuote(true), 200, (j) => !j.some((q) => q.option.id === pink.id));
+    await expect("other riders can't book it", call("POST", "/rides", { optionId: pink.id, pickupId: a.id, dropId: b.id, payment: "upi" }), 409, (j) => /women riders/.test(j.message));
+    const pinkRide = await expect("a women-only ride gets a woman captain and the rider's own PIN", call("POST", "/rides", { optionId: pink.id, pickupId: a.id, dropId: b.id, payment: "upi" }, tokW), 201,
+      (j) => ["Lakshmi R", "Priya S"].includes(j.driver.name) && j.otp === "4826" && j.quote.option.riders === "women");
+    if (pinkRide) await call("POST", `/rides/${pinkRide.id}/cancel`, null, tokW);
+  }
+  await expect("clearing the PIN goes back to a new code each ride", call("PATCH", "/me", { ridePin: null, autoShareRides: "off" }, tokW), 200, (j) => j.ridePin === null && j.autoShareRides === "off" && j.autoShareNightRides === false);
+  await call("POST", "/auth/logout", null, tokW);
+}
 
 // A second, brand-new user for referral, isolation and deletion checks
 const phoneB = "9" + String(Date.now()).slice(-9);
