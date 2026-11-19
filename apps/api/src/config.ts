@@ -30,3 +30,8 @@ export const PUSH_MAX_AGE_MINUTES = 60;
 export const PUSH_BATCH = 40;
 /** Firebase Cloud Messaging endpoints for the service-account sign-in. */
 export const FCM = { tokenUrl: "https://oauth2.googleapis.com/token", scope: "https://www.googleapis.com/auth/firebase.messaging" };
+
+/** Accounts past their deletion grace erased per cron run (each run also has the free plan's 50-query cap). */
+export const ERASE_BATCH = 20;
+/** last_active_at is refreshed at most this often per account (one write a day, not one per request). */
+export const ACTIVITY_TOUCH_HOURS = 24;

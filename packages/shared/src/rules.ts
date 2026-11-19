@@ -7,7 +7,8 @@ export const LIMITS = {
   emergencyContacts: 3,
   nameMin: 2,
   nameMax: 60,
-  minAge: 13,
+  /** Account holders must be adults: the DPDP Rules need verified parental consent for anyone younger. */
+  minAge: 18,
   maxAge: 100,
   /** Driving licence must be valid for at least this many more days. */
   licenceMinDaysLeft: 1,

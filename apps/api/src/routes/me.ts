@@ -1,4 +1,4 @@
-// The signed-in user's account: profile, number, sessions, deletion, referral,
+// The signed-in user's account: profile, number, sessions, privacy (consent, export), deletion, referral,
 // licence, saved places, travellers, emergency contacts and wallet history.
 import { Hono } from "hono";
 import {
@@ -21,6 +21,7 @@ import { creditSummary } from "../services/credits";
 import { buyPass } from "../services/pass";
 import { customerClose, customerReply, myTicket, myTickets, openTicket } from "../services/support";
 import { listNotifications, markRead, registerDevice, removeDevice } from "../services/notifications";
+import { exportData, giveConsent } from "../services/privacy";
 
 type Json = Record<string, unknown>;
 const NAME = [LIMITS.nameMin, LIMITS.nameMax] as const;
@@ -77,6 +78,14 @@ export const me = new Hono<AppEnv>()
   .post("/logout-all", async (c) => {
     await signOutEverywhere(c.env.DB, c.var.user.id);
     return c.json({ signedOut: true });
+  })
+  // Privacy: agree to the current notice; download everything we hold as one JSON file.
+  .post("/consent", async (c) => c.json(await giveConsent(c.env.DB, c.var.user.id, str(await jsonBody(c), "version", 20))))
+  .get("/export", async (c) => {
+    const data = await exportData(c.env.DB, c.var.user.id);
+    c.header("Content-Disposition", `attachment; filename="quikfly-data-${data.exportedAt.slice(0, 10)}.json"`);
+    c.header("Cache-Control", "no-store");
+    return c.json(data);
   })
   .post("/delete", async (c) => {
     await deleteAccount(c.env.DB, c.env.DEMO_OTP, c.var.user.id, str(await jsonBody(c), "otp", 10));

@@ -15,6 +15,7 @@ import { buses } from "./routes/buses";
 import { config, rentals, tours } from "./routes/catalog";
 import { offers, quotes } from "./routes/quotes";
 import { places } from "./routes/places";
+import { privacy } from "./routes/privacy";
 import { rides } from "./routes/rides";
 import { runScheduled } from "./scheduled";
 import type { Env } from "./env";
@@ -36,6 +37,7 @@ const v1 = new Hono<AppEnv>()
   .route("/auth", auth)
   .route("/me", me)
   .route("/config", config)
+  .route("/privacy", privacy)
   .route("/share", share)
   .route("/tickets", tickets)
   .route("/support", support)
