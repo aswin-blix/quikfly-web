@@ -12,6 +12,12 @@ export const EMERGENCY_NUMBER = "112";
 /** Public page where someone can follow a shared ride. */
 export const trackUrl = (token: string) => `${location.origin}/track?${new URLSearchParams({ t: token })}`;
 
+/** Public page a bus m-ticket's QR code opens (a conductor checks it there). */
+export const ticketUrl = (token: string) => `${location.origin}/ticket?${new URLSearchParams({ t: token })}`;
+
+/** QR codes stay dark on white in both themes so every scanner can read them. */
+export const QR_COLORS = { dark: "#000000", light: "#ffffff" } as const;
+
 /** Shown on the wallet page so refunds have clear expectations (Zoomcar-style). */
 export const REFUND_TIMINGS: [string, string][] = [
   ["QuikFly wallet", "Instant"],

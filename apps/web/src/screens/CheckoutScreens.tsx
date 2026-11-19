@@ -1,7 +1,7 @@
 "use client";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BadgePercent, Building2, CarTaxiFront, ChevronDown, Coins, CreditCard, FileText, Info, Lock, Route, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
+import { ArrowLeft, BadgePercent, Building2, CarTaxiFront, ChevronDown, Coins, CreditCard, FileText, Info, Lock, QrCode, RotateCcw, Route, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { TweenNumber } from "@/components/motion";
 import { Empty, GhostLink, GoldButton, Spinner } from "@/components/ui";
@@ -10,7 +10,7 @@ import { cx, inr, prettyDateTime } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
-import { CREDITS_LINE, DEPOSIT_LINE, RIDE_SCHEDULE, cancelPolicyFor, creditsEarned, creditsUsable, formatLicence, minutesUntilStart, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
+import { CREDITS_LINE, DEPOSIT_LINE, RIDE_SCHEDULE, cancelPolicyFor, creditsEarned, creditsUsable, formatLicence, minutesUntilStart, refundAmount, refundPercent, rescheduleError, rideCancelFee, seatCancelRefund, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { bookingWhen, rideOffer } from "@/lib/trips";
 import { LicenceBadge, LicenceForm, licenceMessage, useLicencePolling } from "@/components/account/LicenceSection";
@@ -401,6 +401,8 @@ export function BookingsScreen() {
   const [open, setOpen] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Bus seats ticked for cancelling, for the booking whose seat picker is open. */
+  const [seatPick, setSeatPick] = useState<{ id: string; seats: string[] } | null>(null);
 
   const match: Record<typeof tab, BookingStatus[]> = { upcoming: ["confirmed", "ongoing"], past: ["completed"], cancelled: ["cancelled"] };
   const list = bookings.filter((b) => match[tab].includes(b.status));
@@ -429,6 +431,20 @@ export function BookingsScreen() {
     if (refund === 0) return "Cancel? It's too close to the start for a refund.";
     if (b.payment !== "wallet") return `Cancel? ${inr(refund)}${percent < 100 ? ` (${percent}%)` : ""} is due back under the cancellation policy.`;
     return `Cancel and get ${inr(refund)}${percent < 100 ? ` (${percent}%)` : ""} back in your wallet?`;
+  }
+
+  async function cancelSomeSeats(b: Booking, seatIds: string[]) {
+    setBusy(true);
+    try {
+      const done = await api.bookings.cancelSeats(b.id, seatIds);
+      const { refund } = seatCancelRefund(settings, b, seatIds);
+      toast(`Seat${seatIds.length > 1 ? "s" : ""} ${seatIds.join(", ")} cancelled. ${refund ? (done.payment === "wallet" ? `${inr(refund)} refunded to your wallet.` : `Refund due: ${inr(refund)}.`) : "No refund under the cancellation policy."}`);
+      setSeatPick(null);
+    } catch (e) {
+      toast((e as Error).message, "err");
+    }
+    await refreshBookings();
+    setBusy(false);
   }
 
   async function cancel(b: Booking) {
@@ -504,6 +520,7 @@ export function BookingsScreen() {
                             {b.status === "cancelled" && b.cancelFee > 0 && <div className="flex justify-between gap-3"><dt className="text-subtle">Cancellation fee</dt><dd className="text-right">{inr(b.cancelFee)}{b.payment === "wallet" ? " (kept)" : " (demo: not collected)"}</dd></div>}
                             {b.status === "cancelled" && b.refundAmount !== null && <div className="flex justify-between gap-3"><dt className="text-subtle">{b.payment === "wallet" ? "Refunded to wallet" : "Refund due"}</dt><dd className="text-right">{b.refundAmount ? inr(b.refundAmount) : "Nothing (cancelled too late)"}</dd></div>}
                           </dl>
+                          {b.rescheduledAt && b.status === "confirmed" && <p className="text-xs text-subtle mt-3">Changed to this bus on {prettyDateTime(b.rescheduledAt)}. A ticket can be changed once.</p>}
                           {b.status !== "cancelled" && (
                             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
                               {/* A ride booked ahead starts from here once the driver is assigned. */}
@@ -512,7 +529,14 @@ export function BookingsScreen() {
                                   ? <Link href={`${serviceByKey(b.service).href}${qs({ ride: b.rideId, booking: b.id })}`} className="btn-gold rounded-lg px-3 py-1.5 text-sm">Start ride</Link>
                                   : <span className="text-xs text-muted">Driver assigned {RIDE_SCHEDULE.startWindowMinutes} min before pickup; start the ride here then.</span>
                               )}
+                              {b.ticketToken && b.status === "confirmed" && <Link href={`/ticket${qs({ t: b.ticketToken })}`} className="text-sm text-gold flex items-center gap-1.5"><QrCode size={15} />m-Ticket</Link>}
                               <Link href={`/invoice${qs({ id: b.id })}`} className="text-sm text-gold flex items-center gap-1.5"><FileText size={15} />Invoice</Link>
+                              {b.service === "bus" && !rescheduleError(settings, b) && b.startsAt && (
+                                <Link href={`/bus/search${qs({ from: b.title.split(" → ")[0], to: b.title.split(" → ")[1] ?? "", date: b.startsAt.slice(0, 10), change: b.id })}`} className="text-sm text-gold flex items-center gap-1.5"><RotateCcw size={15} />Change bus</Link>
+                              )}
+                              {b.service === "bus" && b.status === "confirmed" && b.seats.length > 1 && confirming !== b.id && (
+                                <button onClick={() => setSeatPick(seatPick?.id === b.id ? null : { id: b.id, seats: [] })} className="text-sm text-danger">Cancel some seats</button>
+                              )}
                               {b.status === "confirmed" && (confirming === b.id ? (
                                 <>
                                   <span className="text-sm text-soft">{confirmText(b)}</span>
@@ -522,6 +546,32 @@ export function BookingsScreen() {
                               ) : <button onClick={() => setConfirming(b.id)} className="text-sm text-danger hover:text-danger">Cancel booking</button>)}
                             </div>
                           )}
+                          {seatPick?.id === b.id && b.status === "confirmed" && (() => {
+                            const picked = seatPick.seats;
+                            const preview = picked.length ? seatCancelRefund(settings, b, picked) : null;
+                            const all = picked.length >= b.seats.length;
+                            return (
+                              <div className="mt-4 rounded-xl border border-line p-3 space-y-3" role="group" aria-label="Seats to cancel">
+                                <p className="text-sm text-soft">Which seats? The others stay booked.</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {b.seats.map((s) => (
+                                    <button key={s.id} data-on={picked.includes(s.id)} aria-pressed={picked.includes(s.id)} className="chip !text-sm"
+                                      onClick={() => setSeatPick({ id: b.id, seats: picked.includes(s.id) ? picked.filter((x) => x !== s.id) : [...picked, s.id] })}>{s.id}</button>
+                                  ))}
+                                </div>
+                                {all && <p className="text-xs text-warning">To cancel every seat, use Cancel booking.</p>}
+                                {preview && !all && (
+                                  <p className="text-sm text-soft">
+                                    {preview.refund ? `${inr(preview.refund)}${preview.percent < 100 ? ` (${preview.percent}%)` : ""} ${b.payment === "wallet" ? "comes back to your wallet" : "is due back"}.` : "It's too close to departure for a refund."}
+                                  </p>
+                                )}
+                                <div className="flex gap-3">
+                                  <button disabled={busy || !picked.length || all} onClick={() => cancelSomeSeats(b, picked)} className="text-sm px-3 py-1.5 rounded-lg bg-danger/15 text-danger hover:bg-danger/25 disabled:opacity-40">{busy ? "Cancelling…" : `Cancel ${picked.length || ""} seat${picked.length === 1 ? "" : "s"}`}</button>
+                                  <button onClick={() => setSeatPick(null)} className="text-sm text-muted">Keep them</button>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </motion.div>
                     )}

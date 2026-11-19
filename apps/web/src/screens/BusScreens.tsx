@@ -11,7 +11,7 @@ import { Accordion, Empty, GoldButton, PageHeader, SectionTitle, Segmented, Spin
 import { api } from "@/lib/api";
 import { cx, inr, prettyDate, shiftISO, todayISO } from "@/lib/format";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
-import { GENDERS, cancelPolicyText, type Bus, type Gender, type Seat } from "@quikfly/shared";
+import { GENDERS, cancelPolicyText, rescheduleAmounts, type Booking, type Bus, type Gender, type PriceQuote, type Seat } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { serviceByKey } from "@/lib/services";
 
@@ -108,6 +108,10 @@ export function BusResultsScreen() {
   const q = useQuery();
   const nav = useNav();
   const from = q.get("from") || "Chennai", to = q.get("to") || "Bengaluru", date = q.get("date") || todayISO(1);
+  // ?change=<booking id>: moving a bus booking to another bus or date (see My Trips).
+  const changeId = q.get("change");
+  const { bookings } = useApp();
+  const changing = changeId ? bookings.find((b) => b.id === changeId && b.service === "bus" && b.status === "confirmed") ?? null : null;
   const [buses, setBuses] = useState<Bus[] | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [types, setTypes] = useState<string[]>([]);
@@ -143,7 +147,7 @@ export function BusResultsScreen() {
   const today = todayISO();
   const stripStart = [shiftISO(date, -DATE_STRIP_BEFORE), today].sort()[1];
   const days = Array.from({ length: DATE_STRIP_DAYS }, (_, i) => shiftISO(stripStart, i));
-  const go = (d: string) => nav.replace(`/bus/search${qs({ from, to, date: d })}`);
+  const go = (d: string) => nav.replace(`/bus/search${qs(changeId ? { from, to, date: d, change: changeId } : { from, to, date: d })}`);
 
   const clear = () => { setSlots([]); setTypes([]); setOps([]); setRated(false); if (buses) setMaxPrice(Math.max(...buses.map((x) => x.fare)) + 100); };
 
@@ -180,7 +184,15 @@ export function BusResultsScreen() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 pt-6">
-      <BusSearchBar initial={{ from, to, date }} />
+      {changing ? (
+        <div className="panel p-4 flex flex-wrap items-center gap-3 border-gold/40" role="note">
+          <RotateCcw size={18} className="text-gold shrink-0" />
+          <p className="text-sm flex-1 min-w-[12rem]">
+            <b className="text-strong">Changing booking {changing.id}</b> ({from} → {to}). Pick {changing.seats.length} seat{changing.seats.length > 1 ? "s" : ""} on another bus or date; the fare difference is settled when you confirm. A ticket can be changed once.
+          </p>
+          <Link href="/bookings" className="text-sm text-muted hover:text-strong">Cancel change</Link>
+        </div>
+      ) : <BusSearchBar initial={{ from, to, date }} />}
 
       <div className="flex items-center gap-2 mt-4">
         <button onClick={() => go(shiftISO(date, -1))} disabled={date <= today} className="p-2 rounded-lg border border-line hover:border-gold disabled:opacity-40 disabled:hover:border-line" aria-label="Previous day"><ChevronLeft size={16} /></button>
@@ -240,7 +252,7 @@ export function BusResultsScreen() {
                     <AnimatePresence initial={false}>
                       {open === b.id && (
                         <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }} className="overflow-hidden border-t border-line">
-                          <SeatSelector bus={b} from={from} to={to} date={date} />
+                          <SeatSelector bus={b} from={from} to={to} date={date} change={changing} />
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -255,8 +267,12 @@ export function BusResultsScreen() {
   );
 }
 
-function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: string; date: string }) {
-  const { setDraft, toast } = useApp();
+function SeatSelector({ bus, from, to, date, change }: { bus: Bus; from: string; to: string; date: string; change?: Booking | null }) {
+  const { setDraft, toast, refreshBookings } = useApp();
+  /** Change mode: the new bus's price, shown with the difference before confirming. */
+  const [changeQuote, setChangeQuote] = useState<PriceQuote | null>(null);
+  const [changing, setChanging] = useState(false);
+  const maxSeats = change ? change.seats.length : 6;
   const settings = useSettings();
   const [pricing, setPricing] = useState(false);
   const nav = useNav();
@@ -276,16 +292,38 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
   const allNamed = chosen.every((s) => genders[s.id]);
 
   function toggle(s: Seat) {
+    setChangeQuote(null);
     if (picked.includes(s.id)) { setPicked((p) => p.filter((x) => x !== s.id)); return; }
-    if (picked.length >= 6) { toast("You can book up to 6 seats at a time.", "err"); return; }
+    if (picked.length >= maxSeats) { toast(change ? `Pick ${maxSeats} seat${maxSeats > 1 ? "s" : ""}, one for each traveller.` : "You can book up to 6 seats at a time.", "err"); return; }
     setPicked((p) => [...p, s.id]);
-    if (s.ladies) setGenders((g) => ({ ...g, [s.id]: "female" }));
+    // A change keeps the same travellers: each new seat takes the next traveller's gender.
+    const g = s.ladies ? "female" : change?.seats[picked.length]?.gender;
+    if (g) setGenders((x) => ({ ...x, [s.id]: g }));
   }
   const drops = [`${to} – Main Bus Stand`, `${to} – Ring Road`, `${to} – City Center`];
   const bTimes = [bus.depart, addMin(bus.depart, 20), addMin(bus.depart, 45)];
   const dTimes = drops.map((_, i) => addMin(bus.arrive, i * 15));
 
-  /** Gets the API's price for the chosen seats, then opens checkout with it. */
+  const tripLines = (): [string, string][] => [["Date", prettyDate(date)], ["Departure", `${bTimes[boarding]} from ${bus.boardingPoints[boarding]}`], ["Arrival", `${dTimes[dropping]} at ${drops[dropping]}`], ["Seats", chosen.map((s) => s.label).join(", ")]];
+
+  /** Moves the booking being changed to these seats (the API settles the difference). */
+  async function confirmChange() {
+    if (!change || !changeQuote) return;
+    setChanging(true);
+    try {
+      const r = await api.bookings.reschedule(change.id, { quoteId: changeQuote.id, subtitle: `${bus.operator} · ${bus.type}`, lines: tripLines() });
+      await refreshBookings();
+      const money = r.charged ? `Paid ${inr(r.charged)} more.` : r.refunded ? `${inr(r.refunded)} ${r.booking.payment === "wallet" ? "is back in your wallet" : "refund due"}.` : "Same price.";
+      toast(`Booking moved to ${bus.operator}, ${prettyDate(date)} ${bus.depart}. ${money}`);
+      nav.replace("/bookings");
+    } catch (e) {
+      toast((e as Error).message, "err");
+      setChangeQuote(null);
+    }
+    setChanging(false);
+  }
+
+  /** Gets the API's price for the chosen seats, then opens checkout with it (or shows the difference when changing). */
   async function proceed() {
     setPricing(true);
     let quote;
@@ -296,6 +334,7 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
       setPricing(false);
       return;
     }
+    if (change) { setChangeQuote(quote); setPricing(false); return; }
     setDraft({
       service: "bus", title: `${from} → ${to}`, subtitle: `${bus.operator} · ${bus.type}`, image: serviceByKey("bus").image,
       summary: [["Date", prettyDate(date)], ["Departure", `${bTimes[boarding]} from ${bus.boardingPoints[boarding]}`], ["Arrival", `${dTimes[dropping]} at ${drops[dropping]}`], ["Seats", chosen.map((s) => s.label).join(", ")]],
@@ -379,9 +418,26 @@ function SeatSelector({ bus, from, to, date }: { bus: Bus; from: string; to: str
               ))}
             </div>
           )}
-          <div className="flex justify-between font-bold text-lg"><span>Amount</span><span className="text-gold">{inr(total)}</span></div>
-          <GoldButton className="w-full" disabled={!chosen.length || !allNamed} loading={pricing} onClick={proceed}>Proceed to book <ArrowRight size={16} /></GoldButton>
-          {!chosen.length && <p className="text-[11px] text-subtle text-center">Select up to 6 seats</p>}
+          <div className="flex justify-between font-bold text-lg"><span>{change ? "New fare (before GST)" : "Amount"}</span><span className="text-gold">{inr(total)}</span></div>
+          {change && changeQuote ? (() => {
+            const m = rescheduleAmounts(settings, change, changeQuote.total);
+            return (
+              <div className="border-t border-line pt-2 space-y-2">
+                <p className="text-sm text-soft" role="status">
+                  New total {inr(changeQuote.total)}{m.fee ? ` plus a ${inr(m.fee)} change fee` : ""}.{" "}
+                  {m.charge ? <b className="text-strong">You pay {inr(m.charge)} more{change.payment === "wallet" ? " from your wallet" : ""}.</b>
+                    : m.refund ? <b className="text-strong">{inr(m.refund)} {change.payment === "wallet" ? "comes back to your wallet" : "is due back to you"}.</b>
+                    : <b className="text-strong">Nothing more to pay.</b>}
+                </p>
+                <GoldButton className="w-full" loading={changing} onClick={confirmChange}>Change to this bus <ArrowRight size={16} /></GoldButton>
+              </div>
+            );
+          })() : (
+            <GoldButton className="w-full" disabled={chosen.length !== (change ? maxSeats : chosen.length) || !chosen.length || !allNamed} loading={pricing} onClick={proceed}>
+              {change ? "Check the price" : "Proceed to book"} <ArrowRight size={16} />
+            </GoldButton>
+          )}
+          {!chosen.length && <p className="text-[11px] text-subtle text-center">{change ? `Select ${maxSeats} seat${maxSeats > 1 ? "s" : ""}` : "Select up to 6 seats"}</p>}
           {chosen.length > 0 && !allNamed && <p className="text-[11px] text-subtle text-center">Choose who sits in each seat</p>}
         </div>
       </div>
