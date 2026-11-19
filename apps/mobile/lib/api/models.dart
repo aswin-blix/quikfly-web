@@ -397,7 +397,8 @@ class TravelVehicle {
 
 class Booking {
   const Booking(this.id, this.service, this.title, this.subtitle, this.amount, this.status, this.createdAt, this.payment, this.lines,
-      {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0, this.rideId, this.tripId, this.creditsUsed = 0});
+      {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0, this.rideId, this.tripId, this.creditsUsed = 0,
+      this.discount = 0, this.seats = const [], this.ticketToken, this.rescheduledAt});
   final String id, title, subtitle, payment;
   final ServiceKey service;
   final int amount;
@@ -426,6 +427,22 @@ class Booking {
 
   /// Paid with QuikFly Credits, on top of [amount].
   final int creditsUsed;
+
+  /// Coupon discount taken off this booking.
+  final int discount;
+
+  /// Bus seats this booking holds now (empty for other services and once cancelled).
+  final List<BookingSeat> seats;
+
+  /// Bus bookings: the m-ticket's token (its QR code opens the website's /ticket page).
+  final String? ticketToken;
+
+  /// When a bus booking moved to another bus or date (allowed once).
+  final DateTime? rescheduledAt;
+
+  /// A booking line by label, e.g. 'Seats'.
+  String? line(String label) => lines.where((l) => l.$1 == label).firstOrNull?.$2;
+
   factory Booking.fromJson(Json j) => Booking(
         j['id'] as String,
         ServiceKey.parse('${j['service']}'),
@@ -444,7 +461,19 @@ class Booking {
         rideId: j['rideId'] as String?,
         tripId: j['tripId'] as String?,
         creditsUsed: j['creditsUsed'] == null ? 0 : _int(j['creditsUsed']),
+        discount: j['discount'] == null ? 0 : _int(j['discount']),
+        seats: ((j['seats'] as List?) ?? const []).map((s) => BookingSeat.fromJson(s as Json)).toList(),
+        ticketToken: j['ticketToken'] as String?,
+        rescheduledAt: j['rescheduledAt'] == null ? null : DateTime.tryParse('${j['rescheduledAt']}')?.toLocal(),
       );
+}
+
+/// A seat a bus booking holds: what it cost (before GST) and who sits there.
+class BookingSeat {
+  const BookingSeat(this.id, this.price, this.gender);
+  final String id, gender;
+  final int price;
+  factory BookingSeat.fromJson(Json j) => BookingSeat('${j['id']}', _int(j['price'] ?? 0), '${j['gender'] ?? 'other'}');
 }
 
 class Offer {
@@ -587,6 +616,9 @@ class Settings {
   int get rentProtectionPeacePerDay => _i('rentProtectionPeacePerDay', 399);
   int get rentUnlimitedKmExtraPercent => _i('rentUnlimitedKmExtraPercent', 25);
   int get rentDepositRefundHours => _i('rentDepositRefundHours', 48);
+  /// Bus changes: one move to another bus or date until this many hours before departure, for this fee plus any fare difference.
+  int get busRescheduleHours => _i('busRescheduleHours', 6);
+  int get busRescheduleFee => _i('busRescheduleFee', 0);
   double get surgeCap => (_raw['surgeCap'] as num?)?.toDouble() ?? 2;
   double get surgeMultiplier => (_raw['surgeMultiplier'] as num?)?.toDouble() ?? 1.2;
   String get surgeHours => _s('surgeHours', '8-10, 17-20');

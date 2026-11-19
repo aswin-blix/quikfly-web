@@ -258,4 +258,14 @@ class QuikFlyApi {
   Future<Booking> cancelBooking(String id, {String? reason}) =>
       _post('/bookings/$id/cancel', (d) => Booking.fromJson(d as Json), {'reason': ?reason});
   Future<Booking> completeBooking(String id) => _post('/bookings/$id/complete', (d) => Booking.fromJson(d as Json));
+
+  /// Bus tickets: cancel some seats (their share comes back per the bus policy).
+  Future<Booking> cancelSeats(String id, List<String> seatIds) => _post('/bookings/$id/cancel-seats', (d) => Booking.fromJson(d as Json), {'seatIds': seatIds});
+
+  /// Bus tickets: move once to the bus of [quoteId]; the difference is settled. Returns the booking and what was charged or refunded.
+  Future<({Booking booking, int charged, int refunded})> reschedule(String id, String quoteId, String subtitle, List<(String, String)> lines) =>
+      _post('/bookings/$id/reschedule', (d) {
+        final j = d as Json;
+        return (booking: Booking.fromJson(j['booking'] as Json), charged: (j['charged'] as num?)?.round() ?? 0, refunded: (j['refunded'] as num?)?.round() ?? 0);
+      }, {'quoteId': quoteId, 'subtitle': subtitle, 'lines': [for (final l in lines) [l.$1, l.$2]]});
 }
