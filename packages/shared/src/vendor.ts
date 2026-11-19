@@ -55,6 +55,17 @@ export const AUDIT_SLOT_LABEL: Record<AuditSlot, string> = { morning: "Morning (
 /** Bump when the agreement text changes; vendors accept a version. */
 export const VENDOR_AGREEMENT_VERSION = "2026-11";
 
+/** The partner agreement's terms, as the website shows them (Dart copy: apps/mobile/lib/partner/onboarding_screens.dart). Change both with the version. */
+export const VENDOR_AGREEMENT_TERMS = [
+  "Your vehicle and every driver you assign keep valid RC, insurance, permit and licence. Expired documents stop trips until renewed.",
+  "Only drivers registered with QuikFly drive your vehicle on QuikFly trips.",
+  "QuikFly sets customer fares. Your earnings are the fare less QuikFly's commission and taxes, shown for every trip.",
+  "Earnings are paid to your registered bank account; you can request a payout from the app.",
+  "The QuikFly sticker and paint stay on the vehicle while it's listed and come off when you leave.",
+  "Safety rules (SOS, trip sharing, customer complaints) apply to every trip; QuikFly can pause a vehicle while a complaint is checked.",
+  "Either side can end the partnership with 15 days' notice.",
+] as const;
+
 export interface VendorVehicle {
   id: string;
   type: VendorVehicleType;

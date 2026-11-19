@@ -3,7 +3,7 @@ import type {
   ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
   WalletTransaction, AppNotification, CreditSummary,
 } from "@quikfly/shared";
-import type { PublicTicket, RideCancelReason } from "@quikfly/shared";
+import type { PublicTicket, RideCancelReason, VendorApplication, VendorDocument, VendorSection } from "@quikfly/shared";
 
 /**
  * The single contract between the UI and the backend.
@@ -149,5 +149,28 @@ export interface QuikflyApi {
   tickets: {
     /** GET /tickets/:token (public): what a bus m-ticket's QR code shows. */
     get(token: string): Promise<PublicTicket>;
+  };
+  /** Partner (vehicle owner) application and onboarding: the same /vendor endpoints as the QuikFly Partner app. */
+  vendor: {
+    /** GET /vendor: the signed-in user's application, or null before they start one. */
+    get(): Promise<VendorApplication | null>;
+    /** POST /vendor */
+    start(): Promise<VendorApplication>;
+    /** PUT /vendor/sections/:section (photo sections take their image with uploadDocument). */
+    saveSection(section: Exclude<VendorSection, "photo">, body: Record<string, unknown>): Promise<VendorApplication>;
+    /** PUT /vendor/documents/:kind: a JPEG, PNG or WebP up to VENDOR_RULES.maxPhotoBytes. */
+    uploadDocument(kind: VendorDocument, image: Blob): Promise<VendorApplication>;
+    /** GET /vendor/documents/:kind as an object URL to show, or null when none is saved. */
+    documentUrl(kind: VendorDocument): Promise<string | null>;
+    /** POST /vendor/reset: clears a draft, photos included. */
+    reset(): Promise<VendorApplication>;
+    /** POST /vendor/submit */
+    submit(): Promise<VendorApplication>;
+    /** POST /vendor/onboarding/payment (demo: nothing is collected). */
+    payJoiningFee(): Promise<VendorApplication>;
+    /** POST /vendor/onboarding/agreement { name, accept: true } */
+    acceptAgreement(name: string): Promise<VendorApplication>;
+    /** POST /vendor/onboarding/sticker */
+    requestSticker(): Promise<VendorApplication>;
   };
 }

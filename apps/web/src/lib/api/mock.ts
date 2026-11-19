@@ -10,6 +10,7 @@ import {
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
+import { mockVendor } from "./mock-vendor";
 import { KEYS, creditBalance, creditEntry, currentUser, fail, load, save, signedInUser, uid, wait, walletEntry, type MockRide } from "./mock-store";
 
 const creditExpiry = () => new Date(Date.now() + settings.creditsExpiryDays * 86_400_000).toISOString();
@@ -401,6 +402,8 @@ export const mockApi: QuikflyApi = {
       return { booking: b, charged: charge, refunded: refund };
     },
   },
+
+  vendor: mockVendor,
 
   tickets: {
     async get(token) {
