@@ -4,7 +4,7 @@
 // page says so.
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { BusFront, CircleCheck, Printer, XCircle } from "lucide-react";
+import { BusFront, CalendarX, CircleCheck, Printer, XCircle } from "lucide-react";
 import type { PublicTicket } from "@quikfly/shared";
 import { Empty, Spinner } from "@/components/ui";
 import { QR_COLORS, ticketUrl } from "@/lib/account";
@@ -16,6 +16,7 @@ const STATUS = {
   valid: { label: "Valid ticket", className: "bg-success/15 text-success", Icon: CircleCheck },
   cancelled: { label: "Cancelled", className: "bg-danger/15 text-danger", Icon: XCircle },
   completed: { label: "Trip completed", className: "bg-fg/10 text-muted", Icon: CircleCheck },
+  expired: { label: "Trip date passed", className: "bg-fg/10 text-muted", Icon: CalendarX },
 } as const;
 
 export function TicketScreen() {
@@ -37,10 +38,10 @@ export function TicketScreen() {
   return (
     <div className="max-w-lg mx-auto px-4 pt-8 pb-16">
       <div className="panel overflow-hidden">
-        <div className="p-5 border-b border-line flex items-center justify-between gap-3">
+        <div className="p-5 border-b border-line flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <BusFront className="text-gold shrink-0" size={22} />
-            <p className="font-display text-lg text-strong">QuikFly m-Ticket</p>
+            <p className="font-display text-lg text-strong whitespace-nowrap">QuikFly m-Ticket</p>
           </div>
           <span className={cx("text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1 shrink-0", status.className)}>
             <status.Icon size={14} />{status.label}

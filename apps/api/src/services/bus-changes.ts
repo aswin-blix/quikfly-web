@@ -3,7 +3,7 @@
 // m-ticket its QR code opens. Every money change lands in one batch with the booking change.
 import {
   BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, creditsReturned, rescheduleAmounts, rescheduleError,
-  seatCancelError, seatCancelRefund, seatsShare, type Booking, type PublicTicket, type QuoteRequest,
+  seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames, type Booking, type PublicTicket, type QuoteRequest,
 } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
@@ -171,13 +171,13 @@ export async function publicTicket(db: D1Database, token: string): Promise<Publi
   const line = (k: string) => b.lines.find(([key]) => key === k)?.[1];
   return {
     pnr: b.id,
-    status: b.status === "cancelled" ? "cancelled" : b.status === "completed" ? "completed" : "valid",
+    status: ticketStatus(b),
     title: b.title,
     subtitle: b.subtitle,
     startsAt: b.startsAt,
     seats: b.status === "cancelled" ? [] : (line(SEATS_LINE) ?? "").split(", ").filter(Boolean),
     details: (["Date", "Departure", "Arrival"] as const).flatMap((k) => (line(k) ? [[k, line(k)!] as [string, string]] : [])),
     // First names only: enough to match a traveller to a seat.
-    travellers: (line(TRAVELLERS_LINE) ?? "").split(", ").filter(Boolean).map((n) => n.trim().split(/\s+/)[0]),
+    travellers: travellerNames(b.lines).map((n) => n.split(/\s+/)[0]),
   };
 }

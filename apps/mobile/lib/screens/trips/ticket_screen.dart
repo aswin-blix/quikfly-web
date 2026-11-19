@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../api/models.dart';
+import '../../core/bus_changes.dart';
 import '../../core/env.dart';
 import '../../state/catalog.dart';
 import '../../theme/tokens.dart';
@@ -21,6 +22,8 @@ class TicketScreen extends ConsumerWidget {
     final c = context.qf;
     final bookings = ref.watch(bookingsProvider);
     final b = (bookings.value ?? const <Booking>[]).where((x) => x.id == id).firstOrNull;
+    final expired = b != null && ticketExpired(b);
+    final valid = b != null && b.status == BookingStatus.confirmed && !expired;
     return Scaffold(
       appBar: AppBar(title: const Text('m-Ticket')),
       body: bookings.isLoading && b == null
@@ -35,8 +38,8 @@ class TicketScreen extends ConsumerWidget {
                         const SizedBox(width: 8),
                         Expanded(child: Text(b.title, style: Theme.of(context).textTheme.titleLarge)),
                         Pill(
-                          b.status == BookingStatus.confirmed ? 'Valid' : b.status == BookingStatus.cancelled ? 'Cancelled' : 'Completed',
-                          color: b.status == BookingStatus.confirmed ? c.success : b.status == BookingStatus.cancelled ? c.danger : c.fgMuted,
+                          valid ? 'Valid' : expired ? 'Trip date passed' : b.status == BookingStatus.cancelled ? 'Cancelled' : 'Completed',
+                          color: valid ? c.success : b.status == BookingStatus.cancelled ? c.danger : c.fgMuted,
                         ),
                       ]),
                       if (b.subtitle.isNotEmpty) Text(b.subtitle, style: TextStyle(color: c.fgMuted)),
@@ -44,11 +47,11 @@ class TicketScreen extends ConsumerWidget {
                       for (final k in const ['Date', 'Departure', 'Arrival'])
                         if (b.line(k) != null) KeyValue(k, b.line(k)!),
                       KeyValue('Seats', b.line('Seats') ?? b.seats.map((s) => s.id).join(', ')),
-                      if (b.line('Traveller names') != null) KeyValue('Travellers', b.line('Traveller names')!),
+                      if (travellerNamesLine(b) != null) KeyValue('Travellers', travellerNamesLine(b)!),
                       KeyValue('PNR', b.id),
                     ]),
                   ),
-                  if (b.status == BookingStatus.confirmed) ...[
+                  if (valid) ...[
                     const SizedBox(height: 16),
                     Center(
                       // Dark on white in both themes, so any scanner reads it.
