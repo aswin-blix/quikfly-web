@@ -180,6 +180,7 @@ Decided 2026-11-18 from the competitor research ([docs/competitor-gaps-2026-11.m
   - **Deployed 2026-11-19** (PR #60 merged): website `47c9eea6`; live `/partner` links `/partner/apply`, which serves (HTTP 200).
 
 - 2026-11-19 **App 0.1.8 prepared** (branch `release/app-0.1.8`, `version: 0.1.8+9`, arm64 version code 2009): **QuikFly 0.1.8** ships the bus ticket changes (m-ticket with QR, change bus once, cancel some seats); **QuikFly Partner 0.1.8** has no visible change (same version for both apps). `flutter analyze` clean; contract tests 15/15 against the **production** API. Owner builds both flavors; Claude verifies, installs over 0.1.7 on the OnePlus, and publishes `app-v0.1.8` after the owner's yes (notes drafted), same four asset names.
+  - **Published 2026-11-19** as GitHub Release `app-v0.1.8` (latest; target `3be5748`): owner built both flavors (logs in `apps/mobile/build/build-*-0.1.8.log`); verified with aapt2 (`com.quikfly.app` "QuikFly" / `com.quikfly.partner` "QuikFly Partner", 0.1.8, version codes 2009 arm64 / 1009 armv7) and apksigner (upload key C7:84:CE…3A:AE); the bus screens are in the customer build. Not installed on the OnePlus (phone not connected; owner chose to publish without the phone check), so the app's bus screens are still checked by analyze and tests only. Latest-download checksums match (arm64 `345be709…`, Partner arm64 `f03fd387…`).
 
 ### Phase 5 candidates, in priority order (from the same research; all free-tier)
 
