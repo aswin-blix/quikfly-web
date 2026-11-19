@@ -95,7 +95,7 @@ function BusForm() {
   );
 }
 
-const THEMES: [TourTheme | "all", string][] = [["all", "All"], ["beach", "Beaches"], ["hills", "Hill stations"], ["international", "International"], ["weekend", "Weekend"], ["heritage", "Heritage"]];
+const THEMES: [TourTheme | "all", string][] = [["all", "All"], ["beach", "Beaches"], ["hills", "Hill stations"], ["spiritual", "Spiritual"], ["women", "Women only"], ["seniors", "Seniors"], ["international", "International"], ["weekend", "Weekend"], ["heritage", "Heritage"]];
 
 function ToursForm() {
   const nav = useNav();

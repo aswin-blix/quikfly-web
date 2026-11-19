@@ -1,4 +1,5 @@
 // Public catalog reads: start-up config, holidays and rental cars. Hidden items never appear.
+import { withDepartures } from "../services/departures";
 import { Hono } from "hono";
 import type { AppConfig } from "@quikfly/shared";
 import type { AppEnv } from "../env";
@@ -18,12 +19,13 @@ export const config = new Hono<AppEnv>()
     return c.json(body);
   });
 
+// Packages carry their upcoming group departures (with seats left); none = start any date.
 export const tours = new Hono<AppEnv>()
-  .get("/", async (c) => c.json(await visible(c.env.DB, "tour")))
+  .get("/", async (c) => c.json(await withDepartures(c.env.DB, await visible(c.env.DB, "tour"))))
   .get("/:slug", async (c) => {
     const tour = (await visible(c.env.DB, "tour")).find((t) => t.slug === c.req.param("slug"));
     if (!tour) throw notFound("That holiday package isn't available.");
-    return c.json(tour);
+    return c.json((await withDepartures(c.env.DB, [tour]))[0]);
   });
 
 export const rentals = new Hono<AppEnv>()

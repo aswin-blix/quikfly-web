@@ -6,7 +6,7 @@ import type { QuikflyApi } from "./contract";
 import {
   BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
-  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, isWomenOnly, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
+  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, isWomenOnly, upcomingDepartures, type TourPackage, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
@@ -32,6 +32,17 @@ const holdsStore = () => load<StoredHold[]>(HOLDS_KEY, []);
 const holdsFor = (busId: string, date: string) => holdsStore().filter((h) => h.busId === busId && h.date === date);
 
 /** Bookings saved before bus changes existed lack the newer fields. */
+/** Travellers each demo booking takes on a holiday departure (by booking id). */
+const DEP_SEATS_KEY = "quikfly.mockDepartureSeats";
+const depSeats = () => load<Record<string, { departureId: string; travellers: number }>>(DEP_SEATS_KEY, {});
+function withDeps(t: TourPackage): TourPackage {
+  const active = new Set(load<Booking[]>(KEYS.bookings, []).filter((b) => b.status !== "cancelled").map((b) => b.id));
+  const taken: Record<string, number> = {};
+  for (const [id, x] of Object.entries(depSeats())) if (active.has(id)) taken[x.departureId] = (taken[x.departureId] ?? 0) + x.travellers;
+  return { ...t, departures: upcomingDepartures(seed.departure.filter((d) => d.tourId === t.id), t.price, taken, todayIso()) };
+}
+const todayIso = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+
 const bookingsStore = () => load<Booking[]>(KEYS.bookings, []).map((b): Booking => ({ ...b, discount: b.discount ?? 0, seats: b.seats ?? [], ticketToken: b.ticketToken ?? null, rescheduledAt: b.rescheduledAt ?? null }));
 const saveBookings = (list: Booking[]) => save(KEYS.bookings, list);
 const ridesStore = () => load<Record<string, MockRide>>(KEYS.rides, {});
@@ -67,7 +78,16 @@ function priceLines(r: QuoteRequest): FareLine[] {
       if (ruleError) fail(ruleError);
       return priceBus(chosen, settings);
     }
-    case "tours": return priceTour(byId(seed.tour, r.tourId, "holiday"), r.adults, r.kids, settings);
+    case "tours": {
+      // Like the API: a package with upcoming departures is priced on one of them, seats permitting.
+      const tour = byId(seed.tour, r.tourId, "holiday");
+      const deps = withDeps(tour).departures ?? [];
+      if (!deps.length) return priceTour(tour, r.adults, r.kids, settings);
+      const dep = deps.find((d) => d.id === r.departureId) ?? fail("Pick one of this package's departures.");
+      if (dep.seatsLeft < r.adults + r.kids) fail(dep.seatsLeft ? `Only ${dep.seatsLeft} seats are left on this departure.` : "This departure is sold out. Please pick another date.");
+      r.start = dep.date;
+      return priceTour(tour, r.adults, r.kids, settings, dep.price);
+    }
     case "rent": return priceRent(byId(seed.rentalCar, r.carId, "car"), r, settings);
     case "rentals": {
       const km = r.trip === "local" ? 0 : byId(seed.groupDestination, r.destinationId ?? "", "destination").km;
@@ -217,8 +237,8 @@ export const mockApi: QuikflyApi = {
   },
 
   tours: {
-    async list() { await wait(300); return seed.tour; },
-    async get(slug) { await wait(200); return seed.tour.find((t) => t.slug === slug) ?? fail("That holiday package isn't available."); },
+    async list() { await wait(300); return seed.tour.map(withDeps); },
+    async get(slug) { await wait(200); return withDeps(seed.tour.find((t) => t.slug === slug) ?? fail("That holiday package isn't available.")); },
   },
 
   rentals: {
@@ -315,6 +335,7 @@ export const mockApi: QuikflyApi = {
         save(QUOTES_KEY, qs);
       }
       const req = quoted?.request;
+      if (req?.service === "tours" && req.departureId) save(DEP_SEATS_KEY, { ...depSeats(), [b.id]: { departureId: req.departureId, travellers: req.adults + req.kids } });
       if (req?.service === "bus") {
         save(HOLDS_KEY, [...holdsStore(), ...req.seatIds.map((seatId, i) => ({ seatId, gender: req.genders?.[i] ?? "other" as const, busId: req.busId, date: req.date, bookingId: b.id }))]);
       }

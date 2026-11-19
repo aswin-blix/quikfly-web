@@ -33,7 +33,7 @@ apps/mobile/      Flutter Android apps (read apps/mobile/README.md): the custome
   lib/api/        api.dart (one method per endpoint) · models.dart (Dart copy of packages/shared types + Rules)
   lib/theme/      tokens.dart mirrors apps/web tokens.css · lib/screens/ one folder per area · test/api_contract_test.dart
 packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation patterns, limits),
-                  catalog.ts (SEED data only) + catalog-kinds.ts (12 kinds, fields, validation), settings.ts
+                  catalog.ts (SEED data only) + catalog-kinds.ts (13 kinds, fields, validation), settings.ts
                   (runtime Settings, defaults, rules), pricing.ts (all price maths + bus/ride simulation),
                   cancellation.ts (refund tiers per service: the API applies them, the apps preview them),
                   admin.ts (roles, PERMISSIONS, admin shapes)

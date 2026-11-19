@@ -32,6 +32,8 @@ function parseQuoteRequest(body: Record<string, unknown>): QuoteRequest {
       return {
         service, tourId: str(body, "tourId", 40), adults: int(body, "adults", 1, 50), kids: int(body, "kids", 0, 50),
         start: matches(str(body, "start", 10), PATTERNS.isoDate, '"start" must be YYYY-MM-DD.'),
+        // A group departure (required when the package has upcoming departures).
+        departureId: optStr(body, "departureId", 40),
       };
     case "rent":
       return {

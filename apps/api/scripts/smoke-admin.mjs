@@ -136,7 +136,10 @@ const cust2 = (await call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: 
 const offer = await expect("create an offer", call("POST", "/admin/catalog/offer", { data: {
   code: "smoke25", title: "Smoke 25", description: "Test", service: "all", percent: 25, maxDiscount: 100, minAmount: 0, validUntil: "", perUserLimit: "", hue: 10,
 } }, T), 201, (j) => j.data.code === "SMOKE25" && j.data.validUntil === null && j.data.perUserLimit === null);
-const quote = (await call("POST", "/quotes", { service: "tours", tourId: tours[0].id, adults: 1, kids: 0, start: TRAVEL })).json;
+// A package booked by start date (group-tour packages with departures need a departure instead).
+const departureTours = new Set(((await call("GET", "/admin/catalog/departure", null, T)).json ?? []).map((d) => d.data.tourId));
+const anyDateTour = tours.find((t) => t.active && !departureTours.has(t.id)) ?? tours[0];
+const quote = (await call("POST", "/quotes", { service: "tours", tourId: anyDateTour.id, adults: 1, kids: 0, start: TRAVEL })).json;
 await eventually("new coupon works", () => call("POST", "/offers/check", { code: "SMOKE25", quoteId: quote.id }, cust2), (r) => r.status === 200 && r.json.discount === 100);
 await call("PUT", `/admin/catalog/offer/${offer.id}`, { data: { ...offer.data, validUntil: "2020-01-01" } }, T);
 await eventually("expired coupon is refused", () => call("POST", "/offers/check", { code: "SMOKE25", quoteId: quote.id }, cust2), (r) => r.status === 400 && /expired/.test(r.json.message));
