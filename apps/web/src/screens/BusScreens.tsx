@@ -296,10 +296,19 @@ function SeatSelector({ bus, from, to, date, change }: { bus: Bus; from: string;
     if (picked.includes(s.id)) { setPicked((p) => p.filter((x) => x !== s.id)); return; }
     if (picked.length >= maxSeats) { toast(change ? `Pick ${maxSeats} seat${maxSeats > 1 ? "s" : ""}, one for each traveller.` : "You can book up to 6 seats at a time.", "err"); return; }
     setPicked((p) => [...p, s.id]);
-    // A change keeps the same travellers: each new seat takes the next traveller's gender.
-    const g = s.ladies ? "female" : change?.seats[picked.length]?.gender;
-    if (g) setGenders((x) => ({ ...x, [s.id]: g }));
+    if (s.ladies) setGenders((x) => ({ ...x, [s.id]: "female" }));
   }
+
+  // A change keeps the same travellers: each picked seat takes the next traveller's gender, in
+  // the order picked (worked out from the latest selection, so quick taps can't double up).
+  useEffect(() => {
+    if (!change) return;
+    setGenders((x) => {
+      const next = { ...x };
+      picked.forEach((id, i) => { const g = change.seats[i]?.gender; if (g) next[id] = g; });
+      return next;
+    });
+  }, [picked, change]);
   const drops = [`${to} – Main Bus Stand`, `${to} – Ring Road`, `${to} – City Center`];
   const bTimes = [bus.depart, addMin(bus.depart, 20), addMin(bus.depart, 45)];
   const dTimes = drops.map((_, i) => addMin(bus.arrive, i * 15));
