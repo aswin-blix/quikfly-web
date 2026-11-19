@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useHideBottomNav } from "./BottomNav";
 import { ArrowUpDown, Clock, Coins, MapPin, Navigation, Phone, Plus, Share2, Siren, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { PASS_NAME, RIDE_CANCEL_REASONS, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, creditsEarned, creditsUsable, effectiveSurge, isNightHour, passSaleError, rideCancelFee } from "@quikfly/shared";
+import { PASS_NAME, RIDE_CANCEL_REASONS, autoSharesAt, isWomenOnly, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, creditsEarned, creditsUsable, effectiveSurge, passSaleError, rideCancelFee } from "@quikfly/shared";
 import type { FareQuote, PaymentMethod, Place, Ride, RideCancelReason, SavedPlace } from "@quikfly/shared";
 import { trackUrl } from "@/lib/account";
 import { Link } from "@/lib/nav";
@@ -107,13 +107,13 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
     } catch (e) { toast((e as Error).message, "err"); }
   }
 
-  /** Night rides: share with emergency contacts automatically if the rider turned that on. */
+  /** Safety Preferences: share with emergency contacts automatically (night rides or every ride). */
   async function autoShareIfNight(r: Ride) {
-    if (!user?.autoShareNightRides || !isNightHour(new Date().getHours())) return;
+    if (!user || !autoSharesAt(user.autoShareRides, new Date().getHours())) return;
     const contacts = await api.contacts.list().catch(() => []);
     if (!contacts.length) return;
     await api.rides.share(r.id).catch(() => undefined);
-    toast(`Night ride shared with ${contacts.map((c) => c.name.split(" ")[0]).join(", ")} (demo: no SMS sent)`);
+    toast(`Ride shared with ${contacts.map((c) => c.name.split(" ")[0]).join(", ")} (demo: no SMS sent)`);
   }
 
 
@@ -339,8 +339,9 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
                       selected === q.option.id ? "border-gold bg-gold/[0.07]" : "border-line hover:border-line-strong")}>
                     <img src={service === "bike" ? serviceByKey("bike").image : q.option.id === "prime" || q.option.id === "suv" ? serviceByKey("rent").image : serviceByKey("car").image} alt="" className="w-16 h-11 object-cover rounded-lg" />
                     <div className="flex-1">
-                      <p className="font-semibold flex items-center gap-2">{q.option.name}
+                      <p className="font-semibold flex items-center gap-2 flex-wrap">{q.option.name}
                         <span className="text-xs text-muted font-normal flex items-center gap-0.5"><Users size={12} />{q.option.seats}</span>
+                        {isWomenOnly(q.option) && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-highlight/15 text-highlight">Women only</span>}
                       </p>
                       <p className="text-xs text-muted">{q.etaMin} min away · {q.option.description}</p>
                     </div>
@@ -412,7 +413,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
               </div>
               {phase === "arriving" && (
                 <div className="text-center">
-                  <p className="label">OTP</p>
+                  <p className="label">{user?.ridePin && ride.otp === user.ridePin ? "Your PIN" : "OTP"}</p>
                   <p className="text-2xl font-bold tracking-widest text-gold">{ride.otp}</p>
                 </div>
               )}

@@ -1,4 +1,4 @@
-import { DELETION_GRACE_DAYS, type AuthResult, type Gender, type LicenceStatus, type User } from "@quikfly/shared";
+import { DELETION_GRACE_DAYS, type AutoShareMode, type AuthResult, type Gender, type LicenceStatus, type User } from "@quikfly/shared";
 import { DEFAULT_USER_NAME, PHONE_COUNTRY_CODE, PHONE_DIGITS, SESSION_TTL_DAYS } from "../config";
 import { badRequest } from "../lib/errors";
 import { randomToken, sha256, uid } from "../lib/random";
@@ -14,6 +14,7 @@ export interface UserRow {
   licence_number: string | null; licence_expiry: string | null; licence_submitted_at: string | null;
   licence_status: LicenceStatus; licence_note: string | null; licence_reviewed_at: string | null;
   gstin: string | null; gst_name: string | null; auto_share_night: number; deleted_at: string | null;
+  auto_share_mode: AutoShareMode | null; ride_pin: string | null;
   /** Computed by CREDIT_BALANCE_COLUMN; absent when a query didn't ask for it. */
   credit_balance?: number;
   /** Computed by PASS_UNTIL_COLUMN; absent when a query didn't ask for it. */
@@ -35,7 +36,9 @@ export const toUser = (r: UserRow): User => ({
   referred: !!r.referred_by,
   licence: { status: r.licence_status, number: r.licence_number, expiry: r.licence_expiry, note: r.licence_note },
   gst: r.gstin && r.gst_name ? { gstin: r.gstin, name: r.gst_name } : null,
-  autoShareNightRides: !!r.auto_share_night,
+  autoShareNightRides: (r.auto_share_mode ?? (r.auto_share_night ? "night" : "off")) !== "off",
+  autoShareRides: r.auto_share_mode ?? (r.auto_share_night ? "night" : "off"),
+  ridePin: r.ride_pin ?? null,
 });
 
 /** Accepts "9876543210", "+91 98765 43210" and similar; returns "+91 9876543210". */

@@ -1,14 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import { PhoneCall, Share2, ShieldAlert, Trash2, UserRound } from "lucide-react";
-import { LIMITS, NIGHT_HOURS, PATTERNS, type EmergencyContact } from "@quikfly/shared";
+import { AUTO_SHARE_MODES, LIMITS, NIGHT_HOURS, PATTERNS, RIDE_PIN, type AutoShareMode, type EmergencyContact } from "@quikfly/shared";
 import { EMERGENCY_NUMBER } from "@/lib/account";
 import { useSettings } from "../ConfigProvider";
 import { api } from "@/lib/api";
 import { useApp } from "../AppProvider";
 import { GoldButton } from "../ui";
-import { ErrorText, Field, ItemRow, Section, Toggle, useAction } from "./kit";
+import { ErrorText, Field, ItemRow, Section, useAction } from "./kit";
 
+const AUTO_SHARE_LABEL: Record<AutoShareMode, string> = { off: "Off", night: "Night rides", always: "Every ride" };
 const hour = (h: number) => `${h % 12 || 12} ${h < 12 ? "am" : "pm"}`;
 
 export function SafetySection() {
@@ -18,6 +19,7 @@ export function SafetySection() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [relation, setRelation] = useState("");
+  const [pinDraft, setPinDraft] = useState("");
   const { run, busy, error, setError } = useAction();
 
   useEffect(() => { run(async () => setContacts(await api.contacts.list())); }, [run]);
@@ -32,10 +34,18 @@ export function SafetySection() {
       setName(""); setPhone(""); setRelation("");
     });
   };
-  const setAutoShare = (on: boolean) => run(async () => {
-    setUser(await api.account.update({ autoShareNightRides: on }));
-    toast(on ? "Night rides will be shared automatically" : "Auto-share turned off");
+  const setAutoShare = (mode: AutoShareMode) => run(async () => {
+    setUser(await api.account.update({ autoShareRides: mode }));
+    toast(mode === "always" ? "Every ride will be shared automatically" : mode === "night" ? "Night rides will be shared automatically" : "Auto-share turned off");
   });
+  const savePin = (pin: string | null) => {
+    if (pin !== null && !RIDE_PIN.test(pin)) return setError("A ride PIN is 4 digits.");
+    run(async () => {
+      setUser(await api.account.update({ ridePin: pin }));
+      setPinDraft("");
+      toast(pin ? "Your ride PIN is set" : "Back to a new code every ride");
+    });
+  };
   const full = (contacts?.length ?? 0) >= LIMITS.emergencyContacts;
   const noContacts = (contacts?.length ?? 0) === 0;
 
@@ -67,11 +77,35 @@ export function SafetySection() {
       </Section>
 
       <Section title="Safety preferences">
-        <Toggle checked={user.autoShareNightRides} onChange={setAutoShare} disabled={busy || noContacts}
-          label="Share night rides automatically"
-          sub={noContacts
+        <p className="label mb-2">Share my trip automatically</p>
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Share my trip automatically">
+          {AUTO_SHARE_MODES.map((m) => (
+            <button key={m} type="button" role="radio" aria-checked={user.autoShareRides === m} data-on={user.autoShareRides === m}
+              disabled={busy || (noContacts && m !== "off")} onClick={() => setAutoShare(m)} className="chip !text-sm disabled:opacity-50">{AUTO_SHARE_LABEL[m]}</button>
+          ))}
+        </div>
+        <p className="text-xs text-muted mt-2">
+          {noContacts
             ? "Add an emergency contact first."
-            : `Rides booked between ${hour(NIGHT_HOURS[0])} and ${hour(NIGHT_HOURS[1])} are shared with your emergency contacts as soon as a driver is assigned.`} />
+            : `Your emergency contacts get a live trip link as soon as a driver is assigned${user.autoShareRides === "night" ? ` (rides between ${hour(NIGHT_HOURS[0])} and ${hour(NIGHT_HOURS[1])})` : user.autoShareRides === "always" ? " (every ride)" : ""}. Demo: no SMS is sent.`}
+        </p>
+
+        <div className="mt-6 pt-5 border-t border-line">
+          <p className="label mb-1">Ride PIN</p>
+          <p className="text-xs text-muted mb-3">Use your own 4-digit PIN instead of a new code each ride. Tell it to the driver to start the trip.</p>
+          {user.ridePin ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-mono text-lg tracking-[0.3em] text-strong">{user.ridePin}</span>
+              <button type="button" className="text-sm text-muted hover:text-strong" disabled={busy} onClick={() => savePin(null)}>Use a new code each ride</button>
+            </div>
+          ) : (
+            <form className="flex flex-wrap items-center gap-3" onSubmit={(e) => { e.preventDefault(); savePin(pinDraft); }}>
+              <input aria-label="New ride PIN" className="field !w-32 font-mono tracking-[0.3em] text-center" inputMode="numeric" maxLength={4} placeholder="••••"
+                value={pinDraft} onChange={(e) => setPinDraft(e.target.value.replace(/\D/g, ""))} />
+              <GoldButton loading={busy} disabled={pinDraft.length !== 4}>Set PIN</GoldButton>
+            </form>
+          )}
+        </div>
       </Section>
 
       <Section title="During every ride">
@@ -79,7 +113,7 @@ export function SafetySection() {
           {[
             [ShieldAlert, "SOS button", `Calls ${SAFETY.emergency} or our 24×7 safety line, and alerts your contacts.`],
             [Share2, "Share trip", "Send a live link so family can follow the ride on a map."],
-            [PhoneCall, "Ride OTP", "Your driver starts the trip only after you share the 4-digit code."],
+            [PhoneCall, "Ride OTP", "Your driver starts the trip only after you share the 4-digit code (or your own ride PIN)."],
           ].map(([I, t, d]) => {
             const Icon = I as typeof ShieldAlert;
             return <li key={t as string} className="rounded-xl border border-line p-4"><Icon size={20} className="text-gold" /><p className="font-medium text-strong mt-2">{t as string}</p><p className="text-xs text-muted mt-1">{d as string}</p></li>;

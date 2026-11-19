@@ -327,7 +327,7 @@ const switches0 = (await call("GET", "/admin/settings", null, T)).json;
 const SWITCHES_OFF = {
   serviceBus: false, servicePausedMessage: "Bus tickets are paused (smoke test).",
   featureRideScheduling: false, featureMultiStop: false, featureCashRides: false, featureOutstation: false,
-  featureSelfDrive: false, featureTripOffers: false, featureReferral: false, featureRidePass: false,
+  featureSelfDrive: false, featureTripOffers: false, featureReferral: false, featureRidePass: false, featureWomenOnlyRides: false,
 };
 await expect("the paused message can't be blank", call("PATCH", "/admin/settings", { servicePausedMessage: " " }, T), 400);
 await expect("switch a service and every feature off", call("PATCH", "/admin/settings", SWITCHES_OFF, T), 200, (j) => j.serviceBus === false && j.featureReferral === false);
@@ -355,6 +355,7 @@ if (anyBooking) {
 }
 await expect("referral codes are refused when off", call("POST", "/me/referral", { code: "QFZZZZZZ9" }, C), 409, (j) => /Refer/.test(j.message));
 await expect("QuikFly Pass isn't sold when off", call("POST", "/me/pass", null, C), 409, (j) => /isn't on sale/.test(j.message));
+await expect("women-only rides are refused when off", call("POST", "/rides", { optionId: "pink", pickupId: places[0].id, dropId: places[1].id, payment: "upi" }, C), 409, (j) => /paused/.test(j.message));
 if (okRide) await call("POST", `/rides/${okRide.id}/cancel`, null, C);
 } finally {
 const restore = Object.fromEntries(Object.keys(SWITCHES_OFF).map((k) => [k, switches0[k]]));

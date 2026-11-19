@@ -28,6 +28,8 @@ export interface Settings {
   featureReferral: boolean;
   /** QuikFly Pass on sale (passes already bought keep working when this is off). */
   featureRidePass: boolean;
+  /** Women-only ride types (Bike Pink) offered to women riders. */
+  featureWomenOnlyRides: boolean;
 
   /** Verify a submitted driving licence at once instead of waiting for an admin (unattended demos). */
   licenceAutoApprove: boolean;
@@ -170,6 +172,7 @@ export const DEFAULT_SETTINGS: Settings = {
   featureTripOffers: true,
   featureReferral: true,
   featureRidePass: true,
+  featureWomenOnlyRides: true,
   licenceAutoApprove: false,
   welcomeCredit: 500,
   referralBonus: 100,
@@ -264,6 +267,7 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   featureTripOffers: { type: "boolean" },
   featureReferral: { type: "boolean" },
   featureRidePass: { type: "boolean" },
+  featureWomenOnlyRides: { type: "boolean" },
   licenceAutoApprove: { type: "boolean" },
   welcomeCredit: money(5000),
   referralBonus: money(5000),

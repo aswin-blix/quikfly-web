@@ -35,9 +35,16 @@ export interface User {
   licence: { status: LicenceStatus; number: string | null; expiry: string | null; /** Why it was rejected. */ note: string | null };
   /** Business details printed on GST invoices. */
   gst: { gstin: string; name: string } | null;
-  /** Share rides between NIGHT_HOURS with emergency contacts automatically. */
+  /** Older apps read this: true when rides are shared automatically at all (see autoShareRides). */
   autoShareNightRides: boolean;
+  /** Safety Preferences: share the trip with emergency contacts automatically on no rides, night rides (NIGHT_HOURS) or every ride. */
+  autoShareRides: AutoShareMode;
+  /** The rider's own 4-digit ride PIN, used instead of a new code each ride; null = a new code every ride. */
+  ridePin: string | null;
 }
+
+export const AUTO_SHARE_MODES = ["off", "night", "always"] as const;
+export type AutoShareMode = (typeof AUTO_SHARE_MODES)[number];
 
 /** Fields a user can change on their profile. Send only what changes; null clears. */
 export interface ProfileUpdate {
@@ -46,7 +53,10 @@ export interface ProfileUpdate {
   gender?: Gender | null;
   dob?: string | null;
   gst?: { gstin: string; name: string } | null;
+  /** Older apps send this; true = "night", false = "off". */
   autoShareNightRides?: boolean;
+  autoShareRides?: AutoShareMode;
+  ridePin?: string | null;
 }
 
 /** Result of signing in. */
@@ -176,6 +186,8 @@ export interface RideOption {
   perMin: number;
   /** Vehicle models a driver of this type may arrive in, e.g. "Maruti Swift". */
   models: string[];
+  /** "women": only women riders see and book it, and a woman captain drives (B8). Missing = everyone. */
+  riders?: "everyone" | "women";
 }
 
 /** A driver on the roster (catalog). A booked ride gets one, plus a vehicle and plate. */
@@ -185,6 +197,8 @@ export interface DriverProfile {
   rating: number;
   trips: number;
   phone: string;
+  /** Women-only rides go to drivers marked "female". Missing = not matched to women-only rides. */
+  gender?: "female" | "male";
 }
 
 export interface City {

@@ -382,12 +382,12 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   /// Night rides: share with emergency contacts automatically if the rider turned that on.
   Future<void> _autoShareIfNight(Ride r) async {
     final user = ref.read(userProvider);
-    if (user == null || !user.autoShareNightRides || !Rules.isNightHour(DateTime.now().hour)) return;
+    if (user == null || !Rules.autoSharesAt(user.autoShareRides, DateTime.now().hour)) return;
     try {
       final contacts = await ref.read(apiProvider).contacts();
       if (contacts.isEmpty) return;
       await ref.read(apiProvider).shareRide(r.id);
-      if (mounted) toast(context, 'Night ride shared with ${contacts.map((c) => c.name.split(' ').first).join(', ')} (demo: no SMS sent)');
+      if (mounted) toast(context, 'Ride shared with ${contacts.map((c) => c.name.split(' ').first).join(', ')} (demo: no SMS sent)');
     } catch (_) {}
   }
 
@@ -669,6 +669,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
                       const SizedBox(width: 6),
                       Icon(Icons.person_outline, size: 14, color: c.fgMuted),
                       Text('${q.option.seats}', style: TextStyle(color: c.fgMuted, fontSize: 12)),
+                      if (q.option.womenOnly) ...[const SizedBox(width: 6), Pill('Women only', color: c.highlight)],
                     ]),
                     Text('${q.etaMin} min away · ${q.option.description}',
                         maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.fgMuted, fontSize: 12)),
@@ -801,7 +802,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         ),
         if (arriving)
           Column(children: [
-            Text('OTP', style: TextStyle(color: c.fgMuted, fontSize: 11.5, fontWeight: FontWeight.w700)),
+            Text(ref.read(userProvider)?.ridePin == r.otp ? 'YOUR PIN' : 'OTP', style: TextStyle(color: c.fgMuted, fontSize: 11.5, fontWeight: FontWeight.w700)),
             Text(r.otp, style: TextStyle(color: c.accent, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: 4)),
           ]),
       ]),

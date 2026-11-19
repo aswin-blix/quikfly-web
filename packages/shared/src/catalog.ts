@@ -36,6 +36,7 @@ export const PLACES: Place[] = [
 export const RIDE_OPTIONS: RideOption[] = [
   { id: "bike", service: "bike", name: "Bike", description: "Beat the traffic, solo rides", seats: 1, baseFare: 20, perKm: 6, perMin: 0.5, models: ["Honda Activa 6G", "TVS Jupiter", "Bajaj Pulsar 150"] },
   { id: "ebike", service: "bike", name: "E-Bike", description: "Electric, zero emissions", seats: 1, baseFare: 18, perKm: 5.5, perMin: 0.5, models: ["Ather 450X", "Ola S1 Pro"] },
+  { id: "pink", service: "bike", name: "Bike Pink", description: "Women riders, women captains", seats: 1, baseFare: 20, perKm: 6, perMin: 0.5, models: ["Honda Activa 6G", "TVS Jupiter"], riders: "women" },
   { id: "auto", service: "bike", name: "Auto", description: "Doorstep three-wheeler", seats: 3, baseFare: 30, perKm: 13, perMin: 0.8, models: ["Bajaj RE Compact"] },
   { id: "mini", service: "car", name: "Mini", description: "Compact hatchbacks, best value", seats: 4, baseFare: 50, perKm: 14, perMin: 1.2, models: ["Maruti Swift", "Hyundai i20"] },
   { id: "sedan", service: "car", name: "Sedan", description: "Spacious sedans, extra boot", seats: 4, baseFare: 60, perKm: 16, perMin: 1.5, models: ["Maruti Dzire", "Honda Amaze", "Hyundai Aura"] },
@@ -44,10 +45,12 @@ export const RIDE_OPTIONS: RideOption[] = [
 ];
 
 export const DRIVERS: DriverProfile[] = [
-  { id: "d1", name: "Murugan K", rating: 4.9, trips: 3120, phone: "+91 98400 12345" },
-  { id: "d2", name: "Ravi Shankar", rating: 4.8, trips: 1876, phone: "+91 98410 22334" },
-  { id: "d3", name: "Senthil Kumar", rating: 4.7, trips: 2540, phone: "+91 97890 44556" },
-  { id: "d4", name: "Arjun P", rating: 4.9, trips: 980, phone: "+91 90030 77889" },
+  { id: "d1", name: "Murugan K", rating: 4.9, trips: 3120, phone: "+91 98400 12345", gender: "male" },
+  { id: "d2", name: "Ravi Shankar", rating: 4.8, trips: 1876, phone: "+91 98410 22334", gender: "male" },
+  { id: "d3", name: "Senthil Kumar", rating: 4.7, trips: 2540, phone: "+91 97890 44556", gender: "male" },
+  { id: "d4", name: "Arjun P", rating: 4.9, trips: 980, phone: "+91 90030 77889", gender: "male" },
+  { id: "d5", name: "Lakshmi R", rating: 4.9, trips: 1240, phone: "+91 98840 55621", gender: "female" },
+  { id: "d6", name: "Priya S", rating: 4.8, trips: 860, phone: "+91 97100 33417", gender: "female" },
 ];
 
 export const CITIES: City[] = [

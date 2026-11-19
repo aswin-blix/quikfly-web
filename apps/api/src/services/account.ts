@@ -23,7 +23,10 @@ export async function updateProfile(db: D1Database, userId: string, p: ProfileUp
   if (p.gender !== undefined) set("gender", p.gender);
   if (p.dob !== undefined) set("dob", p.dob);
   if (p.gst !== undefined) { set("gstin", p.gst?.gstin ?? null); set("gst_name", p.gst?.name ?? null); }
-  if (p.autoShareNightRides !== undefined) set("auto_share_night", p.autoShareNightRides ? 1 : 0);
+  // Safety Preferences. Older apps send the night-only flag; it maps to "night" / "off".
+  const mode = p.autoShareRides ?? (p.autoShareNightRides === undefined ? undefined : p.autoShareNightRides ? "night" : "off");
+  if (mode !== undefined) { set("auto_share_mode", mode); set("auto_share_night", mode === "off" ? 0 : 1); }
+  if (p.ridePin !== undefined) set("ride_pin", p.ridePin);
   if (sets.length) await db.prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).bind(...values, userId).run();
   return reload(db, userId);
 }

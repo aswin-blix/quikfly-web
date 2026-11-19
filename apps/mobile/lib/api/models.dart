@@ -75,6 +75,8 @@ class User {
     required this.licence,
     this.gst,
     required this.autoShareNightRides,
+    this.autoShareRides = 'off',
+    this.ridePin,
   });
   final String id, name, phone, referralCode;
   final int walletBalance;
@@ -87,6 +89,12 @@ class User {
   final String? email, dob;
   final Gender? gender;
   final bool profileComplete, referred, autoShareNightRides;
+
+  /// Safety Preferences: 'off', 'night' or 'always' (share the trip with emergency contacts automatically).
+  final String autoShareRides;
+
+  /// The rider's own 4-digit ride PIN (used instead of a new code each ride), or null.
+  final String? ridePin;
   final Licence licence;
   final GstDetails? gst;
 
@@ -108,6 +116,8 @@ class User {
         licence: Licence.fromJson(j['licence'] as Json?),
         gst: j['gst'] == null ? null : GstDetails('${(j['gst'] as Json)['gstin']}', '${(j['gst'] as Json)['name']}'),
         autoShareNightRides: j['autoShareNightRides'] == true,
+        autoShareRides: (j['autoShareRides'] as String?) ?? (j['autoShareNightRides'] == true ? 'night' : 'off'),
+        ridePin: j['ridePin'] as String?,
       );
 }
 
@@ -201,13 +211,16 @@ class AppNotification {
 }
 
 class RideOption {
-  const RideOption(this.id, this.service, this.name, this.description, this.seats, this.models);
+  const RideOption(this.id, this.service, this.name, this.description, this.seats, this.models, {this.womenOnly = false});
   final String id, name, description;
   final ServiceKey service;
   final int seats;
   final List<String> models;
+
+  /// For women riders only, with a woman captain (riders: "women", e.g. Bike Pink).
+  final bool womenOnly;
   factory RideOption.fromJson(Json j) => RideOption(j['id'] as String, ServiceKey.parse('${j['service']}'), '${j['name']}',
-      '${j['description'] ?? ''}', _int(j['seats']), _strings(j['models']));
+      '${j['description'] ?? ''}', _int(j['seats']), _strings(j['models']), womenOnly: j['riders'] == 'women');
 }
 
 class FareQuote {
@@ -597,6 +610,7 @@ class Settings {
   bool get featureTripOffers => _b('featureTripOffers');
   bool get featureReferral => _b('featureReferral');
   bool get featureRidePass => _b('featureRidePass');
+  bool get featureWomenOnlyRides => _b('featureWomenOnlyRides');
 
   /// Partner registration (QuikFly Partner app).
   int get vendorJoiningFee => _i('vendorJoiningFee', 1000);
@@ -746,5 +760,11 @@ abstract final class Rules {
 
   /// "tn09 2019-0001234" → "TN0920190001234"
   static String compactCode(String s) => s.toUpperCase().replaceAll(RegExp(r'[\s-]'), '');
+  /// Should a ride now be shared automatically, given the rider's Safety Preferences (autoSharesAt in packages/shared)?
+  static bool autoSharesAt(String mode, int hour) => mode == 'always' || (mode == 'night' && isNightHour(hour));
+
+  /// A rider's own ride PIN: exactly 4 digits (RIDE_PIN).
+  static final ridePin = RegExp(r'^\d{4}$');
+
   static bool isNightHour(int h) => nightHours.$1 > nightHours.$2 ? h >= nightHours.$1 || h < nightHours.$2 : h >= nightHours.$1 && h < nightHours.$2;
 }

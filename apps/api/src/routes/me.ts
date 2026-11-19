@@ -2,7 +2,7 @@
 // licence, saved places, travellers, emergency contacts and wallet history.
 import { Hono } from "hono";
 import {
-  GENDERS, LIMITS, PATTERNS, SAVED_PLACE_KINDS, ageFrom, compactCode, type ProfileUpdate,
+  AUTO_SHARE_MODES, GENDERS, LIMITS, PATTERNS, RIDE_PIN, SAVED_PLACE_KINDS, ageFrom, compactCode, type ProfileUpdate,
 } from "@quikfly/shared";
 import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
@@ -51,6 +51,8 @@ function parseProfile(body: Json): ProfileUpdate {
     }
   }
   if (has(body, "autoShareNightRides")) p.autoShareNightRides = bool(body, "autoShareNightRides");
+  if (has(body, "autoShareRides")) p.autoShareRides = oneOf(body, "autoShareRides", AUTO_SHARE_MODES);
+  if (has(body, "ridePin")) p.ridePin = body.ridePin === null ? null : matches(str(body, "ridePin", 4), RIDE_PIN, "A ride PIN is 4 digits.");
   if (!Object.keys(p).length) throw badRequest("Nothing to update.");
   return p;
 }

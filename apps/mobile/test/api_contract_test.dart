@@ -213,6 +213,24 @@ void main() {
     await api.cancelBooking(booked.id);
   });
 
+  test('Safety Preferences and women-only rides', () async {
+    final me = await api.me();
+    expect(['off', 'night', 'always'].contains(me.autoShareRides), isTrue);
+    // Production: parse only (don't change the shared test account's profile).
+    if (apiUrl.contains('workers.dev')) return;
+    final u = await api.updateProfile({'gender': 'female', 'autoShareRides': 'always', 'ridePin': '5937'});
+    expect(u.autoShareRides, 'always');
+    expect(u.ridePin, '5937');
+    final quotes = await api.rideQuotes(ServiceKey.bike, config.places[0].id, config.places[1].id);
+    final pink = quotes.where((q) => q.option.womenOnly).firstOrNull;
+    expect(pink, isNotNull);
+    final ride = await api.bookRide(pink!.option.id, config.places[0].id, config.places[1].id, PaymentMethod.upi);
+    expect(ride.otp, '5937');
+    await api.cancelRide(ride.id);
+    final back = await api.updateProfile({'ridePin': null, 'autoShareRides': 'off'});
+    expect(back.ridePin, isNull);
+  });
+
   test('credits summary parses', () async {
     final sum = await api.credits();
     expect(sum.balance, greaterThanOrEqualTo(0));

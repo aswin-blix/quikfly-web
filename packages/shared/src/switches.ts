@@ -28,6 +28,7 @@ export const FEATURE_OFF = {
   tripOffers: "Adding bookings to a trip is turned off for now.",
   referral: "Refer and earn is turned off for now.",
   ridePass: "QuikFly Pass isn't on sale right now. Passes already bought keep working.",
+  womenOnly: "Women-only rides are paused for now. Please pick another ride type.",
 } as const;
 
 /** What a new quote, ride or booking asks for: only the parts the switches look at. */

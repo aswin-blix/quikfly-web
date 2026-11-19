@@ -39,7 +39,8 @@ export const fail = (message: string): never => { throw new Error(message); };
 export function currentUser(): User {
   const u = load<User | null>(KEYS.user, null);
   if (!u || load<string | null>(KEYS.deletedAt, null)) fail("Please sign in to continue.");
-  return { ...u!, creditBalance: creditBalance(), passUntil: passCovers(u!.passUntil) ? u!.passUntil : null };
+  // Accounts saved by older demo builds lack the newer fields.
+  return { ...u!, autoShareRides: u!.autoShareRides ?? (u!.autoShareNightRides ? "night" : "off"), ridePin: u!.ridePin ?? null, creditBalance: creditBalance(), passUntil: passCovers(u!.passUntil) ? u!.passUntil : null };
 }
 /** The signed-in demo user, or null (for endpoints that work signed out too). */
 export const signedInUser = () => (load<User | null>(KEYS.user, null) && !load<string | null>(KEYS.deletedAt, null) ? currentUser() : null);
