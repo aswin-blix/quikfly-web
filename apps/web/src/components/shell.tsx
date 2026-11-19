@@ -79,7 +79,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
       )}
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-3">
         <Link href="/" className="shrink-0" aria-label="QuikFly home">
-          <img src="/assets/logo.png" alt="QuikFly" className="h-10 sm:h-11 w-auto rounded-md" />
+          <img src="/assets/logo.svg" alt="QuikFly" width={2059} height={495} className="h-10 sm:h-11 w-auto" />
         </Link>
         <nav className="hidden xl:flex items-center ml-4" aria-label="Services">
           {open.map((s) => (
@@ -146,7 +146,7 @@ function Footer() {
     <footer className="no-print mt-24 border-t border-line bg-coal/40">
       <div className="max-w-7xl mx-auto px-4 py-14 grid sm:grid-cols-2 lg:grid-cols-5 gap-10 text-sm">
         <div className="lg:col-span-2">
-          <img src="/assets/logo.png" alt="QuikFly" className="h-14 rounded-lg" />
+          <img src="/assets/logo.svg" alt="QuikFly" width={2059} height={495} className="h-14 w-auto" />
           <p className="text-muted mt-4 max-w-sm">Rides, buses, holidays and rentals in one app. One login, one wallet, every journey.</p>
           <div className="flex gap-3 mt-5">
             <a href={ANDROID_APP.downloadUrl} download className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gold/50 text-xs text-gold hover:bg-gold/10">

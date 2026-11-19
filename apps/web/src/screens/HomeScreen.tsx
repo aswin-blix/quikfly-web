@@ -327,7 +327,7 @@ function PhoneMock() {
     <div className="on-media w-[230px] h-[460px] rounded-[2.4rem] border-[6px] border-line bg-ink shadow-2xl overflow-hidden mx-auto translate-y-16">
       <div className="h-6 flex justify-center"><span className="w-20 h-4 bg-line rounded-b-xl" /></div>
       <div className="p-3 space-y-2">
-        <img src="/assets/logo.png" alt="" className="rounded-lg" />
+        <img src="/assets/logo.svg" alt="" width={2059} height={495} className="w-full h-auto" />
         <div className="grid grid-cols-3 gap-1.5">
           {SERVICES.map((s) => <div key={s.key} className="rounded-lg overflow-hidden border border-gold/20"><img src={s.image} alt="" className="aspect-square object-cover" /><p className="text-[8px] text-center py-0.5">{s.nav}</p></div>)}
         </div>

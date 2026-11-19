@@ -12,8 +12,9 @@ import { currentTheme, setTheme, type Theme } from "@/lib/theme";
 
 function Wordmark() {
   return (
-    <Link href="/" className="flex items-baseline gap-1.5 font-semibold text-strong">
-      <span className="text-lg tracking-tight">Quik<span className="text-accent">Fly</span></span>
+    <Link href="/" className="flex items-center gap-2" aria-label="QuikFly Admin home">
+      {/* brand/quikfly-logo.svg, copied by scripts/logo.mjs; transparent, so it suits both themes */}
+      <img src="/assets/logo.svg" alt="QuikFly" width={2059} height={495} className="h-8 w-auto" />
       <span className="text-[11px] uppercase tracking-widest text-subtle">Admin</span>
     </Link>
   );
