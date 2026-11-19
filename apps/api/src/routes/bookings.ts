@@ -1,12 +1,24 @@
 import { Hono } from "hono";
-import { PAYMENT_METHODS, RIDE_CANCEL_REASON_KEYS } from "@quikfly/shared";
+import { FUEL_EIGHTHS, PAYMENT_METHODS, RENTAL_PHOTO_SIDES, RENTAL_RULES, RENTAL_STAGES, RIDE_CANCEL_REASON_KEYS } from "@quikfly/shared";
 import { MAX_BOOKING_LINES, SERVICE_KEYS } from "../config";
 import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
-import { jsonBody, oneOf, optStr, str } from "../lib/validate";
+import { int, jsonBody, oneOf, optStr, str } from "../lib/validate";
 import { requireUser } from "../middleware/auth";
 import { cancelBooking, completeBooking, createBooking, getBooking, listBookings } from "../services/bookings";
 import { cancelSeats, rescheduleBooking } from "../services/bus-changes";
+import { extendRental, extensionQuote, myRental, rentalPhoto, returnRental, startRental, uploadRentalPhoto } from "../services/rentals";
+
+/** :stage and :side of a rental checklist photo. */
+const photoParams = (stage: string, side: string) => ({
+  stage: oneOf({ stage }, "stage", RENTAL_STAGES),
+  side: oneOf({ side }, "side", RENTAL_PHOTO_SIDES),
+});
+/** { odometerKm, fuel } of a rental checklist. */
+const reading = (body: Record<string, unknown>) => ({
+  odometerKm: int(body, "odometerKm", 0, RENTAL_RULES.maxOdometerKm),
+  fuel: int(body, "fuel", 0, FUEL_EIGHTHS),
+});
 
 /** Seat ids for a bus change: a short list of short strings. */
 function seatIds(value: unknown): string[] {
@@ -51,6 +63,29 @@ export const bookings = new Hono<AppEnv>()
   .post("/:id/complete", async (c) => c.json(await completeBooking(c.env.DB, c.var.user.id, c.req.param("id"))))
   // Bus tickets: cancel some seats (their share comes back per the bus policy).
   .post("/:id/cancel-seats", async (c) => c.json(await cancelSeats(c.env.DB, c.var.user.id, c.req.param("id"), seatIds((await jsonBody(c)).seatIds))))
+  // Self-drive rentals: the pickup/return checklist, extensions (packages/shared/src/rental.ts).
+  .get("/:id/rental", async (c) => c.json(await myRental(c.env.DB, c.var.user.id, c.req.param("id"))))
+  // Raw JPEG/PNG/WebP body (up to 2 MB) → the rental
+  .put("/:id/rental/photos/:stage/:side", async (c) => {
+    const p = photoParams(c.req.param("stage"), c.req.param("side"));
+    return c.json(await uploadRentalPhoto(c.env.DB, c.env.DOCS, c.var.user.id, c.req.param("id"), p.stage, p.side, await c.req.arrayBuffer()));
+  })
+  .get("/:id/rental/photos/:stage/:side", async (c) => {
+    const p = photoParams(c.req.param("stage"), c.req.param("side"));
+    return rentalPhoto(c.env.DB, c.env.DOCS, c.var.user.id, c.req.param("id"), p.stage, p.side);
+  })
+  // { odometerKm, fuel } once the five pickup photos are in → the rental (booking becomes "ongoing")
+  .post("/:id/rental/start", async (c) => c.json(await startRental(c.env.DB, c.var.user.id, c.req.param("id"), reading(await jsonBody(c)))))
+  // ?hours=N → { lines, total, endsAt } (the price before paying)
+  .get("/:id/rental/extension", async (c) => {
+    const hours = int({ hours: Number(c.req.query("hours")) }, "hours", 1, 168);
+    const { row, lines, total } = await extensionQuote(c.env.DB, c.var.user.id, c.req.param("id"), hours);
+    return c.json({ lines, total, endsAt: new Date(Date.parse(`${row.ends_at}:00Z`) + hours * 3_600_000).toISOString().slice(0, 16) });
+  })
+  // { hours } → { rental, lines, total }; paid like the booking (wallet in the same batch)
+  .post("/:id/rental/extend", async (c) => c.json(await extendRental(c.env.DB, c.var.user.id, c.req.param("id"), int(await jsonBody(c), "hours", 1, 168))))
+  // { odometerKm, fuel } once the five return photos are in → the rental, waiting for staff to settle
+  .post("/:id/rental/return", async (c) => c.json(await returnRental(c.env.DB, c.var.user.id, c.req.param("id"), reading(await jsonBody(c)))))
   // Bus tickets: move once to another bus or date, priced by a new bus quote; { quoteId, subtitle, lines }.
   .post("/:id/reschedule", async (c) => {
     const body = await jsonBody(c);

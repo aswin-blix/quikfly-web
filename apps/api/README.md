@@ -93,6 +93,12 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/bookings/:id/complete` | mark a finished **ride** (called by the website and app when a simulated ride ends; the driver app will own this). Other services: 409, staff close them |
 | POST 🔒 | `/bookings/:id/cancel-seats` | bus tickets: `{ seatIds }` cancels some seats (not all: cancel the booking for that). Their share of what was paid (by seat price) comes back at the bus policy's rate, with the same share of credits and coupon; the seats go back on sale; the Seats and Traveller names lines drop them → the booking |
 | POST 🔒 | `/bookings/:id/reschedule` | bus tickets, once, until `busRescheduleHours` before departure: `{ quoteId, subtitle, lines }` moves the booking to a new bus quote on the same route with one seat per traveller (same genders). The fare difference plus `busRescheduleFee` is paid now (from the wallet for wallet bookings; 400 if short), or the difference comes back → `{ booking, charged, refunded }`. `lines` replaces Date/Departure/Arrival |
+| GET 🔒 | `/bookings/:id/rental` | a self-drive booking's rental (`Rental` in `packages/shared/src/rental.ts`): state `booked` → `on_trip` → `returned` → `settled`, booked pickup and current return time (local India), km plan, deposit, pickup and return readings, photo sides uploaded per stage, extensions, settlement. 404 for other bookings |
+| PUT / GET 🔒 | `/bookings/:id/rental/photos/:stage/:side` | checklist photo (`pickup` or `return`; `front`, `back`, `left`, `right`, `odometer`): raw JPEG/PNG/WebP up to 2 MB, replaces an earlier one; pickup photos only before the start, return photos only while on trip. GET serves it privately |
+| POST 🔒 | `/bookings/:id/rental/start` | `{ odometerKm, fuel }` (fuel in eighths, 0–8) once all five pickup photos are in, from `RENTAL_RULES.startEarlyMinutes` before pickup until the return time → the rental; the booking becomes `ongoing` and can no longer be cancelled by the customer |
+| GET 🔒 | `/bookings/:id/rental/extension?hours=N` | the price of extending: `{ lines, total, endsAt }` (booked hourly rate × hours, plus protection for any extra day). 409 after the return time, past `rentExtendMaxHours` or the 30-day limit |
+| POST 🔒 | `/bookings/:id/rental/extend` | `{ hours }` → `{ rental, lines, total }`: moves the return time, adds the amount to the booking (and a "Return (extended)" line); paid from the wallet in the same batch for wallet bookings (409 if short), otherwise by the booking's method (demo) |
+| POST 🔒 | `/bookings/:id/rental/return` | `{ odometerKm, fuel }` once all five return photos are in (odometer not below pickup) → the rental, now `returned` and waiting for staff to settle the deposit |
 
 ### Partner (`/vendor/*`, QuikFly Partner app; customer login)
 
@@ -135,7 +141,7 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | POST | `/admin/auth/login` | `{ email, password }` → `{ token, admin }`. 401 for a wrong email or password (same message for both); 429 after 5 failures (locked 15 min) |
 | POST 🛡 | `/admin/auth/logout` | ends the session |
 | GET 🛡 | `/admin/auth/me` | the signed-in admin |
-| GET 🛡 | `/admin/stats?days=` | dashboard numbers for the last 1–90 days (default 7, India time): totals, by service, by day, queues, latest bookings `[dashboard.view]` |
+| GET 🛡 | `/admin/stats?days=` | dashboard numbers for the last 1–90 days (default 7, India time): totals, by service, by day, queues (pending licences, pending deletions, returned cars to settle), latest bookings `[dashboard.view]` |
 | GET 🛡 | `/admin/settings` | current business settings (defaults in `@quikfly/shared` `settings.ts`) `[dashboard.view]` |
 | PATCH 🛡 | `/admin/settings` | change settings; only known keys with the right type `[settings.edit]` |
 | GET 🛡 | `/admin/audit?page=&entity=&entityId=` | audit log, newest first, 25 per page `[audit.view]` |
@@ -152,7 +158,10 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | GET 🛡 | `/admin/support/:id` | one with its thread `[support.manage]` |
 | POST 🛡 | `/admin/support/:id/reply` | `{ body }` → status `answered`; the customer is notified (`support.reply`); audited `[support.manage]` |
 | POST 🛡 | `/admin/support/:id/close` | `{ note? }` (added to the thread) → closed; audited `[support.manage]` |
-| POST 🛡 | `/admin/bookings/:id/complete` | marks an active booking completed; a self-drive deposit paid from the wallet goes back to the customer in the same transaction (recorded as `refundAmount` and in the audit row either way) `[bookings.manage]` |
+| POST 🛡 | `/admin/bookings/:id/complete` | marks an active booking completed; a self-drive deposit paid from the wallet goes back to the customer in the same transaction (recorded as `refundAmount` and in the audit row either way) 409 for a self-drive car the customer has returned (settle it instead) `[bookings.manage]` |
+| GET 🛡 | `/admin/bookings/:id/rental` | the rental with the customer's name `[bookings.view]`; photos at `/admin/bookings/:id/rental/photos/:stage/:side` |
+| GET 🛡 | `/admin/bookings/:id/rental/settlement?damage=₹` | what settling would deduct now: extra km (limited plan: `rentLimitedKmPerDay` × days), late return (started hours past the return time beyond `rentLateGraceMinutes`, at `rentLateFeePercent` of the hourly rate), fuel (`rentFuelChargePerEighth` per eighth less), damage; deposit back and anything owed beyond it `[bookings.manage]` |
+| POST 🛡 | `/admin/bookings/:id/rental/settle` | `{ damage, damageNote }` (a note is required with damage) → records the itemised settlement, returns the rest of the deposit (to the wallet for wallet bookings, with the deductions in the wallet note), completes the booking and notifies the customer; audited `rental.settle` `[bookings.manage]` |
 | GET 🛡 | `/admin/vendors?status=` | partner applications: `submitted` (default, oldest first), `draft`, `onboarding`, `active`, `rejected`, `blocked`; deleted accounts left out `[vendors.review]` |
 | GET 🛡 | `/admin/vendors/:id` | `{ application, bankAccount, customerId }`: the full bank account number is staff-only `[vendors.review]` |
 | GET 🛡 | `/admin/vendors/:id/documents/:kind` | a document photo (`photo`, `rc`, `insurance`), private, not cached `[vendors.review]` |

@@ -7,7 +7,7 @@ import { notify } from "../notifications";
 import { audit, listAudit } from "./audit";
 import { LOCAL_DATE, toAdminBooking, type AdminBookingRow } from "./stats";
 
-const SELECT = "SELECT b.*, u.name AS customer_name, u.phone AS customer_phone FROM bookings b JOIN users u ON u.id = b.user_id";
+const SELECT = "SELECT b.*, u.name AS customer_name, u.phone AS customer_phone, (SELECT CASE WHEN settlement IS NOT NULL THEN 'settled' WHEN return_at IS NOT NULL THEN 'returned' WHEN pickup_at IS NOT NULL THEN 'on_trip' ELSE 'booked' END FROM rentals WHERE booking_id = b.id) AS rental_state FROM bookings b JOIN users u ON u.id = b.user_id";
 
 export async function searchBookings(db: D1Database, f: BookingFilters): Promise<Page<ReturnType<typeof toAdminBooking>>> {
   const where: string[] = [];
@@ -83,6 +83,8 @@ export async function adminCancel(db: D1Database, adminId: string, id: string, r
 
 /** Closes a booking; a self-drive deposit paid from the wallet goes back to the customer. */
 export async function adminComplete(db: D1Database, adminId: string, id: string) {
+  const returned = await db.prepare("SELECT 1 AS ok FROM rentals WHERE booking_id = ? AND return_at IS NOT NULL AND settlement IS NULL").bind(id).first();
+  if (returned) throw conflict("The customer has returned this car. Settle the deposit from the Rental section instead.");
   const done = await completeBookingRow(db, id);
   if (!done) await assertActive(db, id); // throws: not found, or already finished
   await audit(db, { adminId, action: "booking.complete", entity: "booking", entityId: id, detail: done!.deposit ? { depositReturned: done!.deposit, toWallet: done!.payment === "wallet" } : undefined });

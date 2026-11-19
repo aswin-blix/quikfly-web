@@ -665,6 +665,54 @@ await expect("register a push device", call("POST", "/me/push-devices", { token:
 await expect("a push device needs a known platform", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "fridge" }), 400);
 await expect("remove a push device", call("DELETE", "/me/push-devices/smoke-token-123"), 200, (j) => j.removed === true);
 
+// Self-drive rental lifecycle: checklist photos, start, extend, return (staff settle in smoke-admin).
+// On production only the read and the photo rule run, then the booking is cancelled, so no
+// returned cars pile up in the staff queue.
+{
+  const PROD = BASE.includes("workers.dev");
+  const localIn = (minutes) => new Date(Date.now() + (330 + minutes) * 60_000).toISOString().slice(0, 16);
+  const start = localIn(20), end = localIn(20 + 6 * 60);
+  const rq = (await call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "self", start, end, kmPlan: "limited", protection: "standard", doorstep: false })).json;
+  const rb = await expect("a self-drive booking starts its rental as booked", call("POST", "/bookings", { service: "rent", title: "Smoke rental", subtitle: "Lifecycle", payment: "upi", lines: [], quoteId: rq.id }), 201,
+    (j) => j.rentalState === "booked");
+  const path = `/bookings/${rb.id}/rental`;
+  await expect("GET /bookings/:id/rental", call("GET", path), 200,
+    (j) => j.state === "booked" && j.start === start && j.endsAt === end && j.kmPlan === "limited" && j.photos.pickup.length === 0 && j.pickup === null);
+  await expect("starting needs all five photos", call("POST", `${path}/start`, { odometerKm: 12000, fuel: 8 }), 400);
+  await expect("unknown photo side refused", upload(`${path}/photos/pickup/roof`, JPEG, token), 400);
+  if (PROD) {
+    await call("POST", `/bookings/${rb.id}/cancel`);
+  } else {
+    const sides = ["front", "back", "left", "right", "odometer"];
+    let last;
+    for (const s of sides) last = await upload(`${path}/photos/pickup/${s}`, JPEG, token);
+    check("five pickup photos uploaded", last.status === 200 && last.json.photos.pickup.length === 5, JSON.stringify(last.json)?.slice(0, 160));
+    await expect("return photos wait until the rental starts", upload(`${path}/photos/return/front`, JPEG, token), 409);
+    await expect("fuel must be 0–8", call("POST", `${path}/start`, { odometerKm: 12000, fuel: 9 }), 400);
+    await expect("start the rental", call("POST", `${path}/start`, { odometerKm: 12000, fuel: 8 }), 200,
+      (j) => j.state === "on_trip" && j.pickup.odometerKm === 12000 && j.pickup.fuel === 8);
+    await expect("a started rental can't be started again", call("POST", `${path}/start`, { odometerKm: 12000, fuel: 8 }), 409);
+    await expect("a started rental can't be cancelled", call("POST", `/bookings/${rb.id}/cancel`), 409);
+    await expect("the booking is ongoing", call("GET", `/bookings/${rb.id}`), 200, (j) => j.status === "ongoing" && j.rentalState === "on_trip");
+    const ext = await expect("extension price", call("GET", `${path}/extension?hours=2`), 200, (j) => j.total > 0 && j.lines[0].label.startsWith("Extension") && j.endsAt > end);
+    await expect("extend by 2 hours", call("POST", `${path}/extend`, { hours: 2 }), 200,
+      (j) => j.total === ext.total && j.rental.endsAt === ext.endsAt && j.rental.extensions.length === 1 && j.rental.extensions[0].amount === ext.total);
+    await expect("an extension longer than the setting is refused", call("POST", `${path}/extend`, { hours: 100 }), 409);
+    await expect("the extension is added to the booking", call("GET", `/bookings/${rb.id}`), 200,
+      (j) => j.amount === rb.amount + ext.total && j.lines.some(([k]) => k === "Return (extended)"));
+    for (const s of sides) last = await upload(`${path}/photos/return/${s}`, JPEG, token);
+    check("five return photos uploaded", last.status === 200 && last.json.photos.return.length === 5);
+    await expect("the odometer can't go down", call("POST", `${path}/return`, { odometerKm: 11000, fuel: 6 }), 400);
+    await expect("return the car", call("POST", `${path}/return`, { odometerKm: 12200, fuel: 6 }), 200,
+      (j) => j.state === "returned" && j.dropoff.odometerKm === 12200 && j.settlement === null);
+    await expect("pickup photos can't change after the return", upload(`${path}/photos/pickup/front`, JPEG, token), 409);
+    await expect("no extension after the return", call("GET", `${path}/extension?hours=1`), 409);
+    await expect("a photo is served to its customer", fetch(`${BASE}${path}/photos/return/front`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => ({ status: r.status, json: r.headers.get("cache-control") })), 200,
+      (cc) => /no-store/.test(cc));
+    await expect("someone else's rental is hidden", call("GET", path, null, tokenB), 404);
+  }
+}
+
 // Sign out everywhere
 const second = (await call("POST", "/auth/verify", { phone: PHONE, otp: OTP })).json.token;
 await expect("POST /me/logout-all", call("POST", "/me/logout-all", null, second), 200);

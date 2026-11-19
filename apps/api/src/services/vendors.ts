@@ -227,12 +227,15 @@ const MIME = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" } as cons
 const SECTION_OF: Record<VendorDocument, VendorSection> = { photo: "photo", rc: "rc", insurance: "insurance" };
 
 /** Checks and stores an image under vendors/<vendorId>/; returns its key. */
-export async function storeImage(docs: R2Bucket, vendorId: string, kind: string, body: ArrayBuffer) {
+export const storeImage = (docs: R2Bucket, vendorId: string, kind: string, body: ArrayBuffer) => storeImageIn(docs, `vendors/${vendorId}`, kind, body);
+
+/** Checks an uploaded photo (size, JPEG/PNG/WebP) and stores it under `folder`; returns its key. */
+export async function storeImageIn(docs: R2Bucket, folder: string, kind: string, body: ArrayBuffer) {
   if (!body.byteLength) throw badRequest("Choose a photo to upload.");
   if (body.byteLength > VENDOR_RULES.maxPhotoBytes) throw badRequest(`Photos can be up to ${VENDOR_RULES.maxPhotoBytes / 1024 / 1024} MB.`);
   const ext = sniff(new Uint8Array(body.slice(0, 12)));
   if (!ext) throw badRequest("Upload a JPEG, PNG or WebP photo.");
-  const key = `vendors/${vendorId}/${kind}-${crypto.randomUUID()}.${ext}`;
+  const key = `${folder}/${kind}-${crypto.randomUUID()}.${ext}`;
   await docs.put(key, body, { httpMetadata: { contentType: MIME[ext] } });
   return key;
 }

@@ -1,4 +1,4 @@
-import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, cancelPolicyFor, creditsReturned, creditsUsable, switchError, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type ServiceKey } from "@quikfly/shared";
+import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, cancelPolicyFor, creditsReturned, creditsUsable, switchError, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visibleById } from "./catalog";
@@ -20,14 +20,27 @@ export interface BookingRow {
   rescheduled_at: string | null; ticket_token: string | null;
 }
 /** `seats`: the bus seats it holds (bookingSeats); left empty where a caller doesn't need them. */
-export const toBooking = (r: BookingRow, seats: BookingSeat[] = []): Booking => ({
+export const toBooking = (r: BookingRow, seats: BookingSeat[] = [], rentalState: RentalState | null = null): Booking => ({
   id: r.id, service: r.service, title: r.title, subtitle: r.subtitle, amount: r.amount,
   status: r.status, payment: r.payment, createdAt: r.created_at, lines: JSON.parse(r.lines),
   startsAt: r.starts_at ?? null, refundAmount: r.refund_amount ?? null, deposit: r.deposit ?? 0,
   cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0, rideId: r.ride_id ?? null, tripId: r.trip_id ?? null,
   creditsUsed: r.credits_used ?? 0, discount: r.discount ?? 0, seats,
-  ticketToken: r.ticket_token ?? null, rescheduledAt: r.rescheduled_at ?? null,
+  ticketToken: r.ticket_token ?? null, rescheduledAt: r.rescheduled_at ?? null, rentalState,
 });
+
+/** Where a rental is, from its row (packages/shared/src/rental.ts). */
+export const RENTAL_STATE_SQL = `CASE WHEN settlement IS NOT NULL THEN 'settled' WHEN return_at IS NOT NULL THEN 'returned' WHEN pickup_at IS NOT NULL THEN 'on_trip' ELSE 'booked' END`;
+
+/** Rental states of these bookings (self-drive ones only), by booking id. */
+export async function rentalStates(db: D1Database, ids: string[]): Promise<Map<string, RentalState>> {
+  const map = new Map<string, RentalState>();
+  if (!ids.length) return map;
+  const { results } = await db.prepare(`SELECT booking_id, ${RENTAL_STATE_SQL} AS state FROM rentals WHERE booking_id IN (SELECT value FROM json_each(?))`)
+    .bind(JSON.stringify(ids)).all<{ booking_id: string; state: RentalState }>();
+  for (const r of results) map.set(r.booking_id, r.state);
+  return map;
+}
 
 /** The bus seats held by these bookings, by booking id. */
 export async function bookingSeats(db: D1Database, ids: string[]): Promise<Map<string, BookingSeat[]>> {
@@ -51,13 +64,15 @@ export async function listBookings(db: D1Database, userId: string) {
   const { results } = await db.prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC")
     .bind(userId).all<BookingRow>();
   const seats = await bookingSeats(db, results.filter((r) => r.service === "bus" && r.status !== "cancelled").map((r) => r.id));
-  return results.map((r) => toBooking(r, seats.get(r.id)));
+  const rentals = await rentalStates(db, results.filter((r) => r.service === "rent").map((r) => r.id));
+  return results.map((r) => toBooking(r, seats.get(r.id), rentals.get(r.id) ?? null));
 }
 
 export async function getBooking(db: D1Database, userId: string, id: string): Promise<Booking> {
   const row = await db.prepare("SELECT * FROM bookings WHERE id = ? AND user_id = ?").bind(id, userId).first<BookingRow>();
   if (!row) throw notFound("Booking not found.");
-  return toBooking(row, (await bookingSeats(db, [id])).get(id));
+  const rental = row.service === "rent" ? (await rentalStates(db, [id])).get(id) ?? null : null;
+  return toBooking(row, (await bookingSeats(db, [id])).get(id), rental);
 }
 
 /** What a booking costs before any coupon (the ride's fare, or the quote's total) and when it starts. */
@@ -66,7 +81,7 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
     if (!input.rideId) throw badRequest('"rideId" is required for ride bookings.');
     const ride = await ownRide(db, userId, input.rideId);
     if (ride.quote.option.service !== input.service) throw badRequest("That ride is for a different service.");
-    return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: ride.scheduledFor ?? null, deposit: 0, seatHolds: null, departure: null };
+    return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: ride.scheduledFor ?? null, deposit: 0, seatHolds: null, departure: null, rental: null };
   }
   if (!input.quoteId) throw badRequest('"quoteId" is required. Get a price from POST /quotes first.');
   const q = await usableQuote(db, input.quoteId, input.service);
@@ -80,7 +95,17 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
   const departure = req.service === "tours" && req.departureId
     ? { id: req.departureId, travellers: req.adults + req.kids, seats: (await visibleById(db, "departure", req.departureId)).seats }
     : null;
-  return { gross: q.total, quoteId: q.id, rideId: null, startsAt: q.starts_at, deposit, seatHolds, departure };
+  // A self-drive car gets a rental (pickup/return checklist), priced as booked for extensions and late fees.
+  let rental: { start: string; end: string; kmPlan: string; hourlyRate: number; protectionPerDay: number } | null = null;
+  if (req.service === "rent" && req.mode === "self") {
+    const [car, settings] = await Promise.all([visibleById(db, "rentalCar", req.carId), getSettings(db)]);
+    const uplift = req.kmPlan === "unlimited" ? 1 + settings.rentUnlimitedKmExtraPercent / 100 : 1;
+    rental = {
+      start: req.start, end: req.end, kmPlan: req.kmPlan, hourlyRate: Math.round(car.pricePerHour * uplift),
+      protectionPerDay: req.protection === "peace" ? settings.rentProtectionPeacePerDay : settings.rentProtectionStandardPerDay,
+    };
+  }
+  return { gross: q.total, quoteId: q.id, rideId: null, startsAt: q.starts_at, deposit, seatHolds, departure, rental };
 }
 
 /**
@@ -92,7 +117,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   // A quote or ride made before a switch went off can't be booked after it.
   const off = switchError(await getSettings(db), { service: input.service, tripOf: input.tripOf });
   if (off) throw conflict(off);
-  const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit, seatHolds, departure } = await grossPrice(db, userId, input);
+  const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit, seatHolds, departure, rental } = await grossPrice(db, userId, input);
   // Joining a trip: the other booking must be the customer's own and not cancelled.
   let tripId: string | null = null;
   if (input.tripOf) {
@@ -130,7 +155,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   ];
   const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0, rideId, tripId, creditsUsed,
     discount: coupon?.discount ?? 0, seats: seatHolds?.seats.map((x) => ({ id: x.seat, price: x.price, gender: x.gender })) ?? [],
-    ticketToken: seatHolds ? ticketToken() : null, rescheduledAt: null };
+    ticketToken: seatHolds ? ticketToken() : null, rescheduledAt: null, rentalState: rental ? "booked" : null };
   const wallet = input.payment === "wallet";
 
   const conditions: string[] = [];
@@ -186,6 +211,12 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
        SELECT ?1, ?2, json_extract(j.value, '$.seat'), ?3, json_extract(j.value, '$.gender'), json_extract(j.value, '$.price') FROM json_each(?4) j
        WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?3)`,
     ).bind(seatHolds.busId, seatHolds.date, id, JSON.stringify(seatHolds.seats)));
+  }
+  if (rental) {
+    statements.push(db.prepare(
+      `INSERT INTO rentals (booking_id, start_local, ends_at, km_plan, hourly_rate, protection_per_day, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?)`,
+    ).bind(id, rental.start, rental.end, rental.kmPlan, rental.hourlyRate, rental.protectionPerDay, createdAt, id));
   }
   // The booking the trip started from joins it too (only if this booking went in).
   if (input.tripOf) {
@@ -299,6 +330,8 @@ export async function cancelBookingRow(db: D1Database, userId: string | null, id
 }
 
 export async function cancelBooking(db: D1Database, userId: string, id: string, reason: string | null = null): Promise<Booking> {
+  const picked = await db.prepare("SELECT 1 AS ok FROM rentals WHERE booking_id = ? AND pickup_at IS NOT NULL").bind(id).first();
+  if (picked) throw conflict("You've already started this rental. End it from My trips instead of cancelling.");
   const row = await cancelBookingRow(db, userId, id, "Refund", reason);
   if (!row) return notActive(db, userId, id);
   await notify(db, userId, { kind: "booking.cancelled", ref: id, bookingId: id, title: `Cancelled · ${row.title}`, body: refundText(row) });
@@ -339,26 +372,35 @@ export async function completeBooking(db: D1Database, userId: string, id: string
  * Staff close an active booking. A refundable deposit paid from the wallet goes back in
  * the same transaction (it is recorded as `refund_amount` either way). Null when not active.
  */
-export async function completeBookingRow(db: D1Database, id: string): Promise<BookingRow | null> {
+export async function completeBookingRow(
+  db: D1Database, id: string,
+  /** A rental settlement: how much of the deposit goes back, the wallet note, and statements to run with it.
+   *  `stillActive` is SQL that uses ?1 for the booking id, so those statements must bind the booking id as ?1. */
+  settle?: { depositBack: number; note: string; statements: (stillActive: string) => D1PreparedStatement[] },
+): Promise<BookingRow | null> {
   const row = await db.prepare(`SELECT * FROM bookings WHERE id = ?1 AND status IN ${ACTIVE}`).bind(id).first<BookingRow>();
   if (!row) return null;
-  const deposit = row.deposit ?? 0;
+  const deposit = settle ? Math.min(settle.depositBack, row.deposit ?? 0) : row.deposit ?? 0;
   const credit = row.payment === "wallet" ? deposit : 0;
   const stillActive = `EXISTS (SELECT 1 FROM bookings WHERE id = ?1 AND status IN ${ACTIVE})`;
   const settings = await getSettings(db);
   const earn = earnStatement(db, settings, row);
-  const [, , done, earned] = await db.batch([
+  const extra = settle ? settle.statements(stillActive) : [];
+  const results = await db.batch([
     db.prepare(`UPDATE users SET wallet_balance = wallet_balance + ?2 WHERE id = ?3 AND ?2 > 0 AND ${stillActive}`).bind(id, credit, row.user_id),
     db.prepare(
       `INSERT INTO wallet_transactions (id, user_id, kind, amount, note, booking_id, created_at)
        SELECT ?2, ?3, 'refund', ?4, ?5, ?1, ?6 WHERE ?4 > 0 AND ${stillActive}`,
-    ).bind(id, uid("WT"), row.user_id, credit, `Deposit returned · ${row.title}`, new Date().toISOString()),
-    db.prepare(`UPDATE bookings SET status = 'completed', refund_amount = CASE WHEN ?2 > 0 THEN ?2 ELSE refund_amount END WHERE id = ?1 AND status IN ${ACTIVE} RETURNING *`)
-      .bind(id, deposit),
+    ).bind(id, uid("WT"), row.user_id, credit, settle?.note ?? `Deposit returned · ${row.title}`, new Date().toISOString()),
+    // Settlement statements run before the status changes, so they still see the booking as active.
+    ...extra,
+    db.prepare(`UPDATE bookings SET status = 'completed', refund_amount = CASE WHEN ?2 > 0 OR ?3 THEN ?2 ELSE refund_amount END WHERE id = ?1 AND status IN ${ACTIVE} RETURNING *`)
+      .bind(id, deposit, settle ? 1 : 0),
     // Credits for the completed trip (runs after the status change, so it sees 'completed').
     ...(earn ? [earn.statement] : []),
     ...settlementStatements(db, settings, row),
   ]);
+  const done = results[2 + extra.length], earned = earn ? results[3 + extra.length] : undefined;
   const finished = (done.results as BookingRow[])[0] ?? null;
   if (finished && earn && earned?.meta.changes) await notify(db, row.user_id, { ...earnedNotice(earn.earn, row.title, settings), ref: id, bookingId: id });
   return finished;

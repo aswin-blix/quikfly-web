@@ -1,5 +1,6 @@
 // Shared domain types. The API returns these shapes, and the website and the
 // mobile app consume them, so change them here only.
+import type { RentalState } from "./rental";
 
 export type ServiceKey = "bike" | "car" | "bus" | "tours" | "rent" | "rentals";
 /** How a booking is paid. Only "wallet" moves money inside QuikFly; the rest go to a gateway later. */
@@ -414,6 +415,8 @@ export interface Booking {
   ticketToken: string | null;
   /** When a bus booking was moved to another bus or date (allowed once); null when never. */
   rescheduledAt: string | null;
+  /** Self-drive bookings: where the rental is (GET /bookings/:id/rental has the details); null for everything else. */
+  rentalState: RentalState | null;
 }
 
 /** A seat a bus booking holds, with what it cost (₹ before GST) and who sits there. */
