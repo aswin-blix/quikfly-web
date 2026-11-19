@@ -11,6 +11,7 @@ import 'screens/trips/ticket_screen.dart';
 import 'screens/checkout/checkout_screen.dart';
 import 'screens/checkout/confirmed_screen.dart';
 import 'screens/trips/trip_screen.dart';
+import 'screens/trips/rental_screen.dart';
 import 'screens/account/notifications_screen.dart';
 import 'widgets/service_gate.dart';
 import 'screens/checkout/invoice_screen.dart';
@@ -90,6 +91,12 @@ final router = GoRouter(
     GoRoute(path: '/invoice/:id', parentNavigatorKey: _rootKey, builder: (_, s) => InvoiceScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/ticket/:id', parentNavigatorKey: _rootKey, builder: (_, s) => TicketScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/trip/:id', parentNavigatorKey: _rootKey, builder: (_, s) => TripScreen(id: s.pathParameters['id']!)),
+    GoRoute(path: '/rental/:id', parentNavigatorKey: _rootKey, builder: (_, s) => RentalScreen(id: s.pathParameters['id']!)),
+    GoRoute(
+      path: '/rental/:id/:stage',
+      parentNavigatorKey: _rootKey,
+      builder: (_, s) => RentalChecklistScreen(id: s.pathParameters['id']!, stage: s.pathParameters['stage'] == 'return' ? 'return' : 'pickup'),
+    ),
     GoRoute(path: '/notifications', parentNavigatorKey: _rootKey, builder: (_, _) => const NotificationsScreen()),
     GoRoute(path: '/rent', parentNavigatorKey: _rootKey, builder: (_, _) => const ServiceGate(service: ServiceKey.rent, child: RentScreen())),
     GoRoute(path: '/rent/:id', parentNavigatorKey: _rootKey, builder: (_, s) => ServiceGate(service: ServiceKey.rent, child: RentDetailScreen(id: s.pathParameters['id']!))),

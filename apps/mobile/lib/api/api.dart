@@ -4,6 +4,7 @@
 import 'package:dio/dio.dart';
 import '../core/env.dart';
 import 'models.dart';
+import 'rental_models.dart';
 import 'support_models.dart';
 import 'vendor_models.dart';
 
@@ -84,6 +85,21 @@ class QuikFlyApi {
   }
 
   VendorApplication _vendor(dynamic d) => VendorApplication.fromJson(d as Json);
+
+  // ── Self-drive rentals: checklist, extensions (stage: pickup | return; side: front | back | left | right | odometer) ──
+  Rental _rental(dynamic d) => Rental.fromJson(d as Json);
+  Future<Rental> rental(String bookingId) => _get('/bookings/$bookingId/rental', _rental);
+  Future<Rental> uploadRentalPhoto(String bookingId, String stage, String side, List<int> bytes) => _send(
+        () => _dio.put('/bookings/$bookingId/rental/photos/$stage/$side',
+            data: Stream.fromIterable([bytes]), options: Options(contentType: 'image/jpeg', headers: {Headers.contentLengthHeader: bytes.length})),
+        _rental,
+      );
+  String rentalPhotoUrl(String bookingId, String stage, String side) => '${_dio.options.baseUrl}/bookings/$bookingId/rental/photos/$stage/$side';
+  Future<Rental> startRental(String bookingId, int odometerKm, int fuel) => _post('/bookings/$bookingId/rental/start', _rental, {'odometerKm': odometerKm, 'fuel': fuel});
+  Future<ExtensionQuote> extensionQuote(String bookingId, int hours) =>
+      _get('/bookings/$bookingId/rental/extension', (d) => ExtensionQuote.fromJson(d as Json), {'hours': '$hours'});
+  Future<Rental> extendRental(String bookingId, int hours) => _post('/bookings/$bookingId/rental/extend', (d) => Rental.fromJson((d as Json)['rental'] as Json), {'hours': hours});
+  Future<Rental> endRental(String bookingId, int odometerKm, int fuel) => _post('/bookings/$bookingId/rental/return', _rental, {'odometerKm': odometerKm, 'fuel': fuel});
 
   // ── Support: callbacks (signed-in ones are linked to the account) and tickets ──
   SupportTicket _ticket(dynamic d) => SupportTicket.fromJson(d as Json);
