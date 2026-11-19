@@ -12,6 +12,7 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started
 - **No open PRs.** Last deploys 2026-11-19: API `a05cd24c`, website `fcffef9b`, admin `c6167b27`; production D1 migrations up to `0024`.
 - **Waiting on the owner:** Firebase project for phone push (Phase 5 #4 step 2, steps in [operations.md](operations.md)); the WhatsApp number in admin → Settings (support buttons stay hidden until then); the Phase 4 demo decisions below (demo numbers, devices, date) and review of [demo-script.md](demo-script.md).
 - **App 0.1.13 published** (Partner first run like Red Taxi's: phone-number picker, application starts after sign-up, Help button, grey Save; Partner inbox shows partner updates only). Still to see on a phone: the number picker (needs a signed-out login) and the customer inbox after the change (covered by a widget test).
+- 🔄 **Admin settings and pricing audit** (branch `docs/admin-settings-audit`, docs only): Stage 1, the inventory and findings, is in [admin-settings-audit.md](admin-settings-audit.md) and waiting for the owner's review. Stage 2 (research and recommendations, then a docs PR) starts after the go-ahead. Nothing gets implemented until the owner approves.
 - **Release rhythm:** each Phase 5 item ships to website/API/admin when its PR is merged; the app part follows in the next app release (owner builds, Claude verifies, phone-checks and publishes). Details in [operations.md](operations.md) and [apps/mobile/README.md](../apps/mobile/README.md).
 
 ## Phases
