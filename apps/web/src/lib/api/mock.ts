@@ -6,6 +6,7 @@ import type { QuikflyApi } from "./contract";
 import {
   BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
+  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare,
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
@@ -29,11 +30,16 @@ type StoredHold = SeatHold & { busId: string; date: string; bookingId: string };
 const holdsStore = () => load<StoredHold[]>(HOLDS_KEY, []);
 const holdsFor = (busId: string, date: string) => holdsStore().filter((h) => h.busId === busId && h.date === date);
 
-const bookingsStore = () => load<Booking[]>(KEYS.bookings, []);
+/** Bookings saved before bus changes existed lack the newer fields. */
+const bookingsStore = () => load<Booking[]>(KEYS.bookings, []).map((b): Booking => ({ ...b, discount: b.discount ?? 0, seats: b.seats ?? [], ticketToken: b.ticketToken ?? null, rescheduledAt: b.rescheduledAt ?? null }));
 const saveBookings = (list: Booking[]) => save(KEYS.bookings, list);
 const ridesStore = () => load<Record<string, MockRide>>(KEYS.rides, {});
 type StoredQuote = PriceQuote & { used?: boolean; startsAt?: string; request?: QuoteRequest };
 const quotesStore = () => load<Record<string, StoredQuote>>(QUOTES_KEY, {});
+
+/** Replaces (or adds) one booking line, keeping the others in place. */
+const setLine = (lines: [string, string][], k: string, v: string): [string, string][] =>
+  lines.some(([x]) => x === k) ? lines.map(([x, y]) => [x, x === k ? v : y] as [string, string]) : [...lines, [k, v]];
 
 /** Updates an active booking; refuses ones already cancelled or completed (409 on the API). */
 function finishBooking(id: string, status: "cancelled" | "completed", patch: Partial<Booking> = {}) {
@@ -220,7 +226,11 @@ export const mockApi: QuikflyApi = {
       const lines = priceLines(r);
       const q: PriceQuote = { id: uid("QT"), service: r.service, lines, total: sumLines(lines), expiresAt: new Date(Date.now() + QUOTE_TTL_MINUTES * 60_000).toISOString() };
       const startsAt = quoteStartsAt(r, r.service === "bus" ? busFor(r.from, r.to, r.date, r.busId).depart : undefined);
-      save(QUOTES_KEY, { ...quotesStore(), [q.id]: { ...q, startsAt, request: r } });
+      // Bus quotes remember each seat's price, so a seat's share can be refunded later (like the API).
+      const seatPrices = r.service === "bus"
+        ? r.seatIds.map((id) => generateSeats(busFor(r.from, r.to, r.date, r.busId), r.date, settings, holdsFor(r.busId, r.date)).find((s) => s.id === id)?.price ?? 0)
+        : undefined;
+      save(QUOTES_KEY, { ...quotesStore(), [q.id]: { ...q, startsAt, request: r.service === "bus" ? { ...r, seatPrices } : r } });
       return q;
     },
   },
@@ -270,6 +280,7 @@ export const mockApi: QuikflyApi = {
       }
       const quoted = input.quoteId ? quotesStore()[input.quoteId] : undefined;
       const quotedDeposit = quoted?.lines.find((l) => l.label === DEPOSIT_LINE)?.amount ?? 0;
+      const busReq = quoted?.request?.service === "bus" ? quoted.request : null;
       const creditsUsed = input.useCredits ? creditsUsable(settings, creditBalance(), afterCoupon, Math.min(quotedDeposit, afterCoupon)) : 0;
       const amount = afterCoupon - creditsUsed;
       const deposit = Math.min(quotedDeposit, amount);
@@ -282,7 +293,9 @@ export const mockApi: QuikflyApi = {
         id: uid("QF"), service: input.service, title: input.title, subtitle: input.subtitle, payment: input.payment,
         amount, lines, status: "confirmed", createdAt: new Date().toISOString(),
         startsAt: quoted?.startsAt || (input.rideId ? ridesStore()[input.rideId]?.ride.scheduledFor : null) || null, refundAmount: null, deposit, cancelReason: null, cancelFee: 0,
-        rideId: input.rideId ?? null, tripId, creditsUsed,
+        rideId: input.rideId ?? null, tripId, creditsUsed, discount: c?.discount ?? 0,
+        seats: busReq ? busReq.seatIds.map((id, i) => ({ id, price: busReq.seatPrices?.[i] ?? 0, gender: busReq.genders?.[i] ?? "other" })) : [],
+        ticketToken: input.service === "bus" ? uid("TK").toLowerCase() : null, rescheduledAt: null,
       };
       if (input.payment === "wallet") {
         if (currentUser().walletBalance < amount) fail("Not enough wallet balance. Choose another payment method.");
@@ -310,7 +323,7 @@ export const mockApi: QuikflyApi = {
       const fee = ride ? rideCancelFee(settings, current.amount, reason, current.createdAt, Date.now(), current.startsAt) : 0;
       const percent = ride ? 100 : refundPercent(cancelPolicyFor(settings, current.service), current.startsAt);
       const refund = ride ? current.amount - fee : refundAmount(current.amount, percent, current.deposit ?? 0);
-      const b = finishBooking(id, "cancelled", { refundAmount: refund, cancelReason: reason ?? null, cancelFee: fee });
+      const b = finishBooking(id, "cancelled", { refundAmount: refund, cancelReason: reason ?? null, cancelFee: fee, seats: [] });
       save(HOLDS_KEY, holdsStore().filter((h) => h.bookingId !== id));
       mockNotify({ kind: "booking.cancelled", title: `Cancelled · ${b.title}`, bookingId: b.id,
         body: refund ? (b.payment === "wallet" ? `₹${refund.toLocaleString("en-IN")} is back in your QuikFly wallet.` : `Refund due: ₹${refund.toLocaleString("en-IN")}.`) : "No refund under the cancellation policy." });
@@ -331,6 +344,76 @@ export const mockApi: QuikflyApi = {
         mockNotify({ kind: "credits.earned", title: `You earned ₹${earn.toLocaleString("en-IN")} QuikFly Credits`, body: `For ${done.title}. Use them on your next booking within ${settings.creditsExpiryDays} days.`, bookingId: done.id });
       }
       return done;
+    },
+    // Bus changes, with the API's rules (packages/shared/src/bus-changes.ts).
+    async cancelSeats(id, seatIds) {
+      await wait(500);
+      const list = bookingsStore();
+      const b = list.find((x) => x.id === id) ?? fail("Booking not found.");
+      const err = seatCancelError(b, seatIds);
+      if (err) fail(err);
+      const { share, percent, refund } = seatCancelRefund(settings, b, seatIds);
+      const creditsShare = seatsShare(b.creditsUsed, b.seats, seatIds);
+      const keep = b.seats.map((s) => !seatIds.includes(s.id));
+      const names = (b.lines.find(([k]) => k === TRAVELLERS_LINE)?.[1] ?? "").split(", ");
+      const what = `${seatIds.join(", ")} · ${refund ? `₹${refund.toLocaleString("en-IN")}${b.payment === "wallet" ? " back to wallet" : " refund due"}` : "no refund"}`;
+      const earlier = b.lines.find(([k]) => k === SEATS_CANCELLED_LINE)?.[1];
+      let lines = setLine(b.lines, SEATS_LINE, b.seats.filter((_, i) => keep[i]).map((s) => s.id).join(", "));
+      if (names.length === b.seats.length) lines = setLine(lines, TRAVELLERS_LINE, names.filter((_, i) => keep[i]).join(", "));
+      lines = setLine(lines, SEATS_CANCELLED_LINE, earlier ? `${earlier}; ${what}` : what);
+      const discountShare = seatsShare(b.discount, b.seats, seatIds);
+      Object.assign(b, { amount: b.amount - share, creditsUsed: b.creditsUsed - creditsShare, discount: b.discount - discountShare, seats: b.seats.filter((_, i) => keep[i]), lines });
+      saveBookings(list);
+      save(HOLDS_KEY, holdsStore().filter((h) => !(h.bookingId === id && seatIds.includes(h.seatId))));
+      if (b.payment === "wallet" && refund > 0) walletEntry("refund", refund, `Refund (seats ${seatIds.join(", ")}${percent < 100 ? `, ${percent}%` : ""}) · ${b.title}`, b.id);
+      const creditsBack = creditsReturned(creditsShare, percent);
+      if (creditsBack) creditEntry("returned", creditsBack, `Returned (seats ${seatIds.join(", ")}) · ${b.title}`, b.id, creditExpiry());
+      mockNotify({ kind: "booking.changed", title: `Seats cancelled · ${b.title}`, bookingId: b.id, body: `Seat ${seatIds.join(", ")} cancelled.` });
+      return b;
+    },
+    async reschedule(id, change) {
+      await wait(700);
+      const list = bookingsStore();
+      const b = list.find((x) => x.id === id) ?? fail("Booking not found.");
+      const err = rescheduleError(settings, b);
+      if (err) fail(err);
+      const q = quotesStore()[change.quoteId] ?? fail("That price isn't valid. Please check the price again.");
+      if (q.used) fail("This price was already used for a booking.");
+      const req = q.request;
+      if (req?.service !== "bus") return fail("That price isn't for a bus.");
+      if (req.seatIds.length !== b.seats.length) fail(`Pick ${b.seats.length} seat${b.seats.length > 1 ? "s" : ""}, one for each traveller.`);
+      const { newAmount, charge, refund, fee } = rescheduleAmounts(settings, b, q.total);
+      if (b.payment === "wallet" && charge > currentUser().walletBalance) fail(`The new bus costs ₹${charge.toLocaleString("en-IN")} more and your wallet is short. Add money or pick another bus.`);
+      const was = [b.lines.find(([k]) => k === "Date")?.[1], b.lines.find(([k]) => k === "Departure")?.[1]].filter(Boolean).join(", ");
+      let lines = b.lines;
+      for (const key of BUS_TRIP_LINES) { const v = change.lines.find(([k]) => k === key)?.[1]; if (v) lines = setLine(lines, key, v); }
+      lines = setLine(lines, SEATS_LINE, req.seatIds.join(", "));
+      lines = setLine(lines, BUS_CHANGED_LINE, `${was || "the earlier bus"}${fee ? ` (fee ₹${fee})` : ""}${charge ? ` · paid ₹${charge} more` : refund ? ` · ₹${refund} ${b.payment === "wallet" ? "back to wallet" : "refund due"}` : ""}`);
+      Object.assign(b, {
+        amount: newAmount, startsAt: q.startsAt ?? b.startsAt, subtitle: change.subtitle, lines, rescheduledAt: new Date().toISOString(),
+        seats: req.seatIds.map((sid, i) => ({ id: sid, price: req.seatPrices?.[i] ?? 0, gender: req.genders?.[i] ?? "other" })),
+      });
+      saveBookings(list);
+      save(QUOTES_KEY, { ...quotesStore(), [change.quoteId]: { ...q, used: true } });
+      save(HOLDS_KEY, [...holdsStore().filter((h) => h.bookingId !== id), ...req.seatIds.map((seatId, i) => ({ seatId, gender: req.genders?.[i] ?? ("other" as const), busId: req.busId, date: req.date, bookingId: id }))]);
+      if (b.payment === "wallet" && (charge || refund)) walletEntry(charge ? "payment" : "refund", refund - charge, `${charge ? "Bus change" : "Bus change refund"} · ${b.title}`, b.id);
+      mockNotify({ kind: "booking.changed", title: `Bus changed · ${b.title}`, bookingId: b.id, body: `${change.subtitle}.` });
+      return { booking: b, charged: charge, refunded: refund };
+    },
+  },
+
+  tickets: {
+    async get(token) {
+      await wait(250);
+      const b = bookingsStore().find((x) => x.ticketToken === token) ?? fail("Ticket not found.");
+      const line = (k: string) => b.lines.find(([key]) => key === k)?.[1];
+      return {
+        pnr: b.id, status: b.status === "cancelled" ? "cancelled" : b.status === "completed" ? "completed" : "valid",
+        title: b.title, subtitle: b.subtitle, startsAt: b.startsAt,
+        seats: b.status === "cancelled" ? [] : (line(SEATS_LINE) ?? "").split(", ").filter(Boolean),
+        details: (["Date", "Departure", "Arrival"] as const).flatMap((k) => (line(k) ? [[k, line(k)!] as [string, string]] : [])),
+        travellers: (line(TRAVELLERS_LINE) ?? "").split(", ").filter(Boolean).map((n) => n.trim().split(/\s+/)[0]),
+      };
     },
   },
 };

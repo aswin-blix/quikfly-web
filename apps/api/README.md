@@ -71,6 +71,7 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/rides/:id/cancel` | cancel a ride |
 | POST 🔒 | `/rides/:id/share` | `{ token, expiresAt }`: a 24-hour link to follow the ride (same link if one is live) |
 | GET | `/share/:token` | public, no sign-in: the shared ride (first name, driver, vehicle, route, start time, status) |
+| GET | `/tickets/:token` | public, no sign-in: a bus m-ticket (the QR code opens it): `{ pnr, status: valid\|cancelled\|completed, title, subtitle, startsAt, seats, details, travellers }` with first names only |
 | GET | `/buses?from=&to=&date=` | bus search (same search, same results) |
 | GET | `/buses/:id/seats?from=&to=&date=` | seat layout, availability and each seat's price (the bus is regenerated from its route and date) |
 | GET | `/tours` | holiday packages |
@@ -85,6 +86,8 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | GET 🔒 | `/bookings/:id` | one booking (for invoices) |
 | POST 🔒 | `/bookings/:id/cancel` | optional `{ reason }` (a `RIDE_CANCEL_REASONS` key, else 400). Rides: a rider cancelling after the free minutes without a valid (driver-side) reason pays the cancellation fee (% of the fare, capped; settings), kept from a wallet refund or recorded as owed; `cancelReason` and `cancelFee` are stored. Others: cancel; refunds the share the service's cancellation policy allows for the notice given (settings `cancelPolicyBus/Tours/Rent/Group`; rides and bookings without `startsAt` get it all; a `deposit` always comes back in full), to the wallet if paid from it, in the same transaction; `refundAmount` records it; 409 if already cancelled or completed |
 | POST 🔒 | `/bookings/:id/complete` | mark a finished **ride** (called by the website and app when a simulated ride ends; the driver app will own this). Other services: 409, staff close them |
+| POST 🔒 | `/bookings/:id/cancel-seats` | bus tickets: `{ seatIds }` cancels some seats (not all: cancel the booking for that). Their share of what was paid (by seat price) comes back at the bus policy's rate, with the same share of credits and coupon; the seats go back on sale; the Seats and Traveller names lines drop them → the booking |
+| POST 🔒 | `/bookings/:id/reschedule` | bus tickets, once, until `busRescheduleHours` before departure: `{ quoteId, subtitle, lines }` moves the booking to a new bus quote on the same route with one seat per traveller (same genders). The fare difference plus `busRescheduleFee` is paid now (from the wallet for wallet bookings; 400 if short), or the difference comes back → `{ booking, charged, refunded }`. `lines` replaces Date/Departure/Arrival |
 
 ### Partner (`/vendor/*`, QuikFly Partner app; customer login)
 

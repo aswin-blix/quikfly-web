@@ -13,6 +13,7 @@ IconData _icon(String kind) => switch (kind) {
       'booking.cancelled' => Icons.replay,
       'booking.cancelled_by_staff' => Icons.cancel_outlined,
       'booking.deposit_returned' => Icons.account_balance_wallet_outlined,
+      'booking.changed' => Icons.swap_horiz,
       'licence.approved' => Icons.verified_outlined,
       'licence.rejected' => Icons.badge_outlined,
       'ride.reminder' => Icons.schedule,

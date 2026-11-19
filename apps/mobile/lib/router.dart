@@ -7,6 +7,7 @@ import 'screens/account/account_screen.dart';
 import 'screens/account/account_sections.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/bus/bus_screens.dart';
+import 'screens/trips/ticket_screen.dart';
 import 'screens/checkout/checkout_screen.dart';
 import 'screens/checkout/confirmed_screen.dart';
 import 'screens/trips/trip_screen.dart';
@@ -70,6 +71,7 @@ final router = GoRouter(
           from: q['from'] ?? 'Chennai',
           to: q['to'] ?? 'Bengaluru',
           date: parseIso(q['date'], DateTime.now().add(const Duration(days: 1))),
+          changeId: q['change'],
         ));
       },
     ),
@@ -82,6 +84,7 @@ final router = GoRouter(
       builder: (_, s) => ConfirmedScreen(id: s.pathParameters['id']!, booking: s.extra is Booking ? s.extra as Booking : null),
     ),
     GoRoute(path: '/invoice/:id', parentNavigatorKey: _rootKey, builder: (_, s) => InvoiceScreen(id: s.pathParameters['id']!)),
+    GoRoute(path: '/ticket/:id', parentNavigatorKey: _rootKey, builder: (_, s) => TicketScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/trip/:id', parentNavigatorKey: _rootKey, builder: (_, s) => TripScreen(id: s.pathParameters['id']!)),
     GoRoute(path: '/notifications', parentNavigatorKey: _rootKey, builder: (_, _) => const NotificationsScreen()),
     GoRoute(path: '/rent', parentNavigatorKey: _rootKey, builder: (_, _) => const ServiceGate(service: ServiceKey.rent, child: RentScreen())),

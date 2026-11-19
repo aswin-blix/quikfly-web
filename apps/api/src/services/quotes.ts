@@ -11,7 +11,7 @@ import { visibleById } from "./catalog";
 import { getSettings } from "./settings";
 
 /** The price lines and when the trip starts (for the cancellation policy). */
-async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLine[]; startsAt: string }> {
+async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLine[]; startsAt: string; seatPrices?: number[] }> {
   const settings = await getSettings(db);
   const off = switchError(settings, {
     service: req.service,
@@ -31,7 +31,8 @@ async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLi
       if (chosen.some((s) => s!.booked)) throw conflict("One of those seats was just booked. Please pick another.");
       const ruleError = seatRuleError(chosen as Seat[], req.genders ?? []);
       if (ruleError) throw badRequest(ruleError);
-      return { lines: priceBus(chosen as NonNullable<(typeof chosen)[number]>[], settings), startsAt: quoteStartsAt(req, bus.depart) };
+      // Seat prices go with the quote so a seat's share can be refunded later (bus-changes.ts).
+      return { lines: priceBus(chosen as Seat[], settings), startsAt: quoteStartsAt(req, bus.depart), seatPrices: (chosen as Seat[]).map((s) => s.price) };
     }
     case "tours": {
       const tour = await visibleById(db, "tour", req.tourId);
@@ -55,10 +56,10 @@ async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLi
 }
 
 export async function createQuote(db: D1Database, req: QuoteRequest): Promise<PriceQuote> {
-  const { lines, startsAt } = await price(db, req);
+  const { lines, startsAt, seatPrices } = await price(db, req);
   const quote: PriceQuote = { id: uid("QT"), service: req.service, lines, total: sumLines(lines), expiresAt: new Date(Date.now() + QUOTE_TTL_MINUTES * 60_000).toISOString() };
   await db.prepare("INSERT INTO quotes (id, service, request, lines, total, expires_at, starts_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .bind(quote.id, quote.service, JSON.stringify(req), JSON.stringify(lines), quote.total, Date.parse(quote.expiresAt), startsAt).run();
+    .bind(quote.id, quote.service, JSON.stringify(seatPrices ? { ...req, seatPrices } : req), JSON.stringify(lines), quote.total, Date.parse(quote.expiresAt), startsAt).run();
   return quote;
 }
 

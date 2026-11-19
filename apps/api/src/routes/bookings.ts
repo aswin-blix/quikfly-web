@@ -6,6 +6,13 @@ import { badRequest } from "../lib/errors";
 import { jsonBody, oneOf, optStr, str } from "../lib/validate";
 import { requireUser } from "../middleware/auth";
 import { cancelBooking, completeBooking, createBooking, getBooking, listBookings } from "../services/bookings";
+import { cancelSeats, rescheduleBooking } from "../services/bus-changes";
+
+/** Seat ids for a bus change: a short list of short strings. */
+function seatIds(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > 10 || value.some((s) => typeof s !== "string" || !s || s.length > 10)) throw badRequest('"seatIds" must be a list of seat ids.');
+  return value as string[];
+}
 
 function parseLines(value: unknown): [string, string][] {
   const ok = Array.isArray(value) && value.length <= MAX_BOOKING_LINES
@@ -41,4 +48,14 @@ export const bookings = new Hono<AppEnv>()
     const reason = body && body.reason !== undefined ? oneOf(body, "reason", RIDE_CANCEL_REASON_KEYS) : null;
     return c.json(await cancelBooking(c.env.DB, c.var.user.id, c.req.param("id"), reason));
   })
-  .post("/:id/complete", async (c) => c.json(await completeBooking(c.env.DB, c.var.user.id, c.req.param("id"))));
+  .post("/:id/complete", async (c) => c.json(await completeBooking(c.env.DB, c.var.user.id, c.req.param("id"))))
+  // Bus tickets: cancel some seats (their share comes back per the bus policy).
+  .post("/:id/cancel-seats", async (c) => c.json(await cancelSeats(c.env.DB, c.var.user.id, c.req.param("id"), seatIds((await jsonBody(c)).seatIds))))
+  // Bus tickets: move once to another bus or date, priced by a new bus quote; { quoteId, subtitle, lines }.
+  .post("/:id/reschedule", async (c) => {
+    const body = await jsonBody(c);
+    return c.json(await rescheduleBooking(c.env.DB, c.var.user.id, c.req.param("id"), str(body, "quoteId", 40), {
+      subtitle: str(body, "subtitle", 300),
+      lines: parseLines(body.lines ?? []),
+    }));
+  });

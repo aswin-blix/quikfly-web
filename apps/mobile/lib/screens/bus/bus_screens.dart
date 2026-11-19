@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
+import '../../core/bus_changes.dart';
 import '../../core/cancellation.dart';
+import '../../state/catalog.dart';
 import '../../core/format.dart';
 import '../../state/checkout.dart';
 import '../../state/providers.dart';
@@ -242,9 +244,12 @@ final _busesProvider = FutureProvider.family<List<Bus>, (String, String, String)
     (ref, a) => ref.watch(apiProvider).buses(a.$1, a.$2, a.$3));
 
 class BusResultsScreen extends ConsumerStatefulWidget {
-  const BusResultsScreen({super.key, required this.from, required this.to, required this.date});
+  const BusResultsScreen({super.key, required this.from, required this.to, required this.date, this.changeId});
   final String from, to;
   final DateTime date;
+
+  /// Moving this bus booking to another bus or date (from My Trips); null for a new booking.
+  final String? changeId;
   @override
   ConsumerState<BusResultsScreen> createState() => _BusResultsScreenState();
 }
@@ -293,6 +298,11 @@ class _BusResultsScreenState extends ConsumerState<BusResultsScreen> {
   Widget build(BuildContext context) {
     final c = context.qf;
     final buses = ref.watch(_busesProvider((widget.from, widget.to, isoDate(_date))));
+    final change = widget.changeId == null
+        ? null
+        : (ref.watch(bookingsProvider).value ?? const <Booking>[])
+            .where((b) => b.id == widget.changeId && b.service == ServiceKey.bus && b.status == BookingStatus.confirmed)
+            .firstOrNull;
     final today = _today();
     var stripStart = _date.subtract(const Duration(days: dateStripBefore));
     if (stripStart.isBefore(today)) stripStart = today;
@@ -306,6 +316,18 @@ class _BusResultsScreenState extends ConsumerState<BusResultsScreen> {
         ]),
       ),
       body: Column(children: [
+        if (change != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Brand.gutter, 8, Brand.gutter, 0),
+            child: Panel(
+              highlighted: true,
+              child: Text(
+                'Changing booking ${change.id}: pick ${change.seats.length} seat${change.seats.length > 1 ? 's' : ''} on another bus or date. '
+                'The fare difference is settled when you confirm. A ticket can be changed once.',
+                style: TextStyle(color: c.fgSoft, fontSize: 13),
+              ),
+            ),
+          ),
         // Date strip
         SizedBox(
           height: 56,
@@ -366,7 +388,7 @@ class _BusResultsScreenState extends ConsumerState<BusResultsScreen> {
                   for (final b in shown)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: _BusCard(bus: b, from: widget.from, to: widget.to, date: _date),
+                      child: _BusCard(bus: b, from: widget.from, to: widget.to, date: _date, change: change),
                     ),
               ]);
             },
@@ -460,10 +482,11 @@ class _BusResultsScreenState extends ConsumerState<BusResultsScreen> {
 }
 
 class _BusCard extends StatelessWidget {
-  const _BusCard({required this.bus, required this.from, required this.to, required this.date});
+  const _BusCard({required this.bus, required this.from, required this.to, required this.date, this.change});
   final Bus bus;
   final String from, to;
   final DateTime date;
+  final Booking? change;
 
   @override
   Widget build(BuildContext context) {
@@ -472,7 +495,7 @@ class _BusCard extends StatelessWidget {
     final own = b.operator == 'QuikFly Travels';
     return Panel(
       highlighted: own,
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeatScreen(bus: b, from: from, to: to, date: date))),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeatScreen(bus: b, from: from, to: to, date: date, change: change))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(
@@ -536,10 +559,13 @@ String _addMin(String hhmm, int m) {
 }
 
 class SeatScreen extends ConsumerStatefulWidget {
-  const SeatScreen({super.key, required this.bus, required this.from, required this.to, required this.date});
+  const SeatScreen({super.key, required this.bus, required this.from, required this.to, required this.date, this.change});
   final Bus bus;
   final String from, to;
   final DateTime date;
+
+  /// Change mode: the booking moving to this bus (same number of seats and travellers).
+  final Booking? change;
   @override
   ConsumerState<SeatScreen> createState() => _SeatScreenState();
 }
@@ -557,6 +583,7 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
   bool _proceeding = false;
 
   Bus get _bus => widget.bus;
+  int get _maxSeats => widget.change?.seats.length ?? maxSeats;
   List<String> get _drops => ['${widget.to} – Main Bus Stand', '${widget.to} – Ring Road', '${widget.to} – City Center'];
   List<String> get _bTimes => [_bus.depart, _addMin(_bus.depart, 20), _addMin(_bus.depart, 45)];
   List<String> get _dTimes => [for (var i = 0; i < 3; i++) _addMin(_bus.arrive, i * 15)];
@@ -594,11 +621,13 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
     setState(() {
       if (_picked.contains(s.id)) {
         _picked.remove(s.id);
-      } else if (_picked.length >= maxSeats) {
-        toast(context, 'You can book up to $maxSeats seats at a time.');
+      } else if (_picked.length >= _maxSeats) {
+        toast(context, widget.change != null ? 'Pick $_maxSeats seat${_maxSeats > 1 ? 's' : ''}, one for each traveller.' : 'You can book up to $maxSeats seats at a time.');
       } else {
+        // A change keeps the same travellers: each new seat takes the next traveller's gender.
+        final g = s.ladies ? 'female' : widget.change?.seats.elementAtOrNull(_picked.length)?.gender;
         _picked.add(s.id);
-        if (s.ladies) _genders[s.id] = 'female';
+        if (g != null) _genders[s.id] = g;
       }
     });
     _live.update(_allNamed ? _request : null);
@@ -611,24 +640,55 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
     _live.update(_allNamed ? _request : null);
   }
 
+  List<(String, String)> _tripLines(List<Seat> seats) {
+    final pts = _bus.boardingPoints;
+    return [
+      ('Date', shortDate(widget.date)),
+      ('Departure', '${_bTimes[_boarding]} from ${pts.isEmpty ? widget.from : pts[_boarding.clamp(0, pts.length - 1)]}'),
+      ('Arrival', '${_dTimes[_dropping]} at ${_drops[_dropping]}'),
+      ('Seats', seats.map((s) => s.label).join(', ')),
+    ];
+  }
+
+  /// Change mode: show the difference, then move the booking to these seats.
+  Future<void> _change(Booking b, PriceQuote quote, List<Seat> seats) async {
+    final s = ref.read(configProvider).value?.settings ?? const Settings({});
+    final m = rescheduleAmounts(s, b, quote.total);
+    final wallet = b.payment == 'wallet';
+    final ok = await confirm(context,
+        title: 'Change to this bus?',
+        message: 'New total ${inr(quote.total)}${m.fee > 0 ? ' plus a ${inr(m.fee)} change fee' : ''}. '
+            '${m.charge > 0 ? 'You pay ${inr(m.charge)} more${wallet ? ' from your wallet' : ''}.' : m.refund > 0 ? '${inr(m.refund)} ${wallet ? 'comes back to your wallet' : 'is due back to you'}.' : 'Nothing more to pay.'} '
+            'A ticket can be changed once.',
+        yes: 'Change bus');
+    if (!ok || !mounted) return;
+    final r = await ref.read(apiProvider).reschedule(b.id, quote.id, '${_bus.operator} · ${_bus.type}', _tripLines(seats));
+    ref.invalidate(bookingsProvider);
+    await ref.read(sessionProvider.notifier).refresh();
+    if (!mounted) return;
+    toast(context, 'Booking moved to ${_bus.operator}, ${shortDate(widget.date)} ${_bus.depart}. '
+        '${r.charged > 0 ? 'Paid ${inr(r.charged)} more.' : r.refunded > 0 ? '${inr(r.refunded)} ${wallet ? 'is back in your wallet' : 'refund due'}.' : 'Same price.'}');
+    context.go('/trips');
+  }
+
   Future<void> _proceed() async {
     final seats = _seats!.where((s) => _picked.contains(s.id)).toList();
     setState(() => _proceeding = true);
     try {
       // Quotes book once, so checkout gets a fresh one.
       final quote = await _live.fresh(_request!);
-      final pts = _bus.boardingPoints;
+      final change = widget.change;
+      if (change != null) {
+        await _change(change, quote, seats);
+        if (mounted) setState(() => _proceeding = false);
+        return;
+      }
       ref.read(checkoutProvider.notifier).set(CheckoutDraft(
             service: ServiceKey.bus,
             title: '${widget.from} → ${widget.to}',
             subtitle: '${_bus.operator} · ${_bus.type}',
             image: serviceOf(ServiceKey.bus).image,
-            summary: [
-              ('Date', shortDate(widget.date)),
-              ('Departure', '${_bTimes[_boarding]} from ${pts.isEmpty ? widget.from : pts[_boarding.clamp(0, pts.length - 1)]}'),
-              ('Arrival', '${_dTimes[_dropping]} at ${_drops[_dropping]}'),
-              ('Seats', seats.map((s) => s.label).join(', ')),
-            ],
+            summary: _tripLines(seats),
             quote: quote,
             travellers: [for (final s in seats) 'Seat ${s.label} · ${_genderLabel[_genders[s.id]] ?? ''}'],
             policy: cancelPolicyText(ref.read(configProvider).value?.settings ?? const Settings({}), ServiceKey.bus),
@@ -720,7 +780,7 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
                   child: Row(children: [
                     Expanded(
                       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(chosen.isEmpty ? 'Select up to $maxSeats seats' : !_allNamed ? 'Choose who sits in each seat' : 'Seats ${chosen.map((s) => s.label).join(', ')}',
+                        Text(chosen.isEmpty ? (widget.change != null ? 'Select $_maxSeats seat${_maxSeats > 1 ? 's' : ''}' : 'Select up to $maxSeats seats') : !_allNamed ? 'Choose who sits in each seat' : 'Seats ${chosen.map((s) => s.label).join(', ')}',
                             maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
                         if (_live.loading)
                           const Padding(padding: EdgeInsets.only(top: 4), child: SizedBox(width: 80, child: LinearProgressIndicator()))
@@ -733,9 +793,9 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
                     const SizedBox(width: 12),
                     GoldButton(
                       expand: false,
-                      label: 'Proceed',
+                      label: widget.change != null ? 'Change bus' : 'Proceed',
                       loading: _proceeding,
-                      onPressed: chosen.isEmpty || !_allNamed || _live.loading ? null : _proceed,
+                      onPressed: chosen.isEmpty || !_allNamed || _live.loading || (widget.change != null && chosen.length != _maxSeats) ? null : _proceed,
                     ),
                   ]),
                 ),

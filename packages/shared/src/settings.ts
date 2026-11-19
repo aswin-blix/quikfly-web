@@ -77,6 +77,10 @@ export interface Settings {
   gstRent: number;
   gstGroup: number;
 
+  /** Bus bookings can move to another bus or date once, until this many hours before departure, for this fee (₹) plus any fare difference. */
+  busRescheduleHours: number;
+  busRescheduleFee: number;
+
   /** Child price as a percentage of the adult price on holidays. */
   tourChildPercent: number;
 
@@ -185,6 +189,8 @@ export const DEFAULT_SETTINGS: Settings = {
   busFareNonAc: 420,
   busSleeperExtra: 250,
   busLowerDeckExtra: 50,
+  busRescheduleHours: 6,
+  busRescheduleFee: 0,
   gstRides: 5,
   gstBus: 5,
   gstTours: 5,
@@ -277,6 +283,8 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   busFareNonAc: money(10000),
   busSleeperExtra: money(5000),
   busLowerDeckExtra: money(2000),
+  busRescheduleHours: { type: "number", min: 0, max: 72, integer: true },
+  busRescheduleFee: money(1000),
   gstRides: percent,
   gstBus: percent,
   gstTours: percent,

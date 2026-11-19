@@ -15,6 +15,7 @@ const ICON: Record<NotificationKind, typeof Bell> = {
   "booking.cancelled": RotateCcw,
   "booking.cancelled_by_staff": CircleX,
   "booking.deposit_returned": Wallet,
+  "booking.changed": Ticket,
   "licence.approved": BadgeCheck,
   "licence.rejected": IdCard,
   "ride.reminder": CalendarClock,

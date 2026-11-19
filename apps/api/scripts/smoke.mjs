@@ -295,6 +295,61 @@ if (pairSeat) {
     (j) => !j.find((x) => x.id === seatA.id).booked && !j.find((x) => x.id === seatB.id).ladies);
 } else console.log("SKIP  no free seat pair on the first bus");
 
+// Bus changes: cancel one seat of three, move once to another bus, and the public m-ticket.
+{
+  const bp = `/buses?from=Chennai&to=Bengaluru&date=${TRAVEL}`;
+  const list = (await call("GET", bp)).json;
+  const sp = (bus) => `/buses/${encodeURIComponent(bus.id)}/seats?from=Chennai&to=Bengaluru&date=${TRAVEL}`;
+  const freeSeats = async (bus, n) => (await call("GET", sp(bus))).json.filter((x) => !x.booked && !x.ladies).slice(0, n);
+  const three = await freeSeats(list[1], 3);
+  const q3 = (await call("POST", "/quotes", { service: "bus", busId: list[1].id, from: "Chennai", to: "Bengaluru", date: TRAVEL, seatIds: three.map((x) => x.id), genders: ["male", "male", "male"] })).json;
+  const before = await balance();
+  const pay = before >= q3.total ? "wallet" : "upi";
+  const tripLines = [["Date", TRAVEL], ["Departure", "21:00 from Koyambedu"], ["Arrival", "05:30 at Majestic"], ["Seats", three.map((x) => x.id).join(", ")], ["Traveller names", "Asha K, Bala R, Chitra S"]];
+  const bk = await expect("a bus booking carries its seats (with prices) and an m-ticket token", call("POST", "/bookings",
+    { service: "bus", title: "Chennai → Bengaluru", subtitle: "Smoke bus", payment: pay, quoteId: q3.id, lines: tripLines }), 201,
+    (j) => j.seats.length === 3 && j.seats.every((x) => x.price > 0 && x.gender === "male") && /^[0-9a-f]{24}$/.test(j.ticketToken) && j.rescheduledAt === null && j.discount === 0);
+  await expect("GET /tickets/:token works without sign-in", call("GET", `/tickets/${bk.ticketToken}`, null, false), 200,
+    (j) => j.pnr === bk.id && j.status === "valid" && j.seats.length === 3 && j.travellers.join() === "Asha,Bala,Chitra" && j.details.length === 3);
+  await expect("GET /tickets/:token unknown is 404", call("GET", "/tickets/nope", null, false), 404);
+  await expect("cancelling every seat this way is refused", call("POST", `/bookings/${bk.id}/cancel-seats`, { seatIds: three.map((x) => x.id) }), 400, (j) => /whole booking/.test(j.message));
+  await expect("a seat that isn't on the booking is refused", call("POST", `/bookings/${bk.id}/cancel-seats`, { seatIds: ["Z9"] }), 400);
+  const mid = three[1];
+  const sum = bk.seats.reduce((a, x) => a + x.price, 0);
+  const share = Math.floor((bk.amount * bk.seats.find((x) => x.id === mid.id).price) / sum);
+  const cut = await expect("POST /bookings/:id/cancel-seats refunds that seat's share", call("POST", `/bookings/${bk.id}/cancel-seats`, { seatIds: [mid.id] }), 200,
+    (j) => j.seats.length === 2 && j.amount === bk.amount - share && j.status === "confirmed"
+      && j.lines.find(([k]) => k === "Seats")[1] === `${three[0].id}, ${three[2].id}` && j.lines.find(([k]) => k === "Traveller names")[1] === "Asha K, Chitra S"
+      && /back to wallet|refund due/.test(j.lines.find(([k]) => k === "Seats cancelled")[1]));
+  if (pay === "wallet") check("the seat's share is back in the wallet", (await balance()) === before - bk.amount + share);
+  await expect("the cancelled seat is on sale again", call("GET", sp(list[1])), 200, (j) => !j.find((x) => x.id === mid.id).booked && j.find((x) => x.id === three[0].id).booked);
+  await expect("the m-ticket shows the two seats left", call("GET", `/tickets/${bk.ticketToken}`, null, false), 200, (j) => j.seats.length === 2 && j.travellers.join() === "Asha,Chitra");
+
+  // Reschedule: same route, same travellers, another bus.
+  const two = await freeSeats(list[2], 2);
+  const one = (await call("POST", "/quotes", { service: "bus", busId: list[2].id, from: "Chennai", to: "Bengaluru", date: TRAVEL, seatIds: [two[0].id], genders: ["male"] })).json;
+  await expect("a change needs one seat per traveller", call("POST", `/bookings/${bk.id}/reschedule`, { quoteId: one.id, subtitle: "x", lines: [] }), 400, (j) => /Pick 2 seats/.test(j.message));
+  const qNew = (await call("POST", "/quotes", { service: "bus", busId: list[2].id, from: "Chennai", to: "Bengaluru", date: TRAVEL, seatIds: two.map((x) => x.id), genders: ["male", "male"] })).json;
+  const newAmount = qNew.total + cfg.settings.busRescheduleFee;
+  const bal1 = await balance();
+  const moved = await expect("POST /bookings/:id/reschedule moves it and settles the difference", call("POST", `/bookings/${bk.id}/reschedule`,
+    { quoteId: qNew.id, subtitle: "Smoke bus 2", lines: [["Date", TRAVEL], ["Departure", "22:15 from Koyambedu"], ["Seats", "ignored"]] }), 200,
+    (j) => j.booking.rescheduledAt && j.booking.amount === newAmount && j.booking.subtitle === "Smoke bus 2"
+      && j.booking.seats.map((x) => x.id).join() === two.map((x) => x.id).join()
+      && j.charged === Math.max(0, newAmount - cut.amount) && j.refunded === Math.max(0, cut.amount - newAmount)
+      && j.booking.lines.find(([k]) => k === "Departure")[1] === "22:15 from Koyambedu" && j.booking.lines.find(([k]) => k === "Seats")[1] === two.map((x) => x.id).join(", ")
+      && !!j.booking.lines.find(([k]) => k === "Changed from"));
+  if (pay === "wallet" && moved) check("the wallet settles the change", (await balance()) === bal1 + moved.refunded - moved.charged);
+  await expect("the old seats are free and the new ones held", call("GET", sp(list[1])), 200, (j) => !j.find((x) => x.id === three[0].id).booked);
+  await expect("the new bus holds the seats", call("GET", sp(list[2])), 200, (j) => two.every((s) => j.find((x) => x.id === s.id).booked));
+  const qAgain = (await call("POST", "/quotes", { service: "bus", busId: list[3].id, from: "Chennai", to: "Bengaluru", date: TRAVEL, seatIds: (await freeSeats(list[3], 2)).map((x) => x.id), genders: ["male", "male"] })).json;
+  await expect("a ticket changes only once", call("POST", `/bookings/${bk.id}/reschedule`, { quoteId: qAgain.id, subtitle: "x", lines: [] }), 409, (j) => /already changed/.test(j.message));
+  await expect("another customer can't change it", call("POST", `/bookings/${bk.id}/cancel-seats`, { seatIds: [two[0].id] }, false), 401);
+  await call("POST", `/bookings/${bk.id}/cancel`);
+  await expect("a cancelled ticket shows as cancelled", call("GET", `/tickets/${bk.ticketToken}`, null, false), 200, (j) => j.status === "cancelled" && j.seats.length === 0);
+  await expect("cancelling frees the new seats", call("GET", sp(list[2])), 200, (j) => two.every((s) => !j.find((x) => x.id === s.id).booked));
+}
+
 await expect("unknown route", call("GET", "/nope"), 404, (j) => !!j.message);
 
 // ── Accounts ──────────────────────────────────────────────

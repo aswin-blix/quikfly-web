@@ -3,7 +3,7 @@ import type {
   ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
   WalletTransaction, AppNotification, CreditSummary,
 } from "@quikfly/shared";
-import type { RideCancelReason } from "@quikfly/shared";
+import type { PublicTicket, RideCancelReason } from "@quikfly/shared";
 
 /**
  * The single contract between the UI and the backend.
@@ -141,5 +141,13 @@ export interface QuikflyApi {
     cancel(id: string, reason?: RideCancelReason): Promise<Booking>;
     /** POST /bookings/:id/complete: marks a finished trip (stand-in for the driver app). */
     complete(id: string): Promise<Booking>;
+    /** POST /bookings/:id/cancel-seats: bus tickets cancel some seats; their share comes back per the bus policy. */
+    cancelSeats(id: string, seatIds: string[]): Promise<Booking>;
+    /** POST /bookings/:id/reschedule: bus tickets move once to a new bus quote on the same route; the difference is settled. */
+    reschedule(id: string, change: { quoteId: string; subtitle: string; lines: [string, string][] }): Promise<{ booking: Booking; charged: number; refunded: number }>;
+  };
+  tickets: {
+    /** GET /tickets/:token (public): what a bus m-ticket's QR code shows. */
+    get(token: string): Promise<PublicTicket>;
   };
 }

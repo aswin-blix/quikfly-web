@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
+import '../../core/bus_changes.dart';
 import '../../core/cancellation.dart';
 import '../../core/format.dart';
 import '../../core/services.dart';
@@ -167,11 +168,80 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     if (mounted) setState(() => _busy = false);
   }
 
+  /// Bus tickets: pick some seats to cancel (the others stay booked), with the refund shown first.
+  Future<void> _cancelSeats() async {
+    final b = widget.booking;
+    final settings = ref.read(configProvider).value?.settings ?? const Settings({});
+    final picked = await showModalBottomSheet<List<String>>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        final chosen = <String>[];
+        return StatefulBuilder(builder: (ctx, setSheet) {
+          final c = ctx.qf;
+          final err = chosen.isEmpty ? null : seatCancelError(b, chosen);
+          final (refund, percent) = chosen.isEmpty ? (0, 100) : seatCancelRefund(settings, b, chosen);
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(Brand.gutter, 0, Brand.gutter, Brand.gutter),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Text('Cancel some seats', style: Theme.of(ctx).textTheme.titleLarge),
+                const SizedBox(height: 4),
+                Text('Which seats? The others stay booked.', style: TextStyle(color: c.fgMuted)),
+                const SizedBox(height: 12),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final s in b.seats)
+                    FilterChip(
+                      label: Text(s.id),
+                      selected: chosen.contains(s.id),
+                      onSelected: (on) => setSheet(() => on ? chosen.add(s.id) : chosen.remove(s.id)),
+                    ),
+                ]),
+                const SizedBox(height: 12),
+                if (err != null)
+                  Text(err, style: TextStyle(color: c.warning, fontSize: 13))
+                else if (chosen.isNotEmpty)
+                  Text(
+                    refund > 0
+                        ? '${inr(refund)}${percent < 100 ? ' ($percent%)' : ''} ${b.payment == 'wallet' ? 'comes back to your wallet' : 'is due back'}.'
+                        : "It's too close to departure for a refund.",
+                    style: TextStyle(color: c.fgSoft),
+                  ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(foregroundColor: c.danger, side: BorderSide(color: c.danger.withValues(alpha: 0.5))),
+                  onPressed: chosen.isEmpty || err != null ? null : () => Navigator.pop(ctx, [...chosen]),
+                  child: Text('Cancel ${chosen.isEmpty ? '' : '${chosen.length} '}seat${chosen.length == 1 ? '' : 's'}'),
+                ),
+              ]),
+            ),
+          );
+        });
+      },
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(apiProvider).cancelSeats(b.id, picked);
+      final (refund, _) = seatCancelRefund(settings, b, picked);
+      ref.invalidate(bookingsProvider);
+      await ref.read(sessionProvider.notifier).refresh();
+      if (mounted) {
+        toast(context, 'Seat${picked.length > 1 ? 's' : ''} ${picked.join(', ')} cancelled. '
+            '${refund == 0 ? 'No refund under the cancellation policy.' : b.payment == 'wallet' ? '${inr(refund)} refunded to your wallet.' : 'Refund due: ${inr(refund)}.'}');
+      }
+    } catch (e) {
+      if (mounted) toast(context, errorText(e));
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.qf;
     final b = widget.booking;
     final s = serviceOf(b.service);
+    final settings = ref.watch(configProvider).value?.settings ?? const Settings({});
     final statusColor = switch (b.status) {
       BookingStatus.cancelled => c.danger,
       BookingStatus.completed => c.fgMuted,
@@ -266,6 +336,39 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                   ),
                 ],
               ]),
+              // Bus tickets: m-ticket, change to another bus (once), cancel some seats.
+              if (b.service == ServiceKey.bus && b.status == BookingStatus.confirmed) ...[
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  if (b.ticketToken != null)
+                    OutlinedButton.icon(onPressed: () => context.push('/ticket/${b.id}'), icon: const Icon(Icons.qr_code_2, size: 18), label: const Text('m-Ticket')),
+                  if (rescheduleError(settings, b) == null)
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        final parts = b.title.split(' → ');
+                        context.push(Uri(path: '/bus/search', queryParameters: {
+                          'from': parts.first,
+                          'to': parts.length > 1 ? parts[1] : '',
+                          'date': isoDate(b.startsAt!),
+                          'change': b.id,
+                        }).toString());
+                      },
+                      icon: const Icon(Icons.swap_horiz, size: 18),
+                      label: const Text('Change bus'),
+                    ),
+                  if (b.seats.length > 1)
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(foregroundColor: c.danger),
+                      onPressed: _busy ? null : _cancelSeats,
+                      child: const Text('Cancel some seats'),
+                    ),
+                ]),
+                if (b.rescheduledAt != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text('Changed to this bus on ${dateTime(b.rescheduledAt!)}. A ticket can be changed once.', style: TextStyle(color: c.fgSubtle, fontSize: 12)),
+                  ),
+              ],
             ]),
           ),
         ),

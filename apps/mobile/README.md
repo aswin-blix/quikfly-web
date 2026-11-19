@@ -59,7 +59,7 @@ lib/
   api/                 api.dart (one method per endpoint, ApiException) · models.dart (mirrors packages/shared types + Rules)
   state/               providers.dart (api, /config, session, theme mode) · catalog.dart (tours, cars, vehicles, bookings)
   widgets/             ui.dart (Panel, GoldButton, ErrorBox, EmptyState, Skeleton, Pill, KeyValue, toast, confirm, ScreenList) · art.dart · logo.dart · offer_card.dart
-  screens/             auth, home, offers, trips, account (hub + account_sections, notifications inbox opened from the Home bell), help, ride (+ place search),
+  screens/             auth, home, offers, trips (+ bus m-ticket with QR), account (hub + account_sections, notifications inbox opened from the Home bell), help, ride (+ place search),
                        bus, holidays, checkout (checkout, confirmed, invoice), rent (cars, group travel), not_found
   state/checkout.dart  CheckoutDraft (what a service screen hands to checkout) + LiveQuote (debounced POST /quotes)
   widgets/             also city_map.dart (painted demo map), safety_sheet.dart, licence_panel.dart, counter.dart

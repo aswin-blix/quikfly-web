@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quikfly/api/api.dart';
 import 'package:quikfly/api/models.dart';
 import 'package:quikfly/core/env.dart';
+import 'package:quikfly/core/format.dart';
 
 void main() {
   final api = QuikFlyApi(baseUrl: apiUrl);
@@ -180,6 +181,36 @@ void main() {
     final at = '${day.toIso8601String().substring(0, 10)}T${peak.toString().padLeft(2, '0')}:00';
     final quotes = await api.rideQuotes(ServiceKey.car, config.places[0].id, config.places[1].id, scheduledFor: at);
     expect(quotes.every((q) => q.surge == 1 && q.passSaving > 0), isTrue);
+  });
+
+  test('bus changes: seats, m-ticket, cancel a seat, change bus', () async {
+    // Every booking parses the new fields (production: parse only).
+    for (final b in await api.bookings()) {
+      expect(b.seats.every((s) => s.id.isNotEmpty), isTrue);
+      if (b.service == ServiceKey.bus && b.status == BookingStatus.confirmed) expect(b.ticketToken, isNotNull);
+    }
+    if (apiUrl.contains('workers.dev')) return;
+    final date = isoDate(DateTime.now().add(const Duration(days: 45)));
+    final buses = await api.buses('Chennai', 'Bengaluru', date);
+    Future<List<Seat>> free(Bus bus, int n) async =>
+        (await api.seats(bus.id, 'Chennai', 'Bengaluru', date)).where((s) => !s.booked && !s.ladies).take(n).toList();
+    final three = await free(buses[4], 3);
+    final q = await api.quote({'service': 'bus', 'busId': buses[4].id, 'from': 'Chennai', 'to': 'Bengaluru', 'date': date,
+      'seatIds': [for (final s in three) s.id], 'genders': ['male', 'male', 'male']});
+    final booked = await api.createBooking(service: ServiceKey.bus, title: 'Chennai → Bengaluru', subtitle: 'Contract bus', payment: PaymentMethod.upi, quoteId: q.id,
+        lines: [('Date', date), ('Seats', three.map((s) => s.id).join(', ')), ('Traveller names', 'Arun A, Bala B, Chandra C')]);
+    expect(booked.seats.length, 3);
+    expect(booked.ticketToken, isNotNull);
+    final cut = await api.cancelSeats(booked.id, [three[1].id]);
+    expect(cut.seats.map((s) => s.id), [three[0].id, three[2].id]);
+    expect(cut.line('Traveller names'), 'Arun A, Chandra C');
+    final two = await free(buses[5], 2);
+    final q2 = await api.quote({'service': 'bus', 'busId': buses[5].id, 'from': 'Chennai', 'to': 'Bengaluru', 'date': date,
+      'seatIds': [for (final s in two) s.id], 'genders': ['male', 'male']});
+    final moved = await api.reschedule(booked.id, q2.id, 'Contract bus 2', [('Date', date)]);
+    expect(moved.booking.rescheduledAt, isNotNull);
+    expect(moved.booking.seats.map((s) => s.id), [for (final s in two) s.id]);
+    await api.cancelBooking(booked.id);
   });
 
   test('credits summary parses', () async {
