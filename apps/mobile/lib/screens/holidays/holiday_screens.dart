@@ -17,7 +17,7 @@ import '../../widgets/ui.dart';
 import '../bus/bus_screens.dart' show DateField;
 import '../home/home_screen.dart' show TourTile;
 
-const _themes = [('all', 'All'), ('beach', 'Beaches'), ('hills', 'Hill stations'), ('international', 'International'), ('weekend', 'Weekend'), ('heritage', 'Heritage')];
+const _themes = [('all', 'All'), ('beach', 'Beaches'), ('hills', 'Hill stations'), ('spiritual', 'Spiritual'), ('women', 'Women only'), ('seniors', 'Seniors'), ('international', 'International'), ('weekend', 'Weekend'), ('heritage', 'Heritage')];
 
 /// Holidays can start this many days from today at the earliest.
 const holidayLeadDays = 3;
@@ -178,6 +178,17 @@ class _TourCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(child: Text(h, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.fgSoft, fontSize: 13))),
                 ]),
+              const SizedBox(height: 4),
+              Builder(builder: (_) {
+                if (t.departures.isEmpty) return Text('Private trip · start any date', style: TextStyle(color: c.fgSubtle, fontSize: 12));
+                final next = t.departures.firstWhere((d) => !d.soldOut, orElse: () => t.departures.first);
+                return Text(
+                  'Group departure ${shortDate(next.day)} from ${next.fromCity} · ${next.soldOut ? 'Sold out' : '${next.seatsLeft} seats left'}${next.filling ? ' · Filling fast' : ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: next.soldOut ? c.danger : next.filling ? c.warning : c.fgSoft, fontSize: 12),
+                );
+              }),
               const Spacer(),
               Row(children: [
                 Text('View details', style: TextStyle(color: c.accent, fontWeight: FontWeight.w600)),
@@ -210,11 +221,26 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
   DateTime _date = DateTime.now().add(const Duration(days: holidayDefaultDays));
   int _adults = 2, _kids = 0;
   int _tab = 0;
+  String? _depId;
+
+  /// The chosen group departure (or the first with room), when the package has departures.
+  DepartureView? _dep(TourPackage t) {
+    if (t.departures.isEmpty) return null;
+    final n = _adults + _kids;
+    return t.departures.where((d) => d.id == _depId && d.seatsLeft >= n).firstOrNull ?? t.departures.where((d) => d.seatsLeft >= n).firstOrNull;
+  }
   late final LiveQuote _live = LiveQuote(ref.read(apiProvider))..addListener(() => setState(() {}));
   bool _booking = false;
   Settings get _settings => ref.read(configProvider).value?.settings ?? const Settings({});
 
-  Map<String, Object?> _request(TourPackage t) => {'service': 'tours', 'tourId': t.id, 'adults': _adults, 'kids': _kids, 'start': isoDate(_date)};
+  Map<String, Object?> _request(TourPackage t) {
+    final dep = _dep(t);
+    return {
+      'service': 'tours', 'tourId': t.id, 'adults': _adults, 'kids': _kids,
+      'start': dep?.date ?? isoDate(_date),
+      if (dep != null) 'departureId': dep.id,
+    };
+  }
 
   @override
   void dispose() {
@@ -231,7 +257,7 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
             title: t.title,
             subtitle: '${t.location} · ${t.days}D/${t.nights}N',
             summary: [
-              ('Start date', shortDate(_date)),
+              if (_dep(t) case final dep?) ('Departure', '${shortDate(dep.day)} from ${dep.fromCity}') else ('Start date', shortDate(_date)),
               ('Travellers', '$_adults adult${_adults > 1 ? 's' : ''}${_kids > 0 ? ', $_kids child${_kids > 1 ? 'ren' : ''}' : ''}'),
               ('Hotels', '${t.hotelStars}★ · ${t.meals}'),
               ('Includes', t.includes.join(', ')),
@@ -342,18 +368,52 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
                 Panel(
                   highlighted: true,
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Text('Starting from', style: TextStyle(color: c.fgSubtle, fontSize: 12)),
+                    Text(t.departures.isEmpty ? 'Starting from' : 'Per person on this departure', style: TextStyle(color: c.fgSubtle, fontSize: 12)),
                     Text.rich(TextSpan(children: [
-                      TextSpan(text: inr(t.price), style: TextStyle(color: c.accent, fontSize: 26, fontWeight: FontWeight.w700)),
+                      TextSpan(text: inr(_dep(t)?.price ?? t.price), style: TextStyle(color: c.accent, fontSize: 26, fontWeight: FontWeight.w700)),
                       TextSpan(text: ' /person', style: TextStyle(color: c.fgMuted)),
                     ])),
                     const SizedBox(height: 12),
-                    DateField(
-                      label: 'Start date',
-                      date: _date,
-                      first: DateTime.now().add(const Duration(days: holidayLeadDays)),
-                      onChanged: (d) => setState(() => _date = d),
-                    ),
+                    if (t.departures.isEmpty)
+                      DateField(
+                        label: 'Start date',
+                        date: _date,
+                        first: DateTime.now().add(const Duration(days: holidayLeadDays)),
+                        onChanged: (d) => setState(() => _date = d),
+                      )
+                    else ...[
+                      Text('GROUP DEPARTURE', style: TextStyle(color: c.fgMuted, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1)),
+                      const SizedBox(height: 6),
+                      RadioGroup<String>(
+                        groupValue: _dep(t)?.id,
+                        onChanged: (v) => setState(() => _depId = v),
+                        child: Column(children: [
+                          for (final d in t.departures)
+                            Builder(builder: (_) {
+                              final full = d.seatsLeft < _adults + _kids;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Opacity(
+                                  opacity: full ? 0.5 : 1,
+                                  child: RadioListTile<String>(
+                                    value: d.id,
+                                    enabled: !full,
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: Text('${shortDate(d.day)} · from ${d.fromCity}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                    subtitle: Text(
+                                      '${d.soldOut ? 'Sold out' : '${d.seatsLeft} of ${d.seats} seats left'}${d.filling ? ' · Filling fast' : ''}${d.price != t.price ? ' · ${inr(d.price)}' : ''}',
+                                      style: TextStyle(color: d.soldOut ? c.danger : d.filling ? c.warning : c.fgMuted, fontSize: 12),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                        ]),
+                      ),
+                      if (_dep(t) == null)
+                        Text('No departure has seats for ${_adults + _kids} travellers. Try fewer travellers.', style: TextStyle(color: c.warning, fontSize: 12)),
+                    ],
                     const SizedBox(height: 8),
                     Counter(label: 'Adults', value: _adults, min: 1, max: 10, onChanged: (v) => setState(() => _adults = v)),
                     Counter(label: 'Children (5–11)', value: _kids, min: 0, max: 8, onChanged: (v) => setState(() => _kids = v)),
@@ -368,7 +428,7 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
                     ]),
                     if (_live.error != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(_live.error!, style: TextStyle(color: c.danger))),
                     const SizedBox(height: 12),
-                    GoldButton(label: 'Book now', loading: _booking, onPressed: _live.loading ? null : () => _book(t)),
+                    GoldButton(label: 'Book now', loading: _booking, onPressed: _live.loading || (t.departures.isNotEmpty && _dep(t) == null) ? null : () => _book(t)),
                     const SizedBox(height: 6),
                     Text('Demo: no payment is taken',
                         textAlign: TextAlign.center, style: TextStyle(color: c.fgSubtle, fontSize: 11.5)),

@@ -320,6 +320,21 @@ class Seat {
       j['booked'] == true, j['ladies'] == true, _int(j['price']), bookedGender: j['bookedGender'] as String?);
 }
 
+/// A holiday group departure as customers see it (packages/shared DepartureView).
+class DepartureView {
+  const DepartureView(this.id, this.date, this.fromCity, this.seats, this.seatsLeft, this.price);
+  final String id, date, fromCity;
+  final int seats, seatsLeft, price;
+
+  /// "Filling fast" with this many seats or fewer left (DEPARTURE_FILLING_SEATS).
+  static const fillingSeats = 5;
+  bool get soldOut => seatsLeft <= 0;
+  bool get filling => !soldOut && seatsLeft <= fillingSeats;
+  DateTime get day => DateTime.parse(date);
+  factory DepartureView.fromJson(Json j) =>
+      DepartureView('${j['id']}', '${j['date']}', '${j['fromCity']}', _int(j['seats']), _int(j['seatsLeft']), _int(j['price']));
+}
+
 class TourPackage {
   const TourPackage({
     required this.id,
@@ -338,12 +353,16 @@ class TourPackage {
     required this.includes,
     required this.itinerary,
     required this.hue,
+    this.departures = const [],
   });
   final String id, slug, meals, title, location;
   final List<String> themes, highlights, includes, itinerary;
   final int hotelStars, days, nights, price;
   final double rating, hue;
   final String? tag;
+
+  /// Upcoming group departures with seats left (from the API); empty = start any date.
+  final List<DepartureView> departures;
   factory TourPackage.fromJson(Json j) => TourPackage(
         id: j['id'] as String,
         slug: '${j['slug']}',
@@ -360,6 +379,7 @@ class TourPackage {
         highlights: _strings(j['highlights']),
         includes: _strings(j['includes']),
         itinerary: _strings(j['itinerary']),
+        departures: ((j['departures'] as List?) ?? const []).map((d) => DepartureView.fromJson(d as Json)).toList(),
         hue: _num(j['hue']),
       );
 }

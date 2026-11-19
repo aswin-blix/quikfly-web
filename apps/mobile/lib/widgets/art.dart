@@ -17,6 +17,9 @@ IconData themeIcon(String theme) => switch (theme) {
       'international' => Icons.flight,
       'weekend' => Icons.weekend,
       'heritage' => Icons.account_balance,
+      'spiritual' => Icons.temple_hindu,
+      'women' => Icons.woman,
+      'seniors' => Icons.elderly,
       _ => Icons.explore,
     };
 

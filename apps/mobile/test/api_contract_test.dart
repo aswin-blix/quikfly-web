@@ -64,11 +64,20 @@ void main() {
     final tours = await api.tours();
     expect(tours, isNotEmpty);
     final travel = DateTime.now().add(const Duration(days: 30)).toIso8601String().substring(0, 10);
-    final q = await api.quote({'service': 'tours', 'tourId': tours.first.id, 'adults': 2, 'kids': 0, 'start': travel});
+    // A package booked by start date; group tours (with departures) are booked by departure, checked below.
+    final anyDate = tours.firstWhere((t) => t.departures.isEmpty, orElse: () => tours.first);
+    final group = tours.where((t) => t.departures.any((d) => d.seatsLeft >= 1)).firstOrNull;
+    if (group != null) {
+      final dep = group.departures.firstWhere((d) => d.seatsLeft >= 1);
+      expect(dep.seatsLeft <= dep.seats, isTrue);
+      final dq = await api.quote({'service': 'tours', 'tourId': group.id, 'adults': 1, 'kids': 0, 'start': travel, 'departureId': dep.id});
+      expect(dq.lines.first.amount, dep.price);
+    }
+    final q = await api.quote({'service': 'tours', 'tourId': anyDate.id, 'adults': 2, 'kids': 0, 'start': travel});
     expect(q.total, greaterThan(0));
     expect(q.lines, isNotEmpty);
-    final tour = await api.tour(tours.first.slug);
-    expect(tour.id, tours.first.id);
+    final tour = await api.tour(anyDate.slug);
+    expect(tour.id, anyDate.id);
     // A coupon is checked against the quote, then the booking is charged the quote (minus the coupon).
     final code = config.offers.where((o) => o.service == 'tours' || o.service == 'all').firstOrNull?.code;
     var expected = q.total;
