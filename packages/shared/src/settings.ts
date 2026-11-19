@@ -160,6 +160,12 @@ export interface Settings {
   companyGstin: string;
   companyEmail: string;
   companyPhone: string;
+  /** Privacy (DPDP): the Grievance Officer published on the privacy page. Placeholder values until the client names one. */
+  privacyOfficerName: string;
+  privacyOfficerEmail: string;
+  privacyOfficerPhone: string;
+  /** Accounts unused this many days are closed with a notice and erased after the deletion grace period; 0 = never. */
+  inactivityEraseDays: number;
   /** QuikFly's 24×7 safety line, shown in the SOS sheet. */
   safetyLine: string;
   /** Support WhatsApp number for the free "Chat on WhatsApp" link; empty hides the link. */
@@ -251,9 +257,16 @@ export const DEFAULT_SETTINGS: Settings = {
   companyGstin: "33AAACQ0000A1Z5",
   companyEmail: "support@quikfly.in",
   companyPhone: "1800 123 4567",
+  privacyOfficerName: "QuikFly Grievance Officer",
+  privacyOfficerEmail: "privacy@quikfly.in",
+  privacyOfficerPhone: "044 4000 1234",
+  inactivityEraseDays: 1095,
   safetyLine: "1800 123 4567",
   whatsappNumber: "",
 };
+
+/** The shortest inactivity period allowed (other than 0 = off). */
+export const INACTIVITY_MIN_DAYS = 180;
 
 type Rule =
   | { type: "boolean" }
@@ -351,6 +364,10 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   companyGstin: { type: "text", max: 15, pattern: /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, hint: "A 15-character GSTIN, e.g. 33ABCDE1234F1Z5." },
   companyEmail: { type: "text", max: 120, pattern: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, hint: "A valid email address." },
   companyPhone: { type: "text", min: 6, max: 30 },
+  privacyOfficerName: { type: "text", min: 2, max: 80 },
+  privacyOfficerEmail: { type: "text", max: 120, pattern: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, hint: "A valid email address." },
+  privacyOfficerPhone: { type: "text", min: 6, max: 30 },
+  inactivityEraseDays: { type: "number", min: 0, max: 3650, integer: true },
   safetyLine: { type: "text", min: 3, max: 30 },
   whatsappNumber: { type: "text", max: 20, pattern: /^$|^\+?[\d\s-]{10,20}$/, hint: "A mobile number with WhatsApp, e.g. +91 98400 12345; empty hides the link." },
 };
@@ -364,6 +381,7 @@ export function checkSetting(key: string, value: unknown): string | null {
     if (typeof value !== "number" || !Number.isFinite(value)) return `"${key}" must be a number.`;
     if (rule.integer && !Number.isInteger(value)) return `"${key}" must be a whole number.`;
     if (value < rule.min || value > rule.max) return `"${key}" must be between ${rule.min} and ${rule.max}.`;
+    if (key === "inactivityEraseDays" && value > 0 && value < INACTIVITY_MIN_DAYS) return `Use 0 (never) or at least ${INACTIVITY_MIN_DAYS} days, so active customers aren't closed by mistake.`;
     return null;
   }
   if (typeof value !== "string") return `"${key}" must be text.`;

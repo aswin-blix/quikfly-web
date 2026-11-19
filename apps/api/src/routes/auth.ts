@@ -12,7 +12,7 @@ export const auth = new Hono<AppEnv>()
   })
   .post("/verify", async (c) => {
     const body = await jsonBody(c);
-    return c.json(await verifyOtp(c.env.DB, c.env.DEMO_OTP, str(body, "phone", 20), str(body, "otp", 10)));
+    return c.json(await verifyOtp(c.env.DB, c.env.DOCS, c.env.DEMO_OTP, str(body, "phone", 20), str(body, "otp", 10)));
   })
   // The signed-in user, e.g. to refresh the wallet balance after a booking.
   .get("/me", requireUser, (c) => c.json(c.var.user))

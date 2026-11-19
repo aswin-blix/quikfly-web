@@ -1,8 +1,9 @@
 import { DELETION_GRACE_DAYS, type AutoShareMode, type AuthResult, type Gender, type LicenceStatus, type User } from "@quikfly/shared";
-import { DEFAULT_USER_NAME, PHONE_COUNTRY_CODE, PHONE_DIGITS, SESSION_TTL_DAYS } from "../config";
+import { ACTIVITY_TOUCH_HOURS, DEFAULT_USER_NAME, PHONE_COUNTRY_CODE, PHONE_DIGITS, SESSION_TTL_DAYS } from "../config";
 import { badRequest } from "../lib/errors";
 import { randomToken, sha256, uid } from "../lib/random";
 import { getSettings } from "./settings";
+import { eraseAccounts } from "./privacy";
 import { CREDIT_BALANCE_COLUMN } from "./credits";
 import { PASS_UNTIL_COLUMN } from "./pass";
 import { txnStatement } from "./wallet";
@@ -15,6 +16,7 @@ export interface UserRow {
   licence_status: LicenceStatus; licence_note: string | null; licence_reviewed_at: string | null;
   gstin: string | null; gst_name: string | null; auto_share_night: number; deleted_at: string | null;
   auto_share_mode: AutoShareMode | null; ride_pin: string | null;
+  privacy_version: string | null; last_active_at: string | null; erased_at: string | null;
   /** Computed by CREDIT_BALANCE_COLUMN; absent when a query didn't ask for it. */
   credit_balance?: number;
   /** Computed by PASS_UNTIL_COLUMN; absent when a query didn't ask for it. */
@@ -39,6 +41,7 @@ export const toUser = (r: UserRow): User => ({
   autoShareNightRides: (r.auto_share_mode ?? (r.auto_share_night ? "night" : "off")) !== "off",
   autoShareRides: r.auto_share_mode ?? (r.auto_share_night ? "night" : "off"),
   ridePin: r.ride_pin ?? null,
+  privacyConsent: r.privacy_version ?? null,
 });
 
 /** Accepts "9876543210", "+91 98765 43210" and similar; returns "+91 9876543210". */
@@ -64,7 +67,7 @@ async function createUser(db: D1Database, phone: string) {
   for (let attempt = 0; ; attempt++) {
     try {
       await db.batch([
-        db.prepare("INSERT INTO users (id, phone, name, wallet_balance, created_at, referral_code) VALUES (?, ?, ?, ?, ?, ?)")
+        db.prepare("INSERT INTO users (id, phone, name, wallet_balance, created_at, referral_code, last_active_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?5)")
           .bind(id, phone, DEFAULT_USER_NAME, credit, new Date().toISOString(), referralCode()),
         ...(credit ? [txnStatement(db, { userId: id, kind: "welcome", amount: credit, note: "Welcome credit" })] : []),
       ]);
@@ -77,7 +80,7 @@ async function createUser(db: D1Database, phone: string) {
 }
 
 /** Checks the code, creates or restores the account, and opens a session. */
-export async function verifyOtp(db: D1Database, demoOtp: string, phoneInput: string, otp: string): Promise<AuthResult> {
+export async function verifyOtp(db: D1Database, docs: R2Bucket | undefined, demoOtp: string, phoneInput: string, otp: string): Promise<AuthResult> {
   const phone = normalisePhone(phoneInput);
   checkOtp(demoOtp, otp);
 
@@ -90,16 +93,19 @@ export async function verifyOtp(db: D1Database, demoOtp: string, phoneInput: str
       row.deleted_at = null;
       restored = true;
     } else {
-      // Grace period over: erase the old account (rows cascade) and start fresh.
-      await db.prepare("DELETE FROM users WHERE id = ?").bind(row.id).run();
+      // Grace period over (the cron sweep hasn't reached it yet): erase it now and start fresh.
+      await eraseAccounts(db, docs, [row.id]);
       row = null;
     }
   }
   row ??= await createUser(db, phone);
 
   const token = randomToken();
-  await db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
-    .bind(await sha256(token), row.id, Date.now() + SESSION_TTL_DAYS * 86_400_000).run();
+  await db.batch([
+    db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
+      .bind(await sha256(token), row.id, Date.now() + SESSION_TTL_DAYS * 86_400_000),
+    db.prepare("UPDATE users SET last_active_at = ? WHERE id = ?").bind(new Date().toISOString(), row.id),
+  ]);
   return { token, user: toUser(row), isNew: !row.profile_completed_at, restored };
 }
 
@@ -112,5 +118,10 @@ export async function userForToken(db: D1Database, token: string): Promise<User 
   const row = await db.prepare(
     `SELECT u.*, ${CREDIT_BALANCE_COLUMN}, ${PASS_UNTIL_COLUMN} FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.deleted_at IS NULL`,
   ).bind(await sha256(token), Date.now()).first<UserRow>();
-  return row ? toUser(row) : null;
+  if (!row) return null;
+  // Remember the account is in use (for the inactivity sweep), at most once a day.
+  if (!row.last_active_at || Date.now() - Date.parse(row.last_active_at) > ACTIVITY_TOUCH_HOURS * 3_600_000) {
+    await db.prepare("UPDATE users SET last_active_at = ? WHERE id = ?").bind(new Date().toISOString(), row.id).run();
+  }
+  return toUser(row);
 }

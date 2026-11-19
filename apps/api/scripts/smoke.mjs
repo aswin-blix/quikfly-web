@@ -713,6 +713,22 @@ await expect("remove a push device", call("DELETE", "/me/push-devices/smoke-toke
   }
 }
 
+// Privacy (DPDP): the public notice, consent to its version, and the data export
+const notice = await expect("GET /privacy", call("GET", "/privacy", null, false), 200,
+  (j) => /^\d{4}-\d{2}-\d{2}$/.test(j.version) && j.summary.length > 0 && j.sections.length > 3 && j.contact.role === "Grievance Officer" && !!j.contact.email);
+await expect("consent to an old notice version is refused", call("POST", "/me/consent", { version: "2000-01-01" }), 400);
+await expect("POST /me/consent records the version", call("POST", "/me/consent", { version: notice?.version }), 200, (j) => j.privacyConsent === notice?.version);
+await expect("GET /auth/me carries the consent", call("GET", "/auth/me"), 200, (j) => j.privacyConsent === notice?.version);
+await expect("consent needs sign-in", call("POST", "/me/consent", { version: notice?.version }, false), 401);
+const exportRes = await fetch(`${BASE}/me/export`, { headers: { Authorization: `Bearer ${token}` } });
+const exported = await exportRes.json().catch(() => null);
+check("GET /me/export is a download of this account's data",
+  exportRes.status === 200 && /attachment; filename="quikfly-data-/.test(exportRes.headers.get("content-disposition") ?? "") && /no-store/.test(exportRes.headers.get("cache-control") ?? "")
+    && exported?.data?.account?.[0]?.phone === `+91 ${PHONE}` && exported.data.bookings.length > 0 && exported.data.privacy_consents.length === 1
+    && !JSON.stringify(exported).includes("token_hash"),
+  `${exportRes.status} ${JSON.stringify(exported)?.slice(0, 200)}`);
+await expect("export needs sign-in", call("GET", "/me/export", null, false), 401);
+
 // Sign out everywhere
 const second = (await call("POST", "/auth/verify", { phone: PHONE, otp: OTP })).json.token;
 await expect("POST /me/logout-all", call("POST", "/me/logout-all", null, second), 200);

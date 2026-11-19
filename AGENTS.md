@@ -7,6 +7,7 @@ Read this file first. Then read:
 - [docs/decisions.md](docs/decisions.md): why things are built this way. Don't reverse a decision without asking the owner.
 - [docs/operations.md](docs/operations.md): environments, deploying, testing, troubleshooting.
 - [docs/demo-script.md](docs/demo-script.md): the client demo, step by step (Phase 4).
+- [docs/privacy.md](docs/privacy.md): DPDP privacy: notice, consent, export, erasure, and the data-breach plan.
 - [apps/api/README.md](apps/api/README.md): endpoint list. [apps/web/README.md](apps/web/README.md): pages, theming, navigation. [apps/admin/README.md](apps/admin/README.md): admin panel structure and rules.
 
 ## Map
@@ -37,7 +38,8 @@ packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation
                   catalog.ts (SEED data only) + catalog-kinds.ts (13 kinds, fields, validation), settings.ts
                   (runtime Settings, defaults, rules), pricing.ts (all price maths + bus/ride simulation),
                   cancellation.ts (refund tiers per service: the API applies them, the apps preview them),
-                  admin.ts (roles, PERMISSIONS, admin shapes), support.ts (support topics, callback times, limits, whatsappLink), rental.ts (self-drive checklist, extensions, deposit settlement)
+                  admin.ts (roles, PERMISSIONS, admin shapes), support.ts (support topics, callback times, limits, whatsappLink), rental.ts (self-drive checklist, extensions, deposit settlement),
+                  privacy.ts (the privacy notice text + version; bump the version to ask everyone to agree again)
 ```
 
 ## Commands (repo root)
@@ -84,5 +86,6 @@ cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://1
 - New `Settings` fields can be missing for a minute after a deploy (old API, new website). Code reading them must not crash on `undefined`.
 - Run the production smoke test once per deploy; every run leaves bookings, tickets and callbacks on production.
 - The logo is transparent and suits both themes: never put it on a badge or background (`test/logo_test.dart` checks the app). Edit only `brand/quikfly-logo.svg`, then run `node scripts/logo.mjs`.
+- Personal data needs a privacy thought: a new table with `user_id` must be added to `exportData()` and handled in `eraseAccounts()` (`services/privacy.ts`), and new kinds of data belong in the notice (`packages/shared/src/privacy.ts`). See [docs/privacy.md](docs/privacy.md).
 - The customer app (QuikFly) never gets partner screens; partner flows live in the Partner app and on the website.
 - Screens shared by both apps (login, notifications, not-found) must not link to pages only one app has; the Partner router lacks customer routes like `/trips`. One account has one inbox: `NotificationScope` keeps `vendor.*` in the Partner app and the rest in the customer app. `test/partner_routes_test.dart` fails if `lib/partner` links to a page the Partner router doesn't have.

@@ -1,5 +1,6 @@
 // Every-minute cron (wrangler.jsonc → triggers.crons): writes scheduled-ride reminders,
-// records expired QuikFly Credits, and pushes new notifications to phones when Firebase is
+// records expired QuikFly Credits, closes long-unused accounts and erases deleted ones past
+// their grace period (services/privacy.ts), and pushes new notifications to phones when Firebase is
 // configured. Stays well under the free plan's 50 queries per invocation: a fixed handful of
 // statements, no per-row queries.
 import { RIDE_SCHEDULE } from "@quikfly/shared";
@@ -7,6 +8,7 @@ import { PUSH_BATCH, PUSH_MAX_AGE_MINUTES } from "./config";
 import type { Env } from "./env";
 import { sendPush, serviceAccount } from "./services/push";
 import { getSettings } from "./services/settings";
+import { privacySweep } from "./services/privacy";
 
 /** One reminder per scheduled ride, when "Start ride" opens (startWindowMinutes before pickup). */
 async function rideReminders(db: D1Database) {
@@ -118,5 +120,6 @@ export async function runScheduled(env: Env) {
   await rideReminders(env.DB);
   await expireCredits(env.DB);
   await documentExpiry(env.DB);
+  await privacySweep(env.DB, env.DOCS);
   await pushNew(env);
 }

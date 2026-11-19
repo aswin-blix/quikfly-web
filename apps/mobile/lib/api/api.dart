@@ -179,6 +179,13 @@ class QuikFlyApi {
   Future<User> changePhone(String phone, String otp) => _post('/me/phone', (d) => User.fromJson(d as Json), {'phone': phone, 'otp': otp});
   Future<void> logoutEverywhere() => _post('/me/logout-all', _ignore);
   Future<void> deleteAccount(String otp) => _post('/me/delete', _ignore, {'otp': otp});
+
+  // ── Privacy (DPDP) ──
+  Future<PrivacyNotice> privacyNotice() => _get('/privacy', (d) => PrivacyNotice(d as Json));
+  Future<User> giveConsent(String version) => _post('/me/consent', (d) => User.fromJson(d as Json), {'version': version});
+
+  /// Everything QuikFly holds about this account, as the JSON the API sends (saved as a file).
+  Future<Json> exportData() => _get('/me/export', (d) => d as Json);
   Future<User> applyReferral(String code) => _post('/me/referral', (d) => User.fromJson(d as Json), {'code': code});
   Future<User> submitLicence(String number, String expiry) =>
       _put('/me/licence', (d) => User.fromJson(d as Json), {'number': number, 'expiry': expiry});

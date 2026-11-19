@@ -8,11 +8,16 @@ import { Link } from "@/lib/nav";
 
 export function Modal({
   open, onClose, title, children, wide,
-}: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode; wide?: boolean }) {
+}: {
+  open: boolean;
+  /** Omit for a sheet that must be answered (no close button, Escape or backdrop close). */
+  onClose?: () => void;
+  title?: string; children: React.ReactNode; wide?: boolean;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   useEffect(() => {
-    if (!open) return;
+    if (!open || !onClose) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -31,7 +36,7 @@ export function Modal({
             className={cx("relative panel w-full max-h-[92vh] overflow-y-auto scrollbar-thin rounded-b-none sm:rounded-b-[1.25rem]", wide ? "sm:max-w-3xl" : "sm:max-w-md")}>
             <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-line bg-coal/95 backdrop-blur">
               <h3 className="font-semibold text-lg">{title}</h3>
-              <button onClick={onClose} className="p-1.5 rounded-full hover:bg-fg/10" aria-label="Close"><X size={18} /></button>
+              {onClose && <button onClick={onClose} className="p-1.5 rounded-full hover:bg-fg/10" aria-label="Close"><X size={18} /></button>}
             </div>
             <div className="p-5">{children}</div>
           </motion.div>

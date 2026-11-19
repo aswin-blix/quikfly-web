@@ -16,6 +16,7 @@ import '../../widgets/ui.dart';
 import '../auth/login_screen.dart';
 import '../checkout/checkout_screen.dart' show travellersProvider;
 import '../ride/place_search_screen.dart';
+import 'privacy_screens.dart';
 
 /// Refund timings shown on the wallet page (apps/web/src/lib/account.ts REFUND_TIMINGS).
 const refundTimings = [('QuikFly wallet', 'Instant'), ('UPI', '1–3 working days'), ('Card / net banking', '5–7 working days')];
@@ -36,6 +37,7 @@ class AccountSectionScreen extends ConsumerWidget {
     'licence': 'Driving licence',
     'refer': 'Refer & earn',
     'business': 'Business / GST',
+    'privacy': 'Privacy & data',
     'settings': 'Login & security',
   };
 
@@ -64,6 +66,7 @@ class AccountSectionScreen extends ConsumerWidget {
       'licence' => const _Licence(),
       'refer' => const _Refer(),
       'business' => const _Business(),
+      'privacy' => const ScreenList(children: [PrivacyDataPanel(deleteRoute: '/account/settings')]),
       'settings' => const _Settings(),
       _ => const EmptyState(icon: Icons.help_outline, title: 'Nothing here'),
     };

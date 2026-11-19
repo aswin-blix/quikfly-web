@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Bell, ChevronDown, CircleCheck, Download, HelpCircle, LayoutGrid, Ticket, TriangleAlert, User as UserIcon, Wallet } from "lucide-react";
 import { AppProvider, useApp } from "./AppProvider";
 import { LoginModal } from "./LoginModal";
+import { PrivacyConsent } from "./PrivacyConsent";
 import { BottomNav, BottomNavProvider } from "./BottomNav";
 import { ServicesSheet } from "./ServicesSheet";
 import { ThemeProvider } from "./ThemeProvider";
@@ -34,6 +35,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <BottomNav servicesOpen={servicesOpen} onOpenServices={openServices} />
         <ServicesSheet open={servicesOpen} onClose={() => setServicesOpen(false)} />
         <LoginModal />
+        <PrivacyConsent />
         <Toasts />
       </BottomNavProvider>
       </AppProvider>
@@ -157,7 +159,7 @@ function Footer() {
         </div>
         <FooterCol title="Services" links={open.map((s) => [s.action, s.href])} />
         <FooterCol title="Company" links={[["Offers", "/offers"], ["Become a partner", "/partner"], ["My trips", "/bookings"]]} />
-        <FooterCol title="Support" links={[["Help centre", "/help"], ["Safety", "/help"], ["Cancellation & refunds", "/help"]]} />
+        <FooterCol title="Support" links={[["Help centre", "/help"], ["Safety", "/help"], ["Cancellation & refunds", "/help"], ["Privacy notice", "/privacy"]]} />
       </div>
       <div className="border-t border-line">
         <p className="max-w-7xl mx-auto px-4 py-5 text-xs text-subtle flex flex-wrap justify-between gap-2">

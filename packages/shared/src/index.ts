@@ -14,3 +14,4 @@ export * from "./holidays";
 export * from "./support";
 export * from "./rental";
 export * from "./vendor";
+export * from "./privacy";

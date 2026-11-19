@@ -1,7 +1,7 @@
 import type {
   AppConfig, AuthResult, Booking, Bus, CouponCheck, EmergencyContact, FareQuote, Gender, NewBooking, PaymentMethod, Place, PriceQuote,
   ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
-  WalletTransaction, AppNotification, CreditSummary,
+  WalletTransaction, AppNotification, CreditSummary, DataExport,
 } from "@quikfly/shared";
 import type { CallbackTime, FareLine, PublicTicket, Rental, RentalPhotoSide, RentalStage, RideCancelReason, SupportTicket, SupportTopic, VendorApplication, VendorDocument, VendorSection } from "@quikfly/shared";
 
@@ -36,6 +36,10 @@ export interface QuikflyApi {
     changePhone(phone: string, otp: string): Promise<User>;
     /** POST /me/logout-all: also clears the token on this device. */
     signOutEverywhere(): Promise<void>;
+    /** POST /me/consent: agree to the privacy notice (PRIVACY_NOTICE.version); returns the user with privacyConsent set. */
+    consent(version: string): Promise<User>;
+    /** GET /me/export: everything QuikFly holds about this person (the DPDP right of access), saved as a JSON file. */
+    exportData(): Promise<DataExport>;
     /** POST /me/delete: schedules deletion; clears the token. */
     deleteAccount(otp: string): Promise<void>;
     /** POST /me/referral */

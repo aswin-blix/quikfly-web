@@ -42,6 +42,8 @@ export interface User {
   autoShareRides: AutoShareMode;
   /** The rider's own 4-digit ride PIN, used instead of a new code each ride; null = a new code every ride. */
   ridePin: string | null;
+  /** The privacy notice version (PRIVACY_NOTICE.version) this person agreed to; null = not yet. Apps ask again when it's behind. */
+  privacyConsent: string | null;
 }
 
 export const AUTO_SHARE_MODES = ["off", "night", "always"] as const;

@@ -416,6 +416,8 @@ class PartnerAccountScreen extends ConsumerWidget {
               onTap: () => launchUrl(Uri(scheme: 'tel', path: settings.companyPhone.replaceAll(' ', ''))),
             ),
             Divider(height: 1, color: c.border),
+            ListTile(leading: const Icon(Icons.privacy_tip_outlined), title: const Text('Privacy & data'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/privacy/data')),
+            Divider(height: 1, color: c.border),
             ListTile(
               leading: Icon(Icons.logout, color: c.danger),
               title: Text('Sign out', style: TextStyle(color: c.danger)),
