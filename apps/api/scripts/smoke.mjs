@@ -508,6 +508,32 @@ await expect("without useCredits nothing is taken", call("POST", "/bookings", ne
   await call("POST", "/auth/logout", null, tokenP);
 }
 
+// Support: callbacks (anyone; a few a day per phone) and tickets (signed in), each a thread.
+{
+  const cbPhone = "6" + String(Date.now()).slice(-9);
+  await expect("a callback needs a valid phone", call("POST", "/support/callbacks", { name: "Smoke Caller", phone: "123", topic: "holiday", preferredTime: "evening" }, false), 400);
+  await expect("a callback needs a known topic", call("POST", "/support/callbacks", { name: "Smoke Caller", phone: cbPhone, topic: "nope", preferredTime: "evening" }, false), 400);
+  // Signed in, so the requests are linked to the account and can be closed again (keeps the staff queue clean).
+  const made = [];
+  for (let i = 1; i <= 3; i++) {
+    const cb = await expect(`callback request ${i} of 3`, call("POST", "/support/callbacks", { name: "Smoke Caller", phone: cbPhone, topic: "holiday", preferredTime: "evening", ref: "holidays/goa-beach-holiday" }, tokenB), 201,
+      (j) => j.kind === "callback" && j.status === "open" && j.phone.endsWith(cbPhone.slice(-10)) && j.preferredTime === "evening" && j.messages[0].body === "Please call me back.");
+    if (cb) made.push(cb.id);
+  }
+  await expect("a 4th callback the same day is refused", call("POST", "/support/callbacks", { name: "Smoke Caller", phone: cbPhone, topic: "holiday", preferredTime: "anytime" }, false), 409);
+  for (const id of made) await call("POST", `/me/tickets/${id}/close`, null, tokenB);
+  await expect("POST /me/tickets needs sign-in", call("POST", "/me/tickets", { topic: "booking", message: "Help please" }, false), 401);
+  await expect("a ticket about someone else's booking is refused", call("POST", "/me/tickets", { topic: "booking", message: "Help with this one", bookingId: "QFNOPE" }, tokenB), 400);
+  await expect("a ticket needs a real message", call("POST", "/me/tickets", { topic: "booking", message: "hi" }, tokenB), 400);
+  const tk = await expect("POST /me/tickets opens a ticket", call("POST", "/me/tickets", { topic: "refund", message: "Smoke: checking the ticket flow." }, tokenB), 201,
+    (j) => j.kind === "ticket" && j.status === "open" && j.messages.length === 1 && j.messages[0].author === "customer");
+  await expect("GET /me/tickets lists it first", call("GET", "/me/tickets", null, tokenB), 200, (j) => j[0].id === tk.id && j[0].messages.length === 1);
+  await expect("the customer replies", call("POST", `/me/tickets/${tk.id}/messages`, { body: "Smoke: one more detail." }, tokenB), 200, (j) => j.messages.length === 2 && j.status === "open");
+  await expect("another customer can't read it", call("GET", `/me/tickets/${tk.id}`, null, true), 404);
+  await expect("the customer closes it", call("POST", `/me/tickets/${tk.id}/close`, null, tokenB), 200, (j) => j.status === "closed");
+  await expect("a closed ticket takes no replies", call("POST", `/me/tickets/${tk.id}/messages`, { body: "Smoke: hello again." }, tokenB), 409);
+}
+
 // Coupon limits per customer: QUIKFLY50 works 3 times for a cab, then stops
 const limited = cfg.offers.find((o) => o.code === "QUIKFLY50");
 for (let i = 1; i <= limited.perUserLimit; i++) {

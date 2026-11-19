@@ -61,6 +61,10 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/me/push-devices` | `{ token, platform: android\|ios\|web }`: registers a Firebase token for push (201) |
 | DELETE 🔒 | `/me/push-devices/:token` | forget a device (on sign-out) |
 | GET 🔒 | `/me/credits` | `{ balance, nextExpiry: { amount, expiresAt } \| null, items }`: QuikFly Credits, newest 100 entries (`earned`, `spent`, `returned`, `expired`). `GET /auth/me` carries `creditBalance` |
+| GET / POST 🔒 | `/me/tickets` | the customer's support tickets and callbacks (newest activity first, first message only); POST `{ topic, message, bookingId? }` opens a ticket (201; at most 5 open; the booking must be theirs) |
+| GET 🔒 | `/me/tickets/:id` | one ticket with its whole thread (`messages`: author customer/staff, staff first name) |
+| POST 🔒 | `/me/tickets/:id/messages` | `{ body }` the customer replies (status back to `open`; 409 when closed) |
+| POST 🔒 | `/me/tickets/:id/close` | the customer closes it |
 | POST 🔒 | `/me/pass` | buy a QuikFly Pass from the wallet (201 → `{ passUntil }`): `passPrice` for `passDays` days, added after the end of a pass still running; 409 when `featureRidePass` is off, there's no surge to waive, or the wallet is short. `GET /auth/me` carries `passUntil` (null when none is running) |
 | GET 🔒 | `/me/wallet` | wallet history, newest first: `welcome`, `payment`, `refund`, `referral`, `opening` |
 | GET | `/places?q=` | place autocomplete (visible catalog places) |
@@ -72,6 +76,7 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/rides/:id/share` | `{ token, expiresAt }`: a 24-hour link to follow the ride (same link if one is live) |
 | GET | `/share/:token` | public, no sign-in: the shared ride (first name, driver, vehicle, route, start time, status) |
 | GET | `/tickets/:token` | public, no sign-in: a bus m-ticket (the QR code opens it): `{ pnr, status: valid\|expired\|cancelled\|completed, title, subtitle, startsAt, seats, details, travellers }` with first names only. `expired` once departure is more than `TICKET_VALID_HOURS_AFTER_DEPARTURE` (12) hours ago and staff haven't closed the booking |
+| POST | `/support/callbacks` | anyone asks for a callback: `{ name, phone, topic, preferredTime, message?, ref? }` → the request (201). A bearer token links it to the account. At most `SUPPORT_RULES.callbacksPerDay` (3) per phone in 24 h (409) |
 | GET | `/buses?from=&to=&date=` | bus search (same search, same results) |
 | GET | `/buses/:id/seats?from=&to=&date=` | seat layout, availability and each seat's price (the bus is regenerated from its route and date) |
 | GET | `/tours` | holiday packages, each with `departures`: upcoming group departures `{ id, date, fromCity, seats, seatsLeft, price }` (bookable from tomorrow; seats left = seats − travellers on active bookings). Empty = the package starts any date |
@@ -143,6 +148,10 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | GET 🛡 | `/admin/bookings?q=&status=&service=&from=&to=&page=` | all customers' bookings, newest first, 25 per page; `q` matches booking id, title, customer name or phone; dates are India time `[bookings.view]` |
 | GET 🛡 | `/admin/bookings/:id` | `{ booking (with customer), wallet entries, coupon, refundIfCancelled ({ amount, percent } while active), history (staff actions) }` `[bookings.view]` |
 | POST 🛡 | `/admin/bookings/:id/cancel` | `{ reason }` (5–300 chars) → cancels an active booking; the policy's share of a wallet payment is refunded to the customer's wallet in the same transaction; 409 if already finished `[bookings.manage]` |
+| GET 🛡 | `/admin/support?status=open\|answered\|closed` | callbacks and tickets (open: oldest first) with the first message and `customerId` `[support.manage]` |
+| GET 🛡 | `/admin/support/:id` | one with its thread `[support.manage]` |
+| POST 🛡 | `/admin/support/:id/reply` | `{ body }` → status `answered`; the customer is notified (`support.reply`); audited `[support.manage]` |
+| POST 🛡 | `/admin/support/:id/close` | `{ note? }` (added to the thread) → closed; audited `[support.manage]` |
 | POST 🛡 | `/admin/bookings/:id/complete` | marks an active booking completed; a self-drive deposit paid from the wallet goes back to the customer in the same transaction (recorded as `refundAmount` and in the audit row either way) `[bookings.manage]` |
 | GET 🛡 | `/admin/vendors?status=` | partner applications: `submitted` (default, oldest first), `draft`, `onboarding`, `active`, `rejected`, `blocked`; deleted accounts left out `[vendors.review]` |
 | GET 🛡 | `/admin/vendors/:id` | `{ application, bankAccount, customerId }`: the full bank account number is staff-only `[vendors.review]` |

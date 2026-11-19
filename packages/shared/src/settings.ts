@@ -154,6 +154,8 @@ export interface Settings {
   companyPhone: string;
   /** QuikFly's 24×7 safety line, shown in the SOS sheet. */
   safetyLine: string;
+  /** Support WhatsApp number for the free "Chat on WhatsApp" link; empty hides the link. */
+  whatsappNumber: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -238,6 +240,7 @@ export const DEFAULT_SETTINGS: Settings = {
   companyEmail: "support@quikfly.in",
   companyPhone: "1800 123 4567",
   safetyLine: "1800 123 4567",
+  whatsappNumber: "",
 };
 
 type Rule =
@@ -333,6 +336,7 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   companyEmail: { type: "text", max: 120, pattern: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, hint: "A valid email address." },
   companyPhone: { type: "text", min: 6, max: 30 },
   safetyLine: { type: "text", min: 3, max: 30 },
+  whatsappNumber: { type: "text", max: 20, pattern: /^$|^\+?[\d\s-]{10,20}$/, hint: "A mobile number with WhatsApp, e.g. +91 98400 12345; empty hides the link." },
 };
 
 /** Returns an error message, or null when the value is allowed. */

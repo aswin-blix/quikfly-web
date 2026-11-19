@@ -173,6 +173,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "companyEmail", type: "text", label: "Support email", help: "" },
       { key: "companyPhone", type: "text", label: "Support phone", help: "" },
       { key: "safetyLine", type: "text", label: "24×7 safety line", help: "Shown in the SOS sheet during rides." },
+      { key: "whatsappNumber", type: "text", label: "Support WhatsApp number", help: 'Shows a free "Chat on WhatsApp" link on Help, holidays and bookings (opens WhatsApp with a message ready). Empty hides it.' },
     ],
   },
 ];
