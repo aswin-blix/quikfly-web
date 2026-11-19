@@ -12,7 +12,7 @@ For whoever presents the demo. It shows one system working end to end: staff cha
 
 ## Before the demo (the day before, then again 30 minutes before)
 
-- [ ] **Phone:** QuikFly app installed (Android Settings → Apps → QuikFly shows the version: **0.1.1** or newer), charged, notifications silenced. Install it beforehand; don't download it live.
+- [ ] **Phone:** QuikFly app installed (Android Settings → Apps → QuikFly shows the version: **0.1.11** or newer), charged, notifications silenced. Install it beforehand; don't download it live.
 - [ ] **Demo customer:** decide which account the phone uses.
   - *New-customer moment:* sign out and sign up live with a demo number such as **+91 90000 00100** (any 10-digit number works; OTP **1234**). It starts with **₹500** in the wallet.
   - *Existing account:* check its wallet balance is enough for the bookings below (a bus seat is about ₹450).
@@ -63,6 +63,8 @@ Tour Packages → a package → adults/children (the total updates as you change
 
 ### 8. The admin view (2 min)
 Admin **Dashboard**: bookings, revenue and cancellations by day and by service, queues. Show the **Audit log**: every staff change (the price edit, the cancel, the licence decision) recorded with who and when.
+
+Optional, support (1 min): on the website **Help** page → **Request a callback** (or in the app: Account → Support tickets → New ticket). Admin → **Support**: it's under "Waiting for us"; open it and send a reply. The customer sees the reply in the app with a notification. *"Replies stay inside QuikFly for now; WhatsApp and SMS replies are paid add-ons after sign-off."* Set the WhatsApp number in admin → Settings beforehand if you want the WhatsApp buttons to show.
 
 ### 9. Getting the app (1 min)
 Website home → **Download for Android**: the signed APK from GitHub Releases. *"Not on Google Play yet; that comes after sign-off. Updates install over the old version and keep the customer signed in."*

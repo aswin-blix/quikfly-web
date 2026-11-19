@@ -4,6 +4,13 @@ Goal: a live client demo of the website and an Android app on one API, at ₹0 (
 
 Legend: ✅ done · 🔄 in progress · ⬜ not started
 
+## Start here (state on 2026-11-19)
+
+- **Everything below is live on production** (website, API, admin) unless marked otherwise. Latest apps: **QuikFly 0.1.11 and QuikFly Partner 0.1.11** (GitHub Release `app-v0.1.11`, 2026-11-19); the website's download buttons serve them.
+- **Current task: Phase 5 #10, rental lifecycle**: built (PR #81: customer pickup/return checklist with photos, extensions, staff deposit settlement; work-log entry below). Website/API/admin go live when it's deployed; the app part ships in app 0.1.12.
+- **Waiting on the owner:** Firebase project for phone push (Phase 5 #4 step 2, steps in [operations.md](operations.md)); the WhatsApp number in admin → Settings (support buttons stay hidden until then); a light-mode logo file; the Phase 4 demo decisions below (demo numbers, devices, date) and review of [demo-script.md](demo-script.md).
+- **Release rhythm:** each Phase 5 item ships to website/API/admin when its PR is merged; the app part follows in the next app release (owner builds, Claude verifies, phone-checks and publishes). Details in [operations.md](operations.md) and [apps/mobile/README.md](../apps/mobile/README.md).
+
 ## Phases
 
 | Phase | Status | Notes |
@@ -12,11 +19,14 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started
 | 2. Website on Cloudflare | ✅ | Live. Demo fixes in PR #5 (ride completion, real wallet, bus times, date strip, rental defaults, cancel errors, holiday tabs) |
 | 2b. Complete the web version: accounts + competitor features | ✅ | Live. PR #6, deployed 2026-11-16 (migration 0003) |
 | 2c. Admin panel (lean) + everything from the API | ✅ | Live. PRs #8 (L1), #9 (L2), #10 (L3), released 2026-11-17 (migrations 0004 + 0005). Admin at https://quikfly-admin.quikfly-api.workers.dev. Tracker below |
-| 3. Flutter Android app (`apps/mobile`) | 🔄 | Full parity with the website (M1–M5 merged, PRs #12 #13). **v0.1.5 is the latest release** (2026-11-18, trips + outstation cabs; v0.1.4 scheduling + multi-stop and v0.1.3 Phase 4b earlier the same day); earlier: **v0.1.1** (v0.1.0 2026-11-17, v0.1.1 the same day with the new photos) as a signed APK on GitHub Releases (https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk); website download button and new service photos live (PR #14). Left: phone-test fixes |
-| 4. Demo hardening | ⬜ | **Planned** 2026-11-17, waiting for the owner's go-ahead and decisions (plan below): rehearse admin → website + phone → book → cancel → refund on production, demo script, clean demo data, fallbacks, dress rehearsal |
-| 5. Admin, full | ⬜ | The parts cut from the lean plan: customers screen (wallet adjust, suspend, sign out everywhere, cancel deletion), booking notes, SOS alerts in admin, team screen, CSV export |
+| 3. Flutter Android app (`apps/mobile`) | ✅ | Full parity with the website (M1–M6). Released as signed APKs on GitHub Releases since `app-v0.1.0` (2026-11-17); **latest `app-v0.1.11`** (2026-11-19). Each Phase 5 item reaches the app in the next release (work log under Phase 4b/5 below) |
+| 3b. QuikFly Partner (vehicle owners) | ✅ | Live 2026-11-18: second Flutter flavor `com.quikfly.partner` (registration and onboarding, fleet and drivers, trips, dashboard, payouts), admin Partners review, R2 bucket `quikfly-docs` for document photos; partner application on the website (`/partner/apply`) since 2026-11-19. The customer app never shows partner screens |
+| 4. Demo hardening | 🔄 | D1 production rehearsal done, D2 demo script drafted; the rest waits for the owner's decisions (plan below) |
+| 4b. Make the UI truthful | ✅ | T1–T5 deployed 2026-11-18 (cancellation-policy engine, honest holiday/rental copy, bus women-first seats, MVAG ride rules) |
+| 5. Features from the competitor research | 🔄 | Items 1–3 and 5–9 live (web, API, admin, app); #4 notifications live except phone push (waits for Firebase); **next: #10 rental lifecycle**. List under "Phase 5 candidates" below |
+| 6. Admin, full | ⬜ | The parts cut from the lean plan: customers screen (wallet adjust, suspend, sign out everywhere, cancel deletion), booking notes, SOS alerts in admin, team screen, CSV export. (Partners review and Support queue were added with Phase 5) |
 
-## Next task: Phase 4, demo hardening (planned, waiting for go-ahead) ⬜
+## Phase 4, demo hardening (waiting for the owner's decisions) 🔄
 
 Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs start to finish without surprises, on production, with the website, the admin panel and the Android app (0.1.1) together. **Not in scope:** new features (only fixes for problems the rehearsal finds) and anything paid (rule 7).
 
@@ -32,12 +42,12 @@ Written 2026-11-17 at the owner's request. **Goal:** the live client demo runs s
 
 | ID | Step | Who | Output | Status |
 |---|---|---|---|---|
-| D0 | Phone-test sign-off: fix what the owner found testing 0.1.1 (closes Phase 3 / M6) | Owner reports, Claude fixes | PRs, app 0.1.2 if needed | ⬜ |
+| D0 | Phone-test sign-off: fix what the owner found testing the app (closes Phase 3 / M6) | Owner reports, Claude fixes | PRs, app releases | 🔄 every release since 0.1.2 is phone-checked by Claude on the OnePlus; the owner's own sign-off is still open |
 | D1 | Production rehearsal of the core flow (script below), timing each step | Claude drives admin + website + phone (adb), owner watches | Work-log entry with results and timings; bugs fixed in PRs | ✅ done (staff-cancel wallet refund skipped by the owner: covered by the automated tests) |
 | D2 | Demo script for the presenter: `docs/demo-script.md` | Claude writes, owner reviews | Doc (setup checklist, talk track, demo data, what's simulated, timings, fallbacks) | 🔄 drafted, owner to review |
 | D3 | Demo data and settings on production: **keep the data** (decision 1); only check settings (read-only) and explain test entries in the script | Claude | Settings checked; D2 script says how to describe the existing test bookings | ⬜ |
 | D4 | Fallbacks and resilience checks | Claude | Section in the demo script; any fixes | ⬜ |
-| D5 | Polish: light-mode logo, rough edges from D1 | Claude (logo needs the file) | PRs | 🔄 findings 2–4 fixed; API + admin deployed (admin fix live); app fix waits for 0.1.2; 5 waits for a decision; logo needs the file |
+| D5 | Polish: light-mode logo, rough edges from D1 | Claude (logo needs the file) | PRs | 🔄 findings 2–4 fixed and shipped (app fix in 0.1.2); 5 waits for a decision; logo needs the file |
 | D6 | Dress rehearsal: one full timed run from the script, after D3, on the demo devices | Owner presents, Claude watches/supports | Sign-off; Phase 4 ✅ | ⬜ |
 
 ### D1 rehearsal script (expected result in brackets)
@@ -99,21 +109,23 @@ What's there now: smoke tests ran against production, leaving test accounts **+9
 
 ### After Phase 4
 
-Phase 5 (full admin: customers screen, booking notes, SOS alerts, team, CSV export) and the backlog. Paid items (SMS OTP, payment gateway, maps, Play Store) wait for the client's sign-off.
+Phase 6 (full admin: customers screen, booking notes, SOS alerts, team, CSV export) and the backlog. Paid items (SMS OTP, payment gateway, maps, Play Store) wait for the client's sign-off.
 
-## Current task: Phase 4b, make the UI truthful 🔄
+## Done: Phase 4b, make the UI truthful ✅ (and the Phase 5 work log)
 
 Decided 2026-11-18 from the competitor research ([docs/competitor-gaps-2026-11.md](competitor-gaps-2026-11.md)): four screens promise rules the API never enforced. Cheapest credibility work before the next demo; all free-tier. Branch `phase4b/truthful-ui`.
 
 | ID | Item | Status |
 |---|---|---|
-| T1 | **Cancellation-policy engine**: per-service refund tiers in `Settings` (`cancelPolicyBus/Tours/Rent/Group`, text like `"15d:100, 7d:50"`), applied inside the refund `db.batch()`; bookings store `startsAt` (from the quote) and `refundAmount`; web, app and admin show the policy and the refund before cancelling. Replaces the hard-coded policy strings on bus, holiday, rent and group screens and the per-tour `cancellation` text | ✅ built, PR open |
-| T2 | Holiday page: remove the unbacked "25% to block", "expert calls within 2 hours" and "insurance at checkout" copy; the start date reaches the tour quote (`start`) and group quotes (`start`) | ✅ built (with T1); also removed "Free expert call" under Book now and fixed FAQ answers f6 and f10 in the seed |
-| T3 | Rental and group copy into `Settings`: roadside assistance, night charge (+ quote line), documents list, deposit-refund window | ✅ built, PR open (stacked on T1/T2); also: limited-plan km and extra-km rate are settings, the deposit is stored per booking and actually returned (cancel: always; completion: when staff mark it), customers can complete rides only, group page drops the unbacked "10+ years" claim |
-| T4 | Bus: women-first seat rule (adjacent seat locked to women once a woman books) instead of the random unenforced `ladies` flag; seat layouts and amenities per bus type; reword the FAQ "UPI refunds in 3–5 days" | ✅ built, PR open (stacked on T1–T3); also: booked seats are stored so a seat sells once, "seats left" counts the real map, "Live tracking"/"CCTV" amenities and "2,500+ operators" removed (FAQ was reworded in T1/T2) |
-| T5 | Rides, MVAG 2025: `surgeCap` (2.0), cancellation-reason picker, `cancellationFeePct`/`Cap` (10% / ₹100), surge disclosure | ✅ built, PR open (settings are `surgeCap`, `rideCancelFeePercent`, `rideCancelFeeCap`, `rideCancelFreeMinutes`) |
+| T1 | **Cancellation-policy engine**: per-service refund tiers in `Settings` (`cancelPolicyBus/Tours/Rent/Group`, text like `"15d:100, 7d:50"`), applied inside the refund `db.batch()`; bookings store `startsAt` (from the quote) and `refundAmount`; web, app and admin show the policy and the refund before cancelling. Replaces the hard-coded policy strings on bus, holiday, rent and group screens and the per-tour `cancellation` text | ✅ deployed 2026-11-18 |
+| T2 | Holiday page: remove the unbacked "25% to block", "expert calls within 2 hours" and "insurance at checkout" copy; the start date reaches the tour quote (`start`) and group quotes (`start`) | ✅ deployed 2026-11-18 (with T1); also removed "Free expert call" under Book now and fixed FAQ answers f6 and f10 in the seed |
+| T3 | Rental and group copy into `Settings`: roadside assistance, night charge (+ quote line), documents list, deposit-refund window | ✅ deployed 2026-11-18; also: limited-plan km and extra-km rate are settings, the deposit is stored per booking and actually returned (cancel: always; completion: when staff mark it), customers can complete rides only, group page drops the unbacked "10+ years" claim |
+| T4 | Bus: women-first seat rule (adjacent seat locked to women once a woman books) instead of the random unenforced `ladies` flag; seat layouts and amenities per bus type; reword the FAQ "UPI refunds in 3–5 days" | ✅ deployed 2026-11-18; also: booked seats are stored so a seat sells once, "seats left" counts the real map, "Live tracking"/"CCTV" amenities and "2,500+ operators" removed (FAQ was reworded in T1/T2) |
+| T5 | Rides, MVAG 2025: `surgeCap` (2.0), cancellation-reason picker, `cancellationFeePct`/`Cap` (10% / ₹100), surge disclosure | ✅ deployed 2026-11-18 (settings are `surgeCap`, `rideCancelFeePercent`, `rideCancelFeeCap`, `rideCancelFreeMinutes`) |
 
-### Phase 4b work log
+### Phase 4b and Phase 5 work log
+
+Newest entries are at the bottom. Phase 5 entries continue here so each item's build, deploy and app release stay together.
 
 - 2026-11-18 **T1 + T2** (branch `phase4b/truthful-ui`): `packages/shared/src/cancellation.ts` (parse and validate tiers, refund %, customer wording, quote start time); four settings with defaults matching the old screen text (bus `12h:100, 4h:50`, holidays `15d:100, 7d:50`, rent `24h:100`, group `48h:100`); migration `0006_cancellation.sql` (`quotes.starts_at`, `bookings.starts_at`, `bookings.refund_amount`); `cancelBookingRow` reads the booking, works out the refund and credits only that share in the same batch (every statement re-checks the booking is still active); admin booking detail returns `refundIfCancelled` and the cancel dialog shows it; Settings page has a "Cancellation policies" group. Web, mock API and app show the policy from settings at checkout and on the holiday and rent pages, preview the refund before cancelling, and show "Refunded to wallet" or "Refund due" afterwards. Tour and group quotes now require `start`. Checks, all against the local API: typecheck (4 workspaces), `flutter analyze`, customer smoke, admin smoke (new: bad policies refused, a 50% policy refunds half to the wallet with a "50%" ledger note, admin preview matches), Flutter contract tests 8/8; browser at desktop (dark) and 390 px (light): holiday policy text, checkout policy, cancel preview "₹7,612 (50%) is due back" on a ₹15,224 booking 10 days out, toast and "Refund due" row match. Bug found by the admin smoke and fixed: the staff path bound a parameter its SQL didn't use (D1 500).
   - **Production, after merge:** apply migration 0006 (`--remote`), then deploy API, admin and website. App 0.1.2 sends tour and group quotes without `start` and will get a 400 on those two flows, so release app 0.1.3 together with the API deploy. Production FAQ answers f6 and f10 live in D1, so the seed fix doesn't reach them: edit both in admin (Catalog → FAQs).
@@ -206,11 +218,11 @@ Decided 2026-11-18 from the competitor research ([docs/competitor-gaps-2026-11.m
 
 - 2026-11-19 **Phase 5 #10: rental lifecycle** (branch `phase5/rental-lifecycle`; owner chose "customer does the checklist, staff settle"): `packages/shared/src/rental.ts` (photo sides, fuel in eighths, `RENTAL_RULES`, `extensionLines()`, `rentalSettlement()`), migration `0023_rental_lifecycle.sql` (`rentals`, `rental_photos`, `rental_extensions`; active self-drive bookings backfilled from their quotes). Every new self-drive booking gets a rental (`Booking.rentalState`: booked → on_trip → returned → settled). **Customer** (website My trips panel, app `/rental/:id`): five photos (front, back, left, right, odometer + fuel gauge; R2 `rentals/<booking>/…`) plus odometer and fuel to **start** (from 60 min before pickup; booking becomes ongoing and can't be cancelled), **extend** before the return time (API price: booked hourly rate × hours + protection for an extra day; wallet bookings pay in the same batch), and the same checklist to **end**. **Staff** (admin booking page): pickup and return photos side by side, live settlement preview, damage + note, **Settle and complete**: extra km (limited plan, `rentLimitedKmPerDay` × days × `rentExtraKmRate`), late return (started hours past the return time beyond `rentLateGraceMinutes`, at `rentLateFeePercent` of the hourly rate), fuel (`rentFuelChargePerEighth` per eighth less) and damage come off the deposit; the rest is refunded (wallet note lists the deductions), anything beyond the deposit shows as owed (demo: not collected); audited `rental.settle`, customer notified. Dashboard queue "Returned cars to settle" → bookings `?rental=returned`. New settings: `rentFuelChargePerEighth` (500), `rentLateGraceMinutes` (30), `rentLateFeePercent` (150), `rentExtendMaxHours` (48). Demo (mock) mode settles at once without a staff check. Checks: customer and admin smoke pass locally (customer smoke on production only reads and cancels), app contract tests 18/18 locally, headless browser at 390 px (checklist with real photos, extend, end, admin dashboard queue, filtered list, photo comparison and settlement in dark mode, settled view in light mode). App screens not yet seen on a phone (next app release). Not done from the research row: co-drivers, weekly/monthly tiers, outstation chauffeur quotes, group request-a-quote, card/UPI deposit holds (paid).
 
-### Phase 5 candidates, in priority order (from the same research; all free-tier)
+### Phase 5 candidates, in priority order (from the same research; all free-tier) 🔄 current: #10
 
 1. ✅ B5 ride scheduling + multi-stop (both live on web; app 0.1.4) → 2. ✅ trips (live on web; app 0.1.5) → 3. ✅ outstation cabs (live on web; app 0.1.5) → 4. 🔄 notifications: inbox + cron reminders live on web (app in 0.1.6); FCM push waits for the owner's Firebase project → 5. ✅ credits ledger + QuikFly Pass (both live on web; pass in the app with 0.1.7) → 6. ✅ B6 bus reschedule + partial seat cancel + m-ticket with QR (live on web; app in 0.1.8) → 7. ✅ B8 women-only rides + Safety Preferences (live on web; app in 0.1.10) → 8. ✅ holiday departures (dates, seats left, departure city/month) + spiritual/women-only/seniors themes (live on web; app in 0.1.10) → 9. ✅ enquiry/callback queue + `wa.me` link + support tickets (live on web; app 0.1.11) → 10. 🔄 rental lifecycle (odometer, photo checklist, B7 extension, deposit deductions; built, PR open) → 11. Tamil/Hindi + DPDP pack (deadline ≈ May 2027) → 12. family and business profiles → 13. $25 Play Console + Truecaller login.
 
-## Current task: Flutter Android app (M1–M6) 🔄
+## Released: Flutter Android app (M1–M6) ✅
 
 Started 2026-11-17. Owner's choices: **full parity** with the website for the first APK the client sees; live price estimates **ask the API** (`POST /quotes`, debounced), no price maths in Dart; APK published as a **GitHub Release** (public repo, no login to download) and linked from the website's "Get it on Google Play" button; package id **`com.quikfly.app`**. Details in [decisions.md](decisions.md) and [apps/mobile/README.md](../apps/mobile/README.md).
 
@@ -223,7 +235,7 @@ Started 2026-11-17. Owner's choices: **full parity** with the website for the fi
 | M3 | Bus + holidays + checkout: bus search + date strip + filters, seat map, holiday list + detail, shared checkout (travellers, coupon, payment), confirmation, invoice | `/buses`, `/buses/:id/seats`, `/tours/:slug`, `/quotes`, `/offers/check`, `/bookings` | ✅ | ✅ | ✅ | ✅ |
 | M4 | Rentals: self-drive / chauffeur cars, car detail, licence check, group vehicles | `/rentals/*`, `/me/licence`, `/quotes` | ✅ | ✅ | ✅ | ✅ |
 | M5 | Account: profile, change number, wallet history, saved places, travellers, emergency contacts, auto-share night rides, referral, sign out everywhere, delete account | `/me/*` | ✅ | ✅ | ✅ | ✅ |
-| M6 | Release: upload key, signed release APK, GitHub Release, website download link (B9) | — | 🔄 key, signed APKs, phone install, GitHub Release `app-v0.1.0`, website download button (PR #14, deployed) done; phone-test sign-off left | — | — | ✅ signed + published |
+| M6 | Release: upload key, signed release APK, GitHub Release, website download link (B9) | — | ✅ key, signed APKs, phone install, GitHub Releases (`app-v0.1.0` … `app-v0.1.11`), website download button (PR #14); owner's phone-test sign-off tracked as Phase 4 D0 | — | — | ✅ signed + published |
 
 Each slice: `flutter analyze` → contract test against the local API → browser pass of the web build at 390 px in light and dark → APK builds → docs + memory → commit (owner asked for regular commits) → PR.
 
@@ -294,15 +306,15 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 
 ## Backlog (agreed ideas, not scheduled)
 
-- Phase 5 items above (customers screen, booking notes, SOS in admin, team screen, CSV export)
+- Phase 6 items above (customers screen, booking notes, SOS in admin, team screen, CSV export)
 - Cloudflare Access in front of the admin address (free ≤ 50 users) when a custom domain exists, or earlier if the `workers.dev` toggle is available
 - `packages/ui` if a third web app appears (admin copies `tokens.css` and a few primitives from the website for now)
-- Partner portals (bus operators, car owners) if the client lets others list on QuikFly
-- Live dispatcher map (rides are simulated); support tickets; payouts
-- B5 Ride scheduling (book for later)
-- B6 Free reschedule for bus and holiday bookings (redBus FlexiTicket)
-- B7 Self-serve "Modify booking" for rentals (Zoomcar)
-- B8 Women-only bike option (Rapido Bike Pink)
-- B9 Save partner applications to the API (the download-button half of B9 shipped with M6)
+- Bus operator portal (car and vehicle owners already have QuikFly Partner)
+- Live dispatcher map (rides are simulated)
+- Holidays: with a departure-city filter on, cards should show the next departure from that city (they show the next one overall)
+- Old bus bookings made before 2026-11-18 have no `starts_at`, so their m-ticket keeps saying "Valid" (options: leave, complete them in admin, or backfill from quotes; owner to choose)
+- App Help centre: a little more space between the support buttons (looks fine once the WhatsApp button sits between them)
 - Light-mode logo: needs a file from the owner or client
-- After client sign-off (paid): SMS OTP, payment gateway, real maps, live tracking, Play Store listing, custom domain, Truecaller/Google login, EMI, ride insurance
+- After client sign-off (paid): SMS OTP, payment gateway, real maps, live tracking, Play Store listing, custom domain, Truecaller/Google login, EMI, ride insurance, WhatsApp Business API / email replies for support
+
+Done from the old backlog: B5 ride scheduling, B6 bus reschedule, B8 women-only bikes, B9 partner applications, support tickets, partner payouts. B7 (modify a rental) is part of Phase 5 #10.

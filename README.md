@@ -7,7 +7,7 @@ apps/
   web/        Next.js website (static export)          → apps/web/README.md
   admin/      Next.js staff admin panel (static export) → apps/admin/README.md
   api/        REST API on Cloudflare Workers + D1      → apps/api/README.md
-  mobile/     Flutter Android app                      → apps/mobile/README.md
+  mobile/     Flutter Android apps: QuikFly (customers) and QuikFly Partner (vehicle owners) → apps/mobile/README.md
 packages/
   shared/     @quikfly/shared: domain types, rules, settings, pricing and catalog seed used by api, web and admin
 ```
@@ -46,9 +46,9 @@ Without it, the website runs on its built-in mock API.
 | Website | https://quikfly-web.quikfly-api.workers.dev | `npm run deploy -w @quikfly/web` (static export served by a Worker, `apps/web/wrangler.jsonc`) |
 | API | https://quikfly-api.quikfly-api.workers.dev/v1 | `npm run deploy -w @quikfly/api` (Worker + D1 `quikfly-db`) |
 | Admin panel | https://quikfly-admin.quikfly-api.workers.dev | `npm run deploy -w @quikfly/admin` |
-| Android app (APK) | https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk | GitHub Releases (`app-v<version>`), signed with the owner's upload key; see apps/mobile/README.md → Release |
+| Android apps (APK) | https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk · Partner: `.../QuikFlyPartner-arm64.apk` | GitHub Releases (`app-v<version>`), signed with the owner's upload key; see apps/mobile/README.md → Release |
 
-`npm run deploy` does API, website and admin, API first. Run `npm run db:migrate:remote` before deploying an API change that adds a migration. Deploys need `npx wrangler login` once per machine.
+`npm run deploy` does API, website and admin, API first. Partner document photos live in the private R2 bucket `quikfly-docs` (docs/operations.md). Run `npm run db:migrate:remote` before deploying an API change that adds a migration. Deploys need `npx wrangler login` once per machine.
 
 The production website build reads `apps/web/.env.production` (API URL and demo OTP). If a static host such as Vercel is ever connected to this repo, its root directory must be **`apps/web`**.
 

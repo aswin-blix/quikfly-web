@@ -9,7 +9,7 @@
 
 Admin panel (`apps/admin`): production https://quikfly-admin.quikfly-api.workers.dev (owner account `admin@quikfly.com`; the owner keeps the password, reset it with `create-admin.mjs`); local `npm run dev:admin` on :3100. It talks to the same API.
 
-Android app (`apps/mobile`): latest APK https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk (GitHub Releases, `app-v0.1.0` first); builds use the production API unless `--dart-define=API_URL` says otherwise. Details in the Android app section below.
+Android app (`apps/mobile`): latest APK https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk and the Partner app `.../QuikFlyPartner-arm64.apk` (GitHub Releases, `app-v0.1.0` … `app-v0.1.11`); builds use the production API unless `--dart-define=API_URL` says otherwise. Details in the Android app section below.
 
 - Cloudflare account: the owner's (log in with `npx wrangler login`). The workers.dev subdomain is `quikfly-api`, which is why both URLs contain it.
 - Production website settings are in `apps/web/.env.production` (API URL, demo OTP hint). Public values only.
@@ -24,8 +24,9 @@ npm install
 npm run typecheck
 npm run db:migrate:remote      # first, whenever apps/api/migrations has a new file
 npm run deploy -w @quikfly/api
-# wait ~60 s: Cloudflare serves old and new versions while the deploy spreads
-node apps/api/scripts/smoke.mjs https://quikfly-api.quikfly-api.workers.dev/v1
+# wait until production answers with the new version everywhere (e.g. loop until a new endpoint stops returning 404
+# several times in a row); Cloudflare serves old and new versions for about a minute
+node apps/api/scripts/smoke.mjs https://quikfly-api.quikfly-api.workers.dev/v1   # once per deploy
 node apps/api/scripts/smoke-admin.mjs https://quikfly-api.quikfly-api.workers.dev/v1 <owner email> <password>
 npm run deploy -w @quikfly/web # builds with .env.production, then uploads apps/web/out
 npm run deploy -w @quikfly/admin
@@ -35,7 +36,11 @@ npm run deploy -w @quikfly/admin
 
 Order matters: **migration → API → website**. The new website may call endpoints that only the new API has, and the new API may read columns only the migration adds.
 
-The smoke test reuses one test user (+91 90000 00001) and leaves cancelled or completed bookings on it. That's expected.
+The smoke test reuses one test user (+91 90000 00001) and leaves cancelled or completed bookings on it. That's expected. Run the production smoke test **once per deploy**: every run adds bookings, tickets and callbacks to production.
+
+After a deploy, record it (migration, version ids, smoke result) in `docs/roadmap.md` with a small docs PR.
+
+**New settings during a deploy:** for about a minute the website can load settings from the old API, without a field the new code reads (this crashed the holiday page once, before `whatsappLink()` accepted a missing number). Code that reads a new `Settings` field must cope with it being missing.
 
 ## Push notifications (FCM, free)
 
@@ -63,8 +68,9 @@ Photos are only served to the partner who uploaded them and to staff with `vendo
 - Two apps from one project: the customer app (default flavor) and **QuikFly Partner** (`--flavor partner -t lib/main_partner.dart`, package `com.quikfly.partner`). Release APK names now include the flavor (`app-arm64-v8a-customer-release.apk`); copy them to the same stable asset names as before.
 - Builds against the production API by default; `--dart-define=API_URL=...` points it elsewhere (see `apps/mobile/README.md`).
 - Signed release: upload key at `%USERPROFILE%\keys\quikfly-upload.jks`, alias `quikfly`, certificate SHA-256 `C7:84:CE:F5:50:DC:5F:A5:FC:64:C5:5A:2E:C6:EE:C8:99:81:FD:2D:75:0A:FF:9A:49:6C:9B:40:17:03:3A:AE` (owner keeps the file and the password, backed up), `apps/mobile/android/key.properties` (git-ignored) with path + alias, password in `QUIKFLY_KEYSTORE_PASSWORD`. Steps in `apps/mobile/README.md` → Release.
-- Distribution: GitHub Releases on the public repo (tags `app-v<version>`). Latest APK, no login: https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk (older phones: `QuikFly-armv7.apk`). Releases: `app-v0.1.0` and `app-v0.1.1` (new photos, latest), both 2026-11-17. A new release with the same asset names automatically becomes what the website's download button serves.
-- Contract test before a release: `flutter test --dart-define=API_URL=<api>/v1`. Against production it uses the test number +91 90000 00002 and leaves a cancelled booking and a pending licence on it.
+- Distribution: GitHub Releases on the public repo (tags `app-v<version>`, both apps share a version). Latest APKs, no login: https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk (older phones: `QuikFly-armv7.apk`) and `QuikFlyPartner-arm64.apk` / `QuikFlyPartner-armv7.apk`. Latest: `app-v0.1.11` (2026-11-19). A new release with the same asset names automatically becomes what the website's download buttons serve.
+- Release flow: a `release/app-<version>` PR bumps `version:` in `pubspec.yaml` → after merge the owner builds both flavors from `main` (only the owner knows the keystore password) → Claude verifies (`aapt2 dump badging`: package, label, version name, version code = 1000 × ABI + build number, e.g. 2013 arm64 / 1013 armv7; `apksigner verify --print-certs`: certificate `c784cef5…3aae`; new screen texts present in the right flavor's `lib/arm64-v8a/libapp.so`, partner texts absent from the customer build) → installs over the previous version on the test phone with `adb install -r` and looks at the new screens → after the owner's yes, `gh release create` with the four stable asset names and tester notes → downloads `releases/latest/download/…` and compares SHA-256 with the builds → docs PR.
+- Contract test before a release: `flutter test` (production by default) or `--dart-define=API_URL=<api>/v1`. Against production it uses the test number +91 90000 00002 and leaves a cancelled booking and a pending licence on it; tests that would create staff work (support tickets, Safety changes) only parse responses there.
 
 ## Testing
 
@@ -74,6 +80,9 @@ Photos are only served to the partner who uploaded them and to staff with `vendo
 - Run typecheck and the smoke tests after each step, not only at the end of a slice (owner's request).
 - UI: check in a browser at 390 px width (phone) in light and dark mode. Use the website against the local API, not the mock, for anything that touches data.
 - Mock (demo) mode: build with `NEXT_PUBLIC_API_URL=` (empty) to check the single-file or offline demo still works.
+- A plain `next build` in `apps/web` reads `.env.production`, so it talks to the **production** API. To test a build against the local API, set it explicitly: `NEXT_PUBLIC_API_URL=http://127.0.0.1:8787/v1 npx next build`, then serve it with `npx wrangler dev --port <port>` (restart that after every build).
+- Admin panel against a local API on another port: `NEXT_PUBLIC_API_URL=http://127.0.0.1:<port>/v1 npx next dev -p 3101` in `apps/admin`; local staff accounts come from `node scripts/create-admin.mjs --local <email> "<name>" <role> <password>` (local D1 only).
+- No Chrome extension? Browser checks can drive headless Chrome over the DevTools protocol (`chrome --headless=new --remote-debugging-port=9334`) from a small Node script: set a 390 px mobile viewport, navigate, fill inputs through the native value setter, screenshot.
 
 ## Troubleshooting
 
