@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../api/api.dart';
 import '../screens/account/notifications_screen.dart';
 import '../screens/auth/login_screen.dart';
+import '../screens/not_found.dart';
 import '../state/providers.dart';
 import '../theme/theme.dart';
 import 'fleet_screens.dart';
@@ -54,6 +55,9 @@ final partnerRouter = GoRouter(
     GoRoute(path: '/onboarding/sticker', builder: (_, _) => const StickerScreen()),
     GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
   ],
+  // Safety net: a link to a page this app doesn't have (e.g. a customer-only page) shows a
+  // friendly screen instead of go_router's red error, and Back returns home.
+  errorBuilder: (_, _) => const NotFoundScreen(),
 );
 
 class PartnerApp extends ConsumerStatefulWidget {

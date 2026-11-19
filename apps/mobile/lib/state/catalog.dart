@@ -10,11 +10,26 @@ final carsProvider = FutureProvider<List<RentalCar>>((ref) => ref.watch(apiProvi
 final carProvider = FutureProvider.family<RentalCar, String>((ref, id) => ref.watch(apiProvider).car(id));
 final travelVehiclesProvider = FutureProvider<List<TravelVehicle>>((ref) => ref.watch(apiProvider).travelVehicles());
 
-/// The notification inbox. Empty when signed out.
+/// Which notifications an app shows. One account has one inbox (bookings and partner updates
+/// alike); the customer app shows the customer's, QuikFly Partner only `vendor.*` ones.
+enum NotificationScope {
+  customer,
+  partner;
+
+  bool shows(String kind) => kind.startsWith('vendor.') == (this == partner);
+}
+
+/// The customer app's scope; QuikFly Partner overrides it in main_partner.dart.
+final notificationScopeProvider = Provider<NotificationScope>((ref) => NotificationScope.customer);
+
+/// The notification inbox for this app, with its own unread count. Empty when signed out.
 final notificationsProvider = FutureProvider<({List<AppNotification> items, int unread})>((ref) async {
   final user = ref.watch(userProvider.select((u) => u?.id));
   if (user == null) return (items: const <AppNotification>[], unread: 0);
-  return ref.watch(apiProvider).notifications();
+  final scope = ref.watch(notificationScopeProvider);
+  final all = await ref.watch(apiProvider).notifications();
+  final items = all.items.where((n) => scope.shows(n.kind)).toList();
+  return (items: items, unread: items.where((n) => n.readAt == null).length);
 });
 
 /// Unread notifications for the bell; re-read after bookings change.
