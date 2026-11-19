@@ -105,6 +105,7 @@ class AccountScreen extends ConsumerWidget {
               }),
               if (ref.watch(configProvider).value?.settings.featureReferral ?? true) link(Icons.card_giftcard, 'Refer & earn', '/account/refer'),
               link(Icons.support_agent, 'Support tickets', '/support'),
+              link(Icons.privacy_tip_outlined, 'Privacy & data', '/account/privacy'),
               link(Icons.settings_outlined, 'Account settings', '/account/settings'),
             ]),
           ],
@@ -127,6 +128,7 @@ class AccountScreen extends ConsumerWidget {
             ),
             link(Icons.local_offer_outlined, 'Offers & coupons', '/offers'),
             link(Icons.help_outline, 'Help centre', '/help'),
+            link(Icons.policy_outlined, 'Privacy notice', '/privacy'),
           ]),
           if (user != null) ...[
             const SizedBox(height: 16),

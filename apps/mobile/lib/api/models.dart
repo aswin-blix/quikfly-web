@@ -77,6 +77,7 @@ class User {
     required this.autoShareNightRides,
     this.autoShareRides = 'off',
     this.ridePin,
+    this.privacyConsent,
   });
   final String id, name, phone, referralCode;
   final int walletBalance;
@@ -95,6 +96,9 @@ class User {
 
   /// The rider's own 4-digit ride PIN (used instead of a new code each ride), or null.
   final String? ridePin;
+
+  /// The privacy notice version this person agreed to (null = not yet); see PrivacyNotice.
+  final String? privacyConsent;
   final Licence licence;
   final GstDetails? gst;
 
@@ -118,7 +122,36 @@ class User {
         autoShareNightRides: j['autoShareNightRides'] == true,
         autoShareRides: (j['autoShareRides'] as String?) ?? (j['autoShareNightRides'] == true ? 'night' : 'off'),
         ridePin: j['ridePin'] as String?,
+        privacyConsent: j['privacyConsent'] as String?,
       );
+}
+
+/// GET /privacy: the DPDP privacy notice (text: packages/shared/src/privacy.ts). The app asks
+/// for consent whenever the signed-in user's privacyConsent differs from its version.
+class PrivacyNotice {
+  PrivacyNotice(Json j)
+      : version = j['version'] as String,
+        updated = j['updated'] as String,
+        summary = [for (final s in j['summary'] as List) '$s'],
+        sections = [
+          for (final s in j['sections'] as List) (title: '${(s as Json)['title']}', points: [for (final p in s['points'] as List) '$p'])
+        ],
+        contact = PrivacyContact(j['contact'] as Json);
+  final String version, updated;
+  final List<String> summary;
+  final List<({String title, List<String> points})> sections;
+  final PrivacyContact contact;
+}
+
+class PrivacyContact {
+  PrivacyContact(Json j)
+      : role = '${j['role']}',
+        name = '${j['name']}',
+        email = '${j['email']}',
+        phone = '${j['phone']}',
+        company = '${j['company']}',
+        address = '${j['address']}';
+  final String role, name, email, phone, company, address;
 }
 
 class AuthResult {
@@ -770,7 +803,7 @@ abstract final class Rules {
   static final gstin = RegExp(r'^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$');
   static final licence = RegExp(r'^[A-Z]{2}\d{2}(19|20)\d{2}\d{7}$');
   static final referralCode = RegExp(r'^[A-Z0-9]{6,10}$');
-  static const nameMin = 2, nameMax = 60, minAge = 13, maxAge = 100;
+  static const nameMin = 2, nameMax = 60, minAge = 18, maxAge = 100;
   static const savedPlaces = 10, travellers = 10, emergencyContacts = 3;
   static const deletionGraceDays = 30;
   static const shareLinkHours = 24;

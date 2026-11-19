@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'router.dart';
+import 'screens/account/privacy_screens.dart';
 import 'state/providers.dart';
 import 'theme/theme.dart';
 
@@ -44,6 +45,7 @@ class _QuikFlyAppState extends ConsumerState<QuikFlyApp> with WidgetsBindingObse
       darkTheme: buildTheme(Brightness.dark),
       themeMode: ref.watch(themeModeProvider),
       routerConfig: router,
+      builder: (_, child) => PrivacyGate(child: child!),
     );
   }
 }

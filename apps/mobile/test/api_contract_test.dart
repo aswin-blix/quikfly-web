@@ -38,6 +38,19 @@ void main() {
     expect(u.referralCode, isNotEmpty);
   });
 
+  test('privacy notice, consent and data export', () async {
+    final n = await api.privacyNotice();
+    expect(n.version, matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')));
+    expect(n.summary, isNotEmpty);
+    expect(n.sections.every((s) => s.title.isNotEmpty && s.points.isNotEmpty), isTrue);
+    expect(n.contact.email, contains('@'));
+    final u = await api.giveConsent(n.version);
+    expect(u.privacyConsent, n.version);
+    final data = await api.exportData();
+    expect(data['noticeVersion'], n.version);
+    expect(((data['data'] as Map)['account'] as List).single['phone'], contains(phone));
+  });
+
   test('ride quote and booking by rideId', () async {
     final a = config.places[0], b = config.places[1];
     final quotes = await api.rideQuotes(ServiceKey.car, a.id, b.id);

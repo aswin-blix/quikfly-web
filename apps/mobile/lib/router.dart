@@ -13,6 +13,7 @@ import 'screens/checkout/confirmed_screen.dart';
 import 'screens/trips/trip_screen.dart';
 import 'screens/trips/rental_screen.dart';
 import 'screens/account/notifications_screen.dart';
+import 'screens/account/privacy_screens.dart';
 import 'widgets/service_gate.dart';
 import 'screens/checkout/invoice_screen.dart';
 import 'screens/not_found.dart';
@@ -44,6 +45,7 @@ final router = GoRouter(
     ),
     GoRoute(path: '/login', parentNavigatorKey: _rootKey, builder: (_, _) => const LoginScreen()),
     GoRoute(path: '/help', parentNavigatorKey: _rootKey, builder: (_, _) => const HelpScreen()),
+    GoRoute(path: '/privacy', parentNavigatorKey: _rootKey, builder: (_, _) => const PrivacyScreen()),
     GoRoute(path: '/support', parentNavigatorKey: _rootKey, builder: (_, _) => const SupportListScreen()),
     GoRoute(path: '/support/new', parentNavigatorKey: _rootKey, builder: (_, s) => NewTicketScreen(bookingId: s.uri.queryParameters['booking'])),
     GoRoute(path: '/support/:id', parentNavigatorKey: _rootKey, builder: (_, s) => SupportThreadScreen(id: s.pathParameters['id']!)),

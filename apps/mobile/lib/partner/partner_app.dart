@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../api/api.dart';
 import '../screens/account/notifications_screen.dart';
+import '../screens/account/privacy_screens.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/not_found.dart';
 import '../state/providers.dart';
@@ -54,6 +55,8 @@ final partnerRouter = GoRouter(
     GoRoute(path: '/onboarding/agreement', builder: (_, _) => const AgreementScreen()),
     GoRoute(path: '/onboarding/sticker', builder: (_, _) => const StickerScreen()),
     GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
+    GoRoute(path: '/privacy', builder: (_, _) => const PrivacyScreen()),
+    GoRoute(path: '/privacy/data', builder: (_, _) => const PrivacyDataScreen()),
   ],
   // Safety net: a link to a page this app doesn't have (e.g. a customer-only page) shows a
   // friendly screen instead of go_router's red error, and Back returns home.
@@ -100,6 +103,7 @@ class _PartnerAppState extends ConsumerState<PartnerApp> with WidgetsBindingObse
       darkTheme: buildTheme(Brightness.dark),
       themeMode: ref.watch(themeModeProvider),
       routerConfig: partnerRouter,
+      builder: (_, child) => PrivacyGate(child: child!),
     );
   }
 }
