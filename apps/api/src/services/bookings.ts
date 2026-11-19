@@ -1,4 +1,4 @@
-import { COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, cancelPolicyFor, creditsReturned, creditsUsable, switchError, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type ServiceKey } from "@quikfly/shared";
+import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, cancelPolicyFor, creditsReturned, creditsUsable, switchError, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { checkCoupon } from "./offers";
@@ -16,14 +16,31 @@ export interface BookingRow {
   starts_at: string | null; refund_amount: number | null; deposit: number;
   cancel_reason: string | null; cancel_fee: number; trip_id: string | null; credits_used: number;
   vendor_id: string | null; vendor_vehicle_id: string | null; vendor_driver_id: string | null;
+  rescheduled_at: string | null; ticket_token: string | null;
 }
-export const toBooking = (r: BookingRow): Booking => ({
+/** `seats`: the bus seats it holds (bookingSeats); left empty where a caller doesn't need them. */
+export const toBooking = (r: BookingRow, seats: BookingSeat[] = []): Booking => ({
   id: r.id, service: r.service, title: r.title, subtitle: r.subtitle, amount: r.amount,
   status: r.status, payment: r.payment, createdAt: r.created_at, lines: JSON.parse(r.lines),
   startsAt: r.starts_at ?? null, refundAmount: r.refund_amount ?? null, deposit: r.deposit ?? 0,
   cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0, rideId: r.ride_id ?? null, tripId: r.trip_id ?? null,
-  creditsUsed: r.credits_used ?? 0,
+  creditsUsed: r.credits_used ?? 0, discount: r.discount ?? 0, seats,
+  ticketToken: r.ticket_token ?? null, rescheduledAt: r.rescheduled_at ?? null,
 });
+
+/** The bus seats held by these bookings, by booking id. */
+export async function bookingSeats(db: D1Database, ids: string[]): Promise<Map<string, BookingSeat[]>> {
+  const map = new Map<string, BookingSeat[]>();
+  if (!ids.length) return map;
+  const { results } = await db.prepare(
+    "SELECT booking_id, seat_id, price, gender FROM bus_seat_holds WHERE booking_id IN (SELECT value FROM json_each(?)) ORDER BY rowid",
+  ).bind(JSON.stringify(ids)).all<{ booking_id: string; seat_id: string; price: number; gender: Gender }>();
+  for (const r of results) map.set(r.booking_id, [...(map.get(r.booking_id) ?? []), { id: r.seat_id, price: r.price ?? 0, gender: r.gender }]);
+  return map;
+}
+
+/** A bus m-ticket's token: unguessable, opened by its QR code (GET /tickets/:token). */
+export const ticketToken = () => [...crypto.getRandomValues(new Uint8Array(12))].map((b) => b.toString(16).padStart(2, "0")).join("");
 
 /** Statuses a booking can still be cancelled or completed from. */
 export const ACTIVE = "('confirmed', 'ongoing')";
@@ -32,13 +49,14 @@ export const ACTIVE = "('confirmed', 'ongoing')";
 export async function listBookings(db: D1Database, userId: string) {
   const { results } = await db.prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC")
     .bind(userId).all<BookingRow>();
-  return results.map(toBooking);
+  const seats = await bookingSeats(db, results.filter((r) => r.service === "bus" && r.status !== "cancelled").map((r) => r.id));
+  return results.map((r) => toBooking(r, seats.get(r.id)));
 }
 
 export async function getBooking(db: D1Database, userId: string, id: string): Promise<Booking> {
   const row = await db.prepare("SELECT * FROM bookings WHERE id = ? AND user_id = ?").bind(id, userId).first<BookingRow>();
   if (!row) throw notFound("Booking not found.");
-  return toBooking(row);
+  return toBooking(row, (await bookingSeats(db, [id])).get(id));
 }
 
 /** What a booking costs before any coupon (the ride's fare, or the quote's total) and when it starts. */
@@ -54,7 +72,9 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
   const deposit = (JSON.parse(q.lines) as FareLine[]).find((l) => l.label === DEPOSIT_LINE)?.amount ?? 0;
   const req = JSON.parse(q.request) as QuoteRequest;
   // Bus seats to hold with the booking (gender per seat; "other" when the quote didn't say).
-  const seatHolds = req.service === "bus" ? { busId: req.busId, date: req.date, seats: req.seatIds.map((seat, i) => ({ seat, gender: req.genders?.[i] ?? "other" })) } : null;
+  const seatHolds = req.service === "bus"
+    ? { busId: req.busId, date: req.date, seats: req.seatIds.map((seat, i) => ({ seat, gender: req.genders?.[i] ?? "other", price: req.seatPrices?.[i] ?? 0 })) }
+    : null;
   return { gross: q.total, quoteId: q.id, rideId: null, startsAt: q.starts_at, deposit, seatHolds };
 }
 
@@ -103,7 +123,9 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
     ...(coupon ? [[COUPON_LINE, `${coupon.code} (−₹${coupon.discount.toLocaleString("en-IN")})`] as [string, string]] : []),
     ...(creditsUsed ? [[CREDITS_LINE, `−₹${creditsUsed.toLocaleString("en-IN")}`] as [string, string]] : []),
   ];
-  const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0, rideId, tripId, creditsUsed };
+  const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0, rideId, tripId, creditsUsed,
+    discount: coupon?.discount ?? 0, seats: seatHolds?.seats.map((x) => ({ id: x.seat, price: x.price, gender: x.gender })) ?? [],
+    ticketToken: seatHolds ? ticketToken() : null, rescheduledAt: null };
   const wallet = input.payment === "wallet";
 
   const conditions: string[] = [];
@@ -122,11 +144,11 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   // Claim the quote with this booking's id, so only one booking can use it.
   if (quoteId) statements.push(db.prepare("UPDATE quotes SET used_at = ? WHERE id = ? AND used_at IS NULL").bind(id, quoteId));
   statements.push(db.prepare(
-    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit, trip_id, credits_used, vendor_id, vendor_vehicle_id, vendor_driver_id)
-     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
+    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit, trip_id, credits_used, vendor_id, vendor_vehicle_id, vendor_driver_id, ticket_token)
+     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
   ).bind(id, userId, booking.service, booking.title, booking.subtitle, amount, booking.payment, JSON.stringify(lines), createdAt,
     quoteId, rideId, coupon?.code ?? null, coupon?.discount ?? 0, startsAt, deposit, tripId, creditsUsed,
-    partner?.vendor_id ?? null, partner?.vendor_vehicle_id ?? null, partner?.vendor_driver_id ?? null, ...condParams));
+    partner?.vendor_id ?? null, partner?.vendor_vehicle_id ?? null, partner?.vendor_driver_id ?? null, booking.ticketToken, ...condParams));
   if (plan.length) {
     statements.push(
       db.prepare(
@@ -151,8 +173,8 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   // Hold the bus seats; the primary key fails the whole batch if someone took one meanwhile.
   if (seatHolds) {
     statements.push(db.prepare(
-      `INSERT INTO bus_seat_holds (bus_id, date, seat_id, booking_id, gender)
-       SELECT ?1, ?2, json_extract(j.value, '$.seat'), ?3, json_extract(j.value, '$.gender') FROM json_each(?4) j
+      `INSERT INTO bus_seat_holds (bus_id, date, seat_id, booking_id, gender, price)
+       SELECT ?1, ?2, json_extract(j.value, '$.seat'), ?3, json_extract(j.value, '$.gender'), json_extract(j.value, '$.price') FROM json_each(?4) j
        WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?3)`,
     ).bind(seatHolds.busId, seatHolds.date, id, JSON.stringify(seatHolds.seats)));
   }

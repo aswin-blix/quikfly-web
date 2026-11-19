@@ -72,6 +72,8 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "busFareNonAc", type: "number", unit: "₹", label: "Non-AC base fare", help: "Per seat." },
       { key: "busSleeperExtra", type: "number", unit: "₹", label: "Sleeper extra", help: "Added for sleeper buses." },
       { key: "busLowerDeckExtra", type: "number", unit: "₹", label: "Lower-deck extra", help: "Added to each lower-deck seat." },
+      { key: "busRescheduleHours", type: "number", unit: "hrs", label: "Bus change closes", help: "Customers can move a ticket to another bus or date once, until this many hours before departure." },
+      { key: "busRescheduleFee", type: "number", unit: "₹", label: "Bus change fee", help: "Charged on top of any fare difference. 0 = free change." },
     ],
   },
   {

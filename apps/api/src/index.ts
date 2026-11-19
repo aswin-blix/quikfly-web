@@ -7,6 +7,7 @@ import { admin } from "./routes/admin";
 import { auth } from "./routes/auth";
 import { me } from "./routes/me";
 import { share } from "./routes/share";
+import { tickets } from "./routes/tickets";
 import { vendor } from "./routes/vendor";
 import { bookings } from "./routes/bookings";
 import { buses } from "./routes/buses";
@@ -35,6 +36,7 @@ const v1 = new Hono<AppEnv>()
   .route("/me", me)
   .route("/config", config)
   .route("/share", share)
+  .route("/tickets", tickets)
   .route("/quotes", quotes)
   .route("/offers", offers)
   .route("/places", places)

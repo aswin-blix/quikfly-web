@@ -122,7 +122,7 @@ export interface CreditSummary {
 /** What a notification is about; the apps pick an icon and where tapping it goes. */
 export const NOTIFICATION_KINDS = [
   "booking.confirmed", "booking.cancelled", "booking.cancelled_by_staff", "booking.deposit_returned",
-  "licence.approved", "licence.rejected", "ride.reminder", "credits.earned",
+  "licence.approved", "licence.rejected", "ride.reminder", "credits.earned", "booking.changed",
   "vendor.changes", "vendor.approved", "vendor.rejected", "vendor.active", "vendor.fleet", "vendor.document", "vendor.trip", "vendor.payout",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
@@ -366,6 +366,36 @@ export interface Booking {
   deposit: number;
   /** Paid with QuikFly Credits (₹), on top of `amount`; 0 when none. */
   creditsUsed: number;
+  /** Coupon discount (₹) taken off this booking; 0 when none. */
+  discount: number;
+  /** Bus seats this booking holds now (empty for other services, and once cancelled). */
+  seats: BookingSeat[];
+  /** Bus bookings: the m-ticket's token (GET /tickets/:token, the QR code); null for other services. */
+  ticketToken: string | null;
+  /** When a bus booking was moved to another bus or date (allowed once); null when never. */
+  rescheduledAt: string | null;
+}
+
+/** A seat a bus booking holds, with what it cost (₹ before GST) and who sits there. */
+export interface BookingSeat {
+  id: string;
+  price: number;
+  gender: Gender;
+}
+
+/** What a bus m-ticket's QR code opens: enough for a conductor to check it, nothing private beyond first names. */
+export interface PublicTicket {
+  pnr: string;
+  /** "valid" until the trip, "cancelled", or "completed". */
+  status: "valid" | "cancelled" | "completed";
+  title: string;
+  subtitle: string;
+  startsAt: string | null;
+  seats: string[];
+  /** Date, departure, arrival as booked. */
+  details: [string, string][];
+  /** Travellers' first names, in seat order. */
+  travellers: string[];
 }
 
 /** A coupon. The API checks it at booking; the website only shows it. */
@@ -421,7 +451,7 @@ export const RENT_PROTECTION = ["standard", "peace"] as const;
 /** What to price. Rides are quoted by POST /rides/quote instead. */
 export type QuoteRequest =
   /** `genders` lines up with `seatIds` (who sits where); women-only seats need "female". */
-  | { service: "bus"; busId: string; from: string; to: string; date: string; seatIds: string[]; genders?: Gender[] }
+  | { service: "bus"; busId: string; from: string; to: string; date: string; seatIds: string[]; genders?: Gender[]; /** Set by the API when it prices the quote (₹ per seat, before GST). */ seatPrices?: number[] }
   /** `start` is the travel date (YYYY-MM-DD); the cancellation policy counts down to it. */
   | { service: "tours"; tourId: string; adults: number; kids: number; start: string }
   | {
