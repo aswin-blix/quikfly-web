@@ -12,8 +12,8 @@ The customer website for all six QuikFly services. All data and every price come
 | `/bike-taxi`, `/cab` | Pickup/drop → fare per vehicle type → driver search → live tracking with ride OTP → rating; plus ride options, fare rates and FAQ Women riders (profile gender female) also see women-only types such as Bike Pink, marked "Women only", with a woman captain; rides share themselves with emergency contacts per Account → Safety (off / night / every ride), and a rider's own ride PIN replaces the OTP. | Uber / Ola / Rapido |
 | `/bus` | Route search with swap, quick date chips, popular routes, offers | redBus |
 | `/bus/search` | 7-day date strip, filter sidebar (departure time, AC/sleeper, max price, rating, operator), sort, expandable seat map with boarding/dropping points | redBus |
-| `/holidays` | Theme and duration filters, package cards | MakeMyTrip Holidays |
-| `/holidays/[slug]` | Hero art, quick facts, Itinerary / Inclusions / Policies tabs, sticky price card, similar getaways | MakeMyTrip Holidays |
+| `/holidays` | Theme (incl. Spiritual, Women only, Seniors), duration, budget, and departure month / city filters; package cards show the next group departure with seats left ("Filling fast" at 5 or fewer) or "Private trip · start any date" | MakeMyTrip Holidays |
+| `/holidays/[slug]` | Hero art, quick facts, Itinerary / Inclusions / Policies tabs, sticky price card, similar getaways; group packages pick a departure (date, city, seats left, its own price) instead of a start date | MakeMyTrip Holidays |
 | `/rent-a-car` | City and dates, self-drive or chauffeur, filters (category, transmission, fuel, seats), hourly pricing | Zoomcar |
 | `/rent-a-car/[id]` | Car details, specs, price breakdown, licence check | Zoomcar |
 | `/travel-rentals` | Tempo traveller → 45-seat coach, local or outstation fare estimate, side-by-side compare | Savaari / group-travel operators |
