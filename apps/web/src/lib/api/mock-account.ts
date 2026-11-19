@@ -1,7 +1,7 @@
 // Mock (demo mode) versions of the account endpoints. Same rules as the API,
 // using the shared limits and patterns, but stored in this browser only.
 import {
-  CATALOG_SEED, DEFAULT_SETTINGS, DELETION_GRACE_DAYS, LIMITS, PATTERNS, compactCode,
+  CATALOG_SEED, DEFAULT_SETTINGS, DELETION_GRACE_DAYS, LIMITS, PASS_NAME, PATTERNS, compactCode, passEnd, passSaleError,
   type EmergencyContact, type SavedPlace, type Traveller, type User,
 } from "@quikfly/shared";
 import type { QuikflyApi } from "./contract";
@@ -17,7 +17,7 @@ const tenDigits = (phone: string) => {
 
 function newUser(phone: string): User {
   return {
-    id: uid("U"), name: "Guest", phone, walletBalance: 0, creditBalance: 0, email: null, gender: null, dob: null, profileComplete: false,
+    id: uid("U"), name: "Guest", phone, walletBalance: 0, creditBalance: 0, passUntil: null, email: null, gender: null, dob: null, profileComplete: false,
     referralCode: "QF" + Math.random().toString(36).slice(2, 8).toUpperCase(), referred: false,
     licence: { status: "none", number: null, expiry: null, note: null }, gst: null, autoShareNightRides: false,
   };
@@ -101,6 +101,18 @@ export const mockAccount: QuikflyApi["account"] = {
   },
   async walletHistory() { await wait(250); return load(KEYS.wallet, []); },
   async credits() { await wait(250); return creditSummary(); },
+  async buyPass() {
+    await wait(500);
+    const s = DEFAULT_SETTINGS;
+    const off = passSaleError(s);
+    if (off) fail(off);
+    const u = currentUser();
+    if (u.walletBalance < s.passPrice) fail(`${PASS_NAME} costs ₹${s.passPrice.toLocaleString("en-IN")} and your wallet has ₹${u.walletBalance.toLocaleString("en-IN")}.`);
+    const passUntil = passEnd(s, u.passUntil);
+    walletEntry("payment", -s.passPrice, `${PASS_NAME} · ${s.passDays} days`);
+    patchUser({ passUntil });
+    return { passUntil };
+  },
 };
 
 /** A small capped list stored under one key. */

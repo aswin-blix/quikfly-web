@@ -46,6 +46,8 @@ export interface QuikflyApi {
     walletHistory(): Promise<WalletTransaction[]>;
     /** GET /me/credits: QuikFly Credits balance, the soonest expiry, and history. */
     credits(): Promise<CreditSummary>;
+    /** POST /me/pass: buy a QuikFly Pass from the wallet; returns when the pass now ends. */
+    buyPass(): Promise<{ passUntil: string }>;
   };
   savedPlaces: {
     /** GET /me/places */

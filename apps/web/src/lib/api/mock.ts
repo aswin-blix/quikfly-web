@@ -4,12 +4,12 @@
 // Storage helpers: ./mock-store.ts. Account endpoints: ./mock-account.ts.
 import type { QuikflyApi } from "./contract";
 import {
-  BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
+  BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
-import { KEYS, creditBalance, creditEntry, currentUser, fail, load, save, uid, wait, walletEntry, type MockRide } from "./mock-store";
+import { KEYS, creditBalance, creditEntry, currentUser, fail, load, save, signedInUser, uid, wait, walletEntry, type MockRide } from "./mock-store";
 
 const creditExpiry = () => new Date(Date.now() + settings.creditsExpiryDays * 86_400_000).toISOString();
 
@@ -121,7 +121,9 @@ export const mockApi: QuikflyApi = {
       if (route.some((id, i) => i > 0 && id === route[i - 1])) fail("A stop can't be the same as the place before it.");
       if (scheduledFor) { const err = scheduleError(settings, scheduledFor); if (err) fail(err); }
       const hour = scheduledFor ? parseInt(scheduledFor.slice(11, 13), 10) : new Date().getHours();
-      return rideQuotes(seed.rideOption.filter((o) => o.service === service), placeById(pickupId), placeById(dropId), settings, hour, stopIds.map(placeById));
+      // A signed-in rider whose QuikFly Pass covers the pickup time pays no surge (like the API).
+      const waive = passCovers(signedInUser()?.passUntil, scheduledFor ? Date.parse(localToIso(scheduledFor)) : Date.now());
+      return rideQuotes(seed.rideOption.filter((o) => o.service === service), placeById(pickupId), placeById(dropId), settings, hour, stopIds.map(placeById), waive);
     },
     async book({ optionId, pickupId, dropId, payment, scheduledFor, stopIds = [] }) {
       await wait(scheduledFor ? 900 : 2600); // "searching for drivers" only for ride-now
