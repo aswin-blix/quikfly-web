@@ -12,7 +12,7 @@ For whoever presents the demo. It shows one system working end to end: staff cha
 
 ## Before the demo (the day before, then again 30 minutes before)
 
-- [ ] **Phone:** QuikFly app installed (Android Settings → Apps → QuikFly shows the version: **0.1.11** or newer), charged, notifications silenced. Install it beforehand; don't download it live.
+- [ ] **Phone:** QuikFly app installed (Android Settings → Apps → QuikFly shows the version: **0.1.12** or newer), charged, notifications silenced. Install it beforehand; don't download it live.
 - [ ] **Demo customer:** decide which account the phone uses.
   - *New-customer moment:* sign out and sign up live with a demo number such as **+91 90000 00100** (any 10-digit number works; OTP **1234**). It starts with **₹500** in the wallet.
   - *Existing account:* check its wallet balance is enough for the bookings below (a bus seat is about ₹450).
