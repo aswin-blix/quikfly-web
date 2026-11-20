@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
-import { SETTING_RULES, checkSetting, checkSettings, type Settings } from "@quikfly/shared";
+import { SETTING_RULES, checkSetting, checkSettings, isTermKey, type Settings } from "@quikfly/shared";
 import { Button, ErrorBox, PageHeader, Toggle } from "@/components/ui";
 import { adminApi } from "@/lib/api";
 import { cx } from "@/lib/format";
@@ -82,7 +82,8 @@ function SettingsForm() {
               <div key={f.key} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
                 <div className="flex-1 min-w-0">
                   <label htmlFor={`set-${f.key}`} className="text-sm font-medium text-fg">{f.label}</label>
-                  <p className="text-xs text-subtle mt-0.5">{f.help}</p>
+                  {f.help && <p className="text-xs text-subtle mt-0.5">{f.help}</p>}
+                  {isTermKey(f.key) && <p className="text-xs text-muted mt-0.5">Kept with each booking: changes apply to new bookings only.</p>}
                 </div>
                 <FieldInput f={f} value={draft[f.key]} disabled={!editable}
                   onChange={(v) => { setSaved(false); setDraft({ ...draft, [f.key]: v } as Settings); }} />

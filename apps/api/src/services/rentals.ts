@@ -3,7 +3,7 @@
 // time; staff then settle the deposit (extra km, late return, fuel, damage), which completes
 // the booking. Photos are private R2 objects, served to the customer and to staff only.
 import {
-  FUEL_EIGHTHS, RENTAL_PHOTO_SIDES, RENTAL_RULES, extensionError, extensionLines, localNow, localToIso, rentExcess, rentalSettlement,
+  FUEL_EIGHTHS, RENTAL_PHOTO_SIDES, RENTAL_RULES, extensionError, extensionLines, localNow, localToIso, parseTerms, rentExcess, rentalSettlement, withTerms,
   type AdminRental, type FareLine, type Rental, type RentalPhotoSide, type RentalSettlement, type RentalStage, type RentalState, type Settings,
 } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
@@ -20,10 +20,10 @@ interface RentalRow {
   return_odometer: number | null; return_fuel: number | null; return_at: string | null;
   settlement: string | null; state: RentalState;
 }
-type Joined = RentalRow & Pick<BookingRow, "user_id" | "title" | "status" | "payment" | "deposit" | "amount" | "lines"> & { customer_name: string };
+type Joined = RentalRow & Pick<BookingRow, "user_id" | "title" | "status" | "payment" | "deposit" | "amount" | "lines" | "terms"> & { customer_name: string };
 
 const SELECT = `SELECT r.*, ${RENTAL_STATE_SQL.replaceAll(/\b(settlement|return_at|pickup_at)\b/g, "r.$1")} AS state,
-  b.user_id, b.title, b.status, b.payment, b.deposit, b.amount, b.lines, u.name AS customer_name
+  b.user_id, b.title, b.status, b.payment, b.deposit, b.amount, b.lines, b.terms, u.name AS customer_name
   FROM rentals r JOIN bookings b ON b.id = r.booking_id JOIN users u ON u.id = b.user_id WHERE r.booking_id = ?`;
 
 async function load(db: D1Database, bookingId: string, userId: string | null): Promise<Joined> {
@@ -194,11 +194,11 @@ export async function returnRental(db: D1Database, userId: string, bookingId: st
   return myRental(db, userId, bookingId);
 }
 
-/** What settling now would deduct, for staff (damage as entered). */
+/** What settling now would deduct, for staff (damage as entered), at the rates the rental was booked under. */
 export async function settlementPreview(db: D1Database, bookingId: string, damage = 0, damageNote: string | null = null) {
   const row = await load(db, bookingId, null);
   if (row.state !== "returned") throw conflict(row.state === "settled" ? "This rental is already settled." : "The customer hasn't returned the car yet.");
-  const settings = await getSettings(db);
+  const settings = withTerms(await getSettings(db), parseTerms(row.terms));
   return { row, settings, settlement: rentalSettlement({
     start: row.start_local, endsAt: row.ends_at, kmPlan: row.km_plan, hourlyRate: row.hourly_rate, deposit: row.deposit ?? 0,
     pickup: { odometerKm: row.pickup_odometer!, fuel: row.pickup_fuel! }, dropoff: { odometerKm: row.return_odometer!, fuel: row.return_fuel!, at: row.return_at! },

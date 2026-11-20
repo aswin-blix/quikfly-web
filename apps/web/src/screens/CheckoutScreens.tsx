@@ -11,7 +11,7 @@ import { cx, inr, prettyDateTime } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
-import { CREDITS_LINE, DEPOSIT_LINE, RIDE_SCHEDULE, cancelPolicyFor, creditsEarned, creditsUsable, formatLicence, minutesUntilStart, refundAmount, refundPercent, rescheduleError, rideCancelFee, seatCancelRefund, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
+import { CREDITS_LINE, DEPOSIT_LINE, RIDE_SCHEDULE, cancelPolicyFor, creditsEarned, creditsUsable, formatLicence, minutesUntilStart, refundAmount, refundPercent, rescheduleError, rideCancelFee, seatCancelRefund, withTerms, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { bookingWhen, rideOffer } from "@/lib/trips";
 import { LicenceBadge, LicenceForm, licenceMessage, useLicencePolling } from "@/components/account/LicenceSection";
@@ -416,14 +416,15 @@ export function BookingsScreen() {
     return list.filter((x) => x.tripId === b.tripId).sort((x, y) => bookingWhen(x).localeCompare(bookingWhen(y)));
   });
 
-  /** What cancelling now gives back under the service's policy (the API applies the same rule). */
+  /** What cancelling now gives back under the terms it was booked under (the API applies the same rule). */
   function preview(b: Booking) {
+    const sold = withTerms(settings, b.terms);
     if (b.service === "bike" || b.service === "car") {
       // No reason from My Trips, so the fee applies after the free minutes.
-      const fee = rideCancelFee(settings, b.amount, null, b.createdAt, Date.now(), b.startsAt);
+      const fee = rideCancelFee(sold, b.amount, null, b.createdAt, Date.now(), b.startsAt);
       return { percent: 100, refund: b.amount - fee, fee };
     }
-    const percent = refundPercent(cancelPolicyFor(settings, b.service), b.startsAt);
+    const percent = refundPercent(cancelPolicyFor(sold, b.service), b.startsAt);
     return { percent, refund: refundAmount(b.amount, percent, b.deposit ?? 0), fee: 0 };
   }
   function confirmText(b: Booking) {
@@ -438,7 +439,7 @@ export function BookingsScreen() {
     setBusy(true);
     try {
       const done = await api.bookings.cancelSeats(b.id, seatIds);
-      const { refund } = seatCancelRefund(settings, b, seatIds);
+      const { refund } = seatCancelRefund(withTerms(settings, b.terms), b, seatIds);
       toast(`Seat${seatIds.length > 1 ? "s" : ""} ${seatIds.join(", ")} cancelled. ${refund ? (done.payment === "wallet" ? `${inr(refund)} refunded to your wallet.` : `Refund due: ${inr(refund)}.`) : "No refund under the cancellation policy."}`);
       setSeatPick(null);
     } catch (e) {
@@ -534,7 +535,7 @@ export function BookingsScreen() {
                               {b.ticketToken && b.status === "confirmed" && <Link href={`/ticket${qs({ t: b.ticketToken })}`} className="text-sm text-gold flex items-center gap-1.5"><QrCode size={15} />m-Ticket</Link>}
                               <Link href={`/invoice${qs({ id: b.id })}`} className="text-sm text-gold flex items-center gap-1.5"><FileText size={15} />Invoice</Link>
                               <Link href={`/account${qs({ tab: "support", booking: b.id })}`} className="text-sm text-gold flex items-center gap-1.5"><LifeBuoy size={15} />Get help</Link>
-                              {b.service === "bus" && !rescheduleError(settings, b) && b.startsAt && (
+                              {b.service === "bus" && !rescheduleError(withTerms(settings, b.terms), b) && b.startsAt && (
                                 <Link href={`/bus/search${qs({ from: b.title.split(" → ")[0], to: b.title.split(" → ")[1] ?? "", date: b.startsAt.slice(0, 10), change: b.id })}`} className="text-sm text-gold flex items-center gap-1.5"><RotateCcw size={15} />Change bus</Link>
                               )}
                               {b.service === "bus" && b.status === "confirmed" && b.seats.length > 1 && confirming !== b.id && (
@@ -551,7 +552,7 @@ export function BookingsScreen() {
                           )}
                           {seatPick?.id === b.id && b.status === "confirmed" && (() => {
                             const picked = seatPick.seats;
-                            const preview = picked.length ? seatCancelRefund(settings, b, picked) : null;
+                            const preview = picked.length ? seatCancelRefund(withTerms(settings, b.terms), b, picked) : null;
                             const all = picked.length >= b.seats.length;
                             return (
                               <div className="mt-4 rounded-xl border border-line p-3 space-y-3" role="group" aria-label="Seats to cancel">

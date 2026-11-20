@@ -190,7 +190,9 @@ await expect("GET /rides/:id unknown is 404", call("GET", "/rides/RDNOPE"), 404)
 await expect("a scheduled ride can't start days early", call("POST", `/rides/${later.id}/start`), 409, (j) => /assigned/.test(j.message));
 await expect("a cancelled ride can't be started", call("POST", `/rides/${ride.id}/start`), 409, (j) => /cancelled/.test(j.message));
 const laterBooking = await expect("booking a scheduled ride", call("POST", "/bookings", { service: "car", title: "Smoke scheduled", subtitle: "A → B", payment: "cash", lines: [], rideId: later.id }), 201,
-  (j) => j.rideId === later.id && j.startsAt === later.scheduledFor);
+  (j) => j.rideId === later.id && j.startsAt === later.scheduledFor
+    // It keeps the ride rules it was sold under (booking terms).
+    && j.terms?.rideCancelFeePercent === cfg.settings.rideCancelFeePercent && j.terms.rideScheduleFreeCancelMinutes === cfg.settings.rideScheduleFreeCancelMinutes && j.terms.gstRides === cfg.settings.gstRides);
 await expect("cancelling well before pickup is free", call("POST", `/bookings/${laterBooking.id}/cancel`, {}), 200, (j) => j.cancelFee === 0 && j.refundAmount === laterBooking.amount);
 
 // Bookings: priced by a quote or a ride, never by the client
@@ -199,6 +201,9 @@ const newBooking = (extra) => ({ service: "bus", title: "Chennai → Bengaluru",
 await expect("POST /bookings needs a quote", call("POST", "/bookings", newBooking({ amount: 1 })), 400, (j) => /quote/i.test(j.message));
 const booking = await expect("POST /bookings charges the quote, not the client", call("POST", "/bookings", newBooking({ quoteId: busQuote.id, amount: 1 })), 201,
   (j) => j.id && j.status === "confirmed" && j.amount === busQuote.total && j.lines[0][1] === "L1" && j.startsAt?.startsWith("2026-12-01T") && j.refundAmount === null);
+await expect("a booking keeps the terms it was sold under (bus keys only)", call("GET", `/bookings/${booking.id}`), 200,
+  (j) => j.terms?.cancelPolicyBus === cfg.settings.cancelPolicyBus && j.terms.gstBus === cfg.settings.gstBus && j.terms.busRescheduleFee === cfg.settings.busRescheduleFee
+    && !("gstTours" in j.terms) && !("rentExtraKmRate" in j.terms));
 await expect("a quote works only once", call("POST", "/bookings", newBooking({ quoteId: busQuote.id })), 409);
 await expect("a quote is for one service", call("POST", "/bookings", newBooking({ service: "tours", quoteId: busQuote.id })), 400);
 await expect("POST /bookings rejects a bad service", call("POST", "/bookings", newBooking({ service: "x" })), 400);

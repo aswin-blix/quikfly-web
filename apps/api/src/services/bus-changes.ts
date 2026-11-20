@@ -2,8 +2,8 @@
 // cancel some seats, move once to another bus or date on the same route, and the public
 // m-ticket its QR code opens. Every money change lands in one batch with the booking change.
 import {
-  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, creditsReturned, rescheduleAmounts, rescheduleError,
-  seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames, type Booking, type PublicTicket, type QuoteRequest,
+  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, creditsReturned, bookingTerms, rescheduleAmounts, rescheduleError,
+  seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames, withTerms, type Booking, type PublicTicket, type QuoteRequest,
 } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
@@ -35,7 +35,8 @@ export async function cancelSeats(db: D1Database, userId: string, id: string, se
   const { row, booking } = await ownBusBooking(db, userId, id);
   const err = seatCancelError(booking, seatIds);
   if (err) throw (booking.status !== "confirmed" ? conflict(err) : badRequest(err));
-  const settings = await getSettings(db);
+  // The bus policy the ticket was sold under.
+  const settings = withTerms(await getSettings(db), booking.terms);
   const { share, percent, refund } = seatCancelRefund(settings, booking, seatIds);
   const creditsShare = seatsShare(row.credits_used ?? 0, booking.seats, seatIds);
   const discountShare = seatsShare(row.discount ?? 0, booking.seats, seatIds);
@@ -91,7 +92,9 @@ export async function rescheduleBooking(
   db: D1Database, userId: string, id: string, quoteId: string, trip: { subtitle: string; lines: [string, string][] },
 ): Promise<{ booking: Booking; charged: number; refunded: number }> {
   const { row, booking } = await ownBusBooking(db, userId, id);
-  const settings = await getSettings(db);
+  // The change window and fee the ticket was sold under.
+  const current = await getSettings(db);
+  const settings = withTerms(current, booking.terms);
   const err = rescheduleError(settings, booking);
   if (err) throw conflict(err);
   const oldReq = row.quote_id
@@ -119,17 +122,19 @@ export async function rescheduleBooking(
   lines = setLine(lines, BUS_CHANGED_LINE, `${was || "the earlier bus"}${fee ? ` (fee ${inr(fee)})` : ""}${charge ? ` · paid ${inr(charge)} more` : refund ? ` · ${inr(refund)} ${wallet ? "back to wallet" : "refund due"}` : ""}`);
   const holds = req.seatIds.map((seat, i) => ({ seat, gender: req.genders?.[i] ?? "other", price: req.seatPrices?.[i] ?? 0 }));
   const moved = "EXISTS (SELECT 1 FROM bookings WHERE id = ?1 AND rescheduled_at = ?2)";
+  // The new fare was quoted with today's GST rate, so the invoice splits it at that rate; the other terms stay.
+  const terms = JSON.stringify({ ...(booking.terms ?? bookingTerms(current, "bus")), gstBus: current.gstBus });
 
   let results: D1Result[];
   try {
     results = await db.batch([
       db.prepare("UPDATE quotes SET used_at = ?1 WHERE id = ?2 AND used_at IS NULL").bind(id, quoteId),
       db.prepare(
-        `UPDATE bookings SET quote_id = ?3, amount = ?4, starts_at = ?5, subtitle = ?6, lines = ?7, rescheduled_at = ?2
+        `UPDATE bookings SET quote_id = ?3, amount = ?4, starts_at = ?5, subtitle = ?6, lines = ?7, rescheduled_at = ?2, terms = ?11
          WHERE id = ?1 AND user_id = ?8 AND status = 'confirmed' AND rescheduled_at IS NULL AND amount = ?9
            AND (SELECT used_at FROM quotes WHERE id = ?3) = ?1
            AND (?10 = 0 OR (SELECT wallet_balance FROM users WHERE id = ?8) >= ?10)`,
-      ).bind(id, now, quoteId, newAmount, q.starts_at, trip.subtitle, JSON.stringify(lines), userId, row.amount, wallet ? charge : 0),
+      ).bind(id, now, quoteId, newAmount, q.starts_at, trip.subtitle, JSON.stringify(lines), userId, row.amount, wallet ? charge : 0, terms),
       db.prepare(`DELETE FROM bus_seat_holds WHERE booking_id = ?1 AND ${moved}`).bind(id, now),
       // The primary key fails the whole batch if someone took one of the new seats meanwhile.
       db.prepare(

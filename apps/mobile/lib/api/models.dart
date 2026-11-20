@@ -464,7 +464,7 @@ class TravelVehicle {
 class Booking {
   const Booking(this.id, this.service, this.title, this.subtitle, this.amount, this.status, this.createdAt, this.payment, this.lines,
       {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0, this.rideId, this.tripId, this.creditsUsed = 0,
-      this.discount = 0, this.seats = const [], this.ticketToken, this.rescheduledAt, this.rentalState});
+      this.discount = 0, this.seats = const [], this.ticketToken, this.rescheduledAt, this.rentalState, this.terms});
   final String id, title, subtitle, payment;
   final ServiceKey service;
   final int amount;
@@ -509,6 +509,10 @@ class Booking {
   /// Self-drive bookings: booked, on_trip, returned or settled (details from GET /bookings/:id/rental); null otherwise.
   final String? rentalState;
 
+  /// The settings this booking was sold under (packages/shared/src/terms.ts): cancellation policy, ride fee,
+  /// GST rate, self-drive rates. Null for bookings made before terms were kept. Use [Settings.withTerms].
+  final Json? terms;
+
   /// A booking line by label, e.g. 'Seats'.
   String? line(String label) => lines.where((l) => l.$1 == label).firstOrNull?.$2;
 
@@ -535,6 +539,7 @@ class Booking {
         ticketToken: j['ticketToken'] as String?,
         rescheduledAt: j['rescheduledAt'] == null ? null : DateTime.tryParse('${j['rescheduledAt']}')?.toLocal(),
         rentalState: j['rentalState'] as String?,
+        terms: j['terms'] is Map ? Map<String, dynamic>.from(j['terms'] as Map) : null,
       );
 }
 
@@ -642,6 +647,10 @@ class ShareLink {
 class Settings {
   const Settings(this._raw);
   final Json _raw;
+
+  /// These settings with a booking's terms laid over them (withTerms in packages/shared/src/terms.ts):
+  /// the rules it was sold under. No terms (older bookings) = these settings.
+  Settings withTerms(Json? terms) => terms == null || terms.isEmpty ? this : Settings({..._raw, ...terms});
   int _i(String k, int d) => (_raw[k] as num?)?.round() ?? d;
   String _s(String k, String d) => (_raw[k] as String?) ?? d;
 

@@ -11,7 +11,7 @@ import { Accordion, Empty, GoldButton, PageHeader, SectionTitle, Segmented, Spin
 import { api } from "@/lib/api";
 import { cx, inr, prettyDate, shiftISO, todayISO } from "@/lib/format";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
-import { GENDERS, cancelPolicyText, rescheduleAmounts, type Booking, type Bus, type Gender, type PriceQuote, type Seat } from "@quikfly/shared";
+import { GENDERS, cancelPolicyText, rescheduleAmounts, withTerms, type Booking, type Bus, type Gender, type PriceQuote, type Seat } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { serviceByKey } from "@/lib/services";
 
@@ -429,7 +429,7 @@ function SeatSelector({ bus, from, to, date, change }: { bus: Bus; from: string;
           )}
           <div className="flex justify-between font-bold text-lg"><span>{change ? "New fare (before GST)" : "Amount"}</span><span className="text-gold">{inr(total)}</span></div>
           {change && changeQuote ? (() => {
-            const m = rescheduleAmounts(settings, change, changeQuote.total);
+            const m = rescheduleAmounts(withTerms(settings, change.terms), change, changeQuote.total);
             return (
               <div className="border-t border-line pt-2 space-y-2">
                 <p className="text-sm text-soft" role="status">

@@ -20,7 +20,8 @@ class Invoice {
 }
 
 Invoice invoiceFor(Booking b, Settings settings) {
-  final rate = settings.gstRate(b.service);
+  // The GST rate the booking was sold under, so an old invoice never changes.
+  final rate = settings.withTerms(b.terms).gstRate(b.service);
   final taxable = _r2(b.amount / (1 + rate / 100));
   final tax = _r2(b.amount - taxable);
   // Intra-state supply (Tamil Nadu) splits GST equally into CGST and SGST.
