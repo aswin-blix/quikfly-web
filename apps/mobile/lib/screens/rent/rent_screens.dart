@@ -31,7 +31,11 @@ Map<String, (String, String)> rentPlans(Settings s) => {
       'limited': ('${s.rentLimitedKmPerDay} km/day', '${inr(s.rentExtraKmRate)}/km beyond the limit'),
       'unlimited': ('Unlimited km', 'Drive as much as you like'),
     };
-const rentProtection = {'standard': ('Standard', 'You pay up to ₹10,000 for damage'), 'peace': ('Peace of mind', 'You pay up to ₹2,000 for damage')};
+/// Protection plans: label, and what the customer pays at most for damage (from Settings, like the website).
+Map<String, (String, String)> rentProtection(Settings s) => {
+      'standard': ('Standard', 'You pay up to ${inr(s.rentExcess('standard'))} for damage'),
+      'peace': ('Peace of mind', 'You pay up to ${inr(s.rentExcess('peace'))} for damage'),
+    };
 
 (DateTime, DateTime) defaultRentalWindow([DateTime? now]) {
   final n = now ?? DateTime.now();
@@ -317,7 +321,7 @@ class _RentDetailScreenState extends ConsumerState<RentDetailScreen> {
               ('Pickup', dateTime(t.start)),
               ('Return', dateTime(t.end)),
               ('Delivery', _doorstep ? 'Doorstep' : 'Self pickup · ${t.city} hub'),
-              if (t.self) ('Plan', '${rentPlans(settings)[_km]!.$1} · ${rentProtection[_prot]!.$1}'),
+              if (t.self) ('Plan', '${rentPlans(settings)[_km]!.$1} · ${rentProtection(settings)[_prot]!.$1}'),
             ],
             quote: quote,
             travellers: const ['Primary driver'],
@@ -420,7 +424,7 @@ class _RentDetailScreenState extends ConsumerState<RentDetailScreen> {
             for (final e in rentPlans(settings).entries) (e.key, e.value.$1, e.value.$2, e.key == 'unlimited' ? '+${settings.rentUnlimitedKmExtraPercent}%' : 'Best value'),
           ]),
           group<String>('Damage protection', _prot, (v) => setState(() => _prot = v), [
-            for (final e in rentProtection.entries)
+            for (final e in rentProtection(settings).entries)
               (e.key, e.value.$1, e.value.$2, '${inr(e.key == 'peace' ? settings.rentProtectionPeacePerDay : settings.rentProtectionStandardPerDay)}/day'),
           ]),
         ],

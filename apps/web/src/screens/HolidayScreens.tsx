@@ -128,6 +128,7 @@ function NextDeparture({ t }: { t: TourPackage }) {
 }
 
 function TourCard({ t }: { t: TourPackage }) {
+  const settings = useSettings();
   return (
     <Tilt max={5}>
       <Link href={`/holidays/${t.slug}`} className="group panel overflow-hidden block hover:border-gold/50 transition-colors h-full">
@@ -150,7 +151,7 @@ function TourCard({ t }: { t: TourPackage }) {
           <ul className="text-sm text-soft space-y-1">{t.highlights.map((h) => <li key={h} className="flex gap-2"><Check size={14} className="text-gold mt-0.5 shrink-0" />{h}</li>)}</ul>
           <NextDeparture t={t} />
           <div className="flex items-end justify-between pt-3 border-t border-line">
-            <div><p className="text-[11px] text-subtle">per person</p><p className="text-xl font-bold text-gold">{inr(t.price)}</p></div>
+            <div><p className="text-[11px] text-subtle">per person{settings.gstTours ? " + GST" : ""}</p><p className="text-xl font-bold text-gold">{inr(t.price)}</p></div>
             <span className="text-sm text-gold group-hover:translate-x-1 transition-transform">View details →</span>
           </div>
         </div>
@@ -269,7 +270,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
                 <div className="panel p-5 space-y-4 text-sm">
                   <div><p className="font-semibold flex items-center gap-2"><ShieldCheck size={16} className="text-success" />Cancellation</p><p className="text-muted mt-1">{cancelPolicyText(settings, "tours")} Counted from midnight on the start date; wallet refunds are instant.</p></div>
                   <div><p className="font-semibold">Payment</p><p className="text-muted mt-1">Pay in full at booking, from your QuikFly wallet or the payment methods at checkout.</p></div>
-                  <div><p className="font-semibold">Price</p><p className="text-muted mt-1">Per person, twin sharing, including GST ({settings.gstTours}%). Children (5–11) pay {settings.tourChildPercent}% of the adult price.</p></div>
+                  <div><p className="font-semibold">Price</p><p className="text-muted mt-1">Per person, twin sharing{settings.gstTours ? `, plus GST (${settings.gstTours}%), shown in the total before you pay` : ""}. Children (5–11) pay {settings.tourChildPercent}% of the adult price.</p></div>
                 </div>
               )}
             </motion.div>
@@ -278,7 +279,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
 
         <aside className="lg:sticky lg:top-24 h-fit">
           <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="panel gold-border p-5 space-y-4">
-            <div><p className="text-xs text-subtle">{deps.length ? "Per person on this departure" : "Starting from"}</p><p className="text-3xl font-bold text-gold">{inr(adultPrice)}<span className="text-sm text-muted font-normal"> /person</span></p></div>
+            <div><p className="text-xs text-subtle">{deps.length ? "Per person on this departure" : "Starting from"}</p><p className="text-3xl font-bold text-gold">{inr(adultPrice)}<span className="text-sm text-muted font-normal"> /person{settings.gstTours ? ` + ${settings.gstTours}% GST` : ""}</span></p></div>
             {deps.length ? (
               <fieldset>
                 <legend className="label">Group departure</legend>

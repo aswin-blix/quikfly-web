@@ -1,10 +1,10 @@
-import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, cancelPolicyFor, creditsReturned, creditsUsable, switchError, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
+import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visibleById } from "./catalog";
 import { checkCoupon } from "./offers";
 import { usableQuote } from "./quotes";
-import { ownRide } from "./rides";
+import { ownRideWithTime } from "./rides";
 import { getSettings } from "./settings";
 import { notify } from "./notifications";
 import { creditExpiry, earnStatement, earnedNotice, spendPlan } from "./credits";
@@ -79,7 +79,9 @@ export async function getBooking(db: D1Database, userId: string, id: string): Pr
 async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
   if (input.service === "bike" || input.service === "car") {
     if (!input.rideId) throw badRequest('"rideId" is required for ride bookings.');
-    const ride = await ownRide(db, userId, input.rideId);
+    const { ride, createdAt } = await ownRideWithTime(db, userId, input.rideId);
+    // A ride's fare is held like a quote: an unbooked ride can't be booked later at an old (e.g. off-peak) fare.
+    if (Date.now() - Date.parse(createdAt) > QUOTE_TTL_MINUTES * 60_000) throw conflict(`Fares are held for ${QUOTE_TTL_MINUTES} minutes and this one has expired. Please check the fare again.`);
     if (ride.quote.option.service !== input.service) throw badRequest("That ride is for a different service.");
     return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: ride.scheduledFor ?? null, deposit: 0, seatHolds: null, departure: null, rental: null };
   }
@@ -96,13 +98,14 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
     ? { id: req.departureId, travellers: req.adults + req.kids, seats: (await visibleById(db, "departure", req.departureId)).seats }
     : null;
   // A self-drive car gets a rental (pickup/return checklist), priced as booked for extensions and late fees.
-  let rental: { start: string; end: string; kmPlan: string; hourlyRate: number; protectionPerDay: number } | null = null;
+  let rental: { start: string; end: string; kmPlan: string; hourlyRate: number; protectionPerDay: number; damageExcess: number } | null = null;
   if (req.service === "rent" && req.mode === "self") {
     const [car, settings] = await Promise.all([visibleById(db, "rentalCar", req.carId), getSettings(db)]);
     const uplift = req.kmPlan === "unlimited" ? 1 + settings.rentUnlimitedKmExtraPercent / 100 : 1;
     rental = {
       start: req.start, end: req.end, kmPlan: req.kmPlan, hourlyRate: Math.round(car.pricePerHour * uplift),
       protectionPerDay: req.protection === "peace" ? settings.rentProtectionPeacePerDay : settings.rentProtectionStandardPerDay,
+      damageExcess: rentExcess(settings, req.protection),
     };
   }
   return { gross: q.total, quoteId: q.id, rideId: null, startsAt: q.starts_at, deposit, seatHolds, departure, rental };
@@ -214,9 +217,9 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   }
   if (rental) {
     statements.push(db.prepare(
-      `INSERT INTO rentals (booking_id, start_local, ends_at, km_plan, hourly_rate, protection_per_day, created_at)
-       SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?)`,
-    ).bind(id, rental.start, rental.end, rental.kmPlan, rental.hourlyRate, rental.protectionPerDay, createdAt, id));
+      `INSERT INTO rentals (booking_id, start_local, ends_at, km_plan, hourly_rate, protection_per_day, damage_excess, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?)`,
+    ).bind(id, rental.start, rental.end, rental.kmPlan, rental.hourlyRate, rental.protectionPerDay, rental.damageExcess, createdAt, id));
   }
   // The booking the trip started from joins it too (only if this booking went in).
   if (input.tripOf) {

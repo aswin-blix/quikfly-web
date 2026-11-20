@@ -125,10 +125,13 @@ export async function startRide(db: D1Database, userId: string, rideId: string):
   return ride;
 }
 
-/** The user's own, not-cancelled ride (used to price its booking). */
-export async function ownRide(db: D1Database, userId: string, rideId: string): Promise<Ride> {
-  const row = await db.prepare("SELECT data, status FROM rides WHERE id = ? AND user_id = ?").bind(rideId, userId).first<{ data: string; status: string }>();
+/** The user's own, not-cancelled ride and when its fare was set (used to price its booking). */
+export async function ownRideWithTime(db: D1Database, userId: string, rideId: string): Promise<{ ride: Ride; createdAt: string }> {
+  const row = await db.prepare("SELECT data, status, created_at FROM rides WHERE id = ? AND user_id = ?").bind(rideId, userId).first<{ data: string; status: string; created_at: string }>();
   if (!row) throw notFound("Ride not found.");
   if (row.status === "cancelled") throw badRequest("This ride was cancelled.");
-  return { scheduledFor: null, stops: [], ...JSON.parse(row.data) } as Ride;
+  return { ride: { scheduledFor: null, stops: [], ...JSON.parse(row.data) } as Ride, createdAt: row.created_at };
 }
+
+/** The user's own, not-cancelled ride. */
+export const ownRide = async (db: D1Database, userId: string, rideId: string): Promise<Ride> => (await ownRideWithTime(db, userId, rideId)).ride;

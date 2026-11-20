@@ -17,14 +17,17 @@ export async function getSettings(db: D1Database): Promise<Settings> {
   return value;
 }
 
-/** Writes the given keys (already validated by the route) and returns the merged settings. */
-export async function updateSettings(db: D1Database, patch: Partial<Settings>): Promise<Settings> {
+/**
+ * Writes the given keys (already validated by the route) and returns the merged settings.
+ * `alsoRun` (the audit row) goes into the same batch, so a change is never saved without it.
+ */
+export async function updateSettings(db: D1Database, patch: Partial<Settings>, alsoRun: D1PreparedStatement[] = []): Promise<Settings> {
   const now = new Date().toISOString();
   const statements = Object.entries(patch).map(([key, v]) =>
     db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
       .bind(key, JSON.stringify(v), now),
   );
-  if (statements.length) await db.batch(statements);
+  if (statements.length) await db.batch([...statements, ...alsoRun]);
   cache = null;
   return getSettings(db);
 }

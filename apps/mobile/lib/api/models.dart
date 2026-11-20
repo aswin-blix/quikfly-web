@@ -688,6 +688,10 @@ class Settings {
   int get rentDoorstepFee => _i('rentDoorstepFee', 299);
   int get rentProtectionStandardPerDay => _i('rentProtectionStandardPerDay', 199);
   int get rentProtectionPeacePerDay => _i('rentProtectionPeacePerDay', 399);
+  /// The most a self-drive customer pays for damage on each protection plan (rentExcess() in packages/shared).
+  int get rentExcessStandard => _i('rentExcessStandard', 10000);
+  int get rentExcessPeace => _i('rentExcessPeace', 2000);
+  int rentExcess(String protection) => protection == 'peace' ? rentExcessPeace : rentExcessStandard;
   int get rentUnlimitedKmExtraPercent => _i('rentUnlimitedKmExtraPercent', 25);
   int get rentDepositRefundHours => _i('rentDepositRefundHours', 48);
   /// Longest single rental extension (hours).

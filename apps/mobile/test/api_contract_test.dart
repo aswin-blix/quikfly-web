@@ -29,6 +29,9 @@ void main() {
     expect(config.offers.every((o) => o.code.isNotEmpty), isTrue);
     expect(config.settings.welcomeCredit, greaterThanOrEqualTo(0));
     expect(config.settings.gstRate(ServiceKey.rent), greaterThan(0));
+    // The API sends each protection plan's damage excess (pricing audit R2); the app's fallbacks are only for an older API.
+    expect(config.settings.rentExcess('standard'), greaterThan(0));
+    expect(config.settings.rentExcess('peace'), greaterThan(0));
   });
 
   test('user parses', () async {
