@@ -557,7 +557,7 @@ Quick wins first. Each step is one PR, merged and deployed in the usual way.
 | Step | Contents | Fixes | Effort |
 |---|---|---|---|
 | **1. Honest prices and safe limits** ✅ live 2026-11-20 (PR #98; app part in the next app release) | R1, R2, R4, R5, R8, R23 | H4, H5, M9, M10, L7, L10 | ~2 days |
-| **2. Validation and roles** ✅ built 2026-11-20 (branch `pricing/step2-validation-roles`) | R3 + R24, R7 | M6, M7, M8 | ~2–3 days |
+| **2. Validation and roles** ✅ live 2026-11-20 (PR #100) | R3 + R24, R7 | M6, M7, M8 | ~2–3 days |
 | **3. Booking terms snapshot** | R9 | H1, H2, H3 | ~3 days |
 | **4. GST model** (after the accountant confirms 7.2) | R10, R25 | M1, H6 | ~3–4 days |
 | **5. Staff tools** | R6, R11, R12 | L1–L3, L5, L6 | ~4–5 days |
