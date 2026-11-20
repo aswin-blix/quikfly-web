@@ -55,6 +55,9 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   String? _bookingId;
   DateTime? _bookedAt;
 
+  /// The cancellation fee rules the ride was booked under.
+  Json? _bookedTerms;
+
   /// Book ahead: the pickup time (null = ride now), and the ride just scheduled (shows its confirmation).
   late DateTime? _at = widget.scheduleAt == null ? null : DateTime.tryParse(widget.scheduleAt!);
   Ride? _scheduled;
@@ -108,6 +111,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         _ride = r;
         _bookingId = b.id;
         _bookedAt = b.createdAt;
+        _bookedTerms = b.terms;
       });
       _startPhase(RidePhase.arriving);
       _autoShareIfNight(r);
@@ -246,6 +250,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       _ride = r;
       _bookingId = booking.id;
       _bookedAt = booking.createdAt;
+      _bookedTerms = booking.terms;
       _startPhase(RidePhase.arriving);
       ref.invalidate(bookingsProvider);
       ref.read(sessionProvider.notifier).refresh();
@@ -261,7 +266,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
 
   /// Asks why (MVAG 2025 reason list) and shows the cancellation fee before confirming. Null = keep the ride.
   Future<String?> _askReason() {
-    final settings = ref.read(configProvider).value?.settings ?? const Settings({});
+    final settings = (ref.read(configProvider).value?.settings ?? const Settings({})).withTerms(_bookedTerms);
     final fare = _ride?.quote.fare ?? 0;
     final wallet = _ride?.payment == 'wallet';
     String? picked;

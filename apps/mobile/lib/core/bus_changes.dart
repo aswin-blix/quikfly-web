@@ -24,14 +24,16 @@ String? seatCancelError(Booking b, List<String> ids) {
 }
 
 /// What cancelling these seats now gives back: (refund, percent).
-(int, int) seatCancelRefund(Settings s, Booking b, List<String> ids) {
+(int, int) seatCancelRefund(Settings settings, Booking b, List<String> ids) {
+  final s = settings.withTerms(b.terms); // the policy the ticket was sold under
   final share = seatsShare(b.amount, b.seats, ids);
   final percent = refundPercent(parseCancelPolicy(s.cancelPolicy(ServiceKey.bus)), b.startsAt);
   return (refundAmount(share, percent), percent);
 }
 
 /// Why this booking can't move to another bus now, or null when it can.
-String? rescheduleError(Settings s, Booking b, {DateTime? now}) {
+String? rescheduleError(Settings settings, Booking b, {DateTime? now}) {
+  final s = settings.withTerms(b.terms);
   if (b.service != ServiceKey.bus) return 'Only bus tickets can change to another bus.';
   if (b.status != BookingStatus.confirmed) return 'This booking is already ${b.status.name}.';
   if (b.rescheduledAt != null) return 'This ticket was already changed once.';
@@ -42,7 +44,8 @@ String? rescheduleError(Settings s, Booking b, {DateTime? now}) {
 }
 
 /// Money for a change to a bus whose quote totals [newTotal]: what's paid now (charge) or comes back (refund).
-({int newAmount, int charge, int refund, int fee}) rescheduleAmounts(Settings s, Booking b, int newTotal) {
+({int newAmount, int charge, int refund, int fee}) rescheduleAmounts(Settings settings, Booking b, int newTotal) {
+  final s = settings.withTerms(b.terms);
   final newAmount = (newTotal - b.discount - b.creditsUsed).clamp(0, 1 << 31) + s.busRescheduleFee;
   return (
     newAmount: newAmount,

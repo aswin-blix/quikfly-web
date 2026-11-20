@@ -30,8 +30,9 @@ class RentalScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.qf;
     final rental = ref.watch(rentalProvider(id));
-    final settings = ref.watch(configProvider).value?.settings;
     final booking = ref.watch(bookingsProvider).value?.where((b) => b.id == id).firstOrNull;
+    // The km plan the rental was booked under.
+    final settings = ref.watch(configProvider).value?.settings.withTerms(booking?.terms);
     return Scaffold(
       appBar: AppBar(title: const Text('Self-drive rental')),
       body: rental.when(

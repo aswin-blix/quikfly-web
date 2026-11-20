@@ -3,7 +3,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, ChevronLeft, XCircle } from "lucide-react";
-import { COUPON_LINE, type AdminBookingDetail, RIDE_CANCEL_REASONS } from "@quikfly/shared";
+import { COUPON_LINE, type AdminBookingDetail, RIDE_CANCEL_REASONS, termLines } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ReasonDialog } from "@/components/ReasonDialog";
 import { Badge, Button, ErrorBox, PageHeader } from "@/components/ui";
@@ -80,6 +80,13 @@ function Detail({ id }: { id: string }) {
             <p className="text-sm text-fg">{b.customer.name}</p>
             <a href={`tel:${b.customer.phone.replace(/\s/g, "")}`} className="text-sm text-accent hover:underline">{b.customer.phone}</a>
             <Link href={`/bookings?q=${encodeURIComponent(b.customer.phone.replace(/\D/g, "").slice(-10))}`} className="block text-xs text-muted hover:text-fg mt-2">All bookings by this customer →</Link>
+          </section>
+          <section className="card p-5" aria-labelledby="terms">
+            <h2 id="terms" className="font-semibold text-strong mb-1">Sold under</h2>
+            <p className="text-xs text-subtle mb-3">The terms kept with this booking. Refunds, the deposit settlement and the invoice use these, whatever the settings say now.</p>
+            {b.terms ? (
+              <dl className="grid gap-2 text-sm">{termLines(b.terms, b.service).map(([k, v]) => <Row key={k} k={k} v={v} />)}</dl>
+            ) : <p className="text-sm text-muted">Booked before terms were kept, so today&apos;s settings apply.</p>}
           </section>
           <section className="card p-5" aria-labelledby="wal">
             <h2 id="wal" className="font-semibold text-strong mb-2">Wallet</h2>

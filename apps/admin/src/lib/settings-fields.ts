@@ -107,7 +107,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
   },
   {
     title: "Cancellation policies",
-    sub: "How much a customer gets back when they (or staff) cancel, by notice given before the start. Bookings made earlier keep the policy's current tiers.",
+    sub: "How much a customer gets back when they (or staff) cancel, by notice given before the start. Each booking keeps the policy it was sold under, so changes apply to new bookings only.",
     fields: [
       { key: "cancelPolicyBus", type: "text", label: "Bus", help: 'e.g. "12h:100, 4h:50": full refund 12+ hours before departure, half 4+ hours before, nothing later. Empty = full refund any time.' },
       { key: "cancelPolicyTours", type: "text", label: "Holidays", help: 'e.g. "15d:100, 7d:50". Counted to midnight (India time) on the start date.' },
@@ -117,7 +117,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
   },
   {
     title: "GST",
-    sub: "Added to bus and holiday prices, and used to split the tax on invoices. Confirm rates with your accountant.",
+    sub: "Added to bus and holiday prices, and used to split the tax on invoices. Each booking keeps the rate it was sold under, so old invoices never change. Confirm rates with your accountant.",
     fields: [
       { key: "gstRides", type: "number", unit: "%", label: "Rides (bike, auto, cab)", help: "" },
       { key: "gstBus", type: "number", unit: "%", label: "Bus", help: "" },

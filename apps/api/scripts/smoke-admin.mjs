@@ -243,10 +243,15 @@ const tq = (await call("POST", "/quotes", { service: "tours", tourId: cheap.id, 
 const P = LOCAL ? (await call("POST", "/auth/verify", { phone: `90001${String(Date.now()).slice(-5)}`, otp: OTP })).json.token : C2;
 const payBy = LOCAL ? "wallet" : "upi";
 const walletBefore = (await call("GET", "/auth/me", null, P)).json.walletBalance;
-const halfBooking = await expect("holiday booking under a 50% policy", call("POST", "/bookings", { service: "tours", title: "Smoke Cheap Trip", subtitle: "Policy test", payment: payBy, lines: [], quoteId: tq.id }, P), 201, (j) => j.startsAt?.startsWith(TRAVEL));
+const halfBooking = await expect("holiday booking under a 50% policy", call("POST", "/bookings", { service: "tours", title: "Smoke Cheap Trip", subtitle: "Policy test", payment: payBy, lines: [], quoteId: tq.id }, P), 201,
+  (j) => j.startsAt?.startsWith(TRAVEL) && j.terms?.cancelPolicyTours === "999d:100, 1h:50" && j.terms.gstTours === s0.gstTours);
+// Booking terms (pricing step 3): a later policy change doesn't touch this booking.
+await expect("change the holiday policy after booking", call("PATCH", "/admin/settings", { cancelPolicyTours: "999d:100" }, T), 200, (j) => j.cancelPolicyTours === "999d:100");
+await eventually("the new policy reaches the API", () => call("GET", "/config"), (r) => r.json?.settings?.cancelPolicyTours === "999d:100");
+await expect("admin sees the terms the booking was sold under", call("GET", `/admin/bookings/${halfBooking.id}`, null, T), 200, (j) => j.booking.terms?.cancelPolicyTours === "999d:100, 1h:50");
 await expect("admin sees what a cancel would refund", call("GET", `/admin/bookings/${halfBooking.id}`, null, T), 200,
   (j) => j.refundIfCancelled?.percent === 50 && j.refundIfCancelled.amount === Math.round(halfBooking.amount / 2));
-await expect("customer cancel refunds half under the policy", call("POST", `/bookings/${halfBooking.id}/cancel`, null, P), 200,
+await expect("customer cancel refunds half under the policy it was sold under", call("POST", `/bookings/${halfBooking.id}/cancel`, null, P), 200,
   (j) => j.status === "cancelled" && j.refundAmount === Math.round(halfBooking.amount / 2));
 if (LOCAL) {
   check("wallet got back only the policy's share", (await call("GET", "/auth/me", null, P)).json.walletBalance === walletBefore - halfBooking.amount + Math.round(halfBooking.amount / 2));
@@ -314,8 +319,17 @@ await expect("restore the rent policy", call("PATCH", "/admin/settings", { cance
   check("staff can open a checklist photo", photo.status === 200);
   const extraKm = Math.max(0, 200 - s0.rentLimitedKmPerDay);
   const expected = extraKm * s0.rentExtraKmRate + 2 * s0.rentFuelChargePerEighth;
-  await expect("settlement preview: extra km and fuel", call("GET", `/admin/bookings/${rb.id}/rental/settlement`, null, T), 200,
-    (j) => j.kmDriven === 200 && j.extraKm === extraKm && j.fuelShort === 2 && j.lateHours === 0 && j.deductions === expected);
+  // Booking terms: rates raised after booking don't apply to this rental (always put back, even on a crash).
+  const raised = { rentExtraKmRate: s0.rentExtraKmRate + 5, rentFuelChargePerEighth: s0.rentFuelChargePerEighth + 50, rentLimitedKmPerDay: Math.max(1, s0.rentLimitedKmPerDay - 40) };
+  await expect("raise the self-drive rates after booking", call("PATCH", "/admin/settings", raised, T), 200, (j) => j.rentExtraKmRate === raised.rentExtraKmRate);
+  try {
+    await eventually("raised rates reach the API", () => call("GET", "/config"), (r) => r.json?.settings?.rentExtraKmRate === raised.rentExtraKmRate);
+    await expect("settlement preview uses the booked rates: extra km and fuel", call("GET", `/admin/bookings/${rb.id}/rental/settlement`, null, T), 200,
+      (j) => j.kmDriven === 200 && j.extraKm === extraKm && j.fuelShort === 2 && j.lateHours === 0 && j.deductions === expected);
+  } finally {
+    await expect("restore the self-drive rates", call("PATCH", "/admin/settings", { rentExtraKmRate: s0.rentExtraKmRate, rentFuelChargePerEighth: s0.rentFuelChargePerEighth, rentLimitedKmPerDay: s0.rentLimitedKmPerDay }, T), 200,
+      (j) => j.rentExtraKmRate === s0.rentExtraKmRate && j.rentLimitedKmPerDay === s0.rentLimitedKmPerDay);
+  }
   await expect("plain completion is refused for a returned car", call("POST", `/admin/bookings/${rb.id}/complete`, null, T), 409);
   await expect("a damage charge needs a note", call("POST", `/admin/bookings/${rb.id}/rental/settle`, { damage: 300 }, T), 400);
   await expect("damage above the protection excess is refused", call("POST", `/admin/bookings/${rb.id}/rental/settle`, { damage: s0.rentExcessStandard + 1, damageNote: "Above the excess" }, T), 400);

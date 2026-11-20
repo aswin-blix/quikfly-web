@@ -15,3 +15,4 @@ export * from "./support";
 export * from "./rental";
 export * from "./vendor";
 export * from "./privacy";
+export * from "./terms";

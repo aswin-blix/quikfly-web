@@ -74,6 +74,8 @@ void main() {
     final booking = await api.createBooking(
         service: ServiceKey.car, title: 'Contract test ride', subtitle: '${a.name} → ${b.name}', payment: PaymentMethod.cash, lines: const [], rideId: ride.id);
     expect(booking.amount, quotes.first.fare);
+    // The ride keeps the cancellation fee rules it was booked under (booking terms).
+    expect(booking.terms?['rideCancelFeePercent'], isA<num>());
     final cancelled = await api.cancelBooking(booking.id);
     expect(cancelled.status, BookingStatus.cancelled);
   });
@@ -109,6 +111,8 @@ void main() {
     expect(booking.amount, expected);
     expect((await api.booking(booking.id)).id, booking.id);
     expect(booking.startsAt, isNotNull);
+    expect(booking.terms?['cancelPolicyTours'], isA<String>());
+    expect(booking.terms?['gstTours'], isA<num>());
     final cancelled = await api.cancelBooking(booking.id);
     expect(cancelled.refundAmount, isNotNull);
     expect((await api.cars()), isNotEmpty);
@@ -283,6 +287,7 @@ void main() {
     final q = await api.quote({'service': 'rent', 'carId': cars.first.id, 'mode': 'self', 'start': localIn(15), 'end': localIn(15 + 360), 'kmPlan': 'limited', 'protection': 'standard', 'doorstep': false});
     final b = await api.createBooking(service: ServiceKey.rent, title: 'App contract rental', subtitle: 'Lifecycle', payment: PaymentMethod.upi, lines: const [], quoteId: q.id);
     expect(b.rentalState, 'booked');
+    expect(b.terms?['rentExtraKmRate'], isA<num>());
     final r = await api.rental(b.id);
     expect(r.state, 'booked');
     expect(r.photos['pickup'], isEmpty);

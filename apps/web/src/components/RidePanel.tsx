@@ -5,8 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useHideBottomNav } from "./BottomNav";
 import { ArrowUpDown, Clock, Coins, MapPin, Navigation, Phone, Plus, Share2, Siren, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { PASS_NAME, RIDE_CANCEL_REASONS, autoSharesAt, isWomenOnly, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, creditsEarned, creditsUsable, effectiveSurge, passSaleError, rideCancelFee } from "@quikfly/shared";
-import type { FareQuote, PaymentMethod, Place, Ride, RideCancelReason, SavedPlace } from "@quikfly/shared";
+import { PASS_NAME, RIDE_CANCEL_REASONS, autoSharesAt, isWomenOnly, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, creditsEarned, creditsUsable, effectiveSurge, passSaleError, rideCancelFee, withTerms } from "@quikfly/shared";
+import type { BookingTerms, FareQuote, PaymentMethod, Place, Ride, RideCancelReason, SavedPlace } from "@quikfly/shared";
 import { trackUrl } from "@/lib/account";
 import { Link } from "@/lib/nav";
 import { cx, inr, prettyDateTime, toLocalInput } from "@/lib/format";
@@ -69,6 +69,8 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   const [ride, setRide] = useState<Ride | null>(null);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [bookedAt, setBookedAt] = useState<string>("");
+  /** The cancellation fee rules the ride was booked under. */
+  const [bookedTerms, setBookedTerms] = useState<BookingTerms | null>(null);
   /** Cancel flow: the reason picker is open, and the reason chosen (MVAG 2025 reason list). */
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState<RideCancelReason | null>(null);
@@ -141,7 +143,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
         const [r, b] = await Promise.all([api.rides.start(resume.rideId), api.bookings.get(resume.bookingId)]);
         if (!live) return;
         setPickup(r.pickup); setDrop(r.drop); setStops(r.stops ?? []);
-        setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setT(0); setPhase("arriving");
+        setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setBookedTerms(b.terms); setT(0); setPhase("arriving");
         autoShareIfNight(r);
       } catch (e) { if (live) toast((e as Error).message, "err"); }
     })();
@@ -205,11 +207,11 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
         });
         setCreditsPaid(b.creditsUsed);
         if (r.scheduledFor) {
-          setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setPhase("scheduled");
+          setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setBookedTerms(b.terms); setPhase("scheduled");
           refreshBookings();
           return;
         }
-        setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setT(0); setPhase("arriving");
+        setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setBookedTerms(b.terms); setT(0); setPhase("arriving");
         refreshBookings();
         autoShareIfNight(r);
       } catch (e) {
@@ -222,7 +224,8 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   }
 
   /** Fee the rider would pay if they cancel now with the chosen reason (the API applies the same rule). */
-  const feeNow = ride && bookedAt ? rideCancelFee(settings, ride.quote.fare, reason, bookedAt, Date.now(), ride.scheduledFor) : 0;
+  const sold = withTerms(settings, bookedTerms);
+  const feeNow = ride && bookedAt ? rideCancelFee(sold, ride.quote.fare, reason, bookedAt, Date.now(), ride.scheduledFor) : 0;
 
   async function cancelRide() {
     cancelAnimationFrame(raf.current);
@@ -455,7 +458,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
                   ))}
                 </div>
                 <p className="text-xs text-muted">
-                  {!reason ? `Free ${settings.rideCancelFreeMinutes > 0 ? `within ${settings.rideCancelFreeMinutes} min of booking or ` : ""}if the driver is at fault; otherwise ${settings.rideCancelFeePercent}% of the fare (up to ${inr(settings.rideCancelFeeCap)}).`
+                  {!reason ? `Free ${sold.rideCancelFreeMinutes > 0 ? `within ${sold.rideCancelFreeMinutes} min of booking or ` : ""}if the driver is at fault; otherwise ${sold.rideCancelFeePercent}% of the fare (up to ${inr(sold.rideCancelFeeCap)}).`
                     : feeNow === 0 ? "No cancellation fee."
                     : `Cancellation fee: ${inr(feeNow)}${ride!.payment === "wallet" ? ", kept from your wallet refund." : " (demo: not collected)."}`}
                 </p>

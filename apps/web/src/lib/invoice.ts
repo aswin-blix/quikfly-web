@@ -1,6 +1,7 @@
 // Invoice maths. Prices are GST-inclusive, so tax is backed out of the paid amount.
-// GST rates per service come from the API settings (gstRides, gstBus, ... in @quikfly/shared).
-import { gstRate, type Booking, type Settings } from "@quikfly/shared";
+// The GST rate is the one the booking was sold under (booking terms), so an old invoice never
+// changes when staff change a rate; bookings made before terms were stored use today's settings.
+import { gstRate, withTerms, type Booking, type Settings } from "@quikfly/shared";
 
 /** Booking line that carries the customer's GSTIN when they asked for a GST invoice. */
 export const GSTIN_LINE = "GSTIN";
@@ -10,7 +11,7 @@ export const GSTIN_LINE = "GSTIN";
 const HIDDEN_ON_INVOICE = new Set([GSTIN_LINE, "Ride OTP", "Paid via", "Payment"]);
 
 export function invoiceFor(b: Booking, settings: Settings) {
-  const rate = gstRate(settings, b.service);
+  const rate = gstRate(withTerms(settings, b.terms), b.service);
   const taxable = Math.round((b.amount / (1 + rate / 100)) * 100) / 100;
   const tax = Math.round((b.amount - taxable) * 100) / 100;
   // Intra-state supply (Tamil Nadu) splits GST equally into CGST and SGST.

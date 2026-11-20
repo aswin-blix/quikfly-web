@@ -2,7 +2,7 @@
 // browser. Demo mode has no staff, so a returned car is settled at once with no damage
 // charge (the page says so).
 import {
-  CATALOG_SEED, DEFAULT_SETTINGS, FUEL_EIGHTHS, RENTAL_PHOTO_SIDES, RENTAL_RULES, extensionError, extensionLines, localNow, localToIso, rentalSettlement,
+  CATALOG_SEED, DEFAULT_SETTINGS, FUEL_EIGHTHS, RENTAL_PHOTO_SIDES, RENTAL_RULES, extensionError, extensionLines, localNow, localToIso, rentalSettlement, withTerms,
   type Booking, type QuoteRequest, type Rental, type RentalStage,
 } from "@quikfly/shared";
 import type { QuikflyApi } from "./contract";
@@ -95,10 +95,11 @@ export const mockRental: QuikflyApi["rental"] = {
     if (odometerKm < r.pickup!.odometerKm) fail(`The odometer can't be lower than at pickup (${r.pickup!.odometerKm} km).`);
     if (!allPhotos(r, "return")) fail("Add all five photos first.");
     const dropoff = { odometerKm, fuel, at: localNow() };
-    const settlement = rentalSettlement({ ...r, pickup: r.pickup!, dropoff, damage: 0 }, settings);
+    const b = bookings().find((x) => x.id === id);
+    // At the rates the rental was booked under, like the API.
+    const settlement = rentalSettlement({ ...r, pickup: r.pickup!, dropoff, damage: 0 }, withTerms(settings, b?.terms));
     const next = { ...r, dropoff, settlement };
     put(next);
-    const b = bookings().find((x) => x.id === id);
     if (b?.payment === "wallet" && settlement.depositReturned) walletEntry("refund", settlement.depositReturned, `Deposit returned · ${b.title}`, id);
     patchBooking(id, () => ({ status: "completed", rentalState: "settled", refundAmount: settlement.depositReturned }));
     return view(next);
