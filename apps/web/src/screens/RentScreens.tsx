@@ -12,7 +12,7 @@ import { api } from "@/lib/api";
 import { cx, inr, prettyDateTime } from "@/lib/format";
 import { defaultRentalWindow } from "@/lib/rentals";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
-import { RENT_PLANS, RENT_PROTECTION_LABEL, cancelPolicyText, priceRent, rentDocumentList, rentExcess, rentHours, rentPlanLabel, sumLines, type RentalCar } from "@quikfly/shared";
+import { RENT_PLANS, RENT_PROTECTION_LABEL, cancelPolicyText, fareDateFor, priceRent, rentDocumentList, rentExcess, rentHours, rentPlanLabel, sumLines, type RentalCar } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { serviceByKey } from "@/lib/services";
 
@@ -123,6 +123,7 @@ export function RentDetailScreen({ id }: { id: string }) {
   const cars = useRentalCars();
   const car = cars?.find((c) => c.id === id);
   const settings = useSettings();
+  const calendar = useConfig()?.fareCalendar ?? [];
   const { setDraft, toast } = useApp();
   const nav = useNav();
   const [km, setKm] = useState<keyof typeof RENT_PLANS>("limited");
@@ -136,7 +137,7 @@ export function RentDetailScreen({ id }: { id: string }) {
   const self = trip.mode === "self";
   const choice = { mode: trip.mode, start: trip.start, end: trip.end, kmPlan: km, protection: prot, doorstep: delivery === "doorstep" } as const;
   // Live estimate while choosing (same maths and settings as the API); book() charges the API's quote.
-  const lines = priceRent(car, choice, settings);
+  const lines = priceRent(car, choice, settings, fareDateFor(calendar, "rent", trip.start.slice(0, 10)));
   const total = sumLines(lines);
   const plan = rentPlanLabel(km, settings);
   const protectionLabel = RENT_PROTECTION_LABEL[prot];

@@ -1,14 +1,14 @@
 // Server-side prices for bus, holiday, self-drive and group bookings. The website shows
 // a quote's lines; POST /bookings charges its total. Rides are priced by services/rides.ts.
 import {
-  BOOKING_LIMITS, QUOTE_TTL_MINUTES, generateSeats, switchError, priceBus, seatRuleError, priceGroup, priceRent, priceTour, quoteStartsAt, rentHours, sumLines,
+  BOOKING_LIMITS, QUOTE_TTL_MINUTES, fareDateFor, generateSeats, switchError, priceBus, seatRuleError, priceGroup, priceRent, priceTour, quoteStartsAt, rentHours, sumLines,
   type FareLine, type PriceQuote, type QuoteRequest, type Seat, type ServiceKey,
 } from "@quikfly/shared";
 import { badRequest, conflict } from "../lib/errors";
 import { uid } from "../lib/random";
 import { findBus, seatHolds } from "./buses";
 import { departuresOf } from "./departures";
-import { visibleById } from "./catalog";
+import { visible, visibleById } from "./catalog";
 import { getSettings } from "./settings";
 
 /** The price lines and when the trip starts (for the cancellation policy). */
@@ -20,6 +20,8 @@ async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLi
     groupTrip: req.service === "rentals" ? req.trip : undefined,
   });
   if (off) throw conflict(off);
+  // Peak and festival dates move holiday, car and group prices on the trip's start date (bus fares move inside the timetable).
+  const calendar = req.service === "bus" ? [] : await visible(db, "fareCalendar");
   switch (req.service) {
     case "bus": {
       if (!req.seatIds.length || req.seatIds.length > BOOKING_LIMITS.busSeats) throw badRequest(`Choose 1 to ${BOOKING_LIMITS.busSeats} seats.`);
@@ -45,23 +47,23 @@ async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLi
         if (!dep) throw badRequest("Pick one of this package's departures.");
         if (dep.seatsLeft < req.adults + req.kids) throw conflict(dep.seatsLeft ? `Only ${dep.seatsLeft} seat${dep.seatsLeft > 1 ? "s are" : " is"} left on this departure.` : "This departure is sold out. Please pick another date.");
         req.start = dep.date;
-        return { lines: priceTour(tour, req.adults, req.kids, settings, dep.price), startsAt: quoteStartsAt(req) };
+        return { lines: priceTour(tour, req.adults, req.kids, settings, dep.price, fareDateFor(calendar, "tours", dep.date)), startsAt: quoteStartsAt(req) };
       }
       if (req.departureId) throw badRequest("This package has no departures to pick; choose a start date.");
-      return { lines: priceTour(tour, req.adults, req.kids, settings), startsAt: quoteStartsAt(req) };
+      return { lines: priceTour(tour, req.adults, req.kids, settings, tour.price, fareDateFor(calendar, "tours", req.start)), startsAt: quoteStartsAt(req) };
     }
     case "rent": {
       const car = await visibleById(db, "rentalCar", req.carId);
       const hours = rentHours(req.start, req.end);
       if (!(Date.parse(`${req.end}:00Z`) > Date.parse(`${req.start}:00Z`))) throw badRequest("Return must be after pickup.");
       if (hours > BOOKING_LIMITS.rentMaxDays * 24) throw badRequest(`Rentals can be at most ${BOOKING_LIMITS.rentMaxDays} days.`);
-      return { lines: priceRent(car, req, settings), startsAt: quoteStartsAt(req) };
+      return { lines: priceRent(car, req, settings, fareDateFor(calendar, "rent", req.start.slice(0, 10))), startsAt: quoteStartsAt(req) };
     }
     case "rentals": {
       const vehicle = await visibleById(db, "travelVehicle", req.vehicleId);
       if (req.days < 1 || req.days > BOOKING_LIMITS.groupMaxDays) throw badRequest(`Trips can be 1 to ${BOOKING_LIMITS.groupMaxDays} days.`);
-      const km = req.trip === "local" ? 0 : (await visibleById(db, "groupDestination", req.destinationId ?? "")).km;
-      return { lines: priceGroup(vehicle, req.trip, km, req.days, settings), startsAt: quoteStartsAt(req) };
+      const dest = req.trip === "local" ? null : await visibleById(db, "groupDestination", req.destinationId ?? "");
+      return { lines: priceGroup(vehicle, req.trip, dest?.km ?? 0, req.days, settings, fareDateFor(calendar, "rentals", req.start), dest?.tollEstimate ?? null), startsAt: quoteStartsAt(req) };
     }
   }
 }

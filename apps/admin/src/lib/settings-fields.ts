@@ -66,6 +66,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "rideNightPercent", type: "number", unit: "%", label: "Night charge", help: "Added to ride fares during night hours, shown to riders as part of the fare. 0 = none; set it only to a state's notified night tariff." },
       { key: "rideNightHours", type: "text", editor: "hours", label: "Night hours", help: "India time. Split a window over midnight into two, e.g. 22:00–23:59 and 00:00–05:59." },
       { key: "rideMaxDiscountPercent", type: "number", unit: "%", label: "Most a ride can be discounted", help: "Coupons and QuikFly Credits together can take at most this share off a ride fare. MVAG 2025: 50%; Maharashtra: 25%. 100 = no limit." },
+      { key: "rideAirportFee", type: "number", unit: "₹", label: "Airport fee", help: "Added to rides that start or end at a place marked Airport in Catalog → Places (not surged, shown to riders). 0 = none." },
       { key: "rideStopMinutes", type: "number", unit: "min", label: "Wait per stop", help: "Waiting time included for each extra stop (up to 2), charged at the ride type's per-minute rate. 0 = stops cost only the extra distance." },
       { key: "rideScheduleMinMinutes", type: "number", unit: "min", label: "Schedule at least", help: "How soon a ride can be booked ahead (minutes before pickup)." },
       { key: "rideScheduleMaxDays", type: "number", unit: "days", label: "Schedule up to", help: "How far ahead a ride can be booked." },
@@ -74,12 +75,13 @@ export const SETTING_GROUPS: SettingGroup[] = [
   },
   {
     title: "Bus fares",
-    sub: "The timetable is generated; these set the base fare per seat before each bus's variation.",
+    sub: "The timetable is generated; these set the base fare per seat before each bus's variation. Routes listed in Catalog → Bus route fares are priced by distance instead; Catalog → Peak and festival dates moves fares on chosen dates.",
     fields: [
       { key: "busFareAc", type: "number", unit: "₹", label: "AC base fare", help: "Per seat." },
       { key: "busFareNonAc", type: "number", unit: "₹", label: "Non-AC base fare", help: "Per seat." },
       { key: "busSleeperExtra", type: "number", unit: "₹", label: "Sleeper extra", help: "Added for sleeper buses." },
       { key: "busLowerDeckExtra", type: "number", unit: "₹", label: "Lower-deck extra", help: "Added to each lower-deck seat." },
+      { key: "busRandomExtraMax", type: "number", unit: "₹", label: "Fare variation per bus", help: "The generated timetable adds up to this much per bus so buses of one type differ. 0 = the same fare for every bus of a type." },
       { key: "busRescheduleHours", type: "number", unit: "hrs", label: "Bus change closes", help: "Customers can move a ticket to another bus or date once, until this many hours before departure." },
       { key: "busRescheduleFee", type: "number", unit: "₹", label: "Bus change fee", help: "Charged on top of any fare difference. 0 = free change." },
     ],

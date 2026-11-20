@@ -7,7 +7,7 @@ import { Calculator } from "lucide-react";
 import { WEEKDAYS, parseSurgeHours, rideTimeAt, type CatalogItem, type CatalogKind, type RideTime, type Settings, type SurgeRule } from "@quikfly/shared";
 import { adminApi } from "@/lib/api";
 import { cx, inr } from "@/lib/format";
-import { busSamples, groupSamples, rentSamples, rideSamples, tourSamples, withId, type Sample, type SampleCatalog } from "@/lib/fare-samples";
+import { busSamples, groupSamples, peakSamples, rentSamples, rideSamples, tourSamples, withId, type Sample, type SampleCatalog } from "@/lib/fare-samples";
 
 import type { PreviewKind } from "@/lib/settings-fields";
 export type { PreviewKind };
@@ -18,10 +18,11 @@ let catalogPromise: Promise<SampleCatalog> | null = null;
 /** The catalog rows samples need, loaded once per page visit (again after a failure). */
 export function loadSampleCatalog(): Promise<SampleCatalog> {
   if (catalogPromise) return catalogPromise;
-  const p = Promise.all([rows("place"), rows("rideOption"), rows("tour"), rows("rentalCar"), rows("travelVehicle"), rows("groupDestination"), rows("surgeRule")])
-    .then(([places, rideOptions, tours, cars, vehicles, destinations, surgeRules]) => ({
+  const p = Promise.all([rows("place"), rows("rideOption"), rows("tour"), rows("rentalCar"), rows("travelVehicle"), rows("groupDestination"), rows("surgeRule"), rows("busRoute"), rows("fareCalendar")])
+    .then(([places, rideOptions, tours, cars, vehicles, destinations, surgeRules, busRoutes, fareCalendar]) => ({
       places: withId(places), rideOptions: withId(rideOptions), tours: withId(tours),
       cars: withId(cars), vehicles: withId(vehicles), destinations: withId(destinations), surgeRules: withId(surgeRules),
+      busRoutes: withId(busRoutes), fareCalendar: withId(fareCalendar),
     }));
   p.catch(() => { catalogPromise = null; });
   catalogPromise = p;
@@ -101,9 +102,9 @@ export function SettingsFarePreview({ kinds, now, draft }: { kinds: PreviewKind[
       const b = cat.places.find((p) => p.id === to) ?? cat.places[1];
       out.push({ title: "Rides", rows: rideSamples(cat.rideOptions, a, b, { hour, weekday: day }, now, draft, cat.rideOptions, cat.surgeRules) });
     }
-    if (kinds.includes("bus")) out.push({ title: "Bus", rows: busSamples(now, draft) });
+    if (kinds.includes("bus")) out.push({ title: "Bus", rows: busSamples(now, draft, { routes: cat.busRoutes, calendar: cat.fareCalendar }) });
     const tour = cat.tours.find((t) => t.id === tourId) ?? cat.tours[0];
-    if (kinds.includes("tour") && tour) out.push({ title: "Holidays", rows: tourSamples(tour, now, draft) });
+    if (kinds.includes("tour") && tour) out.push({ title: "Holidays", rows: tourSamples(tour, now, draft, tour, cat.fareCalendar) });
     const car = cat.cars.find((c) => c.id === carId) ?? cat.cars[0];
     if (kinds.includes("rent") && car) out.push({ title: "Rent a car", rows: rentSamples(car, now, draft) });
     const v = cat.vehicles.find((x) => x.id === vehicleId) ?? cat.vehicles[0];
@@ -143,7 +144,7 @@ export function SettingsFarePreview({ kinds, now, draft }: { kinds: PreviewKind[
 }
 
 /** Catalog kinds the edit form can preview. */
-export const PREVIEW_KINDS: CatalogKind[] = ["rideOption", "surgeRule", "tour", "rentalCar", "travelVehicle"];
+export const PREVIEW_KINDS: CatalogKind[] = ["rideOption", "surgeRule", "tour", "rentalCar", "travelVehicle", "busRoute", "fareCalendar", "groupDestination"];
 
 /**
  * Catalog edit form panel: the saved item vs the edited one (or just the new item), under
@@ -170,7 +171,16 @@ export function ItemFarePreview({ kind, original, edited }: { kind: CatalogKind;
         const savedRule = cat.surgeRules.filter((r) => r.id === id);
         return cat.places.length >= 2 ? rideSamples(cat.rideOptions, cat.places[0], cat.places[1], t, settings, settings, cat.rideOptions, [...others, ...savedRule], [...others, edited as unknown as SurgeRule]) : [];
       }
-      case "tour": return tourSamples(before, settings, settings, after);
+      case "tour": return tourSamples(before, settings, settings, after, cat.fareCalendar);
+      case "busRoute": {
+        // A seat on this route: the saved route (or the Settings fare for a new one) vs as edited.
+        const e = edited as unknown as { id: string; from: string; to: string };
+        const others = cat.busRoutes.filter((r) => r.id !== e.id);
+        const saved = original ? [...others, { ...(original as object), id: e.id } as never] : others;
+        return busSamples(settings, settings, { routes: saved }, { routes: [...others, edited as never] }, { from: e.from, to: e.to });
+      }
+      case "fareCalendar": return peakSamples(cat, edited as never, settings);
+      case "groupDestination": return cat.vehicles[0] ? groupSamples(cat.vehicles[0], before, settings, settings, cat.vehicles[0], after).slice(1) : [];
       case "rentalCar": return rentSamples(before, settings, settings, after);
       case "travelVehicle": return groupSamples(before, cat.destinations[0], settings, settings, after);
       default: return null;
