@@ -11,8 +11,14 @@ int creditsEarned(Settings s, ServiceKey service, int paid, [int deposit = 0]) {
   return (base * s.creditPercent(service) ~/ 100).clamp(0, s.creditsCap);
 }
 
-/// Credits usable on a booking: up to creditsMaxRedeemPercent of the payable amount (deposit excluded), within the balance.
-int creditsUsable(Settings s, int balance, int payable, [int deposit = 0]) {
+/// Credits usable on a booking: up to creditsMaxRedeemPercent of the payable amount (deposit excluded), within the balance,
+/// and within [maxOff] (a ride's discount floor room, rideDiscountRoom).
+int creditsUsable(Settings s, int balance, int payable, [int deposit = 0, int? maxOff]) {
   final limit = (payable - deposit).clamp(0, 1 << 31) * s.creditsMaxRedeemPercent ~/ 100;
-  return balance < limit ? balance.clamp(0, 1 << 31) : limit;
+  final usable = balance < limit ? balance.clamp(0, 1 << 31) : limit;
+  return maxOff == null ? usable : usable.clamp(0, maxOff.clamp(0, 1 << 31));
 }
+
+/// Most ₹ coupons and credits may take off a ride fare (rideDiscountRoom in packages/shared/src/pricing.ts); null = no limit.
+int? rideDiscountRoom(Settings s, ServiceKey service, int fare) =>
+    service == ServiceKey.bike || service == ServiceKey.car ? fare * s.rideMaxDiscountPercent ~/ 100 : null;

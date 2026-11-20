@@ -5,16 +5,18 @@
 // the apps call them to show the same offer.
 import { effectiveSurge, parseSurgeHours, type Settings } from "./settings";
 import { FEATURE_OFF } from "./switches";
+import type { SurgeRule } from "./types";
 
 export const PASS_NAME = "QuikFly Pass";
 
-/** Is there any surge for a pass to take off? */
-export const passUseful = (settings: Settings) => effectiveSurge(settings) > 1 && parseSurgeHours(settings.surgeHours).length > 0;
+/** Is there any surge for a pass to take off: the everyday surge, or a surge rule (`rules`: the visible ones)? */
+export const passUseful = (settings: Settings, rules: Pick<SurgeRule, "multiplier">[] = []) =>
+  (effectiveSurge(settings) > 1 && parseSurgeHours(settings.surgeHours).length > 0) || rules.some((r) => Math.min(r.multiplier, settings.surgeCap) > 1);
 
 /** Why a pass can't be bought right now, or null when it can. */
-export function passSaleError(settings: Settings): string | null {
+export function passSaleError(settings: Settings, rules: Pick<SurgeRule, "multiplier">[] = []): string | null {
   if (!settings.featureRidePass) return FEATURE_OFF.ridePass;
-  if (!passUseful(settings)) return `There's no peak-hour surge right now, so ${PASS_NAME} isn't on sale.`;
+  if (!passUseful(settings, rules)) return `There's no peak-hour surge right now, so ${PASS_NAME} isn't on sale.`;
   return null;
 }
 

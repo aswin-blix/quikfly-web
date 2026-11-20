@@ -140,7 +140,7 @@ All 91 keys have an admin row in `apps/admin/src/lib/settings-fields.ts`. None i
 
 ### 2.2 Catalog prices staff edit (`packages/shared/src/catalog-kinds.ts`)
 
-13 kinds live in one `catalog_items` table (decision 2026-11-16).
+13 kinds live in one `catalog_items` table (decision 2026-11-16); step 6 added a 14th, surge rules.
 
 - **Who can change:** `catalog.edit` and `offers.edit`, both granted to **owner, operations and content** (`admin.ts:22-23`).
 - **Audit:** every create, update, hide or delete writes an audit row in the same `db.batch()` (`apps/api/src/services/catalog.ts:108-153`).
@@ -561,7 +561,7 @@ Quick wins first. Each step is one PR, merged and deployed in the usual way.
 | **3. Booking terms snapshot** ✅ live 2026-11-20 (PR #103; app part in the next app release) | R9 | H1, H2, H3 | ~3 days |
 | **4. GST model** (after the accountant confirms 7.2) | R10, R25 | M1, H6 | ~3–4 days |
 | **5. Staff tools** ✅ live 2026-11-20 (PR #106) | R6, R11, R12 | L1–L3, L5, L6 | ~4–5 days |
-| **6. Ride pricing that fits state rules** | R14, R15, R13 | M2, M4 | ~4 days |
+| **6. Ride pricing that fits state rules** ✅ built 2026-11-20 (branch `pricing/step6-ride-rules`; everyday surge kept in Settings instead of migrating it into a rule) | R14, R15, R13 | M2, M4 | ~4 days |
 | **7. Bus and holiday pricing** | R16, R22 | M3, M4 | ~3–4 days |
 | **8. Time and scale** | R17, R19, R20 (override) | M5, L4 | ~4–5 days |
 | **Later** | R18 maker-checker, R20 subscriptions, R21 cities | — | when the team or the second city arrives |

@@ -2,9 +2,9 @@
 // to quote and to charge. The website's offline demo (mock API) runs the same code so demo
 // prices match. Inputs are catalog items and Settings; nothing here reads a database or clock
 // except through its arguments.
-import { effectiveSurge, gstRate, parseSurgeHours, type Settings } from "./settings";
+import { effectiveSurge, gstRate, inHourRanges, parseSurgeHours, type Settings } from "./settings";
 import type {
-  Bus, FareLine, FareQuote, Gender, GroupTrip, Offer, Place, RentalCar, RideOption, Seat, SeatHold, ServiceKey, TourPackage, TravelVehicle,
+  Bus, FareLine, FareQuote, Gender, GroupTrip, Offer, Place, RentalCar, RideOption, Seat, SeatHold, ServiceKey, SurgeRule, TourPackage, TravelVehicle,
 } from "./types";
 
 /** Ride simulation: map distance → km, speeds, number plates. */
@@ -90,30 +90,95 @@ export const pick = <T,>(arr: readonly T[], seed: number) => arr[Math.abs(seed) 
 /* ───────────── Rides ───────────── */
 
 /** Surge multiplier at an hour of the day (India time), never above the cap. */
+/** The everyday surge from Settings at an India-time hour (1 outside surge hours). */
 export function surgeAt(settings: Settings, hour: number) {
-  return parseSurgeHours(settings.surgeHours).some(([from, to]) => hour >= from && hour <= to) ? effectiveSurge(settings) : 1;
+  return inHourRanges(settings.surgeHours, hour) ? effectiveSurge(settings) : 1;
+}
+
+/** When a ride is priced: India-time hour (0–23) and weekday (0 = Sunday). */
+export interface RideTime { hour: number; weekday: number }
+export const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+/** India time at `ms` (UTC+5:30, no daylight saving). */
+export function rideTimeAt(ms: number): RideTime {
+  const d = new Date(ms + 330 * 60_000);
+  return { hour: d.getUTCHours(), weekday: d.getUTCDay() };
+}
+
+/** Does a surge rule cover this ride type? Autos are "bike" types with id "auto". */
+export function surgeRuleCovers(rule: Pick<SurgeRule, "appliesTo">, option: Pick<RideOption, "id" | "service">) {
+  switch (rule.appliesTo) {
+    case "all": return true;
+    case "auto": return option.id === "auto";
+    case "bike": return option.service === "bike" && option.id !== "auto";
+    case "cab": return option.service === "car";
+  }
+}
+
+/**
+ * The surge for one ride type at `t`: the highest of the everyday surge (Settings) and every
+ * matching surge rule, never above `surgeCap` and never below 1.
+ */
+export function surgeFor(settings: Settings, rules: SurgeRule[], option: Pick<RideOption, "id" | "service">, t: RideTime) {
+  const day = WEEKDAYS[t.weekday];
+  const ruled = rules
+    .filter((r) => surgeRuleCovers(r, option) && r.days.includes(day) && inHourRanges(r.hours, t.hour))
+    .map((r) => r.multiplier);
+  const everyday = inHourRanges(settings.surgeHours, t.hour) ? settings.surgeMultiplier : 1;
+  return Math.max(1, Math.min(Math.max(everyday, ...ruled), settings.surgeCap));
+}
+
+/** Night charge percentage at an India-time hour (0 outside night hours or when off). */
+export const nightPercentAt = (settings: Settings, hour: number) =>
+  settings.rideNightPercent > 0 && inHourRanges(settings.rideNightHours, hour) ? settings.rideNightPercent : 0;
+
+/**
+ * Fare before surge and night charge: base + per km beyond the included km + per minute, at
+ * least the ride type's minimum fare. `minutes` are the billed minutes.
+ */
+export function rideBaseFare(option: RideOption, distanceKm: number, minutes: number) {
+  const km = Math.max(0, distanceKm - (option.includedKm ?? 0));
+  return Math.max(option.minFare ?? 0, option.baseFare + option.perKm * km + option.perMin * minutes);
 }
 
 /**
  * Fares for every option of one service from `a` to `b`, through any `stops` in order. Distance
- * is the sum of the legs; each stop adds `rideStopMinutes` of waiting, charged per minute.
- * `hour` is the India-time hour. `waiveSurge` (a QuikFly Pass) prices without the surge and
- * says how much that saved.
+ * is the sum of the legs; each stop adds `rideStopMinutes` of waiting, charged per minute, and
+ * `rideBilledPickupMinutes` are billed for reaching the pickup. `when` is the India-time hour and
+ * weekday (a bare hour applies only the everyday surge, not surge rules). `rules` are the
+ * visible surge rules. `waiveSurge` (a QuikFly Pass) prices without the surge and says how much
+ * that saved. A night charge (Settings) is added on top and disclosed in `nightCharge`.
  */
-export function rideQuotes(options: RideOption[], a: Place, b: Place, settings: Settings, hour: number, stops: Place[] = [], waiveSurge = false): FareQuote[] {
+export function rideQuotes(
+  options: RideOption[], a: Place, b: Place, settings: Settings, when: RideTime | number, stops: Place[] = [], waiveSurge = false, rules: SurgeRule[] = [],
+): FareQuote[] {
+  const t: RideTime = typeof when === "number" ? { hour: when, weekday: -1 } : when;
   const points = [a, ...stops, b];
   const mapUnits = points.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - points[i].x, p.y - points[i].y), 0);
   const distanceKm = Math.max(RIDE_SIM.minDistanceKm, Math.round(mapUnits * RIDE_SIM.kmPerMapUnit * 10) / 10);
-  const peak = surgeAt(settings, hour);
-  const surge = waiveSurge ? 1 : peak;
+  const nightPct = nightPercentAt(settings, t.hour);
   return options.map((option, i) => {
-    const durationMin = Math.round((distanceKm / RIDE_SIM.speedKmh[option.service]) * 60) + RIDE_SIM.pickupBufferMin + stops.length * settings.rideStopMinutes;
-    const raw = option.baseFare + option.perKm * distanceKm + option.perMin * durationMin;
-    const fare = Math.round(raw * surge);
-    const quote: FareQuote = { option, fare, distanceKm, durationMin, etaMin: 2 + ((i * 3 + Math.round(distanceKm)) % 6), surge };
-    if (waiveSurge && peak > 1) quote.passSaving = Math.round(raw * peak) - fare;
+    const tripMin = Math.round((distanceKm / (option.speedKmh || RIDE_SIM.speedKmh[option.service])) * 60);
+    const waitMin = stops.length * settings.rideStopMinutes;
+    const durationMin = tripMin + RIDE_SIM.pickupBufferMin + waitMin;
+    const raw = rideBaseFare(option, distanceKm, tripMin + settings.rideBilledPickupMinutes + waitMin);
+    const peak = surgeFor(settings, t.weekday < 0 ? [] : rules, option, t);
+    const surge = waiveSurge ? 1 : peak;
+    const surged = Math.round(raw * surge);
+    const nightCharge = Math.round((surged * nightPct) / 100);
+    const quote: FareQuote = { option, fare: surged + nightCharge, distanceKm, durationMin, etaMin: 2 + ((i * 3 + Math.round(distanceKm)) % 6), surge };
+    if (nightCharge) quote.nightCharge = nightCharge;
+    if (waiveSurge && peak > 1) quote.passSaving = Math.round(raw * peak) - surged;
     return quote;
   });
+}
+
+/**
+ * Most ₹ coupons and credits together may take off a ride fare (Settings.rideMaxDiscountPercent,
+ * MVAG 2025's floor). Other services: no limit (Infinity).
+ */
+export function rideDiscountRoom(settings: Settings, service: ServiceKey, fare: number) {
+  if (service !== "bike" && service !== "car") return Infinity;
+  return Math.floor((fare * settings.rideMaxDiscountPercent) / 100);
 }
 
 /* ───────────── Bus ───────────── */

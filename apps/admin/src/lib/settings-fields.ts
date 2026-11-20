@@ -52,7 +52,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
   },
   {
     title: "Rides",
-    sub: "Bike, auto and cab fares come from each ride type in the catalog, multiplied by surge.",
+    sub: "Bike, auto and cab fares come from each ride type in the catalog (Catalog → Ride types), times surge, plus any night charge. Surge for some ride types, days or hours: Catalog → Surge rules.",
     fields: [
       { key: "surgeMultiplier", type: "number", unit: "×", step: 0.05, label: "Surge multiplier", help: "1 means no surge. 1.2 adds 20% during surge hours. Can't be above the surge cap." },
       { key: "surgeHours", type: "text", editor: "hours", label: "Surge hours", help: "India time. A window from 08:00 to 10:59 covers every pickup in those hours. No windows means no surge." },
@@ -62,6 +62,10 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "rideCancelFeePercent", type: "number", unit: "%", label: "Rider cancellation fee", help: "Charged when a rider cancels without a valid reason (guidelines: 10% of the fare)." },
       { key: "rideCancelFeeCap", type: "number", unit: "₹", label: "Cancellation fee cap", help: "The fee never exceeds this (guidelines: ₹100)." },
       { key: "rideCancelFreeMinutes", type: "number", unit: "min", label: "Free cancellation window", help: "Cancelling within this many minutes of booking is always free." },
+      { key: "rideBilledPickupMinutes", type: "number", unit: "min", label: "Billed pickup minutes", help: "Minutes charged at the per-minute rate for the driver reaching the pickup. MVAG 2025 covers dead mileage in the base fare, so a state fare card may want 0." },
+      { key: "rideNightPercent", type: "number", unit: "%", label: "Night charge", help: "Added to ride fares during night hours, shown to riders as part of the fare. 0 = none; set it only to a state's notified night tariff." },
+      { key: "rideNightHours", type: "text", editor: "hours", label: "Night hours", help: "India time. Split a window over midnight into two, e.g. 22:00–23:59 and 00:00–05:59." },
+      { key: "rideMaxDiscountPercent", type: "number", unit: "%", label: "Most a ride can be discounted", help: "Coupons and QuikFly Credits together can take at most this share off a ride fare. MVAG 2025: 50%; Maharashtra: 25%. 100 = no limit." },
       { key: "rideStopMinutes", type: "number", unit: "min", label: "Wait per stop", help: "Waiting time included for each extra stop (up to 2), charged at the ride type's per-minute rate. 0 = stops cost only the extra distance." },
       { key: "rideScheduleMinMinutes", type: "number", unit: "min", label: "Schedule at least", help: "How soon a ride can be booked ahead (minutes before pickup)." },
       { key: "rideScheduleMaxDays", type: "number", unit: "days", label: "Schedule up to", help: "How far ahead a ride can be booked." },

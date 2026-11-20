@@ -2,6 +2,7 @@
 import { PASS_NAME, passEnd, passSaleError } from "@quikfly/shared";
 import { conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
+import { visible } from "./catalog";
 import { getSettings } from "./settings";
 
 const NOW = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
@@ -25,8 +26,8 @@ const walletAndPass = (db: D1Database, userId: string) =>
  * running. The pass, the debit and its ledger row land together or not at all.
  */
 export async function buyPass(db: D1Database, userId: string): Promise<{ passUntil: string }> {
-  const settings = await getSettings(db);
-  const off = passSaleError(settings);
+  const [settings, rules] = await Promise.all([getSettings(db), visible(db, "surgeRule")]);
+  const off = passSaleError(settings, rules);
   if (off) throw conflict(off);
   const row = await walletAndPass(db, userId);
   if (!row) throw notFound("Account not found.");

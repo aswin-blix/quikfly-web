@@ -28,9 +28,10 @@ export function creditsEarned(settings: Settings, service: ServiceKey, paid: num
 }
 
 /** Credits usable on a booking: up to `creditsMaxRedeemPercent` of the payable amount (deposit excluded), within the balance. */
-export function creditsUsable(settings: Settings, balance: number, payable: number, deposit = 0) {
+export function creditsUsable(settings: Settings, balance: number, payable: number, deposit = 0, maxOff = Infinity) {
   const limit = Math.floor((Math.max(0, payable - deposit) * settings.creditsMaxRedeemPercent) / 100);
-  return Math.max(0, Math.min(Math.floor(balance), limit));
+  // `maxOff`: room left under a ride's discount floor (rideDiscountRoom less any coupon).
+  return Math.max(0, Math.min(Math.floor(balance), limit, Math.floor(maxOff)));
 }
 
 /** Credits that come back when a booking is cancelled: the same share as the refund. */

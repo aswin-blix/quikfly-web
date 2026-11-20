@@ -12,13 +12,13 @@ export const config = new Hono<AppEnv>()
   // Everything the website and the app load once at start-up.
   .get("/", async (c) => {
     const db = c.env.DB;
-    const [settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers, faqs] = await Promise.all([
+    const [settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers, faqs, surgeRules] = await Promise.all([
       getSettings(db), visible(db, "place"), visible(db, "rideOption"), visible(db, "city"), visible(db, "busOperator"), visible(db, "popularRoute"),
-      visible(db, "groupDestination"), visible(db, "offer"), visible(db, "faq"),
+      visible(db, "groupDestination"), visible(db, "offer"), visible(db, "faq"), visible(db, "surgeRule"),
     ]);
     // Only offers within their dates are shown (an expired or not-yet-started code can't be used).
     const today = businessDate();
-    const body: AppConfig = { settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers: offers.filter((o) => offerLive(o, today)), faqs };
+    const body: AppConfig = { settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers: offers.filter((o) => offerLive(o, today)), faqs, surgeRules };
     return c.json(body);
   });
 

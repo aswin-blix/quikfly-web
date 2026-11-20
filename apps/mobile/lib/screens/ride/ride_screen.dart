@@ -483,7 +483,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     final saved = ref.watch(savedPlacesProvider).value ?? const <SavedPlace>[];
     final quote = _quote;
     final settings = ref.watch(configProvider).value?.settings ?? const Settings({});
-    final canPay = user != null && quote != null ? creditsUsable(settings, user.creditBalance, quote.fare) : 0;
+    final canPay = user != null && quote != null ? creditsUsable(settings, user.creditBalance, quote.fare, 0, rideDiscountRoom(settings, widget.service, quote.fare)) : 0;
     final payable = quote == null ? 0 : quote.fare - (_useCredits ? canPay : 0);
     final earns = quote == null ? 0 : creditsEarned(settings, widget.service, payable);
     final walletShort = user != null && quote != null && user.walletBalance < payable;
@@ -652,7 +652,8 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       if (_quotes != null && !_loadingQuotes && _quotes!.isNotEmpty) ...[
         const SizedBox(height: 16),
         _label('Choose a ride · ${_quotes!.first.distanceKm} km · ~${_quotes!.first.durationMin} min'),
-        if (_quotes!.first.surge > 1) _surgeNote(_quotes!.first.surge),
+        if (_topSurge > 1) _surgeNote(_topSurge, sameSurge: _quotes!.every((q) => q.surge == _topSurge)),
+        if (_quotes!.any((q) => q.nightCharge > 0)) _nightNote(),
         if (_quotes!.first.passSaving > 0) _passNote(),
         for (final q in _quotes!)
           Padding(
@@ -684,6 +685,8 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                   Text(inr(q.fare), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
                   if (q.passSaving > 0) Text('−${inr(q.passSaving)} surge', style: TextStyle(color: c.success, fontSize: 11)),
+                  if (q.surge > 1 && !_quotes!.every((x) => x.surge == _topSurge)) Text('×${q.surge.toStringAsFixed(q.surge % 1 == 0 ? 0 : 1)} surge', style: TextStyle(color: c.warning, fontSize: 11)),
+                  if (q.nightCharge > 0) Text('incl. ${inr(q.nightCharge)} night', style: TextStyle(color: c.fgMuted, fontSize: 11)),
                 ]),
               ]),
             ),
@@ -736,7 +739,28 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
 
   /// MVAG 2025: show the surge before booking.
 
-  Widget _surgeNote(double surge) {
+  /// "22-23, 0-5" → "22:00–23:59, 00:00–05:59" (hourRangesText in packages/shared/src/settings.ts).
+  String _hourRanges(String s) => s.split(',').map((p) => p.trim()).where((p) => p.contains('-')).map((p) {
+        final h = p.split('-').map((x) => int.tryParse(x.trim()) ?? 0).toList();
+        String two(int v) => v.toString().padLeft(2, '0');
+        return '${two(h[0])}:00–${two(h[1])}:59';
+      }).join(', ');
+
+  /// The highest surge in the current quotes (surge rules can differ by ride type).
+  double get _topSurge => (_quotes ?? const <FareQuote>[]).fold(1.0, (m, q) => q.surge > m ? q.surge : m);
+
+  Widget _nightNote() {
+    final c = context.qf;
+    final s = ref.watch(configProvider).value?.settings ?? const Settings({});
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(border: Border.all(color: c.border), borderRadius: BorderRadius.circular(10)),
+      child: Text('Night fares: ${s.rideNightPercent}% is added ${_hourRanges(s.rideNightHours)} (India time), shown on each ride.', style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
+    );
+  }
+
+  Widget _surgeNote(double surge, {bool sameSurge = true}) {
     final c = context.qf;
     final s = ref.watch(configProvider).value?.settings ?? const Settings({});
     String x(double v) => v.toStringAsFixed(v % 1 == 0 ? 0 : 1);
@@ -745,7 +769,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(color: c.warning.withValues(alpha: 0.1), border: Border.all(color: c.warning.withValues(alpha: 0.3)), borderRadius: BorderRadius.circular(10)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Busy hours: these fares include a ×${x(surge)} surge (never more than ×${x(s.surgeCap)}). Surge hours: ${s.surgeHours}.',
+        Text('Busy hours: ${sameSurge ? 'these fares include a ×${x(surge)} surge' : 'some fares include a surge of up to ×${x(surge)}, shown on each ride'} (never more than ×${x(s.surgeCap)}).${sameSurge && s.surgeHours.isNotEmpty ? ' Surge hours: ${s.surgeHours}.' : ''}',
             style: TextStyle(color: c.warning, fontSize: 12.5)),
         if (s.passOnSale)
           GestureDetector(
@@ -919,7 +943,8 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   int _creditsOff() {
     final user = ref.read(userProvider), q = _quote;
     if (!_useCredits || user == null || q == null) return 0;
-    return creditsUsable(ref.read(configProvider).value?.settings ?? const Settings({}), user.creditBalance, q.fare);
+    final s = ref.read(configProvider).value?.settings ?? const Settings({});
+    return creditsUsable(s, user.creditBalance, q.fare, 0, rideDiscountRoom(s, widget.service, q.fare));
   }
 
   int _earnedNow(Ride r) => creditsEarned(ref.read(configProvider).value?.settings ?? const Settings({}), widget.service, r.quote.fare - _creditsPaid);
