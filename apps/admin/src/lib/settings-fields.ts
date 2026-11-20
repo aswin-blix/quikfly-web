@@ -10,6 +10,8 @@ export interface SettingField {
   /** Shown beside number inputs: "₹", "%", "×", "km". */
   unit?: string;
   step?: number;
+  /** A row editor instead of the raw text: surge windows or cancellation tiers. */
+  editor?: "hours" | "tiers";
 }
 
 export interface SettingGroup {
@@ -53,7 +55,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
     sub: "Bike, auto and cab fares come from each ride type in the catalog, multiplied by surge.",
     fields: [
       { key: "surgeMultiplier", type: "number", unit: "×", step: 0.05, label: "Surge multiplier", help: "1 means no surge. 1.2 adds 20% during surge hours. Can't be above the surge cap." },
-      { key: "surgeHours", type: "text", label: "Surge hours", help: 'India time, inclusive hour ranges like "8-10, 17-20". Empty means no surge.' },
+      { key: "surgeHours", type: "text", editor: "hours", label: "Surge hours", help: "India time. A window from 08:00 to 10:59 covers every pickup in those hours. No windows means no surge." },
       { key: "surgeCap", type: "number", unit: "×", step: 0.1, label: "Surge cap", help: "At most 2×: the 2025 aggregator guidelines allow up to twice the base fare; some states ask for less (Maharashtra: 1.5×)." },
       { key: "passPrice", type: "number", unit: "₹", label: "QuikFly Pass price", help: "Paid from the wallet. The pass takes the surge off every bike, auto and cab ride. Not sold while there are no surge hours." },
       { key: "passDays", type: "number", unit: "days", label: "QuikFly Pass length", help: "How long one pass lasts. Buying again adds these days after the current pass ends." },
@@ -109,21 +111,21 @@ export const SETTING_GROUPS: SettingGroup[] = [
     title: "Cancellation policies",
     sub: "How much a customer gets back when they (or staff) cancel, by notice given before the start. Each booking keeps the policy it was sold under, so changes apply to new bookings only.",
     fields: [
-      { key: "cancelPolicyBus", type: "text", label: "Bus", help: 'e.g. "12h:100, 4h:50": full refund 12+ hours before departure, half 4+ hours before, nothing later. Empty = full refund any time.' },
-      { key: "cancelPolicyTours", type: "text", label: "Holidays", help: 'e.g. "15d:100, 7d:50". Counted to midnight (India time) on the start date.' },
-      { key: "cancelPolicyRent", type: "text", label: "Self-drive and chauffeur cars", help: 'e.g. "24h:100": full refund up to 24 hours before pickup, nothing after.' },
-      { key: "cancelPolicyGroup", type: "text", label: "Group travel", help: 'e.g. "48h:100". Counted to midnight on the trip date.' },
+      { key: "cancelPolicyBus", type: "text", editor: "tiers", label: "Bus", help: "Counted to the departure time. Shorter notice can't refund more than longer notice; later than the last tier refunds nothing." },
+      { key: "cancelPolicyTours", type: "text", editor: "tiers", label: "Holidays", help: "Counted to midnight (India time) on the start date." },
+      { key: "cancelPolicyRent", type: "text", editor: "tiers", label: "Self-drive and chauffeur cars", help: "Counted to the pickup time. The self-drive deposit always comes back in full." },
+      { key: "cancelPolicyGroup", type: "text", editor: "tiers", label: "Group travel", help: "Counted to midnight on the trip date." },
     ],
   },
   {
     title: "GST",
     sub: "Added to bus and holiday prices, and used to split the tax on invoices. Each booking keeps the rate it was sold under, so old invoices never change. Confirm rates with your accountant.",
     fields: [
-      { key: "gstRides", type: "number", unit: "%", label: "Rides (bike, auto, cab)", help: "" },
-      { key: "gstBus", type: "number", unit: "%", label: "Bus", help: "" },
-      { key: "gstTours", type: "number", unit: "%", label: "Holidays", help: "" },
-      { key: "gstRent", type: "number", unit: "%", label: "Self-drive and chauffeur cars", help: "" },
-      { key: "gstGroup", type: "number", unit: "%", label: "Group travel", help: "" },
+      { key: "gstRides", type: "number", unit: "%", label: "Rides (bike, auto, cab)", help: "Included in the fare: changing it changes the invoice split and partner earnings, not what riders pay." },
+      { key: "gstBus", type: "number", unit: "%", label: "Bus", help: "Added on top of the seat price: changing it changes what customers pay (see Try a fare)." },
+      { key: "gstTours", type: "number", unit: "%", label: "Holidays", help: "Added on top of the package price: changing it changes what customers pay." },
+      { key: "gstRent", type: "number", unit: "%", label: "Self-drive and chauffeur cars", help: "Included in the price: changing it changes the invoice split, not what customers pay." },
+      { key: "gstGroup", type: "number", unit: "%", label: "Group travel", help: "Included in the price: changing it changes the invoice split and partner earnings, not what customers pay." },
     ],
   },
   {
@@ -175,10 +177,10 @@ export const SETTING_GROUPS: SettingGroup[] = [
     sub: "Printed on invoices and shown in the SOS sheet.",
     fields: [
       { key: "companyName", type: "text", label: "Legal name", help: "Seller name on invoices." },
-      { key: "companyAddress", type: "text", label: "Address", help: "" },
+      { key: "companyAddress", type: "text", label: "Address", help: "Seller address on invoices." },
       { key: "companyGstin", type: "text", label: "GSTIN", help: "15 characters, e.g. 33ABCDE1234F1Z5." },
-      { key: "companyEmail", type: "text", label: "Support email", help: "" },
-      { key: "companyPhone", type: "text", label: "Support phone", help: "" },
+      { key: "companyEmail", type: "text", label: "Support email", help: "On invoices and the Help page." },
+      { key: "companyPhone", type: "text", label: "Support phone", help: "Shown on Help and for partner support; the apps call it with one tap." },
       { key: "safetyLine", type: "text", label: "24×7 safety line", help: "Shown in the SOS sheet during rides." },
       { key: "whatsappNumber", type: "text", label: "Support WhatsApp number", help: 'Shows a free "Chat on WhatsApp" link on Help, holidays and bookings (opens WhatsApp with a message ready). Empty hides it.' },
     ],
@@ -189,7 +191,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
     fields: [
       { key: "privacyOfficerName", type: "text", label: "Grievance Officer name", help: "A person or a role, e.g. \"QuikFly Grievance Officer\". Placeholder until the company names one." },
       { key: "privacyOfficerEmail", type: "text", label: "Grievance Officer email", help: "Replies are due within 30 days." },
-      { key: "privacyOfficerPhone", type: "text", label: "Grievance Officer phone", help: "" },
+      { key: "privacyOfficerPhone", type: "text", label: "Grievance Officer phone", help: "Shown on the privacy notice for privacy questions and complaints." },
       {
         key: "inactivityEraseDays", type: "number", unit: "days", label: "Close unused accounts after",
         help: "Accounts nobody has signed in to for this long are closed with a notice and erased 30 days later unless the person signs in. Accounts with wallet money, a confirmed booking or a partner application are skipped. 0 = never; otherwise at least 180. 1095 = 3 years.",
@@ -197,3 +199,29 @@ export const SETTING_GROUPS: SettingGroup[] = [
     ],
   },
 ];
+
+/** Fare samples a tab can show ("Try a fare"); see components/FarePreview.tsx. */
+export type PreviewKind = "ride" | "bus" | "tour" | "rent" | "group";
+
+export interface SettingTab {
+  id: string;
+  label: string;
+  /** Group titles from SETTING_GROUPS, in order. */
+  groups: string[];
+  preview?: PreviewKind[];
+}
+
+/** The Settings page's tabs. Every group belongs to exactly one tab. */
+export const SETTING_TABS: SettingTab[] = [
+  { id: "services", label: "Services", groups: ["Services", "Features"] },
+  { id: "rides", label: "Rides", groups: ["Rides"], preview: ["ride"] },
+  { id: "bus", label: "Bus", groups: ["Bus fares"], preview: ["bus"] },
+  { id: "holidays", label: "Holidays & rentals", groups: ["Holidays and rentals"], preview: ["tour", "rent", "group"] },
+  { id: "cancellation", label: "Cancellation", groups: ["Cancellation policies"] },
+  { id: "money", label: "GST & credits", groups: ["GST", "Wallet", "QuikFly Credits"], preview: ["bus", "tour"] },
+  { id: "partners", label: "Partners", groups: ["Partners", "Licence checks"] },
+  { id: "company", label: "Company & privacy", groups: ["Company and safety", "Privacy (DPDP)"] },
+];
+
+export const SETTING_FIELDS: SettingField[] = SETTING_GROUPS.flatMap((g) => g.fields);
+export const fieldLabel = (key: string) => SETTING_FIELDS.find((f) => f.key === key)?.label ?? key;

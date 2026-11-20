@@ -17,11 +17,13 @@ node apps/api/scripts/create-admin.mjs --local you@example.com "Your Name" owner
 ```
 src/app/            one folder per page: / (dashboard), login, settings, audit, catalog (overview), catalog/list?kind=, catalog/edit?kind=&id=
                     (Offers in the sidebar is catalog/list?kind=offer), bookings (filters in the URL, incl. `?rental=returned` for returned self-drive cars), bookings/view?id= (a "Sold under" card with the terms the booking keeps, from `termLines()`; self-drive: `components/RentalReview.tsx` with pickup/return photos and the deposit settlement), licences, vendors (Partners: queue by status, plus Fleet to review and Payouts), vendors/view?id= (section-by-section review; for live partners the Fleet section: vehicles, drivers, renewals, blocks; `components/VendorFleet.tsx`) and support (Support: callback requests and tickets by status: Waiting for us / Answered / Closed; reply or close with a note; `support.manage`)
-src/components/     AdminShell (sidebar / phone menu), ui.tsx (buttons, badges, fields, pager...), charts.tsx, ConfirmDialog.tsx, ReasonDialog.tsx
+src/components/     AdminShell (sidebar / phone menu), ui.tsx (buttons, badges, fields, pager...), charts.tsx, ConfirmDialog.tsx, ReasonDialog.tsx,
+                    FarePreview.tsx ("Try a fare" on Settings and the catalog edit form), SettingEditors.tsx (surge-hours and cancellation-tier rows)
 src/lib/api.ts      the only place that calls fetch(); token in localStorage ("quikfly.admin.token")
 src/lib/session.tsx SessionProvider, useSession(), <RequireAdmin permission="...">
 src/lib/nav.ts      sidebar entries + permissions; LIVE_ROUTES lists pages that exist so far
-src/lib/settings-fields.ts  how each business setting appears on the Settings page
+src/lib/settings-fields.ts  how each business setting appears on the Settings page, its tabs (SETTING_TABS) and which fare samples a tab shows
+src/lib/fare-samples.ts     sample trips priced with the shared pricing functions (current vs draft)
 src/styles/tokens.css       colours, fonts, radii (light + dark). Never use raw hex elsewhere
 ```
 
@@ -31,7 +33,9 @@ src/styles/tokens.css       colours, fonts, radii (light + dark). Never use raw 
 - **Permissions:** wrap every page in `<RequireAdmin permission="...">` and hide buttons with `useSession().can(...)`. The API enforces the same `PERMISSIONS` map from `@quikfly/shared`; the UI only hides what would fail anyway.
 - **New page:** add `src/app/<name>/page.tsx`, a `NAV` entry, and the route to `LIVE_ROUTES`.
 - **Services and features:** the first two Settings groups switch services and features off (owner only). The API enforces them (`packages/shared/src/switches.ts`); a new service or feature switch needs a `switchError` rule there, a row here, and the screens that should hide it.
-- **New setting:** add it to `Settings` in `packages/shared/src/settings.ts` with a default and a rule in `SETTING_RULES`, then a row in `settings-fields.ts`. The API and the page both validate with `checkSetting`.
+- **New setting:** add it to `Settings` in `packages/shared/src/settings.ts` with a default and a rule in `SETTING_RULES`, then a row in `settings-fields.ts` (in a group that belongs to a tab in `SETTING_TABS`). The API and the page both validate with `checkSetting`. The page shows "Changed from default" against `DEFAULT_SETTINGS`, offers "Reset to default", and History (owners) reads the audit log filtered by the key.
+- **Saving settings:** "Review and save" lists every change (old → new) before anything is sent; nothing saves without that step. Restoring an old value from History only puts it in the draft.
+- **Try a fare:** samples run in the browser with `@quikfly/shared` pricing (the same functions the API quotes with) and never save. A tab lists its sample kinds in `SETTING_TABS.preview`; the catalog edit form previews ride types, packages, rental cars and group vehicles.
 - **Catalog:** the list and edit pages are generic. Each kind's fields, labels, hints and limits come from `CATALOG_DEFS` (`packages/shared/src/catalog-kinds.ts`); the form validates with `validateCatalogData` before saving and the API validates again. Add a field there, not here.
 - **CSS layers:** component classes (`.card`, `.field`, `.btn-primary`...) are in `@layer components` in `globals.css` so utilities like `w-56` or `pl-9` override them. Keep new component classes inside that layer.
 - **Routing:** this app uses `next/link` and `next/navigation` directly (unlike the website, it has no single-file SPA build). Pages that read the query string wrap their content in `<Suspense>`.

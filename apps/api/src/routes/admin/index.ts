@@ -2,7 +2,7 @@
 // change data check a permission and write an audit row. Bookings, licences, catalog and
 // offers routers mount here as they are added.
 import { Hono } from "hono";
-import { ADMIN_RULES, checkSetting, checkSettings, type Settings } from "@quikfly/shared";
+import { ADMIN_RULES, SETTING_RULES, checkSetting, checkSettings, type Settings } from "@quikfly/shared";
 import type { AppEnv } from "../../env";
 import { badRequest } from "../../lib/errors";
 import { bearerToken } from "../../middleware/auth";
@@ -47,9 +47,12 @@ export const admin = new Hono<AppEnv>()
     return c.json(await dashboardStats(c.env.DB, days));
   })
 
-  // Audit log: ?page=&entity=&entityId=
-  .get("/audit", requireAdmin("audit.view"), async (c) =>
-    c.json(await listAudit(c.env.DB, pageParam(c.req.query("page")), c.req.query("entity")?.trim() || undefined, c.req.query("entityId")?.trim() || undefined)))
+  // Audit log: ?page=&entity=&entityId=&key= (key: one setting's history)
+  .get("/audit", requireAdmin("audit.view"), async (c) => {
+    const key = c.req.query("key")?.trim() || undefined;
+    if (key && !Object.hasOwn(SETTING_RULES, key)) throw badRequest(`"${key}" isn't a setting.`);
+    return c.json(await listAudit(c.env.DB, pageParam(c.req.query("page")), c.req.query("entity")?.trim() || undefined, c.req.query("entityId")?.trim() || undefined, key));
+  })
 
   // Settings: any admin can read, owners change.
   .get("/settings", requireAdmin("dashboard.view"), async (c) => c.json(await getSettings(c.env.DB)))

@@ -560,7 +560,7 @@ Quick wins first. Each step is one PR, merged and deployed in the usual way.
 | **2. Validation and roles** ✅ live 2026-11-20 (PR #100) | R3 + R24, R7 | M6, M7, M8 | ~2–3 days |
 | **3. Booking terms snapshot** ✅ live 2026-11-20 (PR #103; app part in the next app release) | R9 | H1, H2, H3 | ~3 days |
 | **4. GST model** (after the accountant confirms 7.2) | R10, R25 | M1, H6 | ~3–4 days |
-| **5. Staff tools** | R6, R11, R12 | L1–L3, L5, L6 | ~4–5 days |
+| **5. Staff tools** ✅ built 2026-11-20 (branch `pricing/step5-staff-tools`) | R6, R11, R12 | L1–L3, L5, L6 | ~4–5 days |
 | **6. Ride pricing that fits state rules** | R14, R15, R13 | M2, M4 | ~4 days |
 | **7. Bus and holiday pricing** | R16, R22 | M3, M4 | ~3–4 days |
 | **8. Time and scale** | R17, R19, R20 (override) | M5, L4 | ~4–5 days |

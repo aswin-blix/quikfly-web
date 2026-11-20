@@ -81,7 +81,7 @@ export const adminApi = {
     get: () => req<Settings>("GET", "/admin/settings"),
     update: (patch: Partial<Settings>) => req<Settings>("PATCH", "/admin/settings", patch),
   },
-  audit: (page: number, entity?: string) => req<Page<AuditEntry>>("GET", `/admin/audit${qs({ page, entity })}`),
+  audit: (page: number, entity?: string, key?: string) => req<Page<AuditEntry>>("GET", `/admin/audit${qs({ page, entity, key })}`),
   bookings: {
     search: (f: BookingFilters) => req<Page<AdminBooking>>("GET", `/admin/bookings${qs({ ...f })}`),
     get: (id: string) => req<AdminBookingDetail>("GET", `/admin/bookings/${encodeURIComponent(id)}`),

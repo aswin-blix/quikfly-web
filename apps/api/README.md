@@ -147,7 +147,7 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | GET 🛡 | `/admin/stats?days=` | dashboard numbers for the last 1–90 days (default 7, India time): totals, by service, by day, queues (pending licences, pending deletions, returned cars to settle), latest bookings `[dashboard.view]` |
 | GET 🛡 | `/admin/settings` | current business settings (defaults in `@quikfly/shared` `settings.ts`) `[dashboard.view]` |
 | PATCH 🛡 | `/admin/settings` | change settings; only known keys with the right type `[settings.edit]` |
-| GET 🛡 | `/admin/audit?page=&entity=&entityId=` | audit log, newest first, 25 per page `[audit.view]` |
+| GET 🛡 | `/admin/audit?page=&entity=&entityId=&key=` | audit log, newest first, 25 per page `[audit.view]`. `key` (a setting key; anything else is 400) keeps only settings changes that set it: the admin Settings page's per-setting History |
 | GET 🛡 | `/admin/catalog` | each catalog kind with item counts and whether this admin can edit it `[dashboard.view]` |
 | GET 🛡 | `/admin/catalog/:kind` | all items of a kind, hidden ones included. Kinds and fields: `packages/shared/src/catalog-kinds.ts` `[the kind's permission]` |
 | POST 🛡 | `/admin/catalog/:kind` | `{ data, active?, sort? }` → new item; `data` is validated against the kind's fields (incl. cross-field rules: a ride type needs a fare, a flat offer needs a minimum above its discount, a departure's `tourId` must exist); unique fields (tour slug, offer code, city name...) give 409. Setting a price field (`pricing: true` in catalog-kinds.ts) or creating a visible offer needs `[pricing.edit]`, else 403 |

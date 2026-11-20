@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { ACTIVE_IS_PRICING, CATALOG_DEFS, isCatalogKind, pricingChanges, validateCatalogData, type CatalogField, type CatalogKind } from "@quikfly/shared";
+import { ItemFarePreview, PREVIEW_KINDS } from "@/components/FarePreview";
 import { Button, ErrorBox, Field, PageHeader, Toggle } from "@/components/ui";
 import { adminApi } from "@/lib/api";
 import { cx } from "@/lib/format";
@@ -148,6 +149,10 @@ function EditForm({ kind, id }: { kind: CatalogKind; id: string | null }) {
           );
         })}
       </section>
+      {PREVIEW_KINDS.includes(kind) && (() => {
+        const check = validateCatalogData(kind, fromForm(def.fields, values), id ?? "new");
+        return <ItemFarePreview kind={kind} original={original} edited={"error" in check ? null : (check.data as unknown as Record<string, unknown>)} />;
+      })()}
       <section className="card p-5 grid gap-5 sm:grid-cols-2">
         <div className="flex items-center justify-between gap-4">
           <div>
