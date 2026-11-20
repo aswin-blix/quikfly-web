@@ -76,12 +76,13 @@ Photos are only served to the partner who uploaded them and to staff with `vendo
 
 - `npm run typecheck`: must pass.
 - `npm run smoke` against a local API after `npm run db:migrate:local`. Run it twice: the second run proves the tests don't depend on a fresh database.
-- `npm run smoke:admin` (local) creates test admins in the local D1 and checks every `/admin` endpoint, roles and lockout. Against production pass the URL, an owner email and password; lockout and role checks are skipped there so no real account gets locked.
+- `npm run smoke:admin` (local) creates test admins in the local D1 and checks every `/admin` endpoint, roles and lockout. Its two cron checks need the API started with `wrangler dev --test-scheduled`. Against production the **owner** runs it with the URL, owner email and password (Claude never signs in to production); lockout and role checks are skipped there. Each run makes one deliberate wrong-password attempt, so a run with a wrong password costs two of the five tries before the account locks. In Windows `cmd` use double quotes around the password (single quotes are passed literally).
 - Run typecheck and the smoke tests after each step, not only at the end of a slice (owner's request).
 - UI: check in a browser at 390 px width (phone) in light and dark mode. Use the website against the local API, not the mock, for anything that touches data.
 - Mock (demo) mode: build with `NEXT_PUBLIC_API_URL=` (empty) to check the single-file or offline demo still works.
 - A plain `next build` in `apps/web` reads `.env.production`, so it talks to the **production** API. To test a build against the local API, set it explicitly: `NEXT_PUBLIC_API_URL=http://127.0.0.1:8787/v1 npx next build`, then serve it with `npx wrangler dev --port <port>` (restart that after every build).
 - Admin panel against a local API on another port: `NEXT_PUBLIC_API_URL=http://127.0.0.1:<port>/v1 npx next dev -p 3101` in `apps/admin`; local staff accounts come from `node scripts/create-admin.mjs --local <email> "<name>" <role> <password>` (local D1 only).
+- Another session has the repo folder on a release branch? Build and deploy from a separate worktree: `git worktree add <scratch>/qf-x -b <branch> origin/main`, `npm install` there; run wrangler from the main folder's `node_modules/wrangler/bin/wrangler.js` (npm skips workerd's install script in a fresh worktree). Remove the worktree when done.
 - No Chrome extension? Browser checks can drive headless Chrome over the DevTools protocol (`chrome --headless=new --remote-debugging-port=9334`) from a small Node script: set a 390 px mobile viewport, navigate, fill inputs through the native value setter, screenshot.
 
 ## Troubleshooting
