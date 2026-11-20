@@ -4,15 +4,15 @@ Goal: a live client demo of the website and an Android app on one API, at ₹0 (
 
 Legend: ✅ done · 🔄 in progress · ⬜ not started
 
-## Start here (state on 2026-11-19)
+## Start here (state on 2026-11-20)
 
 - **Everything below is live on production** (website, API, admin) unless marked otherwise. Latest apps: **QuikFly 0.1.13 and QuikFly Partner 0.1.13** (GitHub Release `app-v0.1.13`, 2026-11-19); the website's download buttons serve them.
 - **Phase 5 items 1–3 and 5–10 are fully shipped** (website, API, admin and app 0.1.12+); #4 notifications are live except phone push. **Phase 5 #11:** the DPDP privacy pack is live on website, API and admin (PR #91); the **languages foundation** is live with its switch off (PR #93): full Tamil/Hindi translation, native-speaker review and the TalkBack pass happen at the **feature freeze before production**.
-- **Next (owner picks):** Phase 5 #12, family and business profiles ("go"); approving steps of the **admin settings and pricing audit** plan (done, see the line below; prompt in [prompts/admin-settings-audit.md](prompts/admin-settings-audit.md)); or **app 0.1.14** ("prepare app 0.1.14"): new logo (#89), privacy screens and consent (#91), the hidden language setting (#93). The 0.1.14 phone check should also cover the number picker and the customer inbox (below).
-- **No open PRs.** Last deploys 2026-11-19: API `a05cd24c`, website `fcffef9b`, admin `c6167b27`; production D1 migrations up to `0024`.
-- **Waiting on the owner:** Firebase project for phone push (Phase 5 #4 step 2, steps in [operations.md](operations.md)); the WhatsApp number in admin → Settings (support buttons stay hidden until then); the Phase 4 demo decisions below (demo numbers, devices, date) and review of [demo-script.md](demo-script.md).
+- **Next (owner picks):** approve more steps of the **pricing plan** in [admin-settings-audit.md](admin-settings-audit.md) (step 3 next: bookings keep the refund policy, rental rates and GST rate they were sold under); settle **app 0.1.14** (PR #96 from another session: built and installed, not published; two Partner issues to fix or publish as is); or Phase 5 #12, family and business profiles ("go").
+- **Open PRs:** #96 (app 0.1.14, release branch). Last deploys 2026-11-20 (pricing step 2): API `1b059139`, website `bd760e55`, admin `a1c81062`; production D1 migrations up to `0025` (rental damage excess, step 1).
+- **Waiting on the owner:** change the owner admin password (it was pasted into a chat on 2026-11-20; reset with `create-admin.mjs --remote`, run by the owner); a production admin smoke run (2026-11-20 the owner login failed in the script, probably quotes in `cmd`; it left a pending test licence for +91 90000 00002 in the queue, reject or leave it); Firebase project for phone push (Phase 5 #4 step 2, steps in [operations.md](operations.md)); the WhatsApp number in admin → Settings (support buttons stay hidden until then); the Phase 4 demo decisions below (demo numbers, devices, date) and review of [demo-script.md](demo-script.md).
 - **App 0.1.13 published** (Partner first run like Red Taxi's: phone-number picker, application starts after sign-up, Help button, grey Save; Partner inbox shows partner updates only). Still to see on a phone: the number picker (needs a signed-out login) and the customer inbox after the change (covered by a widget test).
-- 🔄 **Admin settings and pricing audit** (branch `docs/admin-settings-audit`, docs only): [admin-settings-audit.md](admin-settings-audit.md) holds both stages: the findings (H1–H6, M1–M10, L1–L11), the research on MVAG 2025, state rules, GST and competitors, 25 recommendations (R1–R25) and an 8-step plan. The owner approved **plan step 1** ("go step 1", 2026-11-20): **live on website, API and admin since 2026-11-20** (PR #98; app part in the next app release). **Step 2** (validation and roles) **live since 2026-11-20** (PR #100), see the work log; steps 3–8 wait for approval.
+- 🔄 **Pricing plan** ([admin-settings-audit.md](admin-settings-audit.md): findings H1–H6/M1–M10/L1–L11, research, R1–R25, an 8-step plan). **Steps 1 and 2 are live** (2026-11-20, PRs #98 and #100): honest holiday GST wording, damage capped at the protection excess, atomic settings audit, ride fares expire after 30 min, fresh website prices; rules between settings, tighter catalog limits, offer start dates and total-use limits, and a `pricing.edit` permission so content staff can't change prices. The app part of step 1 ships in the next app release after 0.1.14. Steps 3–8 wait for the owner; steps 4 (GST model, TCS) need the accountant first.
 - **Release rhythm:** each Phase 5 item ships to website/API/admin when its PR is merged; the app part follows in the next app release (owner builds, Claude verifies, phone-checks and publishes). Details in [operations.md](operations.md) and [apps/mobile/README.md](../apps/mobile/README.md).
 
 ## Phases
@@ -28,6 +28,7 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started
 | 4. Demo hardening | 🔄 | D1 production rehearsal done, D2 demo script drafted; the rest waits for the owner's decisions (plan below) |
 | 4b. Make the UI truthful | ✅ | T1–T5 deployed 2026-11-18 (cancellation-policy engine, honest holiday/rental copy, bus women-first seats, MVAG ride rules) |
 | 5. Features from the competitor research | 🔄 | Items 1–3 and 5–10 live (web, API, admin, app); #4 notifications live except phone push (waits for Firebase); #11 DPDP pack live, languages foundation live (translation at the feature freeze); **next: #12 family and business profiles**. List under "Phase 5 candidates" below |
+| 5b. Pricing plan (admin settings audit) | 🔄 | Steps 1–2 live 2026-11-20 (PRs #98, #100); steps 3–8 wait for the owner. Plan and findings in [admin-settings-audit.md](admin-settings-audit.md) |
 | 6. Admin, full | ⬜ | The parts cut from the lean plan: customers screen (wallet adjust, suspend, sign out everywhere, cancel deletion), booking notes, SOS alerts in admin, team screen, CSV export. (Partners review and Support queue were added with Phase 5) |
 
 ## Phase 4, demo hardening (waiting for the owner's decisions) 🔄
@@ -349,7 +350,9 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 ## Backlog (agreed ideas, not scheduled)
 
 - Phase 6 items above (customers screen, booking notes, SOS in admin, team screen, CSV export)
-- Admin settings and pricing audit: prompt ready in [prompts/admin-settings-audit.md](prompts/admin-settings-audit.md) (two stages, stops after the inventory for the owner's review)
+- `smoke-admin.mjs`: stop right after a failed owner login (today it carries on and submits a test licence on production); offered to the owner 2026-11-20, not yet approved
+- Production offer GROUP500 (flat ₹500, ₹0 minimum): the step 2 rule asks for a minimum above ₹500 on its next edit; set one (e.g. ₹2,000, as in the seed)
+- Pricing plan steps 3–8 ([admin-settings-audit.md](admin-settings-audit.md) section 10)
 - At the feature freeze: full Tamil/Hindi translation (all screens, API messages, notifications, the privacy notice), native-speaker review, `npm run i18n:strict`, TalkBack/WCAG pass, then turn `featureLanguages` on
 - Cloudflare Access in front of the admin address (free ≤ 50 users) when a custom domain exists, or earlier if the `workers.dev` toggle is available
 - `packages/ui` if a third web app appears (admin copies `tokens.css` and a few primitives from the website for now)
