@@ -85,6 +85,12 @@ await expect("GET /admin/audit shows the change", call("GET", "/admin/audit", nu
   (j) => j.items[0].action === "settings.update" && j.items[0].admin?.email === undefined && j.items[0].admin.name && j.items[0].detail.after.licenceAutoApprove === true && j.total >= 1);
 await expect("GET /admin/audit?entity=settings", call("GET", "/admin/audit?entity=settings", null, T), 200, (j) => j.items.every((e) => e.entity === "settings"));
 await expect("GET /admin/audit?entity=nothing is empty", call("GET", "/admin/audit?entity=nothing", null, T), 200, (j) => j.total === 0 && j.items.length === 0);
+// One setting's history (admin Settings → History): only changes that set that key.
+await expect("GET /admin/audit?key= lists one setting's changes", call("GET", "/admin/audit?entity=settings&key=licenceAutoApprove", null, T), 200,
+  (j) => j.items.length >= 1 && j.items.every((e) => e.entity === "settings" && "licenceAutoApprove" in e.detail.after));
+await expect("a setting's history has only its own changes", call("GET", "/admin/audit?key=companyName", null, T), 200,
+  (j) => j.items.every((e) => "companyName" in e.detail.after));
+await expect("an unknown setting key is refused", call("GET", "/admin/audit?key=nope", null, T), 400);
 
 // The setting reaches the customer side: a licence is verified at once while auto-approve is on, pending when off.
 const cust = (await call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: OTP })).json;

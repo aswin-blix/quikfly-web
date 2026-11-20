@@ -25,11 +25,16 @@ interface AuditRow {
   entity_id: string | null; detail: string; created_at: string;
 }
 
-export async function listAudit(db: D1Database, page: number, entity?: string, entityId?: string): Promise<Page<AuditEntry>> {
+/**
+ * Audit rows, newest first. `settingKey` (a key of SETTING_RULES, checked by the route) keeps only
+ * settings changes that set that key: one setting's history for the admin Settings page.
+ */
+export async function listAudit(db: D1Database, page: number, entity?: string, entityId?: string, settingKey?: string): Promise<Page<AuditEntry>> {
   const where: string[] = [];
   const params: unknown[] = [];
   if (entity) { where.push("a.entity = ?"); params.push(entity); }
   if (entityId) { where.push("a.entity_id = ?"); params.push(entityId); }
+  if (settingKey) { where.push("a.entity = 'settings' AND json_type(a.detail, '$.after.' || ?) IS NOT NULL"); params.push(settingKey); }
   const filter = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const pageSize = ADMIN_RULES.pageSize;
 
