@@ -82,7 +82,9 @@ assets/                fonts (Outfit static weights, Archivo Black), images/ (lo
 
 ## Icons and fonts
 
-- Launcher icon: edit `assets/icon/icon.png` (full icon) and `icon-foreground.png` (adaptive foreground, mark inside the centre 60 %), then `dart run flutter_launcher_icons`.
+- Launcher icons: the two apps have different icons.
+  - **QuikFly (customer):** sources in `assets/icon/customer/` (Android Studio Image Asset layout: `ic_launcher.png` 192 px legacy, `ic_launcher_foreground.png` and `ic_launcher_monochrome.png` 432 px adaptive layers). Run `python tool/customer_icon.py` (Pillow) to write the PNGs into `android/app/src/customer/res`, which overrides `src/main` for the customer flavor only. The adaptive background is the navy gradient in `src/customer/res/drawable/ic_launcher_bg.xml`; the monochrome layer is Android 13+'s themed icon.
+  - **QuikFly Partner:** the shared icon in `src/main/res`, from `assets/icon/icon.png` and `icon-foreground.png` via `dart run flutter_launcher_icons`. Running that command rewrites `src/main` only, so it doesn't touch the customer icon.
 - Outfit is shipped as static weights (400/500/600/700) cut from the variable font with `fonttools varLib.instancer`, because Flutter doesn't map `FontWeight` onto a variable font's axis.
 - `lib/core/cancellation.dart` is a Dart copy of `packages/shared/src/cancellation.ts`: it previews the refund before cancelling; the API decides the amount.
 - `assets/images/logo.png` is rendered from `brand/quikfly-logo.svg` by `node scripts/logo.mjs` (transparent; Flutter's SVG support drops the logo's glow filters, so the apps use a sharp PNG). `AppLogo` shows it bare in both themes, never on a badge or background (`test/logo_test.dart`).
