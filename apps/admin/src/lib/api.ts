@@ -86,7 +86,7 @@ export const adminApi = {
     search: (f: BookingFilters) => req<Page<AdminBooking>>("GET", `/admin/bookings${qs({ ...f })}`),
     get: (id: string) => req<AdminBookingDetail>("GET", `/admin/bookings/${encodeURIComponent(id)}`),
     cancel: (id: string, reason: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/cancel`, { reason }),
-    complete: (id: string) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/complete`),
+    complete: (id: string, tollsActual?: number) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/complete`, tollsActual === undefined ? undefined : { tollsActual }),
     assignVendor: (id: string, vehicleId: string | null) => req<AdminBookingDetail>("POST", `/admin/bookings/${encodeURIComponent(id)}/vendor`, { vehicleId }),
     rental: (id: string) => req<AdminRental>("GET", `/admin/bookings/${encodeURIComponent(id)}/rental`),
     rentalPhoto: (id: string, stage: RentalStage, side: RentalPhotoSide) => photo(`/admin/bookings/${encodeURIComponent(id)}/rental/photos/${stage}/${side}`),

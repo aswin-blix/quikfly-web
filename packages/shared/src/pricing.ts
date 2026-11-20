@@ -414,6 +414,15 @@ export function groupBillKm(v: TravelVehicle, trip: GroupTrip, oneWayKm: number,
 
 /** Line label for a quoted toll estimate; staff settle the actual tolls when they complete the trip. */
 export const TOLL_LINE = "Tolls (estimate)";
+/** Booking detail line written when the actual tolls are settled. */
+export const TOLLS_SETTLED_LINE = "Tolls";
+/** Most staff can enter as a trip's actual tolls (₹). */
+export const TOLLS_MAX = 100_000;
+
+/** Actual tolls against the quoted estimate: what comes back to the customer, or what they still owe. */
+export function tollSettlement(estimate: number, actual: number) {
+  return { refund: Math.max(0, estimate - actual), due: Math.max(0, actual - estimate) };
+}
 
 /**
  * `peak`: a peak or festival entry for the start date (moves the vehicle and bata, not tolls).

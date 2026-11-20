@@ -99,6 +99,8 @@ export interface AdminBookingDetail {
   history: AuditEntry[];
   /** The partner vehicle running this trip, if any. */
   partner: { vendorId: string; vendorName: string; vehicleId: string; regNumber: string; driverName: string | null } | null;
+  /** ₹ of toll estimate in this active group trip's quote: completing it needs the actual tolls (`tollsActual`). Null otherwise. */
+  tollEstimate: number | null;
 }
 
 export const BOOKING_STATUSES = ["confirmed", "ongoing", "completed", "cancelled"] as const;
