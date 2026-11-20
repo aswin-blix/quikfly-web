@@ -44,7 +44,10 @@ function Settle({ rental, onSettled }: { rental: AdminRental; onSettled: () => v
   const [preview, setPreview] = useState<RentalSettlement | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const amount = Math.min(RENTAL_RULES.damageMax, Number(damage) || 0);
+  // The customer's protection plan caps what they pay for damage ("You pay up to ₹X"); the API refuses more.
+  const cap = Math.min(RENTAL_RULES.damageMax, rental.damageExcess);
+  const over = (Number(damage) || 0) > cap;
+  const amount = Math.min(cap, Number(damage) || 0);
 
   useEffect(() => {
     let live = true;
@@ -53,6 +56,7 @@ function Settle({ rental, onSettled }: { rental: AdminRental; onSettled: () => v
   }, [rental.bookingId, amount]);
 
   async function settle() {
+    if (over) return setError(`Damage can be at most ${inr(cap)}: the excess of the customer's protection plan.`);
     if (amount > 0 && !note.trim()) return setError("Say what the damage charge is for.");
     setBusy(true); setError("");
     try { await adminApi.bookings.settle(rental.bookingId, amount, note.trim()); onSettled(); }
@@ -65,8 +69,12 @@ function Settle({ rental, onSettled }: { rental: AdminRental; onSettled: () => v
       <h3 className="font-medium text-strong">Settle the deposit</h3>
       <p className="text-sm text-muted">Compare the pickup and return photos. Extra km, late return and fuel are worked out from the customer&apos;s readings; add a damage charge only if the photos show new damage.</p>
       <div className="grid sm:grid-cols-[160px_1fr] gap-3">
-        <label className="text-sm"><span className="text-muted">Damage (₹)</span>
-          <input className="field mt-1" inputMode="numeric" maxLength={6} value={damage} onChange={(e) => setDamage(e.target.value.replace(/\D/g, ""))} placeholder="0" />
+        <label className="text-sm"><span className="text-muted">Damage (₹, at most {inr(cap)})</span>
+          <input className="field mt-1" inputMode="numeric" maxLength={6} value={damage} onChange={(e) => setDamage(e.target.value.replace(/\D/g, ""))} placeholder="0"
+            aria-invalid={over} aria-describedby="damage-cap" />
+          <span id="damage-cap" className={cx("block text-xs mt-1", over ? "text-danger" : "text-subtle")}>
+            {over ? `The customer's protection plan caps damage at ${inr(cap)}.` : "The customer's protection excess: they never pay more for damage."}
+          </span>
         </label>
         <label className="text-sm"><span className="text-muted">What for (shown to the customer)</span>
           <input className="field mt-1" maxLength={RENTAL_RULES.damageNoteMax} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. New scratch on the rear bumper" disabled={!amount} />
@@ -74,7 +82,7 @@ function Settle({ rental, onSettled }: { rental: AdminRental; onSettled: () => v
       </div>
       {preview && <Breakdown s={preview} payment={rental.payment} />}
       {error && <ErrorBox message={error} />}
-      <div><Button variant="primary" loading={busy} disabled={!preview} onClick={settle}><CheckCircle2 size={16} /> Settle and complete</Button></div>
+      <div><Button variant="primary" loading={busy} disabled={!preview || over} onClick={settle}><CheckCircle2 size={16} /> Settle and complete</Button></div>
     </div>
   );
 }

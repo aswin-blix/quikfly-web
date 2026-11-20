@@ -1,7 +1,8 @@
 // Public catalog reads: start-up config, holidays and rental cars. Hidden items never appear.
 import { withDepartures } from "../services/departures";
 import { Hono } from "hono";
-import type { AppConfig } from "@quikfly/shared";
+import { offerLive, type AppConfig } from "@quikfly/shared";
+import { businessDate } from "../config";
 import type { AppEnv } from "../env";
 import { notFound } from "../lib/errors";
 import { visible } from "../services/catalog";
@@ -15,7 +16,9 @@ export const config = new Hono<AppEnv>()
       getSettings(db), visible(db, "place"), visible(db, "rideOption"), visible(db, "city"), visible(db, "busOperator"), visible(db, "popularRoute"),
       visible(db, "groupDestination"), visible(db, "offer"), visible(db, "faq"),
     ]);
-    const body: AppConfig = { settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers, faqs };
+    // Only offers within their dates are shown (an expired or not-yet-started code can't be used).
+    const today = businessDate();
+    const body: AppConfig = { settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers: offers.filter((o) => offerLive(o, today)), faqs };
     return c.json(body);
   });
 

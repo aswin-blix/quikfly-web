@@ -1,10 +1,10 @@
-import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, cancelPolicyFor, creditsReturned, creditsUsable, switchError, refundAmount, refundPercent, rideCancelFee, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
+import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visibleById } from "./catalog";
-import { checkCoupon } from "./offers";
+import { checkCoupon, findOffer, totalUses } from "./offers";
 import { usableQuote } from "./quotes";
-import { ownRide } from "./rides";
+import { ownRideWithTime } from "./rides";
 import { getSettings } from "./settings";
 import { notify } from "./notifications";
 import { creditExpiry, earnStatement, earnedNotice, spendPlan } from "./credits";
@@ -17,7 +17,7 @@ export interface BookingRow {
   starts_at: string | null; refund_amount: number | null; deposit: number;
   cancel_reason: string | null; cancel_fee: number; trip_id: string | null; credits_used: number;
   vendor_id: string | null; vendor_vehicle_id: string | null; vendor_driver_id: string | null;
-  rescheduled_at: string | null; ticket_token: string | null;
+  rescheduled_at: string | null; ticket_token: string | null; terms: string | null;
 }
 /** `seats`: the bus seats it holds (bookingSeats); left empty where a caller doesn't need them. */
 export const toBooking = (r: BookingRow, seats: BookingSeat[] = [], rentalState: RentalState | null = null): Booking => ({
@@ -26,7 +26,7 @@ export const toBooking = (r: BookingRow, seats: BookingSeat[] = [], rentalState:
   startsAt: r.starts_at ?? null, refundAmount: r.refund_amount ?? null, deposit: r.deposit ?? 0,
   cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0, rideId: r.ride_id ?? null, tripId: r.trip_id ?? null,
   creditsUsed: r.credits_used ?? 0, discount: r.discount ?? 0, seats,
-  ticketToken: r.ticket_token ?? null, rescheduledAt: r.rescheduled_at ?? null, rentalState,
+  ticketToken: r.ticket_token ?? null, rescheduledAt: r.rescheduled_at ?? null, rentalState, terms: parseTerms(r.terms),
 });
 
 /** Where a rental is, from its row (packages/shared/src/rental.ts). */
@@ -79,7 +79,9 @@ export async function getBooking(db: D1Database, userId: string, id: string): Pr
 async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
   if (input.service === "bike" || input.service === "car") {
     if (!input.rideId) throw badRequest('"rideId" is required for ride bookings.');
-    const ride = await ownRide(db, userId, input.rideId);
+    const { ride, createdAt } = await ownRideWithTime(db, userId, input.rideId);
+    // A ride's fare is held like a quote: an unbooked ride can't be booked later at an old (e.g. off-peak) fare.
+    if (Date.now() - Date.parse(createdAt) > QUOTE_TTL_MINUTES * 60_000) throw conflict(`Fares are held for ${QUOTE_TTL_MINUTES} minutes and this one has expired. Please check the fare again.`);
     if (ride.quote.option.service !== input.service) throw badRequest("That ride is for a different service.");
     return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: ride.scheduledFor ?? null, deposit: 0, seatHolds: null, departure: null, rental: null };
   }
@@ -96,13 +98,14 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
     ? { id: req.departureId, travellers: req.adults + req.kids, seats: (await visibleById(db, "departure", req.departureId)).seats }
     : null;
   // A self-drive car gets a rental (pickup/return checklist), priced as booked for extensions and late fees.
-  let rental: { start: string; end: string; kmPlan: string; hourlyRate: number; protectionPerDay: number } | null = null;
+  let rental: { start: string; end: string; kmPlan: string; hourlyRate: number; protectionPerDay: number; damageExcess: number } | null = null;
   if (req.service === "rent" && req.mode === "self") {
     const [car, settings] = await Promise.all([visibleById(db, "rentalCar", req.carId), getSettings(db)]);
     const uplift = req.kmPlan === "unlimited" ? 1 + settings.rentUnlimitedKmExtraPercent / 100 : 1;
     rental = {
       start: req.start, end: req.end, kmPlan: req.kmPlan, hourlyRate: Math.round(car.pricePerHour * uplift),
       protectionPerDay: req.protection === "peace" ? settings.rentProtectionPeacePerDay : settings.rentProtectionStandardPerDay,
+      damageExcess: rentExcess(settings, req.protection),
     };
   }
   return { gross: q.total, quoteId: q.id, rideId: null, startsAt: q.starts_at, deposit, seatHolds, departure, rental };
@@ -115,7 +118,8 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
  */
 export async function createBooking(db: D1Database, userId: string, input: NewBooking): Promise<Booking> {
   // A quote or ride made before a switch went off can't be booked after it.
-  const off = switchError(await getSettings(db), { service: input.service, tripOf: input.tripOf });
+  const settings = await getSettings(db);
+  const off = switchError(settings, { service: input.service, tripOf: input.tripOf });
   if (off) throw conflict(off);
   const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit, seatHolds, departure, rental } = await grossPrice(db, userId, input);
   // Joining a trip: the other booking must be the customer's own and not cancelled.
@@ -134,7 +138,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   let plan: { id: string; take: number }[] = [];
   if (input.useCredits) {
     const credits = await spendPlan(db, userId);
-    creditsUsed = creditsUsable(await getSettings(db), credits.balance, afterCoupon, Math.min(quotedDeposit, afterCoupon));
+    creditsUsed = creditsUsable(settings, credits.balance, afterCoupon, Math.min(quotedDeposit, afterCoupon));
     plan = credits.plan(creditsUsed);
   }
   const amount = afterCoupon - creditsUsed;
@@ -143,6 +147,8 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
 
   const id = uid("QF");
   const createdAt = new Date().toISOString();
+  // The cancellation policy, fees, GST rate and rental rates it's sold under (terms.ts).
+  const terms = bookingTerms(settings, input.service);
   // A ride on a partner's vehicle carries that partner (and earns them money on completion).
   const partner = rideId
     ? await db.prepare("SELECT r.vendor_vehicle_id, r.vendor_driver_id, vv.vendor_id FROM rides r LEFT JOIN vendor_vehicles vv ON vv.id = r.vendor_vehicle_id WHERE r.id = ?")
@@ -155,13 +161,16 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   ];
   const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0, rideId, tripId, creditsUsed,
     discount: coupon?.discount ?? 0, seats: seatHolds?.seats.map((x) => ({ id: x.seat, price: x.price, gender: x.gender })) ?? [],
-    ticketToken: seatHolds ? ticketToken() : null, rescheduledAt: null, rentalState: rental ? "booked" : null };
+    ticketToken: seatHolds ? ticketToken() : null, rescheduledAt: null, rentalState: rental ? "booked" : null, terms };
   const wallet = input.payment === "wallet";
 
   const conditions: string[] = [];
   const condParams: unknown[] = [];
   if (quoteId) { conditions.push("(SELECT used_at FROM quotes WHERE id = ?) = ?"); condParams.push(quoteId, id); }
   if (wallet) { conditions.push("(SELECT wallet_balance FROM users WHERE id = ?) >= ?"); condParams.push(userId, amount); }
+  // An offer with a total-uses limit is re-checked inside the batch, so two bookings can't take its last use.
+  const maxUses = coupon ? (await findOffer(db, coupon.code)).maxUses : null;
+  if (coupon && maxUses != null) { conditions.push("(SELECT COUNT(*) FROM bookings WHERE coupon_code = ? AND status <> 'cancelled') < ?"); condParams.push(coupon.code, maxUses); }
   if (departure) {
     conditions.push("(SELECT COALESCE(SUM(travellers), 0) FROM bookings WHERE departure_id = ? AND status <> 'cancelled') + ? <= ?");
     condParams.push(departure.id, departure.travellers, departure.seats);
@@ -178,11 +187,11 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   // Claim the quote with this booking's id, so only one booking can use it.
   if (quoteId) statements.push(db.prepare("UPDATE quotes SET used_at = ? WHERE id = ? AND used_at IS NULL").bind(id, quoteId));
   statements.push(db.prepare(
-    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit, trip_id, credits_used, vendor_id, vendor_vehicle_id, vendor_driver_id, ticket_token, departure_id, travellers)
-     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
+    `INSERT INTO bookings (id, user_id, service, title, subtitle, amount, status, payment, lines, created_at, quote_id, ride_id, coupon_code, discount, starts_at, deposit, trip_id, credits_used, vendor_id, vendor_vehicle_id, vendor_driver_id, ticket_token, departure_id, travellers, terms)
+     SELECT ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}`,
   ).bind(id, userId, booking.service, booking.title, booking.subtitle, amount, booking.payment, JSON.stringify(lines), createdAt,
     quoteId, rideId, coupon?.code ?? null, coupon?.discount ?? 0, startsAt, deposit, tripId, creditsUsed,
-    partner?.vendor_id ?? null, partner?.vendor_vehicle_id ?? null, partner?.vendor_driver_id ?? null, booking.ticketToken, departure?.id ?? null, departure?.travellers ?? 0, ...condParams));
+    partner?.vendor_id ?? null, partner?.vendor_vehicle_id ?? null, partner?.vendor_driver_id ?? null, booking.ticketToken, departure?.id ?? null, departure?.travellers ?? 0, JSON.stringify(terms), ...condParams));
   if (plan.length) {
     statements.push(
       db.prepare(
@@ -214,9 +223,9 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   }
   if (rental) {
     statements.push(db.prepare(
-      `INSERT INTO rentals (booking_id, start_local, ends_at, km_plan, hourly_rate, protection_per_day, created_at)
-       SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?)`,
-    ).bind(id, rental.start, rental.end, rental.kmPlan, rental.hourlyRate, rental.protectionPerDay, createdAt, id));
+      `INSERT INTO rentals (booking_id, start_local, ends_at, km_plan, hourly_rate, protection_per_day, damage_excess, created_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?)`,
+    ).bind(id, rental.start, rental.end, rental.kmPlan, rental.hourlyRate, rental.protectionPerDay, rental.damageExcess, createdAt, id));
   }
   // The booking the trip started from joins it too (only if this booking went in).
   if (input.tripOf) {
@@ -241,6 +250,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
       const taken = await db.prepare("SELECT COALESCE(SUM(travellers), 0) AS n FROM bookings WHERE departure_id = ? AND status <> 'cancelled'").bind(departure.id).first<{ n: number }>();
       if ((taken?.n ?? 0) + departure.travellers > departure.seats) throw conflict("Those seats on this departure were just taken. Please check the seats left again.");
     }
+    if (coupon && maxUses != null && (await totalUses(db, coupon.code)) >= maxUses) throw conflict(`${coupon.code} has just been fully used. Remove it to book without the discount.`);
     if (plan.length && !wallet) throw conflict("Your QuikFly Credits just changed. Please try again.");
     throw badRequest("Not enough wallet balance. Choose another payment method.");
   }
@@ -268,17 +278,17 @@ export function refundText(row: Pick<BookingRow, "payment" | "refund_amount" | "
   return row.payment === "wallet" ? `₹${back.toLocaleString("en-IN")} is back in your QuikFly wallet${fee}.` : `Refund due: ₹${back.toLocaleString("en-IN")}${fee}.`;
 }
 
-/** What cancelling a booking now gives back, per its service's policy and start time. */
 /**
- * What cancelling a booking now gives back. Bus, holidays and rentals follow their policy
+ * What cancelling a booking now gives back, under the terms it was sold under (today's
+ * settings for bookings made before terms were stored). Bus, holidays and rentals follow their policy
  * and start time; a rider who cancels a ride without a valid reason pays the MVAG
  * cancellation fee (`rider` set). Staff cancels never charge a fee.
  */
 export async function refundFor(
-  db: D1Database, row: Pick<BookingRow, "service" | "starts_at" | "amount" | "deposit" | "created_at">,
+  db: D1Database, row: Pick<BookingRow, "service" | "starts_at" | "amount" | "deposit" | "created_at"> & { terms?: string | null },
   rider?: { reason: string | null },
 ) {
-  const settings = await getSettings(db);
+  const settings = withTerms(await getSettings(db), parseTerms(row.terms));
   if (row.service === "bike" || row.service === "car") {
     const fee = rider ? rideCancelFee(settings, row.amount, rider.reason, row.created_at, Date.now(), row.starts_at) : 0;
     return { percent: 100, amount: row.amount - fee, fee };
@@ -352,8 +362,9 @@ export async function completeBooking(db: D1Database, userId: string, id: string
     const [done, earned] = await db.batch([
       db.prepare(`UPDATE bookings SET status = 'completed' WHERE id = ? AND user_id = ? AND status IN ${ACTIVE} RETURNING *`).bind(id, userId),
       ...(earn ? [earn.statement] : []),
-      // A partner's trip settles in the same batch (after the status change, so it sees 'completed').
-      ...settlementStatements(db, settings, active),
+      // A partner's trip settles in the same batch (after the status change, so it sees 'completed'),
+      // at the GST rate the ride was sold under.
+      ...settlementStatements(db, withTerms(settings, parseTerms(active.terms)), active),
     ]);
     const row = (done.results as BookingRow[])[0];
     if (row) {
@@ -398,7 +409,7 @@ export async function completeBookingRow(
       .bind(id, deposit, settle ? 1 : 0),
     // Credits for the completed trip (runs after the status change, so it sees 'completed').
     ...(earn ? [earn.statement] : []),
-    ...settlementStatements(db, settings, row),
+    ...settlementStatements(db, withTerms(settings, parseTerms(row.terms)), row),
   ]);
   const done = results[2 + extra.length], earned = earn ? results[3 + extra.length] : undefined;
   const finished = (done.results as BookingRow[])[0] ?? null;

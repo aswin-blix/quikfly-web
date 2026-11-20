@@ -3,8 +3,8 @@
 // time; staff then settle the deposit (extra km, late return, fuel, damage), which completes
 // the booking. Photos are private R2 objects, served to the customer and to staff only.
 import {
-  FUEL_EIGHTHS, RENTAL_PHOTO_SIDES, RENTAL_RULES, extensionError, extensionLines, localNow, localToIso, rentalSettlement,
-  type AdminRental, type FareLine, type Rental, type RentalPhotoSide, type RentalSettlement, type RentalStage, type RentalState,
+  FUEL_EIGHTHS, RENTAL_PHOTO_SIDES, RENTAL_RULES, extensionError, extensionLines, localNow, localToIso, parseTerms, rentExcess, rentalSettlement, withTerms,
+  type AdminRental, type FareLine, type Rental, type RentalPhotoSide, type RentalSettlement, type RentalStage, type RentalState, type Settings,
 } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
@@ -15,21 +15,32 @@ import { getSettings } from "./settings";
 import { imageResponse, needBucket, storeImageIn } from "./vendors";
 
 interface RentalRow {
-  booking_id: string; start_local: string; ends_at: string; km_plan: Rental["kmPlan"]; hourly_rate: number; protection_per_day: number;
+  booking_id: string; start_local: string; ends_at: string; km_plan: Rental["kmPlan"]; hourly_rate: number; protection_per_day: number; damage_excess: number | null;
   pickup_odometer: number | null; pickup_fuel: number | null; pickup_at: string | null;
   return_odometer: number | null; return_fuel: number | null; return_at: string | null;
   settlement: string | null; state: RentalState;
 }
-type Joined = RentalRow & Pick<BookingRow, "user_id" | "title" | "status" | "payment" | "deposit" | "amount" | "lines"> & { customer_name: string };
+type Joined = RentalRow & Pick<BookingRow, "user_id" | "title" | "status" | "payment" | "deposit" | "amount" | "lines" | "terms"> & { customer_name: string };
 
 const SELECT = `SELECT r.*, ${RENTAL_STATE_SQL.replaceAll(/\b(settlement|return_at|pickup_at)\b/g, "r.$1")} AS state,
-  b.user_id, b.title, b.status, b.payment, b.deposit, b.amount, b.lines, u.name AS customer_name
+  b.user_id, b.title, b.status, b.payment, b.deposit, b.amount, b.lines, b.terms, u.name AS customer_name
   FROM rentals r JOIN bookings b ON b.id = r.booking_id JOIN users u ON u.id = b.user_id WHERE r.booking_id = ?`;
 
 async function load(db: D1Database, bookingId: string, userId: string | null): Promise<Joined> {
   const row = await db.prepare(SELECT).bind(bookingId).first<Joined>();
   if (!row || (userId && row.user_id !== userId)) throw notFound("This booking has no self-drive rental.");
   return row;
+}
+
+/**
+ * The most staff can deduct for damage: the plan's excess stored at booking. Rentals booked
+ * before it was stored (migration 0025) use the plan their daily protection price matches,
+ * and Standard otherwise.
+ */
+function damageExcess(row: Pick<RentalRow, "damage_excess" | "protection_per_day">, settings: Settings) {
+  if (row.damage_excess != null) return row.damage_excess;
+  const peace = row.protection_per_day === settings.rentProtectionPeacePerDay && row.protection_per_day !== settings.rentProtectionStandardPerDay;
+  return rentExcess(settings, peace ? "peace" : "standard");
 }
 
 async function view(db: D1Database, row: Joined): Promise<AdminRental> {
@@ -47,6 +58,7 @@ async function view(db: D1Database, row: Joined): Promise<AdminRental> {
     photos: byStage,
     extensions: (exts.results as { hours: number; amount: number; created_at: string }[]).map((e) => ({ hours: e.hours, amount: e.amount, createdAt: e.created_at })),
     settlement: row.settlement ? (JSON.parse(row.settlement) as RentalSettlement) : null,
+    damageExcess: damageExcess(row, await getSettings(db)),
     customerName: row.customer_name, title: row.title, payment: row.payment,
   };
 }
@@ -60,7 +72,7 @@ const prettyLocal = (local: string) => {
   return `${day} ${MONTHS[m - 1]}, ${h % 12 || 12}:${String(min).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
 };
 
-const forCustomer = ({ customerName: _n, title: _t, payment: _p, ...r }: AdminRental): Rental => r;
+const forCustomer = ({ customerName: _n, title: _t, payment: _p, damageExcess: _d, ...r }: AdminRental): Rental => r;
 
 export const myRental = async (db: D1Database, userId: string, bookingId: string) => forCustomer(await view(db, await load(db, bookingId, userId)));
 export const adminRental = async (db: D1Database, bookingId: string) => view(db, await load(db, bookingId, null));
@@ -182,22 +194,26 @@ export async function returnRental(db: D1Database, userId: string, bookingId: st
   return myRental(db, userId, bookingId);
 }
 
-/** What settling now would deduct, for staff (damage as entered). */
+/** What settling now would deduct, for staff (damage as entered), at the rates the rental was booked under. */
 export async function settlementPreview(db: D1Database, bookingId: string, damage = 0, damageNote: string | null = null) {
   const row = await load(db, bookingId, null);
   if (row.state !== "returned") throw conflict(row.state === "settled" ? "This rental is already settled." : "The customer hasn't returned the car yet.");
-  return { row, settlement: rentalSettlement({
+  const settings = withTerms(await getSettings(db), parseTerms(row.terms));
+  return { row, settings, settlement: rentalSettlement({
     start: row.start_local, endsAt: row.ends_at, kmPlan: row.km_plan, hourlyRate: row.hourly_rate, deposit: row.deposit ?? 0,
     pickup: { odometerKm: row.pickup_odometer!, fuel: row.pickup_fuel! }, dropoff: { odometerKm: row.return_odometer!, fuel: row.return_fuel!, at: row.return_at! },
     damage, damageNote,
-  }, await getSettings(db)) };
+  }, settings) };
 }
 
 /** Staff settle a returned rental: deductions recorded, the rest of the deposit refunded, booking completed (audited). */
 export async function settleRental(db: D1Database, adminId: string, bookingId: string, input: { damage: number; damageNote: string | null }) {
   if (!Number.isInteger(input.damage) || input.damage < 0 || input.damage > RENTAL_RULES.damageMax) throw badRequest(`Damage must be ₹0 to ₹${RENTAL_RULES.damageMax.toLocaleString("en-IN")}.`);
   if (input.damage > 0 && !input.damageNote?.trim()) throw badRequest("Say what the damage charge is for.");
-  const { row, settlement: s } = await settlementPreview(db, bookingId, input.damage, input.damageNote);
+  const { row, settlement: s, settings } = await settlementPreview(db, bookingId, input.damage, input.damageNote);
+  // The customer was promised "You pay up to ₹X for damage" by their protection plan.
+  const cap = damageExcess(row, settings);
+  if (input.damage > cap) throw badRequest(`Damage can be at most ₹${cap.toLocaleString("en-IN")}: the excess of the customer's protection plan.`);
   const what = s.lines.map((l) => l.label.split(" (")[0].replace(/ \d.*$/, "")).join(", ");
   const note = s.deductions ? `Deposit returned · ${row.title} (₹${s.deductions.toLocaleString("en-IN")} deducted: ${what})` : `Deposit returned · ${row.title}`;
   const done = await completeBookingRow(db, bookingId, {

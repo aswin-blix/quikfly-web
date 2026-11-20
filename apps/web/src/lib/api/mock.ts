@@ -4,9 +4,9 @@
 // Storage helpers: ./mock-store.ts. Account endpoints: ./mock-account.ts.
 import type { QuikflyApi } from "./contract";
 import {
-  BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
+  BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, offerLive, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
-  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, isWomenOnly, upcomingDepartures, type TourPackage, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
+  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, isWomenOnly, upcomingDepartures, type TourPackage, bookingTerms, withTerms, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
@@ -45,7 +45,7 @@ function withDeps(t: TourPackage): TourPackage {
 }
 const todayIso = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
 
-const bookingsStore = () => load<Booking[]>(KEYS.bookings, []).map((b): Booking => ({ ...b, discount: b.discount ?? 0, seats: b.seats ?? [], ticketToken: b.ticketToken ?? null, rescheduledAt: b.rescheduledAt ?? null, rentalState: b.rentalState ?? null }));
+const bookingsStore = () => load<Booking[]>(KEYS.bookings, []).map((b): Booking => ({ ...b, discount: b.discount ?? 0, seats: b.seats ?? [], ticketToken: b.ticketToken ?? null, rescheduledAt: b.rescheduledAt ?? null, rentalState: b.rentalState ?? null, terms: b.terms ?? null }));
 const saveBookings = (list: Booking[]) => save(KEYS.bookings, list);
 const ridesStore = () => load<Record<string, MockRide>>(KEYS.rides, {});
 type StoredQuote = PriceQuote & { used?: boolean; startsAt?: string; request?: QuoteRequest };
@@ -102,6 +102,8 @@ function priceLines(r: QuoteRequest): FareLine[] {
 function gross(input: Pick<NewBooking, "service" | "quoteId" | "rideId">): number {
   if (input.service === "bike" || input.service === "car") {
     const r = ridesStore()[input.rideId ?? ""] ?? fail("Ride not found.");
+    // Like the API: a ride's fare is held for QUOTE_TTL_MINUTES (startedAt is when the ride was created).
+    if (Date.now() - Date.parse(r.startedAt) > QUOTE_TTL_MINUTES * 60_000) fail(`Fares are held for ${QUOTE_TTL_MINUTES} minutes and this one has expired. Please check the fare again.`);
     return r.ride.quote.fare;
   }
   const q = quotesStore()[input.quoteId ?? ""] ?? fail("That price isn't valid. Please check the price again.");
@@ -113,7 +115,8 @@ function gross(input: Pick<NewBooking, "service" | "quoteId" | "rideId">): numbe
 function coupon(code: string, service: ServiceKey, total: number): CouponCheck {
   const offer = seed.offer.find((o) => o.code === code.trim().toUpperCase()) ?? fail("That coupon code isn't valid.");
   const used = bookingsStore().filter((b) => b.status !== "cancelled" && b.lines.some(([k, v]) => k === "Coupon" && v.startsWith(offer.code))).length;
-  const r = couponDiscount(offer, service, total, new Date().toISOString().slice(0, 10), used);
+  // One browser is one customer here, so its uses are also everyone's uses (maxUses).
+  const r = couponDiscount(offer, service, total, new Date().toISOString().slice(0, 10), used, used);
   if ("error" in r) fail(r.error);
   return { code: offer.code, discount: (r as { discount: number }).discount, total: total - (r as { discount: number }).discount };
 }
@@ -124,7 +127,7 @@ export const mockApi: QuikflyApi = {
       await wait(250);
       const config: AppConfig = {
         settings, places: seed.place, rideOptions: seed.rideOption, cities: seed.city, busOperators: seed.busOperator, popularRoutes: seed.popularRoute,
-        groupDestinations: seed.groupDestination, offers: seed.offer, faqs: seed.faq,
+        groupDestinations: seed.groupDestination, offers: seed.offer.filter((o) => offerLive(o, new Date().toISOString().slice(0, 10))), faqs: seed.faq,
       };
       return config;
     },
@@ -325,6 +328,7 @@ export const mockApi: QuikflyApi = {
         rideId: input.rideId ?? null, tripId, creditsUsed, discount: c?.discount ?? 0,
         seats: busReq ? busReq.seatIds.map((id, i) => ({ id, price: busReq.seatPrices?.[i] ?? 0, gender: busReq.genders?.[i] ?? "other" })) : [],
         ticketToken: input.service === "bus" ? uid("TK").toLowerCase() : null, rescheduledAt: null, rentalState: null,
+        terms: bookingTerms(settings, input.service),
       };
       if (quoted?.request) b.rentalState = mockRentalFor(b.id, quoted.request, deposit);
       if (input.payment === "wallet") {
@@ -351,8 +355,9 @@ export const mockApi: QuikflyApi = {
       await wait(500);
       const current = bookingsStore().find((x) => x.id === id) ?? fail("Booking not found.");
       const ride = current.service === "bike" || current.service === "car";
-      const fee = ride ? rideCancelFee(settings, current.amount, reason, current.createdAt, Date.now(), current.startsAt) : 0;
-      const percent = ride ? 100 : refundPercent(cancelPolicyFor(settings, current.service), current.startsAt);
+      const sold = withTerms(settings, current.terms);
+      const fee = ride ? rideCancelFee(sold, current.amount, reason, current.createdAt, Date.now(), current.startsAt) : 0;
+      const percent = ride ? 100 : refundPercent(cancelPolicyFor(sold, current.service), current.startsAt);
       const refund = ride ? current.amount - fee : refundAmount(current.amount, percent, current.deposit ?? 0);
       const b = finishBooking(id, "cancelled", { refundAmount: refund, cancelReason: reason ?? null, cancelFee: fee, seats: [] });
       save(HOLDS_KEY, holdsStore().filter((h) => h.bookingId !== id));
@@ -383,7 +388,7 @@ export const mockApi: QuikflyApi = {
       const b = list.find((x) => x.id === id) ?? fail("Booking not found.");
       const err = seatCancelError(b, seatIds);
       if (err) fail(err);
-      const { share, percent, refund } = seatCancelRefund(settings, b, seatIds);
+      const { share, percent, refund } = seatCancelRefund(withTerms(settings, b.terms), b, seatIds);
       const creditsShare = seatsShare(b.creditsUsed, b.seats, seatIds);
       const keep = b.seats.map((s) => !seatIds.includes(s.id));
       const names = (b.lines.find(([k]) => k === TRAVELLERS_LINE)?.[1] ?? "").split(", ");
@@ -406,14 +411,14 @@ export const mockApi: QuikflyApi = {
       await wait(700);
       const list = bookingsStore();
       const b = list.find((x) => x.id === id) ?? fail("Booking not found.");
-      const err = rescheduleError(settings, b);
+      const err = rescheduleError(withTerms(settings, b.terms), b);
       if (err) fail(err);
       const q = quotesStore()[change.quoteId] ?? fail("That price isn't valid. Please check the price again.");
       if (q.used) fail("This price was already used for a booking.");
       const req = q.request;
       if (req?.service !== "bus") return fail("That price isn't for a bus.");
       if (req.seatIds.length !== b.seats.length) fail(`Pick ${b.seats.length} seat${b.seats.length > 1 ? "s" : ""}, one for each traveller.`);
-      const { newAmount, charge, refund, fee } = rescheduleAmounts(settings, b, q.total);
+      const { newAmount, charge, refund, fee } = rescheduleAmounts(withTerms(settings, b.terms), b, q.total);
       if (b.payment === "wallet" && charge > currentUser().walletBalance) fail(`The new bus costs ₹${charge.toLocaleString("en-IN")} more and your wallet is short. Add money or pick another bus.`);
       const was = [b.lines.find(([k]) => k === "Date")?.[1], b.lines.find(([k]) => k === "Departure")?.[1]].filter(Boolean).join(", ");
       let lines = b.lines;

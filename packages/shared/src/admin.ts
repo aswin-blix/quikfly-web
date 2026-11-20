@@ -7,8 +7,8 @@ export type AdminRole = (typeof ADMIN_ROLES)[number];
 
 export const ADMIN_ROLE_INFO: Record<AdminRole, { label: string; summary: string }> = {
   owner: { label: "Owner", summary: "Everything, including settings and the audit log" },
-  operations: { label: "Operations", summary: "Bookings, refunds, licence reviews and the catalog" },
-  content: { label: "Content", summary: "Catalog, offers and FAQs" },
+  operations: { label: "Operations", summary: "Bookings, refunds, licence reviews, the catalog and prices" },
+  content: { label: "Content", summary: "Catalog text, offer wording and FAQs (not prices)" },
 };
 
 /** Which roles may do what. Add a permission here, then check it in the API route and the admin UI. */
@@ -21,6 +21,8 @@ export const PERMISSIONS = {
   "support.manage": ["owner", "operations"],
   "catalog.edit": ["owner", "operations", "content"],
   "offers.edit": ["owner", "operations", "content"],
+  /** Fares, package and rental prices, coupon amounts and validity, showing or hiding an offer (fields flagged `pricing` in catalog-kinds.ts). */
+  "pricing.edit": ["owner", "operations"],
   "settings.edit": ["owner"],
   "audit.view": ["owner"],
 } as const satisfies Record<string, readonly AdminRole[]>;

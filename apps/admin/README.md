@@ -16,7 +16,7 @@ node apps/api/scripts/create-admin.mjs --local you@example.com "Your Name" owner
 
 ```
 src/app/            one folder per page: / (dashboard), login, settings, audit, catalog (overview), catalog/list?kind=, catalog/edit?kind=&id=
-                    (Offers in the sidebar is catalog/list?kind=offer), bookings (filters in the URL, incl. `?rental=returned` for returned self-drive cars), bookings/view?id= (self-drive: `components/RentalReview.tsx` with pickup/return photos and the deposit settlement), licences, vendors (Partners: queue by status, plus Fleet to review and Payouts), vendors/view?id= (section-by-section review; for live partners the Fleet section: vehicles, drivers, renewals, blocks; `components/VendorFleet.tsx`) and support (Support: callback requests and tickets by status: Waiting for us / Answered / Closed; reply or close with a note; `support.manage`)
+                    (Offers in the sidebar is catalog/list?kind=offer), bookings (filters in the URL, incl. `?rental=returned` for returned self-drive cars), bookings/view?id= (a "Sold under" card with the terms the booking keeps, from `termLines()`; self-drive: `components/RentalReview.tsx` with pickup/return photos and the deposit settlement), licences, vendors (Partners: queue by status, plus Fleet to review and Payouts), vendors/view?id= (section-by-section review; for live partners the Fleet section: vehicles, drivers, renewals, blocks; `components/VendorFleet.tsx`) and support (Support: callback requests and tickets by status: Waiting for us / Answered / Closed; reply or close with a note; `support.manage`)
 src/components/     AdminShell (sidebar / phone menu), ui.tsx (buttons, badges, fields, pager...), charts.tsx, ConfirmDialog.tsx, ReasonDialog.tsx
 src/lib/api.ts      the only place that calls fetch(); token in localStorage ("quikfly.admin.token")
 src/lib/session.tsx SessionProvider, useSession(), <RequireAdmin permission="...">
@@ -27,6 +27,7 @@ src/styles/tokens.css       colours, fonts, radii (light + dark). Never use raw 
 
 ## Rules
 
+- **Prices:** catalog fields flagged `pricing: true` (fares, package and rental prices, coupon amounts and dates) need `pricing.edit` (owner, operations). The edit form dims and locks them for other roles, the list hides "Add" for kinds with a required price and locks offer switches; the API enforces the same rule with `pricingChanges()`.
 - **Permissions:** wrap every page in `<RequireAdmin permission="...">` and hide buttons with `useSession().can(...)`. The API enforces the same `PERMISSIONS` map from `@quikfly/shared`; the UI only hides what would fail anyway.
 - **New page:** add `src/app/<name>/page.tsx`, a `NAV` entry, and the route to `LIVE_ROUTES`.
 - **Services and features:** the first two Settings groups switch services and features off (owner only). The API enforces them (`packages/shared/src/switches.ts`); a new service or feature switch needs a `switchError` rule there, a row here, and the screens that should hide it.

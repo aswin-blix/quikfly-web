@@ -39,11 +39,11 @@ export const adminCatalog = new Hono<AppEnv>()
   .get("/:kind", requireAdmin(), async (c) => c.json(await listAll(c.env.DB, kindFor(c))))
   .post("/:kind", requireAdmin(), async (c) => {
     const kind = kindFor(c);
-    return c.json(await createItem(c.env.DB, c.var.admin.id, kind, itemInput(await jsonBody(c), true)), 201);
+    return c.json(await createItem(c.env.DB, c.var.admin.id, kind, itemInput(await jsonBody(c), true), can(c.var.admin.role, "pricing.edit")), 201);
   })
   .put("/:kind/:id", requireAdmin(), async (c) => {
     const kind = kindFor(c);
-    return c.json(await updateItem(c.env.DB, c.var.admin.id, kind, c.req.param("id"), itemInput(await jsonBody(c), false)));
+    return c.json(await updateItem(c.env.DB, c.var.admin.id, kind, c.req.param("id"), itemInput(await jsonBody(c), false), can(c.var.admin.role, "pricing.edit")));
   })
   .delete("/:kind/:id", requireAdmin(), async (c) => {
     const kind = kindFor(c);

@@ -1,6 +1,7 @@
 // Shared domain types. The API returns these shapes, and the website and the
 // mobile app consume them, so change them here only.
 import type { RentalState } from "./rental";
+import type { BookingTerms } from "./terms";
 
 export type ServiceKey = "bike" | "car" | "bus" | "tours" | "rent" | "rentals";
 /** How a booking is paid. Only "wallet" moves money inside QuikFly; the rest go to a gateway later. */
@@ -419,6 +420,12 @@ export interface Booking {
   rescheduledAt: string | null;
   /** Self-drive bookings: where the rental is (GET /bookings/:id/rental has the details); null for everything else. */
   rentalState: RentalState | null;
+  /**
+   * The settings this booking was sold under (cancellation policy, ride fee, GST rate, self-drive
+   * rates; see terms.ts). Refunds, settlements and invoices use them. Null for bookings made before
+   * terms were stored: they use today's settings (withTerms handles both).
+   */
+  terms: BookingTerms | null;
 }
 
 /** A seat a bus booking holds, with what it cost (₹ before GST) and who sits there. */
@@ -457,10 +464,14 @@ export interface Offer {
   maxDiscount: number;
   /** Smallest booking total the code works on, in rupees (0 = any). */
   minAmount: number;
+  /** First day the code works (YYYY-MM-DD, India time), or null/missing for "from now". Older offers don't have it. */
+  validFrom?: string | null;
   /** Last day the code works (YYYY-MM-DD, India time), or null for no end. */
   validUntil: string | null;
   /** Times one customer may use it, or null for no limit. */
   perUserLimit: number | null;
+  /** Uses by all customers together (bookings not cancelled), or null/missing for no limit. */
+  maxUses?: number | null;
 }
 
 export const FAQ_CATEGORIES = ["Rides", "Bus", "Holidays", "Rentals", "Payments", "Account"] as const;

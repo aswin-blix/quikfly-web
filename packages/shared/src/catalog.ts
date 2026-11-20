@@ -202,12 +202,12 @@ export const GROUP_DESTINATIONS: GroupDestination[] = [
 ];
 
 export const OFFERS: Offer[] = [
-  { id: "o1", code: "QUIKFLY50", title: "50% off your first 3 rides", description: "Cab rides. Max ₹75 off per ride.", service: "car", hue: 45, percent: 50, maxDiscount: 75, minAmount: 0, validUntil: null, perUserLimit: 3 },
-  { id: "o2", code: "BUS150", title: "Flat ₹150 off bus tickets", description: "On bookings above ₹999. All operators.", service: "bus", hue: 0, percent: 100, maxDiscount: 150, minAmount: 999, validUntil: null, perUserLimit: null },
-  { id: "o3", code: "HOLIDAY10", title: "10% off holiday packages", description: "Up to ₹5,000 off domestic & international trips.", service: "tours", hue: 190, percent: 10, maxDiscount: 5000, minAmount: 0, validUntil: null, perUserLimit: null },
-  { id: "o4", code: "DRIVE20", title: "20% off self-drive rentals", description: "Up to ₹2,000 off car rentals.", service: "rent", hue: 270, percent: 20, maxDiscount: 2000, minAmount: 0, validUntil: null, perUserLimit: null },
-  { id: "o5", code: "GROUP500", title: "₹500 off group travel", description: "Tempo traveller & coach bookings.", service: "rentals", hue: 140, percent: 100, maxDiscount: 500, minAmount: 0, validUntil: null, perUserLimit: null },
-  { id: "o6", code: "EBIKE", title: "30% off bike rides", description: "Go green on short city hops. Max ₹40 off.", service: "bike", hue: 100, percent: 30, maxDiscount: 40, minAmount: 0, validUntil: null, perUserLimit: null },
+  { id: "o1", code: "QUIKFLY50", title: "50% off your first 3 rides", description: "Cab rides. Max ₹75 off per ride.", service: "car", hue: 45, percent: 50, maxDiscount: 75, minAmount: 0, validFrom: null, validUntil: null, maxUses: null, perUserLimit: 3 },
+  { id: "o2", code: "BUS150", title: "Flat ₹150 off bus tickets", description: "On bookings above ₹999. All operators.", service: "bus", hue: 0, percent: 100, maxDiscount: 150, minAmount: 999, validFrom: null, validUntil: null, maxUses: null, perUserLimit: null },
+  { id: "o3", code: "HOLIDAY10", title: "10% off holiday packages", description: "Up to ₹5,000 off domestic & international trips.", service: "tours", hue: 190, percent: 10, maxDiscount: 5000, minAmount: 0, validFrom: null, validUntil: null, maxUses: null, perUserLimit: null },
+  { id: "o4", code: "DRIVE20", title: "20% off self-drive rentals", description: "Up to ₹2,000 off car rentals.", service: "rent", hue: 270, percent: 20, maxDiscount: 2000, minAmount: 0, validFrom: null, validUntil: null, maxUses: null, perUserLimit: null },
+  { id: "o5", code: "GROUP500", title: "₹500 off group travel", description: "Tempo traveller & coach bookings above ₹2,000.", service: "rentals", hue: 140, percent: 100, maxDiscount: 500, minAmount: 2000, validFrom: null, validUntil: null, maxUses: null, perUserLimit: null },
+  { id: "o6", code: "EBIKE", title: "30% off bike rides", description: "Go green on short city hops. Max ₹40 off.", service: "bike", hue: 100, percent: 30, maxDiscount: 40, minAmount: 0, validFrom: null, validUntil: null, maxUses: null, perUserLimit: null },
 ];
 
 export const FAQS: Faq[] = [

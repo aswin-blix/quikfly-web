@@ -12,6 +12,12 @@ export async function findOffer(db: D1Database, code: string): Promise<Offer> {
   return offer;
 }
 
+/** Uses by everyone (bookings not cancelled), for an offer's `maxUses`. */
+export async function totalUses(db: D1Database, code: string) {
+  const r = await db.prepare("SELECT COUNT(*) AS n FROM bookings WHERE coupon_code = ? AND status <> 'cancelled'").bind(code).first<{ n: number }>();
+  return r?.n ?? 0;
+}
+
 async function timesUsed(db: D1Database, userId: string, code: string) {
   const r = await db.prepare("SELECT COUNT(*) AS n FROM bookings WHERE user_id = ? AND coupon_code = ? AND status <> 'cancelled'")
     .bind(userId, code).first<{ n: number }>();
@@ -21,7 +27,7 @@ async function timesUsed(db: D1Database, userId: string, code: string) {
 /** Discount for this customer on a total, or 400 explaining why the code can't be used. */
 export async function checkCoupon(db: D1Database, userId: string, code: string, service: ServiceKey, total: number): Promise<CouponCheck> {
   const offer = await findOffer(db, code);
-  const r = couponDiscount(offer, service, total, businessDate(), await timesUsed(db, userId, offer.code));
+  const r = couponDiscount(offer, service, total, businessDate(), await timesUsed(db, userId, offer.code), offer.maxUses != null ? await totalUses(db, offer.code) : 0);
   if ("error" in r) throw badRequest(r.error);
   return { code: offer.code, discount: r.discount, total: total - r.discount };
 }

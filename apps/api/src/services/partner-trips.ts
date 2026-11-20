@@ -4,7 +4,7 @@
 // Money here is in paise. No payment gateway yet: payouts are paid by staff outside the app
 // and recorded with a reference; partner payments are simulated (labelled in the app).
 import {
-  formatRegNumber, tripEarnings, vehicleTypeForRide, VENDOR_VEHICLE_LABEL,
+  formatRegNumber, parseTerms, tripEarnings, vehicleTypeForRide, withTerms, VENDOR_VEHICLE_LABEL,
   type LedgerEntry, type LedgerKind, type PaymentMethod, type RideOption, type ServiceKey, type Settings, type VendorMoney, type VendorPayout,
   type VendorTrip, type VendorTripSummary,
 } from "@quikfly/shared";
@@ -87,7 +87,7 @@ export function range(from?: string, to?: string) {
 
 interface TripRow {
   id: string; status: VendorTrip["status"]; service: ServiceKey; title: string; subtitle: string; created_at: string; starts_at: string | null;
-  payment: PaymentMethod; amount: number; discount: number; credits_used: number; vendor_vehicle_id: string | null; vendor_driver_id: string | null;
+  payment: PaymentMethod; amount: number; discount: number; credits_used: number; vendor_vehicle_id: string | null; vendor_driver_id: string | null; terms: string | null;
   reg_number: string | null; driver_name: string | null;
   t_gross: number | null; t_discount: number | null; t_gst: number | null; t_fare: number | null; t_commission: number | null; t_tds: number | null; t_earning: number | null; completed_at: string | null;
 }
@@ -99,7 +99,7 @@ export async function partnerTrips(db: D1Database, userId: string, from?: string
   const settings = await getSettings(db);
   const { results } = await db.prepare(
     `SELECT b.id, b.status, b.service, b.title, b.subtitle, b.created_at, b.starts_at, b.payment, b.amount, b.discount, b.credits_used,
-            b.vendor_vehicle_id, b.vendor_driver_id, vv.reg_number, d.name AS driver_name,
+            b.vendor_vehicle_id, b.vendor_driver_id, b.terms, vv.reg_number, d.name AS driver_name,
             t.gross_paise AS t_gross, t.discount_paise AS t_discount, t.gst_paise AS t_gst, t.fare_paise AS t_fare, t.commission_paise AS t_commission,
             t.tds_paise AS t_tds, t.earning_paise AS t_earning, t.completed_at
      FROM bookings b
@@ -111,7 +111,7 @@ export async function partnerTrips(db: D1Database, userId: string, from?: string
   ).bind(vendorId, r.fromIso, r.toIso).all<TripRow>();
   return results.map((b) => {
     const settled = b.t_earning !== null;
-    const live = settled ? null : tripEarnings(settings, b.service, b.amount + (b.discount ?? 0) + (b.credits_used ?? 0));
+    const live = settled ? null : tripEarnings(withTerms(settings, parseTerms(b.terms)), b.service, b.amount + (b.discount ?? 0) + (b.credits_used ?? 0));
     return {
       bookingId: b.id, status: b.status, service: b.service, title: b.title, subtitle: b.subtitle, createdAt: b.created_at, startsAt: b.starts_at,
       completedAt: b.completed_at, vehicleId: b.vendor_vehicle_id, regNumber: b.reg_number, driverId: b.vendor_driver_id, driverName: b.driver_name, payment: b.payment,

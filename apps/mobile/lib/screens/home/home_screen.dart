@@ -214,12 +214,14 @@ class _TrendingHolidays extends ConsumerWidget {
 }
 
 /// A holiday package tile on hue artwork. Used on home and the holidays list.
-class TourTile extends StatelessWidget {
+class TourTile extends ConsumerWidget {
   const TourTile(this.tour, {super.key});
   final TourPackage tour;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Package prices are before GST; the quote adds it (pricing audit R1).
+    final gst = (ref.watch(configProvider).value?.settings ?? const Settings({})).gstRate(ServiceKey.tours);
     return Material(
       borderRadius: BorderRadius.circular(Brand.radiusPanel),
       clipBehavior: Clip.antiAlias,
@@ -251,7 +253,7 @@ class TourTile extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text.rich(TextSpan(children: [
                   TextSpan(text: inr(tour.price), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                  const TextSpan(text: ' / person', style: TextStyle(fontSize: 12)),
+                  TextSpan(text: gst > 0 ? ' / person + GST' : ' / person', style: const TextStyle(fontSize: 12)),
                 ]), style: const TextStyle(color: onArt)),
               ]),
             ),

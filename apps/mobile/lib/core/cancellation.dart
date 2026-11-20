@@ -90,8 +90,9 @@ const cancelEvent = {
 String cancelPolicyText(Settings settings, ServiceKey service) =>
     describeCancelPolicy(parseCancelPolicy(settings.cancelPolicy(service)), cancelEvent[service]!);
 
-/// The refund a booking gets if cancelled now: (percent, rupees).
-(int, int) refundPreview(Settings settings, Booking b) {
+/// The refund a booking gets if cancelled now, under the terms it was sold under: (percent, rupees).
+(int, int) refundPreview(Settings current, Booking b) {
+  final settings = current.withTerms(b.terms);
   if (b.service == ServiceKey.bike || b.service == ServiceKey.car) {
     // From My Trips there's no reason, so the fee applies after the free minutes.
     return (100, b.amount - rideCancelFee(settings, b.amount, null, b.createdAt, scheduledFor: b.startsAt));

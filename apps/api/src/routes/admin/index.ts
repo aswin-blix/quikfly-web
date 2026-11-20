@@ -2,13 +2,13 @@
 // change data check a permission and write an audit row. Bookings, licences, catalog and
 // offers routers mount here as they are added.
 import { Hono } from "hono";
-import { ADMIN_RULES, checkSetting, type Settings } from "@quikfly/shared";
+import { ADMIN_RULES, checkSetting, checkSettings, type Settings } from "@quikfly/shared";
 import type { AppEnv } from "../../env";
 import { badRequest } from "../../lib/errors";
 import { bearerToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
 import { jsonBody, str } from "../../lib/validate";
-import { audit, listAudit } from "../../services/admin/audit";
+import { auditStatement, listAudit } from "../../services/admin/audit";
 import { adminLogin, endAdminSession } from "../../services/admin/auth";
 import { dashboardStats } from "../../services/admin/stats";
 import { getSettings, updateSettings } from "../../services/settings";
@@ -56,12 +56,15 @@ export const admin = new Hono<AppEnv>()
   .patch("/settings", requireAdmin("settings.edit"), async (c) => {
     const patch = settingsPatch(await jsonBody(c));
     const before = await getSettings(c.env.DB);
-    const after = await updateSettings(c.env.DB, patch);
     const changed = Object.keys(patch) as (keyof Settings)[];
-    await audit(c.env.DB, {
+    // Rules between settings (e.g. surge multiplier <= cap), only those touching what is being saved.
+    const crossError = checkSettings({ ...before, ...patch }, changed);
+    if (crossError) throw badRequest(crossError);
+    // The audit row is written in the same batch as the change (AGENTS.md rule 4).
+    const after = await updateSettings(c.env.DB, patch, [auditStatement(c.env.DB, {
       adminId: c.var.admin.id, action: "settings.update", entity: "settings",
-      detail: { before: Object.fromEntries(changed.map((k) => [k, before[k]])), after: Object.fromEntries(changed.map((k) => [k, after[k]])) },
-    });
+      detail: { before: Object.fromEntries(changed.map((k) => [k, before[k]])), after: Object.fromEntries(changed.map((k) => [k, patch[k]])) },
+    })]);
     return c.json(after);
   })
 

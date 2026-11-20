@@ -52,9 +52,9 @@ export const SETTING_GROUPS: SettingGroup[] = [
     title: "Rides",
     sub: "Bike, auto and cab fares come from each ride type in the catalog, multiplied by surge.",
     fields: [
-      { key: "surgeMultiplier", type: "number", unit: "×", step: 0.05, label: "Surge multiplier", help: "1 means no surge. 1.2 adds 20% during surge hours." },
+      { key: "surgeMultiplier", type: "number", unit: "×", step: 0.05, label: "Surge multiplier", help: "1 means no surge. 1.2 adds 20% during surge hours. Can't be above the surge cap." },
       { key: "surgeHours", type: "text", label: "Surge hours", help: 'India time, inclusive hour ranges like "8-10, 17-20". Empty means no surge.' },
-      { key: "surgeCap", type: "number", unit: "×", step: 0.1, label: "Surge cap", help: "Surge never goes above this, whatever the multiplier says. The 2025 aggregator guidelines allow up to 2×; some states ask for less (Maharashtra draft: 1.5×)." },
+      { key: "surgeCap", type: "number", unit: "×", step: 0.1, label: "Surge cap", help: "At most 2×: the 2025 aggregator guidelines allow up to twice the base fare; some states ask for less (Maharashtra: 1.5×)." },
       { key: "passPrice", type: "number", unit: "₹", label: "QuikFly Pass price", help: "Paid from the wallet. The pass takes the surge off every bike, auto and cab ride. Not sold while there are no surge hours." },
       { key: "passDays", type: "number", unit: "days", label: "QuikFly Pass length", help: "How long one pass lasts. Buying again adds these days after the current pass ends." },
       { key: "rideCancelFeePercent", type: "number", unit: "%", label: "Rider cancellation fee", help: "Charged when a rider cancels without a valid reason (guidelines: 10% of the fare)." },
@@ -86,6 +86,8 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "rentUnlimitedKmExtraPercent", type: "number", unit: "%", label: "Unlimited km extra", help: "How much more the unlimited-km self-drive plan costs." },
       { key: "rentProtectionStandardPerDay", type: "number", unit: "₹", label: "Standard protection per day", help: "Self-drive damage protection." },
       { key: "rentProtectionPeacePerDay", type: "number", unit: "₹", label: "Peace-of-mind protection per day", help: "Self-drive damage protection with a lower excess." },
+      { key: "rentExcessStandard", type: "number", unit: "₹", label: "Standard protection: most the customer pays for damage", help: "Shown on the car page (\"You pay up to ₹X for damage\") and kept with each booking; staff can't deduct more damage than this. Changes apply to new bookings." },
+      { key: "rentExcessPeace", type: "number", unit: "₹", label: "Peace-of-mind protection: most the customer pays for damage", help: "Usually lower than Standard. Kept with each booking; changes apply to new bookings." },
       { key: "rentDoorstepFee", type: "number", unit: "₹", label: "Doorstep delivery fee", help: "Delivery and collection at the customer's address." },
       { key: "rentDeposit", type: "number", unit: "₹", label: "Self-drive deposit", help: "Refundable deposit added to self-drive bookings. 0 removes it. Always refunded on cancel; refunded on 'Mark completed'." },
       { key: "rentDepositRefundHours", type: "number", unit: "hrs", label: "Deposit back within", help: "What customers are told: how soon after the return staff check the car and mark the booking completed." },
@@ -105,7 +107,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
   },
   {
     title: "Cancellation policies",
-    sub: "How much a customer gets back when they (or staff) cancel, by notice given before the start. Bookings made earlier keep the policy's current tiers.",
+    sub: "How much a customer gets back when they (or staff) cancel, by notice given before the start. Each booking keeps the policy it was sold under, so changes apply to new bookings only.",
     fields: [
       { key: "cancelPolicyBus", type: "text", label: "Bus", help: 'e.g. "12h:100, 4h:50": full refund 12+ hours before departure, half 4+ hours before, nothing later. Empty = full refund any time.' },
       { key: "cancelPolicyTours", type: "text", label: "Holidays", help: 'e.g. "15d:100, 7d:50". Counted to midnight (India time) on the start date.' },
@@ -115,7 +117,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
   },
   {
     title: "GST",
-    sub: "Added to bus and holiday prices, and used to split the tax on invoices. Confirm rates with your accountant.",
+    sub: "Added to bus and holiday prices, and used to split the tax on invoices. Each booking keeps the rate it was sold under, so old invoices never change. Confirm rates with your accountant.",
     fields: [
       { key: "gstRides", type: "number", unit: "%", label: "Rides (bike, auto, cab)", help: "" },
       { key: "gstBus", type: "number", unit: "%", label: "Bus", help: "" },
