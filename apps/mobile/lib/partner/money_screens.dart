@@ -11,7 +11,7 @@ import '../core/language.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
-import 'home_screen.dart' show partnerSettings;
+import 'home_screen.dart' show partnerSettings, signOutPartner;
 import 'partner_app.dart';
 
 typedef DayRange = ({String from, String to});
@@ -424,9 +424,7 @@ class PartnerAccountScreen extends ConsumerWidget {
               leading: Icon(Icons.logout, color: c.danger),
               title: Text('Sign out', style: TextStyle(color: c.danger)),
               onTap: () async {
-                await ref.read(sessionProvider.notifier).signOut();
-                ref.invalidate(vendorProvider);
-                if (context.mounted) context.go('/');
+                if (await signOutPartner(context, ref) && context.mounted) context.go('/');
               },
             ),
           ]),
