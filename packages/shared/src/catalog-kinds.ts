@@ -8,7 +8,7 @@ import {
   BUS_OPERATORS, CITIES, DEPARTURES, DRIVERS, FAQS, GROUP_DESTINATIONS, OFFERS, PLACES, POPULAR_ROUTES, RENTAL_CARS, RIDE_OPTIONS, TOURS, TRAVEL_VEHICLES,
 } from "./catalog";
 import type {
-  BusOperator, City, DriverProfile, Faq, GroupDestination, Offer, Place, PopularRoute, RentalCar, RideOption, SurgeRule, TourDeparture, TourPackage, TravelVehicle,
+  BusOperator, BusRoute, City, DriverProfile, Faq, FareDate, GroupDestination, Offer, Place, PopularRoute, RentalCar, RideOption, SurgeRule, TourDeparture, TourPackage, TravelVehicle,
 } from "./types";
 import { FAQ_CATEGORIES } from "./types";
 
@@ -16,6 +16,8 @@ export interface CatalogItemMap {
   place: Place;
   rideOption: RideOption;
   surgeRule: SurgeRule;
+  busRoute: BusRoute;
+  fareCalendar: FareDate;
   driver: DriverProfile;
   city: City;
   busOperator: BusOperator;
@@ -92,8 +94,9 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
       name(), { key: "area", label: "Area", type: "text", maxLength: 80 },
       { key: "x", label: "Map position across", type: "int", min: 0, max: 100, hint: "0 = left edge, 100 = right edge of the demo map" },
       { key: "y", label: "Map position down", type: "int", min: 0, max: 100, hint: "0 = top, 100 = bottom" },
+      { key: "airport", label: "Airport", type: "select", options: ["no", "yes"], optional: true, pricing: true, hint: '"yes": rides to or from here pay the airport fee in Settings' },
     ],
-    title: (d) => String(d.name), detail: (d) => String(d.area),
+    title: (d) => String(d.name), detail: (d) => `${d.area}${d.airport === "yes" ? " · airport" : ""}`,
   },
   rideOption: {
     label: "Ride types and fares", singular: "ride type", group: "Rides", idPrefix: "ro", permission: "catalog.edit",
@@ -224,8 +227,35 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
   groupDestination: {
     label: "Group destinations", singular: "group destination", group: "Rentals", idPrefix: "g", permission: "catalog.edit",
     description: "Outstation destinations for group travel, priced on the round-trip distance from Chennai.", unique: "name",
-    fields: [name("Destination"), { key: "km", label: "One-way distance", type: "int", min: 1, max: 3000, hint: "km from Chennai; sets the trip price", pricing: true }],
-    title: (d) => String(d.name), detail: (d) => `${d.km} km one way`,
+    fields: [
+      name("Destination"), { key: "km", label: "One-way distance", type: "int", min: 1, max: 3000, hint: "km from Chennai; sets the trip price", pricing: true },
+      { key: "tollEstimate", label: "Tolls one way (estimate)", type: "int", min: 0, max: 20000, optional: true, pricing: true, hint: "₹; quoted as an estimate (twice for a round trip), and staff enter the actual tolls when they complete the trip. Empty = tolls paid on actuals" },
+    ],
+    title: (d) => String(d.name), detail: (d) => `${d.km} km one way${d.tollEstimate ? ` · tolls ≈ ${inr(d.tollEstimate)}` : ""}`,
+  },
+  busRoute: {
+    label: "Bus route fares", singular: "bus route fare", group: "Bus", idPrefix: "br", permission: "catalog.edit",
+    description: "Distance fares for listed routes (either direction). Routes not listed keep the AC and non-AC base fares in Settings.",
+    fields: [
+      { key: "from", label: "From city", type: "text", maxLength: 60 },
+      { key: "to", label: "To city", type: "text", maxLength: 60 },
+      { key: "km", label: "Distance", type: "int", min: 10, max: 3000, hint: "km by road", pricing: true },
+      { key: "acPerKm", label: "AC fare per km", type: "number", min: 0.3, max: 10, hint: "₹ per km for an AC seat (sleepers add the sleeper extra)", pricing: true },
+      { key: "nonAcPerKm", label: "Non-AC fare per km", type: "number", min: 0.3, max: 10, hint: "₹ per km for a non-AC seat", pricing: true },
+    ],
+    title: (d) => `${d.from} ⇄ ${d.to}`, detail: (d) => `${d.km} km · AC ₹${d.acPerKm}/km · non-AC ₹${d.nonAcPerKm}/km`,
+  },
+  fareCalendar: {
+    label: "Peak and festival dates", singular: "peak date range", group: "Marketing", idPrefix: "fc", permission: "catalog.edit",
+    description: "Prices up (or down) by a percentage for trips starting on these dates, e.g. Pongal 12–16 Jan +20% on buses. Shown to customers as its own price line.",
+    fields: [
+      name(),
+      { key: "service", label: "Service", type: "select", options: ["all", "bus", "tours", "rent", "rentals"], pricing: true, hint: '"rent" = rent a car, "rentals" = group travel; rides use surge rules instead' },
+      { key: "from", label: "From", type: "date", pricing: true },
+      { key: "to", label: "To", type: "date", pricing: true, hint: "Inclusive" },
+      { key: "percent", label: "Change", type: "int", min: -50, max: 100, pricing: true, hint: "% on the price before GST: 20 = 20% more, -10 = 10% off" },
+    ],
+    title: (d) => String(d.name), detail: (d) => `${d.service === "all" ? "All services" : d.service} · ${d.from} to ${d.to} · ${Number(d.percent) > 0 ? "+" : ""}${d.percent}%`,
   },
   offer: {
     label: "Offers and coupons", singular: "offer", group: "Marketing", idPrefix: "of", permission: "offers.edit",
@@ -263,7 +293,7 @@ export const isCatalogKind = (k: string): k is CatalogKind => k in CATALOG_DEFS;
 
 /** The seed copied into D1 on first use and by "reset catalog". */
 export const CATALOG_SEED: { [K in CatalogKind]: CatalogItemMap[K][] } = {
-  place: PLACES, rideOption: RIDE_OPTIONS, surgeRule: [], driver: DRIVERS, city: CITIES, busOperator: BUS_OPERATORS,
+  place: PLACES, rideOption: RIDE_OPTIONS, surgeRule: [], busRoute: [], fareCalendar: [], driver: DRIVERS, city: CITIES, busOperator: BUS_OPERATORS,
   popularRoute: POPULAR_ROUTES, tour: TOURS, departure: DEPARTURES, rentalCar: RENTAL_CARS, travelVehicle: TRAVEL_VEHICLES,
   groupDestination: GROUP_DESTINATIONS, offer: OFFERS, faq: FAQS,
 };
@@ -329,6 +359,9 @@ export function validateCatalogData(kind: CatalogKind, input: unknown, id: strin
     }
   }
   if (kind === "popularRoute" && String(out.from).toLowerCase() === String(out.to).toLowerCase()) return { error: "From and To must be different." };
+  if (kind === "busRoute" && String(out.from).trim().toLowerCase() === String(out.to).trim().toLowerCase()) return { error: "From and To must be different." };
+  if (kind === "fareCalendar" && (out.from as string) > (out.to as string)) return { error: "From must be on or before To." };
+  if (kind === "fareCalendar" && out.percent === 0) return { error: "A change of 0% does nothing. Set a percentage up or down." };
   if (kind === "surgeRule" && (!String(out.hours).trim() || hourRangesError(String(out.hours)))) return { error: 'Hours must be ranges from 0 to 23 with the start before the end, like "8-10, 17-20". Split a window over midnight: "22-23, 0-2".' };
   if (kind === "rideOption" && out.minFare && (out.minFare as number) <= (out.baseFare as number)) return { error: "The minimum fare is below the base fare, so it never applies. Raise it or leave it empty." };
   return { data: out };
@@ -338,7 +371,7 @@ export function validateCatalogData(kind: CatalogKind, input: unknown, id: strin
 export const kindHasPricing = (kind: CatalogKind) => CATALOG_DEFS[kind].fields.some((f) => f.pricing);
 
 /** Offers: showing or hiding one turns a discount on or off, so it needs "pricing.edit" too. */
-export const ACTIVE_IS_PRICING: readonly CatalogKind[] = ["offer", "surgeRule"];
+export const ACTIVE_IS_PRICING: readonly CatalogKind[] = ["offer", "surgeRule", "busRoute", "fareCalendar"];
 
 const sameValue = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 

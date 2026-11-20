@@ -18,7 +18,7 @@ export const BOARDING_POINT_PLACES: Record<string, string> = {
 
 export const PLACES: Place[] = [
   { id: "p1", name: "Chennai Central", area: "Park Town", x: 62, y: 30 },
-  { id: "p2", name: "Chennai Airport (MAA)", area: "Meenambakkam", x: 30, y: 82 },
+  { id: "p2", name: "Chennai Airport (MAA)", area: "Meenambakkam", x: 30, y: 82, airport: "yes" },
   { id: "p3", name: "T. Nagar", area: "Thyagaraya Nagar", x: 44, y: 52 },
   { id: "p4", name: "Marina Beach", area: "Triplicane", x: 80, y: 44 },
   { id: "p5", name: "Anna Nagar Tower Park", area: "Anna Nagar", x: 36, y: 24 },
