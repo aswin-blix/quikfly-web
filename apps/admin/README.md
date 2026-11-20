@@ -27,6 +27,7 @@ src/styles/tokens.css       colours, fonts, radii (light + dark). Never use raw 
 
 ## Rules
 
+- **Prices:** catalog fields flagged `pricing: true` (fares, package and rental prices, coupon amounts and dates) need `pricing.edit` (owner, operations). The edit form dims and locks them for other roles, the list hides "Add" for kinds with a required price and locks offer switches; the API enforces the same rule with `pricingChanges()`.
 - **Permissions:** wrap every page in `<RequireAdmin permission="...">` and hide buttons with `useSession().can(...)`. The API enforces the same `PERMISSIONS` map from `@quikfly/shared`; the UI only hides what would fail anyway.
 - **New page:** add `src/app/<name>/page.tsx`, a `NAV` entry, and the route to `LIVE_ROUTES`.
 - **Services and features:** the first two Settings groups switch services and features off (owner only). The API enforces them (`packages/shared/src/switches.ts`); a new service or feature switch needs a `switchError` rule there, a row here, and the screens that should hide it.

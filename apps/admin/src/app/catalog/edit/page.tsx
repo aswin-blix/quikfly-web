@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { CATALOG_DEFS, isCatalogKind, validateCatalogData, type CatalogField, type CatalogKind } from "@quikfly/shared";
+import { ACTIVE_IS_PRICING, CATALOG_DEFS, isCatalogKind, pricingChanges, validateCatalogData, type CatalogField, type CatalogKind } from "@quikfly/shared";
 import { Button, ErrorBox, Field, PageHeader, Toggle } from "@/components/ui";
 import { adminApi } from "@/lib/api";
 import { cx } from "@/lib/format";
@@ -81,6 +81,8 @@ function EditForm({ kind, id }: { kind: CatalogKind; id: string | null }) {
   const router = useRouter();
   const { can } = useSession();
   const [values, setValues] = useState<Values | null>(id ? null : toForm(def.fields, null));
+  // The saved data, to tell which price fields an edit would change.
+  const [original, setOriginal] = useState<Record<string, unknown> | null>(null);
   const [active, setActive] = useState(true);
   const [sort, setSort] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -93,12 +95,19 @@ function EditForm({ kind, id }: { kind: CatalogKind; id: string | null }) {
       const item = items.find((x) => x.id === id);
       if (!item) return setLoadError(`That ${def.singular} doesn't exist any more.`);
       setValues(toForm(def.fields, item.data as unknown as Record<string, unknown>));
+      setOriginal(item.data as unknown as Record<string, unknown>);
       setActive(item.active);
       setSort(String(item.sort));
     }).catch((e: Error) => setLoadError(e.message));
   }, [kind, id, def]);
 
+  // Prices (fields flagged `pricing`) need "pricing.edit"; the API enforces the same rule.
+  const canPrice = can("pricing.edit");
+  const activeLocked = !canPrice && ACTIVE_IS_PRICING.includes(kind);
   if (!can(def.permission)) return <ErrorBox message="Your role can't edit this part of the catalog." />;
+  if (!id && !canPrice && def.fields.some((f) => f.pricing && !f.optional)) {
+    return <ErrorBox message={`A ${def.singular} has a price, so only owners and operations staff can add one. Ask them, then you can edit its text here.`} />;
+  }
   if (loadError) return <ErrorBox message={loadError} />;
   if (!values) return <div className="card p-6 grid gap-4">{[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-10" />)}</div>;
 
@@ -107,12 +116,14 @@ function EditForm({ kind, id }: { kind: CatalogKind; id: string | null }) {
     const data = fromForm(def.fields, values);
     const check = validateCatalogData(kind, data, id ?? "new");
     if ("error" in check) return setError(check.error);
+    const priced = canPrice ? [] : pricingChanges(kind, id ? original : null, check.data);
+    if (priced.length) return setError(`Only owners and operations staff can change prices (${priced.join(", ")}).`);
     const sortNum = sort.trim() === "" ? undefined : Number(sort);
     if (sortNum !== undefined && (!Number.isInteger(sortNum) || sortNum < 0)) return setError("Order must be a whole number from 0.");
     setSaving(true); setError("");
     try {
       if (id) await adminApi.catalog.update(kind, id, { data, active, sort: sortNum });
-      else await adminApi.catalog.create(kind, { data, active, sort: sortNum });
+      else await adminApi.catalog.create(kind, { data, active: activeLocked ? false : active, sort: sortNum });
       router.push(`/catalog/list?kind=${kind}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save.");
@@ -123,19 +134,27 @@ function EditForm({ kind, id }: { kind: CatalogKind; id: string | null }) {
   return (
     <form onSubmit={save} className="grid gap-4 pb-24" noValidate>
       <section className="card p-5 grid gap-5">
-        {def.fields.map((f) => (
-          <Field key={f.key} label={`${f.label}${f.optional ? " (optional)" : ""}`} htmlFor={`f-${f.key}`} hint={f.hint}>
-            <Input f={f} value={values[f.key]} onChange={(v) => setValues({ ...values, [f.key]: v })} />
-          </Field>
-        ))}
+        {!canPrice && def.fields.some((f) => f.pricing) && (
+          <p className="text-sm text-muted">Fields marked <span className="font-medium text-fg">Price</span> are set by owners and operations staff; you can change the rest.</p>
+        )}
+        {def.fields.map((f) => {
+          const locked = !canPrice && !!f.pricing;
+          return (
+            <Field key={f.key} label={`${f.label}${f.optional ? " (optional)" : ""}${locked ? " · Price" : ""}`} htmlFor={`f-${f.key}`} hint={f.hint}>
+              <fieldset disabled={locked} className={cx("min-w-0 border-0 p-0 m-0", locked && "opacity-60 cursor-not-allowed")}>
+                <Input f={f} value={values[f.key]} onChange={(v) => setValues({ ...values, [f.key]: v })} />
+              </fieldset>
+            </Field>
+          );
+        })}
       </section>
       <section className="card p-5 grid gap-5 sm:grid-cols-2">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-fg">Visible to customers</p>
-            <p className="text-xs text-subtle">Off hides it on the website and the app without deleting it.</p>
+            <p className="text-xs text-subtle">{activeLocked ? `Turning an ${def.singular} on or off changes what customers pay: owners and operations staff do it.` : "Off hides it on the website and the app without deleting it."}</p>
           </div>
-          <Toggle label="Visible to customers" checked={active} onChange={setActive} />
+          <Toggle label="Visible to customers" checked={activeLocked && !id ? false : active} onChange={setActive} disabled={activeLocked} />
         </div>
         <Field label="Order (optional)" htmlFor="f-sort" hint="Lower numbers come first. Empty puts a new item last.">
           <input id="f-sort" type="number" min={0} step={1} className="field sm:w-40" value={sort} onChange={(e) => setSort(e.target.value)} />

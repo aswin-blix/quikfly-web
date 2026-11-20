@@ -66,6 +66,11 @@ const vehicles = await expect("GET /rentals/travel-vehicles", call("GET", "/rent
 const cfg = await expect("GET /config", call("GET", "/config", null, false), 200,
   (j) => j.places.length > 5 && j.rideOptions.length > 0 && j.cities.length > 0 && j.offers.length > 0 && j.faqs.length > 0
     && j.groupDestinations.length > 0 && typeof j.settings.welcomeCredit === "number" && typeof j.settings.surgeHours === "string");
+{
+  // Only offers within their dates are listed (India date).
+  const today = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+  check("/config lists only offers within their dates", cfg.offers.every((o) => (!o.validFrom || o.validFrom <= today) && (!o.validUntil || o.validUntil >= today)));
+}
 
 // Buses
 const busPath = "/buses?from=Chennai&to=Bengaluru&date=2026-12-01";

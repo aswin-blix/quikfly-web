@@ -457,10 +457,14 @@ export interface Offer {
   maxDiscount: number;
   /** Smallest booking total the code works on, in rupees (0 = any). */
   minAmount: number;
+  /** First day the code works (YYYY-MM-DD, India time), or null/missing for "from now". Older offers don't have it. */
+  validFrom?: string | null;
   /** Last day the code works (YYYY-MM-DD, India time), or null for no end. */
   validUntil: string | null;
   /** Times one customer may use it, or null for no limit. */
   perUserLimit: number | null;
+  /** Uses by all customers together (bookings not cancelled), or null/missing for no limit. */
+  maxUses?: number | null;
 }
 
 export const FAQ_CATEGORIES = ["Rides", "Bus", "Holidays", "Rentals", "Payments", "Account"] as const;

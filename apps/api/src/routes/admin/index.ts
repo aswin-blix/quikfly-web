@@ -2,7 +2,7 @@
 // change data check a permission and write an audit row. Bookings, licences, catalog and
 // offers routers mount here as they are added.
 import { Hono } from "hono";
-import { ADMIN_RULES, checkSetting, type Settings } from "@quikfly/shared";
+import { ADMIN_RULES, checkSetting, checkSettings, type Settings } from "@quikfly/shared";
 import type { AppEnv } from "../../env";
 import { badRequest } from "../../lib/errors";
 import { bearerToken } from "../../middleware/auth";
@@ -57,6 +57,9 @@ export const admin = new Hono<AppEnv>()
     const patch = settingsPatch(await jsonBody(c));
     const before = await getSettings(c.env.DB);
     const changed = Object.keys(patch) as (keyof Settings)[];
+    // Rules between settings (e.g. surge multiplier <= cap), only those touching what is being saved.
+    const crossError = checkSettings({ ...before, ...patch }, changed);
+    if (crossError) throw badRequest(crossError);
     // The audit row is written in the same batch as the change (AGENTS.md rule 4).
     const after = await updateSettings(c.env.DB, patch, [auditStatement(c.env.DB, {
       adminId: c.var.admin.id, action: "settings.update", entity: "settings",

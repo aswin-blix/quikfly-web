@@ -4,7 +4,7 @@
 // Storage helpers: ./mock-store.ts. Account endpoints: ./mock-account.ts.
 import type { QuikflyApi } from "./contract";
 import {
-  BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
+  BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, offerLive, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
   BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, isWomenOnly, upcomingDepartures, type TourPackage, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
@@ -115,7 +115,8 @@ function gross(input: Pick<NewBooking, "service" | "quoteId" | "rideId">): numbe
 function coupon(code: string, service: ServiceKey, total: number): CouponCheck {
   const offer = seed.offer.find((o) => o.code === code.trim().toUpperCase()) ?? fail("That coupon code isn't valid.");
   const used = bookingsStore().filter((b) => b.status !== "cancelled" && b.lines.some(([k, v]) => k === "Coupon" && v.startsWith(offer.code))).length;
-  const r = couponDiscount(offer, service, total, new Date().toISOString().slice(0, 10), used);
+  // One browser is one customer here, so its uses are also everyone's uses (maxUses).
+  const r = couponDiscount(offer, service, total, new Date().toISOString().slice(0, 10), used, used);
   if ("error" in r) fail(r.error);
   return { code: offer.code, discount: (r as { discount: number }).discount, total: total - (r as { discount: number }).discount };
 }
@@ -126,7 +127,7 @@ export const mockApi: QuikflyApi = {
       await wait(250);
       const config: AppConfig = {
         settings, places: seed.place, rideOptions: seed.rideOption, cities: seed.city, busOperators: seed.busOperator, popularRoutes: seed.popularRoute,
-        groupDestinations: seed.groupDestination, offers: seed.offer, faqs: seed.faq,
+        groupDestinations: seed.groupDestination, offers: seed.offer.filter((o) => offerLive(o, new Date().toISOString().slice(0, 10))), faqs: seed.faq,
       };
       return config;
     },

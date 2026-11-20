@@ -325,13 +325,20 @@ export function priceGroup(v: TravelVehicle, trip: GroupTrip, oneWayKm: number, 
 
 /* ───────────── Coupons ───────────── */
 
+/** Is an offer within its dates on `today` (India date, YYYY-MM-DD)? Customers only see offers that are. */
+export const offerLive = (offer: Pick<Offer, "validFrom" | "validUntil">, today: string) =>
+  (!offer.validFrom || offer.validFrom <= today) && (!offer.validUntil || offer.validUntil >= today);
+
 /**
  * Discount a coupon gives on a total, or why it can't be used. `today` is the
- * India-time date (YYYY-MM-DD); `usedBefore` is how often this customer used it.
+ * India-time date (YYYY-MM-DD); `usedBefore` is how often this customer used it;
+ * `usedByAll` is how often everyone used it (for `maxUses`).
  */
-export function couponDiscount(offer: Offer, service: ServiceKey, total: number, today: string, usedBefore: number): { discount: number } | { error: string } {
+export function couponDiscount(offer: Offer, service: ServiceKey, total: number, today: string, usedBefore: number, usedByAll = 0): { discount: number } | { error: string } {
   if (offer.service !== "all" && offer.service !== service) return { error: `${offer.code} works only on ${offer.service === "rent" ? "self-drive" : offer.service === "rentals" ? "group travel" : offer.service === "tours" ? "holiday" : offer.service} bookings.` };
+  if (offer.validFrom && today < offer.validFrom) return { error: `${offer.code} starts on ${offer.validFrom}.` };
   if (offer.validUntil && today > offer.validUntil) return { error: `${offer.code} has expired.` };
+  if (offer.maxUses != null && usedByAll >= offer.maxUses) return { error: `${offer.code} has been fully used.` };
   if (total < offer.minAmount) return { error: `${offer.code} needs a booking of at least ${inr(offer.minAmount)}.` };
   if (offer.perUserLimit !== null && usedBefore >= offer.perUserLimit) return { error: `You've already used ${offer.code}${offer.perUserLimit > 1 ? ` ${offer.perUserLimit} times` : ""}.` };
   const discount = Math.min(offer.maxDiscount, Math.round((total * offer.percent) / 100), total);

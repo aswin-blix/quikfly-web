@@ -3,7 +3,7 @@ import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, Pencil, Plus, Search, Trash2 } from "lucide-react";
-import { CATALOG_DEFS, isCatalogKind, type CatalogItem, type CatalogKind } from "@quikfly/shared";
+import { ACTIVE_IS_PRICING, CATALOG_DEFS, isCatalogKind, type CatalogItem, type CatalogKind } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Badge, Button, Empty, ErrorBox, PageHeader, Toggle } from "@/components/ui";
 import { adminApi } from "@/lib/api";
@@ -58,7 +58,9 @@ function KindList({ kind }: { kind: CatalogKind }) {
       <PageHeader
         title={def.label}
         sub={def.description}
-        actions={<Link href={`/catalog/edit?kind=${kind}`}><Button variant="primary"><Plus size={16} /> Add {def.singular}</Button></Link>}
+        actions={(can("pricing.edit") || !def.fields.some((f) => f.pricing && !f.optional))
+          ? <Link href={`/catalog/edit?kind=${kind}`}><Button variant="primary"><Plus size={16} /> Add {def.singular}</Button></Link>
+          : undefined}
       />
       <div className="relative mb-4 max-w-sm">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
@@ -85,7 +87,8 @@ function KindList({ kind }: { kind: CatalogKind }) {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <span className="sr-only">{item.active ? "Visible to customers" : "Hidden from customers"}</span>
-                    <Toggle label={`Show ${def.title(item.data as never)} to customers`} checked={item.active} disabled={busy === item.id} onChange={(v) => toggle(item, v)} />
+                    <Toggle label={`Show ${def.title(item.data as never)} to customers`} checked={item.active}
+                      disabled={busy === item.id || (!can("pricing.edit") && ACTIVE_IS_PRICING.includes(kind))} onChange={(v) => toggle(item, v)} />
                     <Link href={`/catalog/edit?kind=${kind}&id=${encodeURIComponent(item.id)}`} aria-label={`Edit ${def.title(item.data as never)}`}
                       className="size-9 grid place-items-center rounded-field text-muted hover:text-fg hover:bg-raised ml-1"><Pencil size={16} /></Link>
                     <button onClick={() => setToDelete(item)} aria-label={`Delete ${def.title(item.data as never)}`}

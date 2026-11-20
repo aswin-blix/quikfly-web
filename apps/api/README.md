@@ -38,7 +38,7 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | Method | Endpoint | Purpose |
 |---|---|---|
 | GET | `/health` | liveness check |
-| GET | `/config` | everything the apps load at start-up: `{ settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers, faqs }` (visible items only) |
+| GET | `/config` | everything the apps load at start-up: `{ settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers, faqs }` (visible items only; offers only within their `validFrom`–`validUntil` dates) |
 | POST | `/auth/otp` | `{ phone }` → `{ sent }` (no SMS yet) |
 | POST | `/auth/verify` | `{ phone, otp }` → `{ token, user, isNew, restored }`. Creates the user on first login (₹500 welcome credit, referral code); `isNew` stays true until a name is saved; signing in within 30 days of deleting restores the account (`restored`) |
 | POST | `/auth/logout` | ends the session for the bearer token (always succeeds) |
@@ -150,8 +150,8 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | GET 🛡 | `/admin/audit?page=&entity=&entityId=` | audit log, newest first, 25 per page `[audit.view]` |
 | GET 🛡 | `/admin/catalog` | each catalog kind with item counts and whether this admin can edit it `[dashboard.view]` |
 | GET 🛡 | `/admin/catalog/:kind` | all items of a kind, hidden ones included. Kinds and fields: `packages/shared/src/catalog-kinds.ts` `[the kind's permission]` |
-| POST 🛡 | `/admin/catalog/:kind` | `{ data, active?, sort? }` → new item; `data` is validated against the kind's fields; unique fields (tour slug, offer code, city name...) give 409 |
-| PUT 🛡 | `/admin/catalog/:kind/:id` | change `data`, `active` (show/hide) and/or `sort` |
+| POST 🛡 | `/admin/catalog/:kind` | `{ data, active?, sort? }` → new item; `data` is validated against the kind's fields (incl. cross-field rules: a ride type needs a fare, a flat offer needs a minimum above its discount, a departure's `tourId` must exist); unique fields (tour slug, offer code, city name...) give 409. Setting a price field (`pricing: true` in catalog-kinds.ts) or creating a visible offer needs `[pricing.edit]`, else 403 |
+| PUT 🛡 | `/admin/catalog/:kind/:id` | change `data`, `active` (show/hide) and/or `sort`; changing a price field, or showing/hiding an offer, needs `[pricing.edit]` (403 names the fields) |
 | DELETE 🛡 | `/admin/catalog/:kind/:id` | remove an item (bookings keep their own copy of what was bought) |
 | POST 🛡 | `/admin/catalog/reset` | replace the whole catalog with the seed (demo reset) `[settings.edit]` |
 | GET 🛡 | `/admin/bookings?q=&status=&service=&from=&to=&page=` | all customers' bookings, newest first, 25 per page; `q` matches booking id, title, customer name or phone; dates are India time `[bookings.view]` |
@@ -220,7 +220,7 @@ node scripts/create-admin.mjs --remote owner@example.com "Your Name" owner      
 node scripts/create-admin.mjs --remote ops@example.com "Ops Person" operations "ChosenPassword123"
 ```
 
-Roles: `owner` (everything), `operations` (bookings, licences, catalog), `content` (catalog, offers). Running the script again for the same email resets the password and clears a lockout.
+Roles: `owner` (everything), `operations` (bookings, licences, catalog and prices), `content` (catalog text, offer wording, FAQs; not prices: `pricing.edit` is owner and operations only). Running the script again for the same email resets the password and clears a lockout.
 
 ## Deploy (free tier)
 
