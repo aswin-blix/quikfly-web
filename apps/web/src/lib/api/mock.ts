@@ -5,7 +5,7 @@
 import type { QuikflyApi } from "./contract";
 import {
   BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, offerLive, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
-  priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, rideQuotes, rideTimeAt, seatRuleError, sumLines,
+  fareDateFor, priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, rideQuotes, rideTimeAt, seatRuleError, sumLines,
   BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, isWomenOnly, upcomingDepartures, type TourPackage, bookingTerms, withTerms, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
@@ -21,6 +21,8 @@ export { MOCK_OTP } from "./mock-store";
 
 const settings = DEFAULT_SETTINGS;
 const seed = CATALOG_SEED;
+/** Listed bus route fares and peak dates for the generated timetable, like the API. */
+const busPricing = { routes: seed.busRoute, calendar: seed.fareCalendar };
 const QUOTES_KEY = "quikfly.mockQuotes";
 const HOLDS_KEY = "quikfly.mockSeatHolds";
 const NOTES_KEY = "quikfly.mockNotifications";
@@ -68,7 +70,7 @@ function finishBooking(id: string, status: "cancelled" | "completed", patch: Par
 const placeById = (id: string) => seed.place.find((x) => x.id === id) ?? fail("Unknown place.");
 const byId = <T extends { id: string }>(list: T[], id: string, what: string) => list.find((x) => x.id === id) ?? fail(`Unknown ${what}.`);
 const busFor = (from: string, to: string, date: string, id: string) =>
-  generateBuses(BUS_OPERATORS.map((o) => o.name), settings, from, to, date).find((b) => b.id === id) ?? fail("That bus isn't running on this route and date.");
+  generateBuses(BUS_OPERATORS.map((o) => o.name), settings, from, to, date, busPricing).find((b) => b.id === id) ?? fail("That bus isn't running on this route and date.");
 
 function priceLines(r: QuoteRequest): FareLine[] {
   switch (r.service) {
@@ -84,16 +86,16 @@ function priceLines(r: QuoteRequest): FareLine[] {
       // Like the API: a package with upcoming departures is priced on one of them, seats permitting.
       const tour = byId(seed.tour, r.tourId, "holiday");
       const deps = withDeps(tour).departures ?? [];
-      if (!deps.length) return priceTour(tour, r.adults, r.kids, settings);
+      if (!deps.length) return priceTour(tour, r.adults, r.kids, settings, tour.price, fareDateFor(seed.fareCalendar, "tours", r.start));
       const dep = deps.find((d) => d.id === r.departureId) ?? fail("Pick one of this package's departures.");
       if (dep.seatsLeft < r.adults + r.kids) fail(dep.seatsLeft ? `Only ${dep.seatsLeft} seats are left on this departure.` : "This departure is sold out. Please pick another date.");
       r.start = dep.date;
-      return priceTour(tour, r.adults, r.kids, settings, dep.price);
+      return priceTour(tour, r.adults, r.kids, settings, dep.price, fareDateFor(seed.fareCalendar, "tours", dep.date));
     }
-    case "rent": return priceRent(byId(seed.rentalCar, r.carId, "car"), r, settings);
+    case "rent": return priceRent(byId(seed.rentalCar, r.carId, "car"), r, settings, fareDateFor(seed.fareCalendar, "rent", r.start.slice(0, 10)));
     case "rentals": {
-      const km = r.trip === "local" ? 0 : byId(seed.groupDestination, r.destinationId ?? "", "destination").km;
-      return priceGroup(byId(seed.travelVehicle, r.vehicleId, "vehicle"), r.trip, km, r.days, settings);
+      const dest = r.trip === "local" ? null : byId(seed.groupDestination, r.destinationId ?? "", "destination");
+      return priceGroup(byId(seed.travelVehicle, r.vehicleId, "vehicle"), r.trip, dest?.km ?? 0, r.days, settings, fareDateFor(seed.fareCalendar, "rentals", r.start), dest?.tollEstimate ?? null);
     }
   }
 }
@@ -130,7 +132,7 @@ export const mockApi: QuikflyApi = {
       const config: AppConfig = {
         settings, places: seed.place, rideOptions: seed.rideOption, cities: seed.city, busOperators: seed.busOperator, popularRoutes: seed.popularRoute,
         groupDestinations: seed.groupDestination, offers: seed.offer.filter((o) => offerLive(o, new Date().toISOString().slice(0, 10))), faqs: seed.faq,
-        surgeRules: seed.surgeRule,
+        surgeRules: seed.surgeRule, fareCalendar: seed.fareCalendar,
       };
       return config;
     },
@@ -237,7 +239,7 @@ export const mockApi: QuikflyApi = {
   buses: {
     async search(from, to, date) {
       await wait(800);
-      return generateBuses(BUS_OPERATORS.map((o) => o.name), settings, from, to, date).map((b) => ({ ...b, seatsLeft: Math.max(0, b.seatsLeft - holdsFor(b.id, date).length) }));
+      return generateBuses(BUS_OPERATORS.map((o) => o.name), settings, from, to, date, busPricing).map((b) => ({ ...b, seatsLeft: Math.max(0, b.seatsLeft - holdsFor(b.id, date).length) }));
     },
     async seats(bus, date) {
       await wait(500);

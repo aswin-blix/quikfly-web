@@ -4,7 +4,7 @@
 // except through its arguments.
 import { effectiveSurge, gstRate, inHourRanges, parseSurgeHours, type Settings } from "./settings";
 import type {
-  Bus, FareLine, FareQuote, Gender, GroupTrip, Offer, Place, RentalCar, RideOption, Seat, SeatHold, ServiceKey, SurgeRule, TourPackage, TravelVehicle,
+  Bus, BusRoute, FareDate, FareLine, FareQuote, Gender, GroupTrip, Offer, Place, RentalCar, RideOption, Seat, SeatHold, ServiceKey, SurgeRule, TourPackage, TravelVehicle,
 } from "./types";
 
 /** Ride simulation: map distance → km, speeds, number plates. */
@@ -30,8 +30,6 @@ export const BUS_SIM = {
     { type: "Non A/C Seater (2+2)", ac: false, sleeper: false, layout: "seater", amenities: ["Reclining seats"] },
     { type: "Bharat Benz A/C Sleeper (2+1)", ac: true, sleeper: true, layout: "sleeper", amenities: ["Water bottle", "Blanket", "Pillow", "Charging point", "Reading light"] },
   ],
-  /** Up to this much is added per bus so fares vary (₹). */
-  randomExtra: 400,
   /** Rows per deck: sleeper berths, and seater rows (seater/sleeper lower deck, 2+2 buses). */
   sleeperRows: 6,
   seaterRows: 10,
@@ -156,6 +154,8 @@ export function rideQuotes(
   const mapUnits = points.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - points[i].x, p.y - points[i].y), 0);
   const distanceKm = Math.max(RIDE_SIM.minDistanceKm, Math.round(mapUnits * RIDE_SIM.kmPerMapUnit * 10) / 10);
   const nightPct = nightPercentAt(settings, t.hour);
+  // A pickup or drop at an airport place pays the airport fee (not surged).
+  const airportFee = a.airport === "yes" || b.airport === "yes" ? settings.rideAirportFee : 0;
   return options.map((option, i) => {
     const tripMin = Math.round((distanceKm / (option.speedKmh || RIDE_SIM.speedKmh[option.service])) * 60);
     const waitMin = stops.length * settings.rideStopMinutes;
@@ -165,8 +165,9 @@ export function rideQuotes(
     const surge = waiveSurge ? 1 : peak;
     const surged = Math.round(raw * surge);
     const nightCharge = Math.round((surged * nightPct) / 100);
-    const quote: FareQuote = { option, fare: surged + nightCharge, distanceKm, durationMin, etaMin: 2 + ((i * 3 + Math.round(distanceKm)) % 6), surge };
+    const quote: FareQuote = { option, fare: surged + nightCharge + airportFee, distanceKm, durationMin, etaMin: 2 + ((i * 3 + Math.round(distanceKm)) % 6), surge };
     if (nightCharge) quote.nightCharge = nightCharge;
+    if (airportFee) quote.airportFee = airportFee;
     if (waiveSurge && peak > 1) quote.passSaving = Math.round(raw * peak) - surged;
     return quote;
   });
@@ -181,13 +182,47 @@ export function rideDiscountRoom(settings: Settings, service: ServiceKey, fare: 
   return Math.floor((fare * settings.rideMaxDiscountPercent) / 100);
 }
 
+/* ───────────── Peak and festival dates ───────────── */
+
+/**
+ * The peak or festival entry for a service on a trip date (YYYY-MM-DD, India), or null. When
+ * several match, the one with the largest change wins.
+ */
+export function fareDateFor(entries: FareDate[] | undefined, service: Exclude<ServiceKey, "bike" | "car">, date: string): FareDate | null {
+  const hits = (entries ?? []).filter((e) => (e.service === "all" || e.service === service) && e.from <= date && date <= e.to);
+  return hits.sort((x, y) => Math.abs(y.percent) - Math.abs(x.percent))[0] ?? null;
+}
+
+/** "Pongal (+20%)" on `subtotal`, as a price line; none without an entry. */
+export function fareDateLines(entry: FareDate | null, subtotal: number): FareLine[] {
+  if (!entry || !subtotal) return [];
+  return [{ label: `${entry.name} (${entry.percent > 0 ? "+" : "−"}${Math.abs(entry.percent)}%)`, amount: Math.round((subtotal * entry.percent) / 100) }];
+}
+
 /* ───────────── Bus ───────────── */
+
+/** A listed route fare for `from`–`to`, either direction (city names, any case), or null. */
+export function busRouteFor(routes: BusRoute[] | undefined, from: string, to: string): BusRoute | null {
+  const a = from.trim().toLowerCase(), b = to.trim().toLowerCase();
+  return (routes ?? []).find((r) => {
+    const f = r.from.trim().toLowerCase(), t = r.to.trim().toLowerCase();
+    return (f === a && t === b) || (f === b && t === a);
+  }) ?? null;
+}
 
 const hhmm = (h: number, m: number) => `${String(h % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 
-/** Generated timetable: the same route, date, operators and fares always give the same buses. */
-export function generateBuses(operators: string[], settings: Settings, from: string, to: string, date: string): Bus[] {
+/**
+ * Generated timetable: the same route, date, operators and fares always give the same buses.
+ * `pricing.routes` (bus route fares) price listed routes by distance; `pricing.calendar` (peak
+ * and festival dates) moves the fare on its dates. Without them, the Settings fares apply.
+ */
+export function generateBuses(
+  operators: string[], settings: Settings, from: string, to: string, date: string, pricing: { routes?: BusRoute[]; calendar?: FareDate[] } = {},
+): Bus[] {
   const rnd = seeded(`${from}-${to}-${date}`);
+  const route = busRouteFor(pricing.routes, from, to);
+  const peak = fareDateFor(pricing.calendar, "bus", date);
   const ops = operators.length ? operators : ["QuikFly Travels"];
   const hours = 5 + Math.floor(rnd() * 5);
   const list = Array.from({ length: BUS_SIM.resultsPerSearch }, (_, i): Bus => {
@@ -196,8 +231,8 @@ export function generateBuses(operators: string[], settings: Settings, from: str
     const dm = [0, 15, 30, 45][Math.floor(rnd() * 4)];
     const dur = hours + Math.floor(rnd() * 3);
     // `fare` is the cheapest seat: on seater/sleeper buses that's a seat, and the berths add the sleeper extra.
-    const base = (t.ac ? settings.busFareAc : settings.busFareNonAc) + (t.layout === "sleeper" ? settings.busSleeperExtra : 0)
-      + Math.floor(rnd() * BUS_SIM.randomExtra);
+    const seat = route ? Math.round(route.km * (t.ac ? route.acPerKm : route.nonAcPerKm)) : (t.ac ? settings.busFareAc : settings.busFareNonAc);
+    const base = (seat + (t.layout === "sleeper" ? settings.busSleeperExtra : 0) + Math.floor(rnd() * (settings.busRandomExtraMax ?? 400))) * (1 + (peak?.percent ?? 0) / 100);
     const { layout: _layout, ...kind } = t;
     return {
       id: `bus${i}-${from}-${to}`.replace(/\s/g, ""),
@@ -295,11 +330,12 @@ export function priceBus(seats: Seat[], settings: Settings): FareLine[] {
 /** Child price: a share of the adult price (the package's, or a departure's own price). */
 export const childPrice = (tour: Pick<TourPackage, "price">, settings: Settings, adultPrice = tour.price) => Math.round((adultPrice * settings.tourChildPercent) / 100);
 
-/** `adultPrice`: a departure's own price per adult (defaults to the package price). */
-export function priceTour(tour: TourPackage, adults: number, kids: number, settings: Settings, adultPrice = tour.price): FareLine[] {
+/** `adultPrice`: a departure's own price per adult (defaults to the package price). `peak`: a peak or festival entry for the start date. */
+export function priceTour(tour: TourPackage, adults: number, kids: number, settings: Settings, adultPrice = tour.price, peak: FareDate | null = null): FareLine[] {
   const kid = childPrice(tour, settings, adultPrice);
   const lines: FareLine[] = [{ label: `${adults} adult × ${inr(adultPrice)}`, amount: adultPrice * adults }];
   if (kids) lines.push({ label: `${kids} child × ${inr(kid)}`, amount: kid * kids });
+  lines.push(...fareDateLines(peak, sumLines(lines)));
   return [...lines, ...gstLine(settings, "tours", sumLines(lines))];
 }
 
@@ -318,21 +354,25 @@ export interface RentChoice {
   doorstep: boolean;
 }
 
-export function priceRent(car: RentalCar, c: RentChoice, settings: Settings): FareLine[] {
+/** `peak`: a peak or festival entry for the pickup date; it moves the car and driver charges (not protection, delivery or the deposit). */
+export function priceRent(car: RentalCar, c: RentChoice, settings: Settings, peak: FareDate | null = null): FareLine[] {
   const self = c.mode === "self";
   const hours = rentHours(c.start, c.end);
   const nights = self ? 0 : driverNights(c.start, c.end);
   const days = Math.max(1, Math.ceil(hours / 24));
   const mult = self && c.kmPlan === "unlimited" ? 1 + settings.rentUnlimitedKmExtraPercent / 100 : 1;
   const protectionPerDay = c.protection === "peace" ? settings.rentProtectionPeacePerDay : settings.rentProtectionStandardPerDay;
+  const rental = Math.round(car.pricePerHour * hours * mult);
+  const driver = self ? 0 : car.driverPerDay * days;
   return [
-    { label: `Rental (${hours} hrs${self ? `, ${rentPlanLabel(c.kmPlan, settings).label}` : ""})`, amount: Math.round(car.pricePerHour * hours * mult) },
+    { label: `Rental (${hours} hrs${self ? `, ${rentPlanLabel(c.kmPlan, settings).label}` : ""})`, amount: rental },
     ...(self
       ? [{ label: `${RENT_PROTECTION_LABEL[c.protection]} protection`, amount: protectionPerDay * days }]
-      : [{ label: `Driver (${days} day${days > 1 ? "s" : ""})`, amount: car.driverPerDay * days }]),
+      : [{ label: `Driver (${days} day${days > 1 ? "s" : ""})`, amount: driver }]),
     ...(!self && nights && settings.rentDriverNightCharge
       ? [{ label: `Driver night charge (${nights} night${nights > 1 ? "s" : ""})`, amount: nights * settings.rentDriverNightCharge }]
       : []),
+    ...fareDateLines(peak, rental + driver),
     ...(c.doorstep ? [{ label: "Doorstep delivery & pickup", amount: settings.rentDoorstepFee }] : []),
     ...(self && settings.rentDeposit ? [{ label: DEPOSIT_LINE, amount: settings.rentDeposit }] : []),
   ];
@@ -372,20 +412,44 @@ export function groupBillKm(v: TravelVehicle, trip: GroupTrip, oneWayKm: number,
   return Math.max(oneWayKm * 2, v.minKmPerDay * days);
 }
 
-export function priceGroup(v: TravelVehicle, trip: GroupTrip, oneWayKm: number, days: number, settings: Settings): FareLine[] {
-  if (trip === "local") return [{ label: `Local package × ${days}`, amount: v.localPackage * days }];
+/** Line label for a quoted toll estimate; staff settle the actual tolls when they complete the trip. */
+export const TOLL_LINE = "Tolls (estimate)";
+/** Booking detail line written when the actual tolls are settled. */
+export const TOLLS_SETTLED_LINE = "Tolls";
+/** Most staff can enter as a trip's actual tolls (₹). */
+export const TOLLS_MAX = 100_000;
+
+/** Actual tolls against the quoted estimate: what comes back to the customer, or what they still owe. */
+export function tollSettlement(estimate: number, actual: number) {
+  return { refund: Math.max(0, estimate - actual), due: Math.max(0, actual - estimate) };
+}
+
+/**
+ * `peak`: a peak or festival entry for the start date (moves the vehicle and bata, not tolls).
+ * `tollOneWay`: the destination's toll estimate, quoted once one way and twice for a round trip.
+ */
+export function priceGroup(
+  v: TravelVehicle, trip: GroupTrip, oneWayKm: number, days: number, settings: Settings, peak: FareDate | null = null, tollOneWay: number | null = null,
+): FareLine[] {
+  if (trip === "local") {
+    const pkg = v.localPackage * days;
+    return [{ label: `Local package × ${days}`, amount: pkg }, ...fareDateLines(peak, pkg)];
+  }
   const d = groupDays(trip, days);
   const km = groupBillKm(v, trip, oneWayKm, d, settings);
   const rate = trip === "oneway" ? v.perKm * (1 + settings.groupOneWaySurchargePercent / 100) : v.perKm;
   // A multi-day round trip pays the driver's night allowance for each night away.
   const nights = trip === "outstation" ? d - 1 : 0;
-  return [
+  const lines: FareLine[] = [
     { label: `${km} km × ${inr(Math.round(rate * 100) / 100)}${trip === "oneway" ? " (one way)" : ""}`, amount: Math.round(km * rate) },
     { label: `Driver bata × ${d}`, amount: v.driverBataPerDay * d },
     ...(nights > 0 && settings.groupDriverNightAllowance
       ? [{ label: `Driver night allowance × ${nights}`, amount: nights * settings.groupDriverNightAllowance }]
       : []),
   ];
+  lines.push(...fareDateLines(peak, sumLines(lines)));
+  if (tollOneWay) lines.push({ label: TOLL_LINE, amount: tollOneWay * (trip === "oneway" ? 1 : 2) });
+  return lines;
 }
 
 /* ───────────── Coupons ───────────── */

@@ -3,7 +3,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, ChevronLeft, XCircle } from "lucide-react";
-import { COUPON_LINE, type AdminBookingDetail, RIDE_CANCEL_REASONS, termLines } from "@quikfly/shared";
+import { COUPON_LINE, TOLLS_MAX, type AdminBookingDetail, RIDE_CANCEL_REASONS, termLines, tollSettlement } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ReasonDialog } from "@/components/ReasonDialog";
 import { Badge, Button, ErrorBox, PageHeader } from "@/components/ui";
@@ -23,6 +23,7 @@ function Detail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [notice, setNotice] = useState("");
+  const [tolls, setTolls] = useState("");
 
   const act = async (fn: () => Promise<AdminBookingDetail>, done: string) => {
     setBusy(true); setActionError("");
@@ -137,9 +138,31 @@ function Detail({ id }: { id: string }) {
       <ConfirmDialog
         open={dialog === "complete"} title="Mark as completed?" confirmLabel="Mark completed" busy={busy}
         onCancel={() => setDialog(null)}
-        onConfirm={() => act(() => adminApi.bookings.complete(b.id), b.deposit > 0 && b.payment === "wallet" ? `Marked completed. ${inr(b.deposit)} deposit returned to the wallet.` : "Marked completed.")}
+        onConfirm={() => {
+          if (data.tollEstimate !== null) {
+            const actual = Number(tolls);
+            if (tolls.trim() === "" || !Number.isInteger(actual) || actual < 0 || actual > TOLLS_MAX) return setActionError(`Enter the actual tolls in whole rupees (₹0 to ₹${TOLLS_MAX.toLocaleString("en-IN")}).`);
+            const { refund, due } = tollSettlement(data.tollEstimate, actual);
+            return act(() => adminApi.bookings.complete(b.id, actual),
+              refund ? `Marked completed. ${inr(refund)} of tolls ${b.payment === "wallet" ? "refunded to the wallet" : "is due back to the customer"}.` : due ? `Marked completed. The customer owes ${inr(due)} more in tolls (not collected).` : "Marked completed. Tolls matched the estimate.");
+          }
+          return act(() => adminApi.bookings.complete(b.id), b.deposit > 0 && b.payment === "wallet" ? `Marked completed. ${inr(b.deposit)} deposit returned to the wallet.` : "Marked completed.");
+        }}
       >
         Use this when the trip or stay has happened. Completed bookings can&apos;t be cancelled.
+        {data.tollEstimate !== null && (() => {
+          const actual = Number(tolls);
+          const valid = tolls.trim() !== "" && Number.isInteger(actual) && actual >= 0;
+          const s = valid ? tollSettlement(data.tollEstimate, actual) : null;
+          return (
+            <span className="block mt-3 text-fg">
+              <label htmlFor="tolls-actual" className="block text-sm font-medium">Actual tolls (₹)</label>
+              <span className="block text-xs text-subtle">{inr(data.tollEstimate)} was quoted as an estimate. Less comes back to the customer{b.payment === "wallet" ? "'s wallet" : " (refund outside QuikFly)"}; more is recorded as owed.</span>
+              <input id="tolls-actual" type="number" min={0} max={TOLLS_MAX} step={1} inputMode="numeric" className="field sm:w-48 mt-1.5" value={tolls} placeholder={String(data.tollEstimate)} onChange={(e) => setTolls(e.target.value)} />
+              {s && <span className="block text-xs mt-1">{s.refund ? `${inr(s.refund)} back to the customer.` : s.due ? `Customer owes ${inr(s.due)} more.` : "Matches the estimate."}</span>}
+            </span>
+          );
+        })()}
         {b.deposit > 0 && (b.payment === "wallet"
           ? <> Check the car first: the {inr(b.deposit)} deposit goes back to {b.customer.name}&apos;s wallet at once.</>
           : <> Check the car first: the {inr(b.deposit)} deposit was paid by {b.payment.toUpperCase()}, so return it outside QuikFly.</>)}

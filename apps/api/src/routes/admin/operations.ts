@@ -54,8 +54,12 @@ export const adminBookings = new Hono<AppEnv>()
   })
   .post("/:id/cancel", requireAdmin("bookings.manage"), async (c) =>
     c.json(await adminCancel(c.env.DB, c.var.admin.id, c.req.param("id"), reason(await jsonBody(c)))))
-  .post("/:id/complete", requireAdmin("bookings.manage"), async (c) =>
-    c.json(await adminComplete(c.env.DB, c.var.admin.id, c.req.param("id"))))
+  // { tollsActual? }: a group trip quoted with a toll estimate needs the actual tolls.
+  .post("/:id/complete", requireAdmin("bookings.manage"), async (c) => {
+    const body = await jsonBody(c).catch(() => ({} as Record<string, unknown>));
+    if (body.tollsActual !== undefined && typeof body.tollsActual !== "number") throw badRequest('"tollsActual" must be a number of rupees.');
+    return c.json(await adminComplete(c.env.DB, c.var.admin.id, c.req.param("id"), body.tollsActual as number | undefined));
+  })
   // Self-drive rental: readings, photos, extensions, settlement
   .get("/:id/rental", requireAdmin("bookings.view"), async (c) => c.json(await adminRental(c.env.DB, c.req.param("id"))))
   .get("/:id/rental/photos/:stage/:side", requireAdmin("bookings.view"), async (c) => {

@@ -116,7 +116,8 @@ class _GroupScreenState extends ConsumerState<GroupScreen> {
             ],
             quote: quote,
             travellers: const ['Lead traveller'],
-            policy: '${cancelPolicyText(ref.read(configProvider).value?.settings ?? const Settings({}), ServiceKey.rentals)} Tolls, parking and state permits paid on actuals.',
+            // A quote with a toll estimate (TOLL_LINE in packages/shared/src/pricing.ts) is settled on actuals after the trip.
+            policy: '${cancelPolicyText(ref.read(configProvider).value?.settings ?? const Settings({}), ServiceKey.rentals)} ${quote.lines.any((l) => l.label == 'Tolls (estimate)') ? 'Tolls are an estimate in the price; QuikFly settles the actual tolls after the trip (any difference is refunded or added). Parking and state permits paid on actuals.' : 'Tolls, parking and state permits paid on actuals.'}',
           ));
       if (mounted) context.push('/checkout');
     } catch (e) {

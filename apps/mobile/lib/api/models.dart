@@ -257,7 +257,7 @@ class RideOption {
 }
 
 class FareQuote {
-  const FareQuote(this.option, this.fare, this.distanceKm, this.durationMin, this.etaMin, {this.surge = 1, this.passSaving = 0, this.nightCharge = 0});
+  const FareQuote(this.option, this.fare, this.distanceKm, this.durationMin, this.etaMin, {this.surge = 1, this.passSaving = 0, this.nightCharge = 0, this.airportFee = 0});
   final RideOption option;
   final int fare, durationMin, etaMin;
 
@@ -267,13 +267,17 @@ class FareQuote {
   /// ₹ of night charge inside [fare] (Settings rideNightPercent during rideNightHours); 0 = none.
   final int nightCharge;
 
+  /// ₹ airport fee inside [fare] (pickup or drop at a place marked airport); 0 = none.
+  final int airportFee;
+
   /// Surge in this fare (1 = none), shown before booking (MVAG 2025).
   final double distanceKm, surge;
   factory FareQuote.fromJson(Json j) => FareQuote(
       RideOption.fromJson(j['option'] as Json), _int(j['fare']), _num(j['distanceKm']), _int(j['durationMin']), _int(j['etaMin']),
       surge: j['surge'] == null ? 1 : _num(j['surge']),
       passSaving: j['passSaving'] == null ? 0 : _int(j['passSaving']),
-      nightCharge: j['nightCharge'] == null ? 0 : _int(j['nightCharge']));
+      nightCharge: j['nightCharge'] == null ? 0 : _int(j['nightCharge']),
+      airportFee: j['airportFee'] == null ? 0 : _int(j['airportFee']));
 }
 
 class Driver {

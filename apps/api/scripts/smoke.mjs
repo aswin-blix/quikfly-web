@@ -66,7 +66,7 @@ const vehicles = await expect("GET /rentals/travel-vehicles", call("GET", "/rent
 const cfg = await expect("GET /config", call("GET", "/config", null, false), 200,
   (j) => j.places.length > 5 && j.rideOptions.length > 0 && j.cities.length > 0 && j.offers.length > 0 && j.faqs.length > 0
     && j.groupDestinations.length > 0 && typeof j.settings.welcomeCredit === "number" && typeof j.settings.surgeHours === "string"
-    && Array.isArray(j.surgeRules) && typeof j.settings.rideNightPercent === "number");
+    && Array.isArray(j.surgeRules) && typeof j.settings.rideNightPercent === "number" && Array.isArray(j.fareCalendar) && typeof j.settings.rideAirportFee === "number");
 {
   // Only offers within their dates are listed (India date).
   const today = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);

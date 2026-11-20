@@ -441,6 +441,53 @@ await expect("restore ride settings", call("PATCH", "/admin/settings", {
   await eventually("quotes are back to normal", quote, (r) => r.status === 200 && r.json.every((q) => !q.nightCharge && q.surge !== 1.9 || s0.surgeMultiplier === 1.9));
 }
 
+// ── Bus and holiday pricing (pricing step 7): route fares, peak dates, airport fee, toll estimates
+// settled at completion. Everything is put back in `finally` (this also runs on production).
+{
+  const created = [];
+  const make = async (name, kind, data) => {
+    const r = await expect(name, call("POST", `/admin/catalog/${kind}`, { data }, T), 201);
+    if (r) created.push([kind, r.id]);
+    return r;
+  };
+  await expect("a route needs two different cities", call("POST", "/admin/catalog/busRoute", { data: { from: "Chennai", to: "chennai", km: 350, acPerKm: 2, nonAcPerKm: 1.5 } }, T), 400);
+  await expect("peak dates must run forwards", call("POST", "/admin/catalog/fareCalendar", { data: { name: "Bad", service: "bus", from: TRAVEL, to: "2020-01-01", percent: 20 } }, T), 400);
+  try {
+    await expect("no fare variation per bus (for exact fares)", call("PATCH", "/admin/settings", { busRandomExtraMax: 0, rideAirportFee: 50 }, T), 200, (j) => j.busRandomExtraMax === 0);
+    await make("create a route fare: Chennai ⇄ Bengaluru, 350 km", "busRoute", { from: "Chennai", to: "Bengaluru", km: 350, acPerKm: 2, nonAcPerKm: 1.5 });
+    const seaters = (j) => (Array.isArray(j) ? j : []).filter((b) => !b.sleeper);
+    await eventually("listed routes are priced by distance (AC ₹700, non-AC ₹530)", () => call("GET", `/buses?from=Bengaluru&to=Chennai&date=${TRAVEL}`),
+      (r) => r.status === 200 && seaters(r.json).length > 0 && seaters(r.json).every((b) => b.fare === (b.ac ? 700 : 530)));
+    await make("create peak dates: +20% on buses and holidays", "fareCalendar", { name: "Smoke festival", service: "all", from: TRAVEL, to: TRAVEL, percent: 20 });
+    await eventually("peak dates raise bus fares on those dates", () => call("GET", `/buses?from=Chennai&to=Bengaluru&date=${TRAVEL}`),
+      (r) => r.status === 200 && seaters(r.json).length > 0 && seaters(r.json).every((b) => b.fare === (b.ac ? 840 : 630)));
+    await eventually("a holiday quote shows the peak line before GST", () => call("POST", "/quotes", { service: "tours", tourId: anyDateTour.id, adults: 1, kids: 0, start: TRAVEL }),
+      (r) => r.status === 201 && r.json.lines.some((l) => l.label === "Smoke festival (+20%)" && l.amount === Math.round((anyDateTour.data.price * 20) / 100)));
+    await eventually("GET /config lists the peak dates", () => call("GET", "/config"), (r) => (r.json?.fareCalendar ?? []).some((e) => e.name === "Smoke festival"));
+    // Airport fee: a place marked airport adds the fee to rides there.
+    const ap = await make("create an airport place", "place", { name: "Smoke Airport", area: "Smoke", x: 90, y: 90, airport: "yes" });
+    await eventually("rides to an airport add and show the fee", () => call("POST", "/rides/quote", { service: "car", pickupId: places[0].id, dropId: ap?.id }),
+      (r) => r.status === 200 && r.json.every((q) => q.airportFee === 50));
+    // Tolls: quoted as an estimate, settled with the actual amount when staff complete the trip.
+    const dest = await make("create a destination with a toll estimate", "groupDestination", { name: "Smoke Tollgate", km: 120, tollEstimate: 300 });
+    const vehicles = (await call("GET", "/rentals/travel-vehicles")).json;
+    let gq;
+    await eventually("a round trip quotes the tolls twice", async () => (gq = await call("POST", "/quotes", { service: "rentals", vehicleId: vehicles[0].id, trip: "outstation", destinationId: dest?.id, days: 2, start: dayOffset(30) })),
+      (r) => r.status === 201 && r.json.lines.some((l) => l.label === "Tolls (estimate)" && l.amount === 600));
+    const gb = (await call("POST", "/bookings", { service: "rentals", title: "Smoke toll trip", subtitle: "Tolls", payment: "upi", lines: [], quoteId: gq?.json?.id }, C2)).json;
+    await expect("admin sees the toll estimate", call("GET", `/admin/bookings/${gb?.id}`, null, T), 200, (j) => j.tollEstimate === 600);
+    await expect("completing needs the actual tolls", call("POST", `/admin/bookings/${gb?.id}/complete`, {}, T), 400, (j) => /actual tolls/.test(j.message));
+    await expect("actual tolls can't be negative", call("POST", `/admin/bookings/${gb?.id}/complete`, { tollsActual: -5 }, T), 400);
+    await expect("complete with ₹500 actual tolls: ₹100 due back", call("POST", `/admin/bookings/${gb?.id}/complete`, { tollsActual: 500 }, T), 200,
+      (j) => j.booking.status === "completed" && j.booking.lines.some(([k, v]) => k === "Tolls" && /₹500/.test(v) && /₹100 refund due/.test(v)) && j.history[0]?.detail?.tollsRefund === 100);
+    await expect("the customer sees the tolls line", call("GET", `/bookings/${gb?.id}`, null, C2), 200, (j) => j.lines.some(([k]) => k === "Tolls"));
+  } finally {
+    for (const [kind, id] of created.reverse()) await call("DELETE", `/admin/catalog/${kind}/${id}`, null, T);
+    await expect("restore bus variation and airport fee", call("PATCH", "/admin/settings", { busRandomExtraMax: s0.busRandomExtraMax, rideAirportFee: s0.rideAirportFee }, T), 200,
+      (j) => j.busRandomExtraMax === s0.busRandomExtraMax && j.rideAirportFee === s0.rideAirportFee);
+  }
+}
+
 // ── Licence reviews ── (the customer's licence is pending from the settings test above)
 await expect("GET /admin/licences lists pending first", call("GET", "/admin/licences", null, T), 200, (j) => j.some((l) => l.customer.id === cMe.id && l.status === "pending" && l.number));
 await expect("reject needs a reason", call("POST", `/admin/licences/${cMe.id}/reject`, { reason: "no" }, T), 400);

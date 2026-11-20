@@ -687,6 +687,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
                   if (q.passSaving > 0) Text('−${inr(q.passSaving)} surge', style: TextStyle(color: c.success, fontSize: 11)),
                   if (q.surge > 1 && !_quotes!.every((x) => x.surge == _topSurge)) Text('×${q.surge.toStringAsFixed(q.surge % 1 == 0 ? 0 : 1)} surge', style: TextStyle(color: c.warning, fontSize: 11)),
                   if (q.nightCharge > 0) Text('incl. ${inr(q.nightCharge)} night', style: TextStyle(color: c.fgMuted, fontSize: 11)),
+                  if (q.airportFee > 0) Text('incl. ${inr(q.airportFee)} airport fee', style: TextStyle(color: c.fgMuted, fontSize: 11)),
                 ]),
               ]),
             ),

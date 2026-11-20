@@ -6,12 +6,12 @@ import { useApp } from "@/components/AppProvider";
 import { SceneArt } from "@/components/SceneArt";
 import { Reveal, Tilt, TweenNumber } from "@/components/motion";
 import { Breadcrumbs, Counter, Empty, GoldButton, Modal, PageHeader, SectionTitle, Segmented, Spinner } from "@/components/ui";
-import { useSettings } from "@/components/ConfigProvider";
+import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { api } from "@/lib/api";
 import { cx, inr, prettyDate, todayISO } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, useNav, useQuery } from "@/lib/nav";
-import { cancelPolicyText, childPrice, departureMonth, departureStatus, type DepartureView, type TourPackage, type TourTheme } from "@quikfly/shared";
+import { cancelPolicyText, childPrice, fareDateFor, departureMonth, departureStatus, type DepartureView, type TourPackage, type TourTheme } from "@quikfly/shared";
 import { useTours } from "@/components/catalog-hooks";
 import { CallbackForm, WhatsAppButton } from "@/components/support/CallbackForm";
 
@@ -168,6 +168,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
   const settings = useSettings();
   const [pricing, setPricing] = useState(false);
   const [callback, setCallback] = useState(false);
+  const calendar = useConfig()?.fareCalendar ?? [];
   const tour = TOURS.find((t) => t.slug === slug);
   const ref = useRef<HTMLDivElement>(null);
   const { setDraft, toast } = useApp();
@@ -194,7 +195,10 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
   const adultPrice = dep?.price ?? tour.price;
   // Live estimate while choosing; the price charged is the API's quote fetched in book().
   const kidPrice = childPrice(tour, settings, adultPrice);
-  const subtotal = adultPrice * adults + kidPrice * kids;
+  // Peak and festival dates move the price before GST, like the API (fareDateFor).
+  const peak = fareDateFor(calendar, "tours", dep?.date ?? date);
+  const base = adultPrice * adults + kidPrice * kids;
+  const subtotal = base + Math.round((base * (peak?.percent ?? 0)) / 100);
   const taxes = Math.round((subtotal * settings.gstTours) / 100);
   const similar = TOURS.filter((t) => t.id !== tour.id && t.themes.some((x) => tour.themes.includes(x))).slice(0, 3);
 
@@ -311,6 +315,7 @@ export function HolidayDetailScreen({ slug }: { slug: string }) {
               <span className="text-sm text-muted">Total incl. GST</span>
               <TweenNumber value={subtotal + taxes} format={inr} className="text-2xl font-bold" />
             </div>
+            {peak && <p className="text-xs text-muted" role="note">Includes {peak.name} ({peak.percent > 0 ? "+" : "−"}{Math.abs(peak.percent)}% on these dates).</p>}
             <GoldButton className="w-full" loading={pricing} onClick={book} disabled={deps.length > 0 && !dep}>Book now</GoldButton>
             <p className="text-[11px] text-subtle text-center">Demo: no payment is taken</p>
           </motion.div>

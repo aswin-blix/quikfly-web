@@ -10,7 +10,7 @@ import { useTravelVehicles } from "@/components/catalog-hooks";
 import { api } from "@/lib/api";
 import { cx, inr, prettyDate, todayISO } from "@/lib/format";
 import { useNav, useQuery } from "@/lib/nav";
-import { cancelPolicyText, groupBillKm, groupDays, priceGroup, sumLines, type GroupTrip, type TravelVehicle } from "@quikfly/shared";
+import { cancelPolicyText, fareDateFor, groupBillKm, groupDays, priceGroup, sumLines, type GroupTrip, type TravelVehicle } from "@quikfly/shared";
 import { serviceByKey } from "@/lib/services";
 
 const vehicleImg = (v: TravelVehicle) => (v.seats <= 4 ? serviceByKey("car").image : v.seats <= 7 ? serviceByKey("rent").image : v.seats >= 26 ? serviceByKey("bus").image : serviceByKey("rentals").image);
@@ -35,7 +35,9 @@ export function TravelRentalsScreen() {
   // Live estimates (same maths and settings as the API); book() charges the API's quote.
   const billDays = groupDays(type, days);
   const billKm = (v: TravelVehicle) => groupBillKm(v, type, oneWayKm, billDays, settings);
-  const estimate = (v: TravelVehicle) => sumLines(priceGroup(v, type, oneWayKm, days, settings));
+  const peak = fareDateFor(useConfig()?.fareCalendar, "rentals", date);
+  const tolls = type === "local" ? null : destination?.tollEstimate ?? null;
+  const estimate = (v: TravelVehicle) => sumLines(priceGroup(v, type, oneWayKm, days, settings, peak, tolls));
   const fits = vehicles.filter((v) => v.seats >= pax).sort((a, b) => a.seats - b.seats);
 
   async function book(v: TravelVehicle) {
@@ -56,7 +58,7 @@ export function TravelRentalsScreen() {
       summary: [["Trip", type === "local" ? `Local · 8 hr / ${settings.groupLocalKmPerDay} km per day` : type === "oneway" ? `One way to ${dest}` : `Round trip to ${dest}`], ["Start", prettyDate(date)], ["Days", String(billDays)], ["Passengers", String(pax)], ["Billable distance", `${billKm(v)} km`]],
       quote,
       travellers: ["Lead traveller"],
-      policy: `${cancelPolicyText(settings, "rentals")} Tolls, parking & state permits paid on actuals.`,
+      policy: `${cancelPolicyText(settings, "rentals")} ${tolls ? "Tolls are an estimate in the price; QuikFly settles the actual tolls after the trip (any difference is refunded or added). Parking & state permits paid on actuals." : "Tolls, parking & state permits paid on actuals."}`,
     });
     nav.push("/checkout");
   }

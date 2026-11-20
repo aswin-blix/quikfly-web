@@ -68,6 +68,8 @@ export interface Settings {
   rideNightHours: string;
   /** Coupons and credits together can take at most this % off a ride fare (MVAG 2025: 50% below the base fare; Maharashtra 25%). 100 = no limit. */
   rideMaxDiscountPercent: number;
+  /** Added to rides that start or end at a place marked airport (₹, not surged). 0 = none. */
+  rideAirportFee: number;
 
   /** Scheduled rides: how soon (minutes) and how far ahead (days) a pickup can be booked. */
   rideScheduleMinMinutes: number;
@@ -81,6 +83,8 @@ export interface Settings {
   busSleeperExtra: number;
   /** Extra for a lower-deck seat (₹). */
   busLowerDeckExtra: number;
+  /** The generated timetable adds up to this much per bus so fares vary (₹). 0 = every bus of a type costs the same. */
+  busRandomExtraMax: number;
 
   /** GST rates (%) per service: added to bus and holiday prices, and shown on invoices. */
   gstRides: number;
@@ -219,6 +223,7 @@ export const DEFAULT_SETTINGS: Settings = {
   rideNightPercent: 0,
   rideNightHours: "22-23, 0-5",
   rideMaxDiscountPercent: 100,
+  rideAirportFee: 0,
   rideScheduleMinMinutes: 30,
   rideScheduleMaxDays: 30,
   rideScheduleFreeCancelMinutes: 60,
@@ -226,6 +231,7 @@ export const DEFAULT_SETTINGS: Settings = {
   busFareNonAc: 420,
   busSleeperExtra: 250,
   busLowerDeckExtra: 50,
+  busRandomExtraMax: 400,
   busRescheduleHours: 6,
   busRescheduleFee: 0,
   gstRides: 5,
@@ -335,6 +341,8 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   rideNightPercent: { type: "number", min: 0, max: 100, integer: true },
   rideNightHours: { type: "text", max: 60, pattern: HOUR_RANGES, hint: 'Hour ranges like "22-23, 0-5" (0–23), or empty for no night hours.' },
   rideMaxDiscountPercent: { type: "number", min: 0, max: 100, integer: true },
+  rideAirportFee: money(500),
+  busRandomExtraMax: money(2000),
   rideScheduleMinMinutes: { type: "number", min: 5, max: 240, integer: true },
   rideScheduleMaxDays: { type: "number", min: 1, max: 90, integer: true },
   rideScheduleFreeCancelMinutes: { type: "number", min: 0, max: 1440, integer: true },

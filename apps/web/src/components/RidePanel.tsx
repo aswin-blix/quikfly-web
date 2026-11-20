@@ -363,6 +363,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
                       {!!q.passSaving && <p className="text-[11px] text-success">−{inr(q.passSaving)} surge</p>}
                       {q.surge > 1 && topSurge > 1 && !quotes.every((x) => x.surge === topSurge) && <p className="text-[11px] text-warning">×{q.surge} surge</p>}
                       {!!q.nightCharge && <p className="text-[11px] text-muted">incl. {inr(q.nightCharge)} night</p>}
+                      {!!q.airportFee && <p className="text-[11px] text-muted">incl. {inr(q.airportFee)} airport fee</p>}
                     </div>
                   </motion.button>
                 ))}

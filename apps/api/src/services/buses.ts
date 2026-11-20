@@ -3,14 +3,14 @@ import { notFound } from "../lib/errors";
 import { visible } from "./catalog";
 import { getSettings } from "./settings";
 
-/** Generated timetable from the visible operators and the bus fares in Settings. */
+/** Generated timetable from the visible operators, the bus fares in Settings, listed route fares and peak dates. */
 export async function searchBuses(db: D1Database, from: string, to: string, date: string): Promise<Bus[]> {
-  const [operators, settings, held] = await Promise.all([
-    visible(db, "busOperator"), getSettings(db),
+  const [operators, settings, routes, calendar, held] = await Promise.all([
+    visible(db, "busOperator"), getSettings(db), visible(db, "busRoute"), visible(db, "fareCalendar"),
     db.prepare("SELECT bus_id, COUNT(*) AS n FROM bus_seat_holds WHERE date = ? GROUP BY bus_id").bind(date).all<{ bus_id: string; n: number }>(),
   ]);
   const heldBy = new Map(held.results.map((r) => [r.bus_id, r.n]));
-  return generateBuses(operators.map((o) => o.name), settings, from, to, date).map((b) => ({ ...b, seatsLeft: Math.max(0, b.seatsLeft - (heldBy.get(b.id) ?? 0)) }));
+  return generateBuses(operators.map((o) => o.name), settings, from, to, date, { routes, calendar }).map((b) => ({ ...b, seatsLeft: Math.max(0, b.seatsLeft - (heldBy.get(b.id) ?? 0)) }));
 }
 
 export async function findBus(db: D1Database, from: string, to: string, date: string, busId: string): Promise<Bus> {

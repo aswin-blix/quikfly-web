@@ -177,6 +177,8 @@ export interface Place {
   /** Position on the demo map (0–100). The real API returns lat/lng instead. */
   x: number;
   y: number;
+  /** "yes": rides to or from here pay Settings.rideAirportFee (shown as its own amount). Missing = no. */
+  airport?: "yes" | "no";
 }
 
 export interface RideOption {
@@ -250,6 +252,34 @@ export interface GroupDestination {
   id: string;
   name: string;
   km: number;
+  /** Tolls one way (₹), quoted as "Tolls (estimate)"; staff settle the actual tolls when the trip is completed. Missing = tolls paid on actuals. */
+  tollEstimate?: number | null;
+}
+
+/**
+ * A bus route fare (catalog kind "busRoute"): listed routes are priced by distance, either
+ * direction; other routes keep the base fares in Settings.
+ */
+export interface BusRoute {
+  id: string;
+  from: string;
+  to: string;
+  km: number;
+  /** ₹ per km for an AC and a non-AC seat (sleeper buses add Settings.busSleeperExtra). */
+  acPerKm: number;
+  nonAcPerKm: number;
+}
+
+/** Peak or festival dates (catalog kind "fareCalendar"): a % up (or down) on one service's prices for trips starting in the range. */
+export interface FareDate {
+  id: string;
+  name: string;
+  service: "all" | "bus" | "tours" | "rent" | "rentals";
+  /** India dates, inclusive (YYYY-MM-DD). */
+  from: string;
+  to: string;
+  /** −50 to +100. */
+  percent: number;
 }
 
 export interface FareQuote {
@@ -264,6 +294,8 @@ export interface FareQuote {
   passSaving?: number;
   /** ₹ of night charge inside `fare` (Settings.rideNightPercent during rideNightHours); absent or 0 = none. Shown to the rider. */
   nightCharge?: number;
+  /** ₹ airport fee inside `fare` (a pickup or drop at a place marked airport); absent or 0 = none. Shown to the rider. */
+  airportFee?: number;
 }
 
 export interface Driver {
@@ -565,6 +597,8 @@ export interface AppConfig {
   faqs: Faq[];
   /** Visible surge rules (ride types, days, hours, multiplier); missing from APIs before 2026-11-20, so read it as `?? []`. */
   surgeRules?: SurgeRule[];
+  /** Peak and festival dates (prices up or down by %); read as `?? []` for the same reason. */
+  fareCalendar?: FareDate[];
 }
 
 /** Body of POST /bookings. The amount comes from the quote (or the ride), never the client. */
