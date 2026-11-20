@@ -257,19 +257,23 @@ class RideOption {
 }
 
 class FareQuote {
-  const FareQuote(this.option, this.fare, this.distanceKm, this.durationMin, this.etaMin, {this.surge = 1, this.passSaving = 0});
+  const FareQuote(this.option, this.fare, this.distanceKm, this.durationMin, this.etaMin, {this.surge = 1, this.passSaving = 0, this.nightCharge = 0});
   final RideOption option;
   final int fare, durationMin, etaMin;
 
   /// ₹ the rider's QuikFly Pass took off this fare (the surge it waived); 0 = none.
   final int passSaving;
 
+  /// ₹ of night charge inside [fare] (Settings rideNightPercent during rideNightHours); 0 = none.
+  final int nightCharge;
+
   /// Surge in this fare (1 = none), shown before booking (MVAG 2025).
   final double distanceKm, surge;
   factory FareQuote.fromJson(Json j) => FareQuote(
       RideOption.fromJson(j['option'] as Json), _int(j['fare']), _num(j['distanceKm']), _int(j['durationMin']), _int(j['etaMin']),
       surge: j['surge'] == null ? 1 : _num(j['surge']),
-      passSaving: j['passSaving'] == null ? 0 : _int(j['passSaving']));
+      passSaving: j['passSaving'] == null ? 0 : _int(j['passSaving']),
+      nightCharge: j['nightCharge'] == null ? 0 : _int(j['nightCharge']));
 }
 
 class Driver {
@@ -723,6 +727,10 @@ class Settings {
   int get rideCancelFeeCap => _i('rideCancelFeeCap', 100);
   int get rideCancelFreeMinutes => _i('rideCancelFreeMinutes', 2);
   int get rideStopMinutes => _i('rideStopMinutes', 3);
+  int get rideNightPercent => _i('rideNightPercent', 0);
+  String get rideNightHours => _s('rideNightHours', '22-23, 0-5');
+  /// Coupons and credits together take at most this % off a ride fare (MVAG 2025 floor); 100 = no limit.
+  int get rideMaxDiscountPercent => _i('rideMaxDiscountPercent', 100);
   int get rideScheduleMinMinutes => _i('rideScheduleMinMinutes', 30);
   int get rideScheduleMaxDays => _i('rideScheduleMaxDays', 30);
   int get rideScheduleFreeCancelMinutes => _i('rideScheduleFreeCancelMinutes', 60);

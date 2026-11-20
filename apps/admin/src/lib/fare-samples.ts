@@ -3,8 +3,8 @@
 // customer would be quoted. Staff compare today's settings or item with their unsaved draft.
 import {
   generateBuses, generateSeats, priceBus, priceGroup, priceRent, priceTour, rideQuotes, sumLines,
-  type CatalogItem, type CatalogItemMap, type CatalogKind, type GroupDestination, type Place, type RentalCar, type RideOption,
-  type Settings, type TourPackage, type TravelVehicle,
+  type CatalogItem, type CatalogItemMap, type CatalogKind, type GroupDestination, type Place, type RentalCar, type RideOption, type RideTime,
+  type Settings, type SurgeRule, type TourPackage, type TravelVehicle,
 } from "@quikfly/shared";
 
 /** Catalog rows the samples price, with each item's id in its data. */
@@ -15,6 +15,7 @@ export interface SampleCatalog {
   cars: RentalCar[];
   vehicles: TravelVehicle[];
   destinations: GroupDestination[];
+  surgeRules: SurgeRule[];
 }
 
 export const withId = <K extends CatalogKind>(items: CatalogItem<K>[]): CatalogItemMap[K][] =>
@@ -26,12 +27,15 @@ export interface Sample { label: string; now: number; draft: number }
 /** A date a few weeks out (India), so samples never fall in the past. */
 const sampleDate = () => new Date(Date.now() + 330 * 60_000 + 21 * 86_400_000).toISOString().slice(0, 10);
 
-/** Every ride type from `a` to `b` at `hour` (India time). */
-export function rideSamples(options: RideOption[], a: Place, b: Place, hour: number, now: Settings, draft: Settings, draftOptions = options): Sample[] {
-  const before = rideQuotes(options, a, b, now, hour);
-  const after = rideQuotes(draftOptions, a, b, draft, hour);
+/** Every ride type from `a` to `b` at `t` (India-time hour and weekday), with surge rules. */
+export function rideSamples(
+  options: RideOption[], a: Place, b: Place, t: RideTime, now: Settings, draft: Settings, draftOptions = options, rulesNow: SurgeRule[] = [], rulesDraft = rulesNow,
+): Sample[] {
+  const before = rideQuotes(options, a, b, now, t, [], false, rulesNow);
+  const after = rideQuotes(draftOptions, a, b, draft, t, [], false, rulesDraft);
   const surge = (x: number, y: number) => (x === y ? (x > 1 ? ` · surge ${x}×` : "") : ` · surge ${x}× → ${y}×`);
-  return before.map((q, i) => ({ label: `${q.option.name} · ${q.distanceKm} km${surge(q.surge, after[i].surge)}`, now: q.fare, draft: after[i].fare }));
+  const night = (x?: number, y?: number) => (x || y ? ` · night ${x ? `₹${x}` : "none"}${x !== y ? ` → ${y ? `₹${y}` : "none"}` : ""}` : "");
+  return before.map((q, i) => ({ label: `${q.option.name} · ${q.distanceKm} km${surge(q.surge, after[i].surge)}${night(q.nightCharge, after[i].nightCharge)}`, now: q.fare, draft: after[i].fare }));
 }
 
 /** One seat on the first bus of each type on a sample route, with GST. */

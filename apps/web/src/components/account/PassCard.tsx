@@ -4,7 +4,7 @@ import { PASS_NAME, effectiveSurge, passSaleError } from "@quikfly/shared";
 import { api } from "@/lib/api";
 import { inr, prettyDate } from "@/lib/format";
 import { useApp } from "../AppProvider";
-import { useSettings } from "../ConfigProvider";
+import { useConfig, useSettings } from "../ConfigProvider";
 import { GoldButton } from "../ui";
 import { ErrorText, Section, useAction } from "./kit";
 
@@ -12,9 +12,10 @@ import { ErrorText, Section, useAction } from "./kit";
 export function PassCard() {
   const { user, setUser, toast } = useApp();
   const settings = useSettings();
+  const rules = useConfig()?.surgeRules ?? [];
   const { run, busy, error } = useAction();
   if (!user) return null;
-  const saleError = passSaleError(settings);
+  const saleError = passSaleError(settings, rules);
   const active = !!user.passUntil;
   // Nothing to show when the pass isn't sold and the rider doesn't hold one.
   if (saleError && !active) return null;

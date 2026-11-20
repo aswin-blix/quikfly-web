@@ -1,4 +1,4 @@
-import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
+import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visibleById } from "./catalog";
@@ -138,7 +138,9 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   let plan: { id: string; take: number }[] = [];
   if (input.useCredits) {
     const credits = await spendPlan(db, userId);
-    creditsUsed = creditsUsable(settings, credits.balance, afterCoupon, Math.min(quotedDeposit, afterCoupon));
+    // A ride keeps at least its discount floor: credits get only the room the coupon left.
+    const room = rideDiscountRoom(settings, input.service, gross) - (coupon?.discount ?? 0);
+    creditsUsed = creditsUsable(settings, credits.balance, afterCoupon, Math.min(quotedDeposit, afterCoupon), room);
     plan = credits.plan(creditsUsed);
   }
   const amount = afterCoupon - creditsUsed;

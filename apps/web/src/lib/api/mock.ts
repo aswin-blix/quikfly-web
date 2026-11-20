@@ -5,7 +5,7 @@
 import type { QuikflyApi } from "./contract";
 import {
   BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, offerLive, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
-  priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideQuotes, seatRuleError, sumLines,
+  priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, rideQuotes, rideTimeAt, seatRuleError, sumLines,
   BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, isWomenOnly, upcomingDepartures, type TourPackage, bookingTerms, withTerms, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
@@ -118,7 +118,9 @@ function coupon(code: string, service: ServiceKey, total: number): CouponCheck {
   // One browser is one customer here, so its uses are also everyone's uses (maxUses).
   const r = couponDiscount(offer, service, total, new Date().toISOString().slice(0, 10), used, used);
   if ("error" in r) fail(r.error);
-  return { code: offer.code, discount: (r as { discount: number }).discount, total: total - (r as { discount: number }).discount };
+  // A ride fare can't go below its discount floor (like the API).
+  const discount = Math.min((r as { discount: number }).discount, rideDiscountRoom(settings, service, total));
+  return { code: offer.code, discount, total: total - discount };
 }
 
 export const mockApi: QuikflyApi = {
@@ -128,6 +130,7 @@ export const mockApi: QuikflyApi = {
       const config: AppConfig = {
         settings, places: seed.place, rideOptions: seed.rideOption, cities: seed.city, busOperators: seed.busOperator, popularRoutes: seed.popularRoute,
         groupDestinations: seed.groupDestination, offers: seed.offer.filter((o) => offerLive(o, new Date().toISOString().slice(0, 10))), faqs: seed.faq,
+        surgeRules: seed.surgeRule,
       };
       return config;
     },
@@ -152,13 +155,14 @@ export const mockApi: QuikflyApi = {
       const route = [pickupId, ...stopIds, dropId];
       if (route.some((id, i) => i > 0 && id === route[i - 1])) fail("A stop can't be the same as the place before it.");
       if (scheduledFor) { const err = scheduleError(settings, scheduledFor); if (err) fail(err); }
-      const hour = scheduledFor ? parseInt(scheduledFor.slice(11, 13), 10) : new Date().getHours();
+      // Priced at the pickup time, India time (hour and weekday), like the API.
+      const at = scheduledFor ? Date.parse(localToIso(scheduledFor)) : Date.now();
       // A signed-in rider whose QuikFly Pass covers the pickup time pays no surge (like the API).
       const waive = passCovers(signedInUser()?.passUntil, scheduledFor ? Date.parse(localToIso(scheduledFor)) : Date.now());
       // Women-only ride types only for signed-in women riders (like the API).
       const woman = settings.featureWomenOnlyRides && signedInUser()?.gender === "female";
       const options = seed.rideOption.filter((o) => o.service === service && (woman || !isWomenOnly(o)));
-      return rideQuotes(options, placeById(pickupId), placeById(dropId), settings, hour, stopIds.map(placeById), waive);
+      return rideQuotes(options, placeById(pickupId), placeById(dropId), settings, rideTimeAt(at), stopIds.map(placeById), waive, seed.surgeRule);
     },
     async book({ optionId, pickupId, dropId, payment, scheduledFor, stopIds = [] }) {
       await wait(scheduledFor ? 900 : 2600); // "searching for drivers" only for ride-now
@@ -313,7 +317,8 @@ export const mockApi: QuikflyApi = {
       const quoted = input.quoteId ? quotesStore()[input.quoteId] : undefined;
       const quotedDeposit = quoted?.lines.find((l) => l.label === DEPOSIT_LINE)?.amount ?? 0;
       const busReq = quoted?.request?.service === "bus" ? quoted.request : null;
-      const creditsUsed = input.useCredits ? creditsUsable(settings, creditBalance(), afterCoupon, Math.min(quotedDeposit, afterCoupon)) : 0;
+      const room = rideDiscountRoom(settings, input.service, total) - (c?.discount ?? 0);
+      const creditsUsed = input.useCredits ? creditsUsable(settings, creditBalance(), afterCoupon, Math.min(quotedDeposit, afterCoupon), room) : 0;
       const amount = afterCoupon - creditsUsed;
       const deposit = Math.min(quotedDeposit, amount);
       const lines: [string, string][] = [

@@ -4,7 +4,7 @@
 // same functions the API quotes with (lib/fare-samples.ts). Nothing here saves anything.
 import { useEffect, useMemo, useState } from "react";
 import { Calculator } from "lucide-react";
-import { parseSurgeHours, type CatalogItem, type CatalogKind, type Settings } from "@quikfly/shared";
+import { WEEKDAYS, parseSurgeHours, rideTimeAt, type CatalogItem, type CatalogKind, type RideTime, type Settings, type SurgeRule } from "@quikfly/shared";
 import { adminApi } from "@/lib/api";
 import { cx, inr } from "@/lib/format";
 import { busSamples, groupSamples, rentSamples, rideSamples, tourSamples, withId, type Sample, type SampleCatalog } from "@/lib/fare-samples";
@@ -18,10 +18,10 @@ let catalogPromise: Promise<SampleCatalog> | null = null;
 /** The catalog rows samples need, loaded once per page visit (again after a failure). */
 export function loadSampleCatalog(): Promise<SampleCatalog> {
   if (catalogPromise) return catalogPromise;
-  const p = Promise.all([rows("place"), rows("rideOption"), rows("tour"), rows("rentalCar"), rows("travelVehicle"), rows("groupDestination")])
-    .then(([places, rideOptions, tours, cars, vehicles, destinations]) => ({
+  const p = Promise.all([rows("place"), rows("rideOption"), rows("tour"), rows("rentalCar"), rows("travelVehicle"), rows("groupDestination"), rows("surgeRule")])
+    .then(([places, rideOptions, tours, cars, vehicles, destinations, surgeRules]) => ({
       places: withId(places), rideOptions: withId(rideOptions), tours: withId(tours),
-      cars: withId(cars), vehicles: withId(vehicles), destinations: withId(destinations),
+      cars: withId(cars), vehicles: withId(vehicles), destinations: withId(destinations), surgeRules: withId(surgeRules),
     }));
   p.catch(() => { catalogPromise = null; });
   catalogPromise = p;
@@ -54,6 +54,15 @@ export function SampleRow({ s, isNew }: { s: Sample; isNew?: boolean }) {
   );
 }
 
+/** Weekday picker for ride samples (surge rules depend on the day). */
+export function DaySelect({ id, value, onChange }: { id: string; value: number; onChange: (d: number) => void }) {
+  return (
+    <select id={id} className="field" value={value} onChange={(e) => onChange(Number(e.target.value))}>
+      {WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+    </select>
+  );
+}
+
 /** India-time hour picker for ride samples (surge depends on the hour). */
 export function HourSelect({ id, value, onChange }: { id: string; value: number; onChange: (h: number) => void }) {
   return (
@@ -79,6 +88,7 @@ export function SettingsFarePreview({ kinds, now, draft }: { kinds: PreviewKind[
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [hour, setHour] = useState(() => firstSurgeHour(draft));
+  const [day, setDay] = useState(() => rideTimeAt(Date.now()).weekday);
   const [tourId, setTourId] = useState("");
   const [carId, setCarId] = useState("");
   const [vehicleId, setVehicleId] = useState("");
@@ -89,7 +99,7 @@ export function SettingsFarePreview({ kinds, now, draft }: { kinds: PreviewKind[
     if (kinds.includes("ride") && cat.places.length >= 2 && cat.rideOptions.length) {
       const a = cat.places.find((p) => p.id === from) ?? cat.places[0];
       const b = cat.places.find((p) => p.id === to) ?? cat.places[1];
-      out.push({ title: "Rides", rows: rideSamples(cat.rideOptions, a, b, hour, now, draft) });
+      out.push({ title: "Rides", rows: rideSamples(cat.rideOptions, a, b, { hour, weekday: day }, now, draft, cat.rideOptions, cat.surgeRules) });
     }
     if (kinds.includes("bus")) out.push({ title: "Bus", rows: busSamples(now, draft) });
     const tour = cat.tours.find((t) => t.id === tourId) ?? cat.tours[0];
@@ -99,7 +109,7 @@ export function SettingsFarePreview({ kinds, now, draft }: { kinds: PreviewKind[
     const v = cat.vehicles.find((x) => x.id === vehicleId) ?? cat.vehicles[0];
     if (kinds.includes("group") && v) out.push({ title: "Group travel", rows: groupSamples(v, cat.destinations[0], now, draft) });
     return out;
-  }, [cat, kinds, from, to, hour, tourId, carId, vehicleId, now, draft]);
+  }, [cat, kinds, from, to, hour, day, tourId, carId, vehicleId, now, draft]);
 
   return (
     <section className="card p-5" aria-labelledby="try-fare">
@@ -114,6 +124,7 @@ export function SettingsFarePreview({ kinds, now, draft }: { kinds: PreviewKind[
               <label className="grid gap-1 text-xs text-muted">From<ItemSelect id="tf-from" items={cat.places} value={from || cat.places[0].id} onChange={setFrom} label={(p) => p.name} /></label>
               <label className="grid gap-1 text-xs text-muted">To<ItemSelect id="tf-to" items={cat.places} value={to || cat.places[1].id} onChange={setTo} label={(p) => p.name} /></label>
               <label className="grid gap-1 text-xs text-muted">Pickup time (India)<HourSelect id="tf-hour" value={hour} onChange={setHour} /></label>
+              <label className="grid gap-1 text-xs text-muted">Day (surge rules)<DaySelect id="tf-day" value={day} onChange={setDay} /></label>
             </>
           )}
           {kinds.includes("tour") && cat.tours.length > 0 && <label className="grid gap-1 text-xs text-muted">Holiday<ItemSelect id="tf-tour" items={cat.tours} value={tourId || cat.tours[0].id} onChange={setTourId} label={(t) => t.title} /></label>}
@@ -132,7 +143,7 @@ export function SettingsFarePreview({ kinds, now, draft }: { kinds: PreviewKind[
 }
 
 /** Catalog kinds the edit form can preview. */
-export const PREVIEW_KINDS: CatalogKind[] = ["rideOption", "tour", "rentalCar", "travelVehicle"];
+export const PREVIEW_KINDS: CatalogKind[] = ["rideOption", "surgeRule", "tour", "rentalCar", "travelVehicle"];
 
 /**
  * Catalog edit form panel: the saved item vs the edited one (or just the new item), under
@@ -141,21 +152,30 @@ export const PREVIEW_KINDS: CatalogKind[] = ["rideOption", "tour", "rentalCar", 
 export function ItemFarePreview({ kind, original, edited }: { kind: CatalogKind; original: Record<string, unknown> | null; edited: Record<string, unknown> | null }) {
   const { cat, error } = useSampleCatalog();
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [hour, setHour] = useState(12);
+  const [hour, setHour] = useState(() => (kind === "surgeRule" ? 9 : 12));
+  const [day, setDay] = useState(() => rideTimeAt(Date.now()).weekday);
   useEffect(() => { adminApi.settings.get().then(setSettings, () => undefined); }, []);
 
   const rows = useMemo((): Sample[] | null => {
     if (!cat || !settings || !edited) return null;
     const after = { ...edited, id: "preview" } as never;
     const before = (original ? { ...original, id: "preview" } : after) as never;
+    const t: RideTime = { hour, weekday: day };
     switch (kind) {
-      case "rideOption": return cat.places.length >= 2 ? rideSamples([before], cat.places[0], cat.places[1], hour, settings, settings, [after]) : [];
+      case "rideOption": return cat.places.length >= 2 ? rideSamples([before], cat.places[0], cat.places[1], t, settings, settings, [after], cat.surgeRules) : [];
+      case "surgeRule": {
+        // Every ride type with the saved rules, then with this rule as edited (in place of its saved copy).
+        const id = String(edited.id);
+        const others = cat.surgeRules.filter((r) => r.id !== id);
+        const savedRule = cat.surgeRules.filter((r) => r.id === id);
+        return cat.places.length >= 2 ? rideSamples(cat.rideOptions, cat.places[0], cat.places[1], t, settings, settings, cat.rideOptions, [...others, ...savedRule], [...others, edited as unknown as SurgeRule]) : [];
+      }
       case "tour": return tourSamples(before, settings, settings, after);
       case "rentalCar": return rentSamples(before, settings, settings, after);
       case "travelVehicle": return groupSamples(before, cat.destinations[0], settings, settings, after);
       default: return null;
     }
-  }, [cat, settings, edited, original, kind, hour]);
+  }, [cat, settings, edited, original, kind, hour, day]);
 
   if (!PREVIEW_KINDS.includes(kind)) return null;
   return (
@@ -163,11 +183,12 @@ export function ItemFarePreview({ kind, original, edited }: { kind: CatalogKind;
       <h2 id="try-item" className="font-semibold text-strong flex items-center gap-2"><Calculator size={18} className="text-accent" /> Try a fare</h2>
       <p className="text-xs text-subtle mt-0.5">{original ? "What a customer pays now, and with your edits" : "What a customer would pay"}, with today&apos;s settings. Nothing is saved here.</p>
       {error && <p className="text-sm text-danger mt-3" role="alert">Couldn&apos;t load sample trips: {error}</p>}
-      {kind === "rideOption" && cat && cat.places.length >= 2 && (
-        <label className="grid gap-1 text-xs text-muted mt-3 sm:max-w-48">
-          Pickup time (India) · {cat.places[0].name} → {cat.places[1].name}
-          <HourSelect id="ti-hour" value={hour} onChange={setHour} />
-        </label>
+      {(kind === "rideOption" || kind === "surgeRule") && cat && cat.places.length >= 2 && (
+        <div className="grid gap-3 mt-3 sm:grid-cols-2">
+          <p className="text-xs text-muted sm:col-span-2">{cat.places[0].name} → {cat.places[1].name}</p>
+          <label className="grid gap-1 text-xs text-muted">Pickup time (India)<HourSelect id="ti-hour" value={hour} onChange={setHour} /></label>
+          <label className="grid gap-1 text-xs text-muted">Day<DaySelect id="ti-day" value={day} onChange={setDay} /></label>
+        </div>
       )}
       {!edited && <p className="text-sm text-muted mt-3">Fill in the price fields to see a fare.</p>}
       {edited && !rows && !error && <div className="skeleton h-12 mt-3" />}

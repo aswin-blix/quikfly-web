@@ -192,6 +192,29 @@ export interface RideOption {
   models: string[];
   /** "women": only women riders see and book it, and a woman captain drives (B8). Missing = everyone. */
   riders?: "everyone" | "women";
+  /** The fare never goes below this (₹, before surge and night charge); missing or 0 = no minimum. State fare cards set one. */
+  minFare?: number | null;
+  /** Kilometres covered by the base fare before per-km applies (MVAG 2025: 3 km); missing or 0 = none. */
+  includedKm?: number | null;
+  /** Average speed for this type (km/h), which sets the billed minutes; missing = RIDE_SIM.speedKmh for its service. */
+  speedKmh?: number | null;
+}
+
+/**
+ * A surge rule (catalog kind "surgeRule"): a multiplier for some ride types on some days and
+ * hours. The highest matching rule, or the everyday surge in Settings, applies, never above
+ * `surgeCap`. Lets staff surge cabs without surging bikes, or set weekend hours.
+ */
+export interface SurgeRule {
+  id: string;
+  name: string;
+  /** Which ride types: every type, bikes (not autos), autos, or cabs. */
+  appliesTo: "all" | "bike" | "auto" | "cab";
+  /** India-time weekdays it runs on. */
+  days: ("Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun")[];
+  /** Inclusive India-time hour ranges, "8-10, 17-20" (the same format as Settings.surgeHours). */
+  hours: string;
+  multiplier: number;
 }
 
 /** A driver on the roster (catalog). A booked ride gets one, plus a vehicle and plate. */
@@ -239,6 +262,8 @@ export interface FareQuote {
   surge: number;
   /** ₹ the rider's QuikFly Pass took off this fare (the surge it waived); absent or 0 = none. */
   passSaving?: number;
+  /** ₹ of night charge inside `fare` (Settings.rideNightPercent during rideNightHours); absent or 0 = none. Shown to the rider. */
+  nightCharge?: number;
 }
 
 export interface Driver {
@@ -538,6 +563,8 @@ export interface AppConfig {
   groupDestinations: GroupDestination[];
   offers: Offer[];
   faqs: Faq[];
+  /** Visible surge rules (ride types, days, hours, multiplier); missing from APIs before 2026-11-20, so read it as `?? []`. */
+  surgeRules?: SurgeRule[];
 }
 
 /** Body of POST /bookings. The amount comes from the quote (or the ride), never the client. */

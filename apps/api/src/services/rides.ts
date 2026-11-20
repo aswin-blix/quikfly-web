@@ -1,5 +1,4 @@
-import { FEATURE_OFF, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIM, isWomenOnly, localToIso, minutesUntilStart, pick, rideQuotes, scheduleError, switchError, type FareQuote, type PaymentMethod, type Place, type Ride, type RideOption, type Settings } from "@quikfly/shared";
-import { businessHour } from "../config";
+import { FEATURE_OFF, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIM, isWomenOnly, localToIso, minutesUntilStart, pick, rideQuotes, rideTimeAt, scheduleError, switchError, type FareQuote, type PaymentMethod, type Place, type Ride, type RideOption, type Settings } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visible, visibleById } from "./catalog";
@@ -21,17 +20,18 @@ export async function quoteRides(
   const off = switchError(await getSettings(db), { service, scheduledFor, stopCount: stopIds.length });
   if (off) throw conflict(off);
   const stops = await rideStops(db, pickupId, dropId, stopIds);
-  const [a, b, options, settings] = await Promise.all([
-    placeById(db, pickupId), placeById(db, dropId), visible(db, "rideOption"), getSettings(db),
+  const [a, b, options, settings, rules] = await Promise.all([
+    placeById(db, pickupId), placeById(db, dropId), visible(db, "rideOption"), getSettings(db), visible(db, "surgeRule"),
   ]);
   if (scheduledFor) {
     const err = scheduleError(settings, scheduledFor);
     if (err) throw badRequest(err);
   }
-  const hour = scheduledFor ? parseInt(scheduledFor.slice(11, 13), 10) : businessHour();
-  const waive = !!userId && await passCoversAt(db, userId, new Date(scheduledFor ? localToIso(scheduledFor) : Date.now()).toISOString());
+  // Priced at the pickup time (India): hour for surge and night hours, weekday for surge rules.
+  const at = scheduledFor ? Date.parse(localToIso(scheduledFor)) : Date.now();
+  const waive = !!userId && await passCoversAt(db, userId, new Date(at).toISOString());
   const forRider = await ridesFor(db, settings, options.filter((o) => o.service === service), userId);
-  return rideQuotes(forRider, a, b, settings, hour, stops, waive);
+  return rideQuotes(forRider, a, b, settings, rideTimeAt(at), stops, waive, rules);
 }
 
 /** Women-only ride types (B8) are offered only to signed-in women riders, while the feature is on. */

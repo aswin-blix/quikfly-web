@@ -121,7 +121,7 @@ export const mockAccount: QuikflyApi["account"] = {
   async buyPass() {
     await wait(500);
     const s = DEFAULT_SETTINGS;
-    const off = passSaleError(s);
+    const off = passSaleError(s, CATALOG_SEED.surgeRule);
     if (off) fail(off);
     const u = currentUser();
     if (u.walletBalance < s.passPrice) fail(`${PASS_NAME} costs ₹${s.passPrice.toLocaleString("en-IN")} and your wallet has ₹${u.walletBalance.toLocaleString("en-IN")}.`);

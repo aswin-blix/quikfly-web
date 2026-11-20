@@ -3,17 +3,19 @@
 // panel's list and edit forms, and the seed copied into D1. To add a field: add it to the
 // type in types.ts, here, and to the seed in catalog.ts.
 import type { Permission } from "./admin";
+import { HOUR_RANGES, hourRangesError } from "./settings";
 import {
   BUS_OPERATORS, CITIES, DEPARTURES, DRIVERS, FAQS, GROUP_DESTINATIONS, OFFERS, PLACES, POPULAR_ROUTES, RENTAL_CARS, RIDE_OPTIONS, TOURS, TRAVEL_VEHICLES,
 } from "./catalog";
 import type {
-  BusOperator, City, DriverProfile, Faq, GroupDestination, Offer, Place, PopularRoute, RentalCar, RideOption, TourDeparture, TourPackage, TravelVehicle,
+  BusOperator, City, DriverProfile, Faq, GroupDestination, Offer, Place, PopularRoute, RentalCar, RideOption, SurgeRule, TourDeparture, TourPackage, TravelVehicle,
 } from "./types";
 import { FAQ_CATEGORIES } from "./types";
 
 export interface CatalogItemMap {
   place: Place;
   rideOption: RideOption;
+  surgeRule: SurgeRule;
   driver: DriverProfile;
   city: City;
   busOperator: BusOperator;
@@ -95,7 +97,7 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
   },
   rideOption: {
     label: "Ride types and fares", singular: "ride type", group: "Rides", idPrefix: "ro", permission: "catalog.edit",
-    description: "Bike, auto and cab types with their fares. Fare = base + per km + per minute, times surge.",
+    description: "Bike, auto and cab types with their fares. Fare = base + per km (after any included km) + per minute, at least the minimum fare, times surge, plus any night charge.",
     fields: [
       name(), { key: "service", label: "Service", type: "select", options: ["bike", "car"], hint: '"bike" also covers autos' },
       { key: "description", label: "Description", type: "text", maxLength: 120 },
@@ -105,8 +107,29 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
       { key: "perMin", label: "Per minute", type: "number", min: 0, max: 10, hint: "In rupees, up to ₹10", pricing: true },
       { key: "models", label: "Vehicle models", type: "list", maxLength: 60, hint: "One per line; a driver arrives in one of these" },
       { key: "riders", label: "Riders", type: "select", options: ["everyone", "women"], optional: true, hint: '"women": only women riders see it, and a woman captain drives' },
+      { key: "minFare", label: "Minimum fare", type: "int", min: 0, max: 2000, optional: true, pricing: true, hint: "In rupees, before surge and night charge. Empty or 0 = no minimum (state fare cards set one, e.g. ₹100)" },
+      { key: "includedKm", label: "Km in the base fare", type: "number", min: 0, max: 20, optional: true, pricing: true, hint: "Per km starts after this distance (MVAG 2025: 3 km). Empty = per km from the start" },
+      { key: "speedKmh", label: "Average speed", type: "int", min: 5, max: 80, optional: true, pricing: true, hint: "km/h; sets the billed minutes. Empty = 24 for bikes and autos, 20 for cabs" },
     ],
-    title: (d) => String(d.name), detail: (d) => `${d.service === "car" ? "Cab" : "Bike/auto"} · ${inr(d.baseFare)} + ${inr(d.perKm)}/km + ${inr(d.perMin)}/min`,
+    title: (d) => String(d.name),
+    detail: (d) => `${d.service === "car" ? "Cab" : "Bike/auto"} · ${inr(d.baseFare)}${d.includedKm ? ` incl. ${d.includedKm} km` : ""} + ${inr(d.perKm)}/km + ${inr(d.perMin)}/min${d.minFare ? ` · min ${inr(d.minFare)}` : ""}`,
+  },
+  surgeRule: {
+    label: "Surge rules", singular: "surge rule", group: "Rides", idPrefix: "sr", permission: "catalog.edit",
+    description: "Surge for some ride types on some days and hours, e.g. cabs Mon–Fri 8–10 ×1.3. The highest matching rule or the everyday surge (Settings) applies, never above the surge cap.",
+    fields: [
+      name(),
+      { key: "appliesTo", label: "Ride types", type: "select", options: ["all", "bike", "auto", "cab"], pricing: true, hint: '"bike" means bikes (not autos)' },
+      { key: "days", label: "Days", type: "multiselect", options: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], pricing: true },
+      { key: "hours", label: "Hours", type: "text", maxLength: 60, pattern: HOUR_RANGES, pricing: true, hint: 'India time, inclusive ranges like "8-10, 17-20" (8-10 covers 08:00–10:59)' },
+      { key: "multiplier", label: "Multiplier", type: "number", min: 1, max: 2, pricing: true, hint: "1 to 2; the surge cap in Settings still applies" },
+    ],
+    title: (d) => String(d.name),
+    detail: (d) => {
+      const days = d.days as string[];
+      const when = days.length === 7 ? "Every day" : days.join(",") === "Mon,Tue,Wed,Thu,Fri" ? "Mon–Fri" : days.join(",") === "Sat,Sun" ? "Weekends" : days.join(", ");
+      return `${d.appliesTo === "all" ? "All ride types" : d.appliesTo === "cab" ? "Cabs" : d.appliesTo === "auto" ? "Autos" : "Bikes"} · ${when} · ${d.hours} · ×${d.multiplier}`;
+    },
   },
   driver: {
     label: "Drivers", singular: "driver", group: "Rides", idPrefix: "d", permission: "catalog.edit",
@@ -240,7 +263,7 @@ export const isCatalogKind = (k: string): k is CatalogKind => k in CATALOG_DEFS;
 
 /** The seed copied into D1 on first use and by "reset catalog". */
 export const CATALOG_SEED: { [K in CatalogKind]: CatalogItemMap[K][] } = {
-  place: PLACES, rideOption: RIDE_OPTIONS, driver: DRIVERS, city: CITIES, busOperator: BUS_OPERATORS,
+  place: PLACES, rideOption: RIDE_OPTIONS, surgeRule: [], driver: DRIVERS, city: CITIES, busOperator: BUS_OPERATORS,
   popularRoute: POPULAR_ROUTES, tour: TOURS, departure: DEPARTURES, rentalCar: RENTAL_CARS, travelVehicle: TRAVEL_VEHICLES,
   groupDestination: GROUP_DESTINATIONS, offer: OFFERS, faq: FAQS,
 };
@@ -306,6 +329,8 @@ export function validateCatalogData(kind: CatalogKind, input: unknown, id: strin
     }
   }
   if (kind === "popularRoute" && String(out.from).toLowerCase() === String(out.to).toLowerCase()) return { error: "From and To must be different." };
+  if (kind === "surgeRule" && (!String(out.hours).trim() || hourRangesError(String(out.hours)))) return { error: 'Hours must be ranges from 0 to 23 with the start before the end, like "8-10, 17-20". Split a window over midnight: "22-23, 0-2".' };
+  if (kind === "rideOption" && out.minFare && (out.minFare as number) <= (out.baseFare as number)) return { error: "The minimum fare is below the base fare, so it never applies. Raise it or leave it empty." };
   return { data: out };
 }
 
@@ -313,7 +338,7 @@ export function validateCatalogData(kind: CatalogKind, input: unknown, id: strin
 export const kindHasPricing = (kind: CatalogKind) => CATALOG_DEFS[kind].fields.some((f) => f.pricing);
 
 /** Offers: showing or hiding one turns a discount on or off, so it needs "pricing.edit" too. */
-export const ACTIVE_IS_PRICING: readonly CatalogKind[] = ["offer"];
+export const ACTIVE_IS_PRICING: readonly CatalogKind[] = ["offer", "surgeRule"];
 
 const sameValue = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 

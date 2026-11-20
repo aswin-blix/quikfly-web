@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useHideBottomNav } from "./BottomNav";
 import { ArrowUpDown, Clock, Coins, MapPin, Navigation, Phone, Plus, Share2, Siren, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { PASS_NAME, RIDE_CANCEL_REASONS, autoSharesAt, isWomenOnly, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, creditsEarned, creditsUsable, effectiveSurge, passSaleError, rideCancelFee, withTerms } from "@quikfly/shared";
+import { PASS_NAME, RIDE_CANCEL_REASONS, autoSharesAt, isWomenOnly, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, creditsEarned, creditsUsable, effectiveSurge, passSaleError, rideCancelFee, rideDiscountRoom, hourRangesText, withTerms } from "@quikfly/shared";
 import type { BookingTerms, FareQuote, PaymentMethod, Place, Ride, RideCancelReason, SavedPlace } from "@quikfly/shared";
 import { trackUrl } from "@/lib/account";
 import { Link } from "@/lib/nav";
@@ -42,6 +42,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   resume?: { rideId: string; bookingId: string };
 }) {
   const PLACES = useConfig()?.places ?? [];
+  const surgeRules = useConfig()?.surgeRules ?? [];
   const { user, requireAuth, refreshBookings, toast } = useApp();
   const [pickup, setPickup] = useState<Place | null>(null);
   const [drop, setDrop] = useState<Place | null>(null);
@@ -58,6 +59,8 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placesReady]);
   const [quotes, setQuotes] = useState<FareQuote[] | null>(null);
+  /** The highest surge in the current quotes (surge rules can differ by ride type). */
+  const topSurge = quotes?.length ? Math.max(...quotes.map((q) => q.surge)) : 1;
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [selected, setSelected] = useState<string>("");
   const [payment, setPayment] = useState<PaymentMethod>("upi");
@@ -183,7 +186,8 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   }
 
   // Credits: the same rule the API applies at booking.
-  const creditsCanPay = user && quote ? creditsUsable(settings, user.creditBalance, quote.fare) : 0;
+  // A ride fare keeps its discount floor (Settings.rideMaxDiscountPercent), like the API.
+  const creditsCanPay = user && quote ? creditsUsable(settings, user.creditBalance, quote.fare, 0, rideDiscountRoom(settings, service, quote.fare)) : 0;
   const creditsOff = useCredits ? creditsCanPay : 0;
   const payable = quote ? quote.fare - creditsOff : 0;
   const earns = quote ? creditsEarned(settings, service, payable) : 0;
@@ -323,12 +327,18 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
             {quotes && !loadingQuotes && (
               <div className="space-y-2">
                 <p className="label">Choose a ride · {quotes[0].distanceKm} km · ~{quotes[0].durationMin} min</p>
-                {quotes[0].surge > 1 && (
+                {topSurge > 1 && (
                   <p className="text-xs text-warning border border-warning/30 bg-warning/10 rounded-lg px-3 py-2" role="note">
-                    Busy hours: these fares include a ×{quotes[0].surge} surge (never more than ×{settings.surgeCap}). Surge hours today: {settings.surgeHours}.
-                    {!passSaleError(settings) && (
+                    Busy hours: {quotes.every((q) => q.surge === topSurge) ? `these fares include a ×${topSurge} surge` : `some fares include a surge of up to ×${topSurge}, shown on each ride`} (never more than ×{settings.surgeCap}).
+                    {!surgeRules.length && settings.surgeHours && <> Surge hours today: {settings.surgeHours}.</>}
+                    {!passSaleError(settings, surgeRules) && (
                       <> <Link href="/account?tab=wallet#pass" className="underline font-medium">Skip surge with {PASS_NAME}</Link> ({inr(settings.passPrice)} for {settings.passDays} days).</>
                     )}
+                  </p>
+                )}
+                {quotes.some((q) => q.nightCharge) && (
+                  <p className="text-xs text-muted border border-line rounded-lg px-3 py-2" role="note">
+                    Night fares: {settings.rideNightPercent}% is added {hourRangesText(settings.rideNightHours ?? "")} (India time), shown on each ride.
                   </p>
                 )}
                 {!!quotes[0].passSaving && (
@@ -351,6 +361,8 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
                     <div className="text-right">
                       <p className="font-bold text-lg">{inr(q.fare)}</p>
                       {!!q.passSaving && <p className="text-[11px] text-success">−{inr(q.passSaving)} surge</p>}
+                      {q.surge > 1 && topSurge > 1 && !quotes.every((x) => x.surge === topSurge) && <p className="text-[11px] text-warning">×{q.surge} surge</p>}
+                      {!!q.nightCharge && <p className="text-[11px] text-muted">incl. {inr(q.nightCharge)} night</p>}
                     </div>
                   </motion.button>
                 ))}

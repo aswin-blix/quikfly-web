@@ -37,7 +37,7 @@ apps/mobile/      Flutter Android apps (read apps/mobile/README.md): the custome
 packages/shared/i18n/ app_en.arb (template), app_ta.arb, app_hi.arb: UI strings for the website (useT()) and both apps (L.of(context))
 brand/           quikfly-logo.svg: the one logo. After changing it run `node scripts/logo.mjs` (copies to web/admin, renders the app PNG)
 packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation patterns, limits),
-                  catalog.ts (SEED data only) + catalog-kinds.ts (13 kinds, fields, validation), settings.ts
+                  catalog.ts (SEED data only) + catalog-kinds.ts (14 kinds, fields, validation), settings.ts
                   (runtime Settings, defaults, rules), pricing.ts (all price maths + bus/ride simulation),
                   cancellation.ts (refund tiers per service: the API applies them, the apps preview them),
                   admin.ts (roles, PERMISSIONS, admin shapes), support.ts (support topics, callback times, limits, whatsappLink), rental.ts (self-drive checklist, extensions, deposit settlement),

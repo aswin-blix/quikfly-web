@@ -60,6 +60,14 @@ export interface Settings {
 
   /** Waiting time allowed at each extra stop (minutes), added to the trip time and charged at the per-minute rate. */
   rideStopMinutes: number;
+  /** Minutes billed for the driver reaching the pickup, at the per-minute rate. 0 = none (MVAG 2025 covers dead mileage in the base fare). */
+  rideBilledPickupMinutes: number;
+  /** Night charge on ride fares during rideNightHours (% of the fare). 0 = none, until a state's notified tariff says otherwise. */
+  rideNightPercent: number;
+  /** Night hours in India time, inclusive ranges like Settings.surgeHours: "22-23, 0-5". */
+  rideNightHours: string;
+  /** Coupons and credits together can take at most this % off a ride fare (MVAG 2025: 50% below the base fare; Maharashtra 25%). 100 = no limit. */
+  rideMaxDiscountPercent: number;
 
   /** Scheduled rides: how soon (minutes) and how far ahead (days) a pickup can be booked. */
   rideScheduleMinMinutes: number;
@@ -207,6 +215,10 @@ export const DEFAULT_SETTINGS: Settings = {
   rideCancelFeeCap: 100,
   rideCancelFreeMinutes: 2,
   rideStopMinutes: 3,
+  rideBilledPickupMinutes: 3,
+  rideNightPercent: 0,
+  rideNightHours: "22-23, 0-5",
+  rideMaxDiscountPercent: 100,
   rideScheduleMinMinutes: 30,
   rideScheduleMaxDays: 30,
   rideScheduleFreeCancelMinutes: 60,
@@ -283,7 +295,9 @@ type Rule =
 
 const money = (max: number): Rule => ({ type: "number", min: 0, max, integer: true });
 const percent: Rule = { type: "number", min: 0, max: 100, integer: true };
-const SURGE_HOURS = /^\s*$|^\s*\d{1,2}\s*-\s*\d{1,2}(\s*,\s*\d{1,2}\s*-\s*\d{1,2})*\s*$/;
+/** Inclusive hour ranges "8-10, 17-20", or empty (surge hours, night hours, surge rules). */
+export const HOUR_RANGES = /^\s*$|^\s*\d{1,2}\s*-\s*\d{1,2}(\s*,\s*\d{1,2}\s*-\s*\d{1,2})*\s*$/;
+const SURGE_HOURS = HOUR_RANGES;
 const cancelPolicy: Rule = { type: "text", max: 80, pattern: CANCEL_POLICY_PATTERN, hint: CANCEL_POLICY_HINT };
 
 /** Allowed values per setting. The API refuses anything else. */
@@ -317,6 +331,10 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   rideCancelFeeCap: money(1000),
   rideCancelFreeMinutes: { type: "number", min: 0, max: 30, integer: true },
   rideStopMinutes: { type: "number", min: 0, max: 15, integer: true },
+  rideBilledPickupMinutes: { type: "number", min: 0, max: 10, integer: true },
+  rideNightPercent: { type: "number", min: 0, max: 100, integer: true },
+  rideNightHours: { type: "text", max: 60, pattern: HOUR_RANGES, hint: 'Hour ranges like "22-23, 0-5" (0–23), or empty for no night hours.' },
+  rideMaxDiscountPercent: { type: "number", min: 0, max: 100, integer: true },
   rideScheduleMinMinutes: { type: "number", min: 5, max: 240, integer: true },
   rideScheduleMaxDays: { type: "number", min: 1, max: 90, integer: true },
   rideScheduleFreeCancelMinutes: { type: "number", min: 0, max: 1440, integer: true },
@@ -399,7 +417,8 @@ export function checkSetting(key: string, value: unknown): string | null {
   if (value.length > rule.max) return `"${key}" is too long (max ${rule.max}).`;
   if (rule.min && value.trim().length < rule.min) return `"${key}" is too short.`;
   if (rule.pattern && !rule.pattern.test(value)) return rule.hint ?? `"${key}" isn't in the right format.`;
-  if (key === "surgeHours" && parseSurgeHours(value).some(([a, b]) => a > 23 || b > 23 || a > b)) return "Surge hours must be 0–23 with the start before the end.";
+  if (key === "surgeHours" && hourRangesError(value)) return "Surge hours must be 0–23 with the start before the end.";
+  if (key === "rideNightHours" && hourRangesError(value)) return 'Night hours must be 0–23 with the start before the end; split a window over midnight, like "22-23, 0-5".';
   if (key.startsWith("cancelPolicy")) return checkCancelPolicy(value);
   return null;
 }
@@ -432,6 +451,16 @@ export const effectiveSurge = (settings: Settings) => Math.max(1, Math.min(setti
 export function parseSurgeHours(s: string): [number, number][] {
   return s.split(",").map((p) => p.trim()).filter(Boolean).map((p) => p.split("-").map((n) => parseInt(n, 10)) as [number, number]);
 }
+
+/** True when hour ranges (already matching HOUR_RANGES) go past 23 or run backwards. */
+export const hourRangesError = (s: string) => parseSurgeHours(s).some(([a, b]) => a > 23 || b > 23 || a > b);
+
+/** Hour ranges as customers read them: "22-23, 0-5" → "22:00–23:59, 00:00–05:59". */
+export const hourRangesText = (s: string) =>
+  parseSurgeHours(s).map(([a, b]) => `${String(a).padStart(2, "0")}:00–${String(b).padStart(2, "0")}:59`).join(", ");
+
+/** Is `hour` (0–23) inside any of the ranges? */
+export const inHourRanges = (s: string, hour: number) => parseSurgeHours(s).some(([from, to]) => hour >= from && hour <= to);
 
 /** The self-drive documents list ("a; b; c" → ["a", "b", "c"]). */
 export const rentDocumentList = (settings: Settings) => settings.rentDocuments.split(";").map((s) => s.trim()).filter(Boolean);

@@ -396,6 +396,51 @@ await expect("restore ride settings", call("PATCH", "/admin/settings", {
   rideCancelFreeMinutes: s0.rideCancelFreeMinutes, rideCancelFeePercent: s0.rideCancelFeePercent, rideCancelFeeCap: s0.rideCancelFeeCap,
 }, T), 200, (j) => j.surgeMultiplier === s0.surgeMultiplier && j.rideCancelFreeMinutes === s0.rideCancelFreeMinutes);
 
+// ── Ride pricing that fits state rules (pricing step 6): surge rules, minimum fare and included km,
+// night charge, the discount floor. Everything is put back in `finally`, even on a crash (this also runs on production).
+{
+  const quote = (service = "car") => call("POST", "/rides/quote", { service, pickupId: places[0].id, dropId: places[1].id });
+  const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  await expect("a surge rule needs valid hours", call("POST", "/admin/catalog/surgeRule", { data: { name: "Bad", appliesTo: "cab", days: ["Mon"], hours: "20-8", multiplier: 1.3 } }, T), 400);
+  await expect("a surge rule can't go above ×2", call("POST", "/admin/catalog/surgeRule", { data: { name: "Bad", appliesTo: "cab", days: ["Mon"], hours: "8-10", multiplier: 2.5 } }, T), 400);
+  const rule = await expect("create a surge rule: cabs, every day, all day, ×1.9", call("POST", "/admin/catalog/surgeRule", { data: { name: "Smoke cab surge", appliesTo: "cab", days: day, hours: "0-23", multiplier: 1.9 } }, T), 201);
+  const minType = await expect("create a ride type with a minimum fare and included km", call("POST", "/admin/catalog/rideOption", { data: {
+    name: "Smoke Min", service: "bike", description: "Smoke test", seats: 1, baseFare: 10, perKm: 1, perMin: 0, models: ["Test"], minFare: 1500, includedKm: 3, speedKmh: 30,
+  } }, T), 201);
+  await expect("a minimum fare below the base fare is refused", call("POST", "/admin/catalog/rideOption", { data: {
+    name: "Smoke Bad", service: "car", description: "Smoke", seats: 4, baseFare: 100, perKm: 10, perMin: 1, models: ["Test"], minFare: 50,
+  } }, T), 400);
+  try {
+    await eventually("the surge rule reaches GET /config", () => call("GET", "/config"), (r) => (r.json?.surgeRules ?? []).some((x) => x.id === rule?.id));
+    await eventually("cab quotes take the rule's surge (up to the cap)", quote, (r) => r.status === 200 && r.json.every((q) => q.surge === Math.min(1.9, s0.surgeCap)));
+    await expect("bike quotes don't", quote("bike"), 200, (j) => j.every((q) => q.surge !== 1.9 || s0.surgeMultiplier === 1.9));
+    await eventually("the minimum fare applies (before surge)", () => quote("bike"), (r) => {
+      const q = r.json?.find?.((x) => x.option.id === minType?.id);
+      return !!q && q.fare === Math.round(1500 * q.surge) + (q.nightCharge ?? 0);
+    });
+    await expect("night charge 20% all day", call("PATCH", "/admin/settings", { rideNightPercent: 20, rideNightHours: "0-23" }, T), 200, (j) => j.rideNightPercent === 20);
+    await expect("night hours must not run backwards", call("PATCH", "/admin/settings", { rideNightHours: "22-5" }, T), 400);
+    await eventually("quotes add and show the night charge", quote, (r) => r.status === 200 && r.json.every((q) => q.nightCharge > 0 && q.nightCharge === Math.round(((q.fare - q.nightCharge) * 20) / 100)));
+    // Discount floor: a 50% coupon on a ride gives only what the 10% limit allows.
+    await expect("rides can be discounted at most 10%", call("PATCH", "/admin/settings", { rideMaxDiscountPercent: 10 }, T), 200);
+    const floorOffer = await expect("create a 50% ride coupon", call("POST", "/admin/catalog/offer", { data: {
+      code: "smokefloor", title: "Smoke floor", description: "Test", service: "car", percent: 50, maxDiscount: 1000, minAmount: 0, validUntil: "", perUserLimit: "", hue: 10,
+    } }, T), 201);
+    const r1 = (await call("POST", "/rides", { optionId: "mini", pickupId: places[0].id, dropId: places[1].id, payment: "cash" }, C2)).json;
+    await eventually("the coupon stops at the discount floor", () => call("POST", "/offers/check", { code: "SMOKEFLOOR", rideId: r1?.id }, C2),
+      (r) => r.status === 200 && r.json.discount === Math.floor((r1.quote.fare * 10) / 100));
+    if (r1) await call("POST", `/rides/${r1.id}/cancel`, null, C2);
+    if (floorOffer) await call("DELETE", `/admin/catalog/offer/${floorOffer.id}`, null, T);
+  } finally {
+    if (rule) await call("DELETE", `/admin/catalog/surgeRule/${rule.id}`, null, T);
+    if (minType) await call("DELETE", `/admin/catalog/rideOption/${minType.id}`, null, T);
+    await expect("restore night and discount settings", call("PATCH", "/admin/settings", {
+      rideNightPercent: s0.rideNightPercent, rideNightHours: s0.rideNightHours, rideMaxDiscountPercent: s0.rideMaxDiscountPercent,
+    }, T), 200, (j) => j.rideNightPercent === s0.rideNightPercent && j.rideMaxDiscountPercent === s0.rideMaxDiscountPercent);
+  }
+  await eventually("quotes are back to normal", quote, (r) => r.status === 200 && r.json.every((q) => !q.nightCharge && q.surge !== 1.9 || s0.surgeMultiplier === 1.9));
+}
+
 // ── Licence reviews ── (the customer's licence is pending from the settings test above)
 await expect("GET /admin/licences lists pending first", call("GET", "/admin/licences", null, T), 200, (j) => j.some((l) => l.customer.id === cMe.id && l.status === "pending" && l.number));
 await expect("reject needs a reason", call("POST", `/admin/licences/${cMe.id}/reject`, { reason: "no" }, T), 400);
