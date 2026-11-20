@@ -8,7 +8,7 @@ import { badRequest } from "../../lib/errors";
 import { bearerToken } from "../../middleware/auth";
 import { requireAdmin } from "../../middleware/admin";
 import { jsonBody, str } from "../../lib/validate";
-import { audit, listAudit } from "../../services/admin/audit";
+import { auditStatement, listAudit } from "../../services/admin/audit";
 import { adminLogin, endAdminSession } from "../../services/admin/auth";
 import { dashboardStats } from "../../services/admin/stats";
 import { getSettings, updateSettings } from "../../services/settings";
@@ -56,12 +56,12 @@ export const admin = new Hono<AppEnv>()
   .patch("/settings", requireAdmin("settings.edit"), async (c) => {
     const patch = settingsPatch(await jsonBody(c));
     const before = await getSettings(c.env.DB);
-    const after = await updateSettings(c.env.DB, patch);
     const changed = Object.keys(patch) as (keyof Settings)[];
-    await audit(c.env.DB, {
+    // The audit row is written in the same batch as the change (AGENTS.md rule 4).
+    const after = await updateSettings(c.env.DB, patch, [auditStatement(c.env.DB, {
       adminId: c.var.admin.id, action: "settings.update", entity: "settings",
-      detail: { before: Object.fromEntries(changed.map((k) => [k, before[k]])), after: Object.fromEntries(changed.map((k) => [k, after[k]])) },
-    });
+      detail: { before: Object.fromEntries(changed.map((k) => [k, before[k]])), after: Object.fromEntries(changed.map((k) => [k, patch[k]])) },
+    })]);
     return c.json(after);
   })
 

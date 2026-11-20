@@ -14,7 +14,7 @@ import { Link, qs } from "@/lib/nav";
 import { serviceByKey, SERVICES } from "@/lib/services";
 import { ANDROID_APP } from "@/lib/site";
 import { useApp } from "@/components/AppProvider";
-import { useConfig } from "@/components/ConfigProvider";
+import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { useTours } from "@/components/catalog-hooks";
 import { useOpenServices, useServiceOn } from "@/components/ServiceGate";
 
@@ -176,6 +176,7 @@ function Offers() {
 
 function Popular() {
   const TOURS = useTours() ?? [];
+  const settings = useSettings();
   const POPULAR_ROUTES = (useConfig()?.popularRoutes ?? []).map((r) => [r.from, r.to] as [string, string]);
   return (
     <section className="max-w-7xl mx-auto px-4 py-12 grid lg:grid-cols-2 gap-8">
@@ -202,7 +203,7 @@ function Popular() {
               <Link key={t.id} href={`/holidays/${t.slug}`} className="on-media group relative rounded-xl overflow-hidden aspect-[4/3]">
                 <SceneArt tour={t} className="absolute inset-0 w-full h-full transition-transform duration-700 group-hover:scale-110" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-                <div className="absolute bottom-0 p-3"><p className="text-sm font-semibold leading-tight">{t.title}</p><p className="text-xs text-gold">from {inr(t.price)}</p></div>
+                <div className="absolute bottom-0 p-3"><p className="text-sm font-semibold leading-tight">{t.title}</p><p className="text-xs text-gold">from {inr(t.price)}{settings.gstTours ? " + GST" : ""}</p></div>
               </Link>
             ))}
           </div>

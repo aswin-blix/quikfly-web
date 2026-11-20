@@ -60,7 +60,7 @@ class _BusScreenState extends ConsumerState<BusScreen> {
           final to = _to ?? cities.firstWhere((x) => x != from, orElse: () => '');
           final faqs = cfg.faqs.where((f) => f.category == 'Bus' || f.category == 'Payments').toList();
           return ScreenList(children: [
-            Text('2,500+ operators, live seat maps, women-only seats and instant refunds.', style: TextStyle(color: c.fgMuted)),
+            Text('Live seat maps, women-first seating and instant wallet refunds.', style: TextStyle(color: c.fgMuted)),
             const SizedBox(height: 14),
             Panel(
               highlighted: true,

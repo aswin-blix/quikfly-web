@@ -86,6 +86,8 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "rentUnlimitedKmExtraPercent", type: "number", unit: "%", label: "Unlimited km extra", help: "How much more the unlimited-km self-drive plan costs." },
       { key: "rentProtectionStandardPerDay", type: "number", unit: "₹", label: "Standard protection per day", help: "Self-drive damage protection." },
       { key: "rentProtectionPeacePerDay", type: "number", unit: "₹", label: "Peace-of-mind protection per day", help: "Self-drive damage protection with a lower excess." },
+      { key: "rentExcessStandard", type: "number", unit: "₹", label: "Standard protection: most the customer pays for damage", help: "Shown on the car page (\"You pay up to ₹X for damage\") and kept with each booking; staff can't deduct more damage than this. Changes apply to new bookings." },
+      { key: "rentExcessPeace", type: "number", unit: "₹", label: "Peace-of-mind protection: most the customer pays for damage", help: "Usually lower than Standard. Kept with each booking; changes apply to new bookings." },
       { key: "rentDoorstepFee", type: "number", unit: "₹", label: "Doorstep delivery fee", help: "Delivery and collection at the customer's address." },
       { key: "rentDeposit", type: "number", unit: "₹", label: "Self-drive deposit", help: "Refundable deposit added to self-drive bookings. 0 removes it. Always refunded on cancel; refunded on 'Mark completed'." },
       { key: "rentDepositRefundHours", type: "number", unit: "hrs", label: "Deposit back within", help: "What customers are told: how soon after the return staff check the car and mark the booking completed." },

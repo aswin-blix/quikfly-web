@@ -278,7 +278,8 @@ await expect("restore the rent policy", call("PATCH", "/admin/settings", { cance
   await expect("customer returns the car (200 km, 2/8 less fuel)", call("POST", `${path}/return`, { odometerKm: 30200, fuel: 6 }, C2), 200, (j) => j.state === "returned");
   await expect("dashboard counts returns to settle", call("GET", "/admin/stats?days=1", null, T), 200, (j) => j.queues.returnsToSettle >= 1);
   await expect("staff see the rental with photos", call("GET", `/admin/bookings/${rb.id}/rental`, null, T), 200,
-    (j) => j.state === "returned" && j.photos.return.length === 5 && j.customerName && j.pickup.odometerKm === 30000);
+    (j) => j.state === "returned" && j.photos.return.length === 5 && j.customerName && j.pickup.odometerKm === 30000
+      && j.damageExcess === s0.rentExcessStandard);
   const photo = await fetch(`${BASE}/admin/bookings/${rb.id}/rental/photos/pickup/odometer`, { headers: { Authorization: `Bearer ${T}` } });
   check("staff can open a checklist photo", photo.status === 200);
   const extraKm = Math.max(0, 200 - s0.rentLimitedKmPerDay);
@@ -287,6 +288,7 @@ await expect("restore the rent policy", call("PATCH", "/admin/settings", { cance
     (j) => j.kmDriven === 200 && j.extraKm === extraKm && j.fuelShort === 2 && j.lateHours === 0 && j.deductions === expected);
   await expect("plain completion is refused for a returned car", call("POST", `/admin/bookings/${rb.id}/complete`, null, T), 409);
   await expect("a damage charge needs a note", call("POST", `/admin/bookings/${rb.id}/rental/settle`, { damage: 300 }, T), 400);
+  await expect("damage above the protection excess is refused", call("POST", `/admin/bookings/${rb.id}/rental/settle`, { damage: s0.rentExcessStandard + 1, damageNote: "Above the excess" }, T), 400);
   const total = expected + 300;
   await expect("settle with a damage charge", call("POST", `/admin/bookings/${rb.id}/rental/settle`, { damage: 300, damageNote: "Scratch on rear bumper" }, T), 200,
     (j) => j.state === "settled" && j.settlement.deductions === total && j.settlement.depositReturned === Math.max(0, rb.deposit - total)

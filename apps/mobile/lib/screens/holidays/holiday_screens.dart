@@ -416,7 +416,7 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
                     Text(t.departures.isEmpty ? 'Starting from' : 'Per person on this departure', style: TextStyle(color: c.fgSubtle, fontSize: 12)),
                     Text.rich(TextSpan(children: [
                       TextSpan(text: inr(_dep(t)?.price ?? t.price), style: TextStyle(color: c.accent, fontSize: 26, fontWeight: FontWeight.w700)),
-                      TextSpan(text: ' /person', style: TextStyle(color: c.fgMuted)),
+                      TextSpan(text: _settings.gstRate(ServiceKey.tours) > 0 ? ' /person + ${_settings.gstRate(ServiceKey.tours)}% GST' : ' /person', style: TextStyle(color: c.fgMuted)),
                     ])),
                     const SizedBox(height: 12),
                     if (t.departures.isEmpty)
@@ -588,7 +588,7 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             p('Cancellation', '${cancelPolicyText(_settings, ServiceKey.tours)} Counted from midnight on the start date; wallet refunds are instant.', Icons.verified_user_outlined),
             p('Payment', 'Pay in full at booking, from your QuikFly wallet or the payment methods at checkout.'),
-            p('Price', 'Per person, twin sharing, including GST (${_settings.gstRate(ServiceKey.tours)}%). Children (5–11) pay ${_settings.tourChildPercent}% of the adult price.'),
+            p('Price', 'Per person, twin sharing${_settings.gstRate(ServiceKey.tours) > 0 ? ', plus GST (${_settings.gstRate(ServiceKey.tours)}%), shown in the total before you pay' : ''}. Children (5–11) pay ${_settings.tourChildPercent}% of the adult price.'),
           ]),
         );
     }

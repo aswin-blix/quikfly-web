@@ -12,7 +12,7 @@ import { api } from "@/lib/api";
 import { cx, inr, prettyDateTime } from "@/lib/format";
 import { defaultRentalWindow } from "@/lib/rentals";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
-import { RENT_PLANS, RENT_PROTECTION_LABEL, cancelPolicyText, priceRent, rentDocumentList, rentHours, rentPlanLabel, sumLines, type RentalCar } from "@quikfly/shared";
+import { RENT_PLANS, RENT_PROTECTION_LABEL, cancelPolicyText, priceRent, rentDocumentList, rentExcess, rentHours, rentPlanLabel, sumLines, type RentalCar } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { serviceByKey } from "@/lib/services";
 
@@ -117,8 +117,6 @@ export function RentScreen() {
 
 /* ───────────── /rent-a-car/[id] ───────────── */
 
-/** What each protection plan leaves the customer to pay for damage (shown as help text). */
-const PROTECTION_SUB = { standard: "You pay up to ₹10,000 for damage", peace: "You pay up to ₹2,000 for damage" } as const;
 
 export function RentDetailScreen({ id }: { id: string }) {
   const trip = useTrip();
@@ -153,6 +151,8 @@ export function RentDetailScreen({ id }: { id: string }) {
       setPricing(false);
       return;
     }
+    // Prices can change while a page is open; say so rather than charging a different total silently.
+    if (quote.total !== total) toast(`The price was updated to ${inr(quote.total)}. Check it before you pay.`);
     setDraft({
       service: "rent", title: `${car!.name} · ${self ? "Self-drive" : "With driver"}`, subtitle: `${trip.city} · ${car!.category}`, image: carImg(car!),
       summary: [["Pickup", prettyDateTime(trip.start)], ["Return", prettyDateTime(trip.end)], ["Delivery", delivery === "doorstep" ? "Doorstep" : `Self pickup · ${trip.city} hub`], ...(self ? [["Plan", `${plan.label} · ${protectionLabel}`] as [string, string]] : [])],
@@ -189,7 +189,7 @@ export function RentDetailScreen({ id }: { id: string }) {
           )}
           {self && (
             <OptionGroup title="Damage protection" id="prot" value={prot} onChange={setProt}
-              options={(Object.keys(RENT_PROTECTION_LABEL) as (keyof typeof RENT_PROTECTION_LABEL)[]).map((k) => [k, RENT_PROTECTION_LABEL[k], PROTECTION_SUB[k], `${inr(k === "peace" ? settings.rentProtectionPeacePerDay : settings.rentProtectionStandardPerDay)}/day`])} />
+              options={(Object.keys(RENT_PROTECTION_LABEL) as (keyof typeof RENT_PROTECTION_LABEL)[]).map((k) => [k, RENT_PROTECTION_LABEL[k], `You pay up to ${inr(rentExcess(settings, k))} for damage`, `${inr(k === "peace" ? settings.rentProtectionPeacePerDay : settings.rentProtectionStandardPerDay)}/day`])} />
           )}
           <OptionGroup title="Delivery" id="del" value={delivery} onChange={setDelivery}
             options={[["pickup", "Self pickup", `QuikFly hub, ${trip.city}`, "Free"], ["doorstep", "Doorstep delivery", "Delivered & collected at your address", inr(settings.rentDoorstepFee)]]} />

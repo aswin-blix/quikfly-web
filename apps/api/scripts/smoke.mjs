@@ -111,6 +111,7 @@ const tourQuote = await expect("POST /quotes (tour)", call("POST", "/quotes", { 
   (j) => j.lines[0].amount === anyDate.price * 2 && j.lines[1].amount === Math.round((anyDate.price * cfg.settings.tourChildPercent) / 100));
 await expect("POST /quotes (self-drive)", call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "self", start: "2026-12-01T10:00", end: "2026-12-02T10:00", kmPlan: "limited", protection: "standard", doorstep: false }), 201,
   (j) => j.lines[0].amount === cars[0].pricePerHour * 24 && j.lines.at(-1).amount === cfg.settings.rentDeposit);
+check("/config carries the damage excess of each protection plan", Number.isInteger(cfg.settings.rentExcessStandard) && Number.isInteger(cfg.settings.rentExcessPeace));
 const chauffeur = await expect("POST /quotes (chauffeur across a night)", call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "driver", start: "2026-12-01T10:00", end: "2026-12-02T10:00", kmPlan: "limited", protection: "standard", doorstep: false }), 201,
   (j) => !j.lines.some((l) => /deposit/i.test(l.label)));
 check("chauffeur night charge follows the setting",

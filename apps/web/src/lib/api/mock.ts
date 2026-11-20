@@ -102,6 +102,8 @@ function priceLines(r: QuoteRequest): FareLine[] {
 function gross(input: Pick<NewBooking, "service" | "quoteId" | "rideId">): number {
   if (input.service === "bike" || input.service === "car") {
     const r = ridesStore()[input.rideId ?? ""] ?? fail("Ride not found.");
+    // Like the API: a ride's fare is held for QUOTE_TTL_MINUTES (startedAt is when the ride was created).
+    if (Date.now() - Date.parse(r.startedAt) > QUOTE_TTL_MINUTES * 60_000) fail(`Fares are held for ${QUOTE_TTL_MINUTES} minutes and this one has expired. Please check the fare again.`);
     return r.ride.quote.fare;
   }
   const q = quotesStore()[input.quoteId ?? ""] ?? fail("That price isn't valid. Please check the price again.");

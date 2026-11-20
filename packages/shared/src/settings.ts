@@ -92,6 +92,9 @@ export interface Settings {
   rentUnlimitedKmExtraPercent: number;
   rentProtectionStandardPerDay: number;
   rentProtectionPeacePerDay: number;
+  /** The most a self-drive customer pays for damage on each protection plan (₹). Shown on the car page and stored with each rental; staff can't deduct more. */
+  rentExcessStandard: number;
+  rentExcessPeace: number;
   rentDoorstepFee: number;
   /** Refundable deposit collected with self-drive bookings (₹). */
   rentDeposit: number;
@@ -222,6 +225,8 @@ export const DEFAULT_SETTINGS: Settings = {
   rentUnlimitedKmExtraPercent: 25,
   rentProtectionStandardPerDay: 199,
   rentProtectionPeacePerDay: 399,
+  rentExcessStandard: 10000,
+  rentExcessPeace: 2000,
   rentDoorstepFee: 299,
   rentDeposit: 2000,
   rentDepositRefundHours: 48,
@@ -330,6 +335,8 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   rentUnlimitedKmExtraPercent: { type: "number", min: 0, max: 200, integer: true },
   rentProtectionStandardPerDay: money(5000),
   rentProtectionPeacePerDay: money(5000),
+  rentExcessStandard: money(100_000),
+  rentExcessPeace: money(100_000),
   rentDoorstepFee: money(5000),
   rentDeposit: money(50000),
   rentDepositRefundHours: { type: "number", min: 1, max: 720, integer: true },

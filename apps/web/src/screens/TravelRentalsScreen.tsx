@@ -48,6 +48,8 @@ export function TravelRentalsScreen() {
       setPricing(null);
       return;
     }
+    // Prices can change while a page is open; say so rather than charging a different total silently.
+    if (quote.total !== estimate(v)) toast(`The price was updated to ${inr(quote.total)}. Check it before you pay.`);
     setDraft({
       service: "rentals", title: v.name, image: vehicleImg(v),
       subtitle: type === "local" ? `Chennai local · ${days} day(s)` : type === "oneway" ? `Chennai → ${dest} one way` : `Chennai ⇄ ${dest} round trip`,

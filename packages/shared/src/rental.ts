@@ -2,7 +2,7 @@
 // fuel), extensions before the return time, and the deposit settlement staff confirm after
 // the return. The API applies these rules and prices; the apps show them.
 import { localToIso } from "./cancellation";
-import { BOOKING_LIMITS, RENT_PLANS, rentHours } from "./pricing";
+import { BOOKING_LIMITS, RENT_PLANS, RENT_PROTECTION_LABEL, rentHours } from "./pricing";
 import type { Settings } from "./settings";
 import type { FareLine } from "./types";
 
@@ -77,12 +77,18 @@ export interface Rental {
 
 /** Staff view: who the booking belongs to and what a settlement would deduct now (before damage). */
 export interface AdminRental extends Rental {
+  /** The most staff can deduct for damage: the excess of the protection plan the customer bought. */
+  damageExcess: number;
   customerName: string;
   title: string;
   payment: string;
 }
 
 const MINUTE = 60_000;
+
+/** The most a customer pays for damage on a protection plan ("You pay up to ₹X"). Stored with each rental at booking. */
+export const rentExcess = (settings: Settings, protection: keyof typeof RENT_PROTECTION_LABEL) =>
+  protection === "peace" ? settings.rentExcessPeace : settings.rentExcessStandard;
 
 /** Now as a local India time "YYYY-MM-DDTHH:mm". */
 export const localNow = (now = Date.now()) => new Date(now + 330 * MINUTE).toISOString().slice(0, 16);
