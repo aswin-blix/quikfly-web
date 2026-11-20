@@ -51,17 +51,36 @@ PreferredSizeWidget _bar(BuildContext context, WidgetRef ref, {String title = 'P
         if (ref.watch(sessionProvider).value != null) const _Bell(),
         const ThemeToggle(),
         if (ref.watch(sessionProvider).value != null)
+          // Applicants have no account page until they're live, so the privacy pages are here too.
+          // Sign out is last and asks first, so a tap on ⋮ can't sign anyone out by accident.
           PopupMenuButton<String>(
-            onSelected: (v) async {
+            tooltip: 'More',
+            onSelected: (v) {
               if (v == 'signout') {
-                await ref.read(sessionProvider.notifier).signOut();
-                ref.invalidate(vendorProvider);
+                signOutPartner(context, ref);
+              } else {
+                context.push(v);
               }
             },
-            itemBuilder: (_) => const [PopupMenuItem(value: 'signout', child: Text('Sign out'))],
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: '/privacy/data', child: Text('Privacy & data')),
+              PopupMenuItem(value: '/privacy', child: Text('Privacy notice')),
+              PopupMenuDivider(),
+              PopupMenuItem(value: 'signout', child: Text('Sign out')),
+            ],
           ),
       ],
     );
+
+/// Signs out of the Partner app after a confirmation. Returns true when signed out.
+Future<bool> signOutPartner(BuildContext context, WidgetRef ref) async {
+  if (!await confirm(context, title: 'Sign out of QuikFly Partner?', message: 'Your application and vehicles stay saved on your account.', yes: 'Sign out', danger: true)) {
+    return false;
+  }
+  await ref.read(sessionProvider.notifier).signOut();
+  ref.invalidate(vendorProvider);
+  return true;
+}
 
 class _Bell extends ConsumerWidget {
   const _Bell();
