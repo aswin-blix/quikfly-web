@@ -562,7 +562,7 @@ Quick wins first. Each step is one PR, merged and deployed in the usual way.
 | **4. GST model** (after the accountant confirms 7.2) | R10, R25 | M1, H6 | ~3–4 days |
 | **5. Staff tools** ✅ live 2026-11-20 (PR #106) | R6, R11, R12 | L1–L3, L5, L6 | ~4–5 days |
 | **6. Ride pricing that fits state rules** ✅ live 2026-11-20 (PR #108; everyday surge kept in Settings instead of migrating it into a rule) | R14, R15, R13 | M2, M4 | ~4 days |
-| **7. Bus and holiday pricing** ✅ built 2026-11-20 (branch `pricing/step7-bus-holiday-pricing`; tolls settle on group trips only, chauffeur rentals have no destination to estimate from) | R16, R22 | M3, M4 | ~3–4 days |
+| **7. Bus and holiday pricing** ✅ live 2026-11-20 (PR #110; tolls settle on group trips only, chauffeur rentals have no destination to estimate from) | R16, R22 | M3, M4 | ~3–4 days |
 | **8. Time and scale** | R17, R19, R20 (override) | M5, L4 | ~4–5 days |
 | **Later** | R18 maker-checker, R20 subscriptions, R21 cities | — | when the team or the second city arrives |
 
