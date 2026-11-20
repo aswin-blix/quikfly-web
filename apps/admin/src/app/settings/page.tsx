@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
-import { SETTING_RULES, checkSetting, type Settings } from "@quikfly/shared";
+import { SETTING_RULES, checkSetting, checkSettings, type Settings } from "@quikfly/shared";
 import { Button, ErrorBox, PageHeader, Toggle } from "@/components/ui";
 import { adminApi } from "@/lib/api";
 import { cx } from "@/lib/format";
@@ -50,6 +50,9 @@ function SettingsForm() {
         return setSaveError(problem.includes(`"${k}"`) ? problem.replace(`"${k}"`, label) : problem);
       }
     }
+    // Rules between settings (e.g. surge multiplier <= cap), the same check the API runs.
+    const cross = checkSettings({ ...data!, ...draft }, changed);
+    if (cross) return setSaveError(cross);
     setSaving(true); setSaveError(""); setSaved(false);
     try {
       const patch = Object.fromEntries(changed.map((k) => [k, draft[k]])) as Partial<Settings>;

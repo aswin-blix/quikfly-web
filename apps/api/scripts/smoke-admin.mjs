@@ -147,6 +147,36 @@ await call("PUT", `/admin/catalog/offer/${offer.id}`, { active: false }, T);
 await eventually("hidden coupon is refused", () => call("POST", "/offers/check", { code: "SMOKE25", quoteId: quote.id }, cust2), (r) => r.status === 400 && /isn't valid/.test(r.json.message));
 await call("DELETE", `/admin/catalog/offer/${offer.id}`, null, T);
 
+// ── Pricing audit step 2: rules between settings, catalog limits, offer dates and total uses ──
+{
+  const sNow = (await call("GET", "/admin/settings", null, T)).json;
+  await expect("surge multiplier above the cap is refused", call("PATCH", "/admin/settings", { surgeMultiplier: 1.5, surgeCap: 1.4 }, T), 400, (j) => /above the surge cap/.test(j.message));
+  await expect("a surge cap above 2x is refused", call("PATCH", "/admin/settings", { surgeCap: 2.5 }, T), 400);
+  await expect("Peace protection cheaper than Standard is refused", call("PATCH", "/admin/settings", { rentProtectionPeacePerDay: Math.max(0, sNow.rentProtectionStandardPerDay - 1) }, T), 400, (j) => /less than Standard/.test(j.message));
+  await expect("Peace damage limit above Standard's is refused", call("PATCH", "/admin/settings", { rentExcessPeace: sNow.rentExcessStandard + 1 }, T), 400);
+  await expect("an AC bus fare below non-AC is refused", call("PATCH", "/admin/settings", { busFareAc: Math.max(0, sNow.busFareNonAc - 1) }, T), 400, (j) => /AC bus fare/.test(j.message));
+  const ro = (await call("GET", "/admin/catalog/rideOption", null, T)).json[0];
+  await expect("a ride per-km rate above ₹100 is refused", call("PUT", `/admin/catalog/rideOption/${ro.id}`, { data: { ...ro.data, perKm: 150 } }, T), 400);
+  await expect("a ride type with no fare is refused", call("PUT", `/admin/catalog/rideOption/${ro.id}`, { data: { ...ro.data, baseFare: 0, perKm: 0, perMin: 0 } }, T), 400, (j) => /needs a fare/.test(j.message));
+  await expect("a departure needs a real package", call("POST", "/admin/catalog/departure", { data: { tourId: "t-nope", date: TRAVEL, fromCity: "Chennai", seats: 10, price: null } }, T), 400, (j) => /No holiday package/.test(j.message));
+  const offerBase = { title: "Smoke offer", description: "Test", service: "all", percent: 10, maxDiscount: 50, minAmount: 0, validFrom: "", validUntil: "", perUserLimit: "", maxUses: "", hue: 10 };
+  await expect("a flat offer needs a minimum above the discount", call("POST", "/admin/catalog/offer", { data: { ...offerBase, code: "SMOKEFLAT", percent: 100, maxDiscount: 200, minAmount: 100 } }, T), 400, (j) => /minimum booking total above/.test(j.message));
+  await expect("valid from after valid until is refused", call("POST", "/admin/catalog/offer", { data: { ...offerBase, code: "SMOKEDATE", validFrom: "2030-02-01", validUntil: "2030-01-01" } }, T), 400);
+  const soon = await expect("an offer that starts later", call("POST", "/admin/catalog/offer", { data: { ...offerBase, code: "SMOKESOON", validFrom: "2099-01-01" } }, T), 201);
+  const once = await expect("an offer with one use in total", call("POST", "/admin/catalog/offer", { data: { ...offerBase, code: "SMOKEONE", maxUses: 1 } }, T), 201, (j) => j.data.maxUses === 1);
+  const soonOffer = soon?.id ? soon : (await call("GET", "/admin/catalog/offer", null, T)).json.find((o) => o.data.code === "SMOKESOON");
+  const onceOffer = once?.id ? once : (await call("GET", "/admin/catalog/offer", null, T)).json.find((o) => o.data.code === "SMOKEONE");
+  await eventually("/config lists live offers only", () => call("GET", "/config"), (r) => r.json?.offers?.some((o) => o.code === "SMOKEONE") && !r.json.offers.some((o) => o.code === "SMOKESOON"));
+  const q1 = (await call("POST", "/quotes", { service: "tours", tourId: anyDateTour.id, adults: 1, kids: 0, start: TRAVEL })).json;
+  await expect("a coupon that hasn't started is refused", call("POST", "/offers/check", { code: "SMOKESOON", quoteId: q1.id }, cust2), 400, (j) => /starts on/.test(j.message));
+  const used = await expect("book with the one-use coupon", call("POST", "/bookings", { service: "tours", title: "Smoke one-use", subtitle: "Coupon", payment: "upi", lines: [], quoteId: q1.id, couponCode: "SMOKEONE" }, cust2), 201, (j) => j.discount > 0);
+  const q2 = (await call("POST", "/quotes", { service: "tours", tourId: anyDateTour.id, adults: 1, kids: 0, start: TRAVEL })).json;
+  await expect("the used-up coupon is refused", call("POST", "/offers/check", { code: "SMOKEONE", quoteId: q2.id }, cust2), 400, (j) => /fully used/.test(j.message));
+  if (used) await call("POST", `/bookings/${used.id}/cancel`, {}, cust2);
+  await expect("cancelling gives the use back", call("POST", "/offers/check", { code: "SMOKEONE", quoteId: q2.id }, cust2), 200);
+  for (const o of [soonOffer, onceOffer]) if (o) await call("DELETE", `/admin/catalog/offer/${o.id}`, null, T);
+}
+
 // Settings reach prices: bus lower-deck extra, then restore
 const s0 = (await call("GET", "/admin/settings", null, T)).json;
 await expect("PATCH /admin/settings refuses a negative fare", call("PATCH", "/admin/settings", { busLowerDeckExtra: -5 }, T), 400);
@@ -301,9 +331,10 @@ await expect("restore the rent policy", call("PATCH", "/admin/settings", { cance
 }
 
 // ── Ride rules (MVAG 2025): surge cap and the rider cancellation fee ──
-await expect("a surge cap above 3× is refused", call("PATCH", "/admin/settings", { surgeCap: 5 }, T), 400);
-await expect("surge ×3 with a ×1.5 cap, all day", call("PATCH", "/admin/settings", { surgeMultiplier: 3, surgeCap: 1.5, surgeHours: "0-23" }, T), 200, (j) => j.surgeCap === 1.5);
-await eventually("quotes apply the cap, not the multiplier", () => call("POST", "/rides/quote", { service: "car", pickupId: places[0].id, dropId: places[1].id }),
+await expect("a surge cap above 2× is refused", call("PATCH", "/admin/settings", { surgeCap: 5 }, T), 400);
+await expect("a surge multiplier above the cap can't be saved", call("PATCH", "/admin/settings", { surgeMultiplier: 2, surgeCap: 1.5 }, T), 400);
+await expect("surge ×1.5 with a ×1.5 cap, all day", call("PATCH", "/admin/settings", { surgeMultiplier: 1.5, surgeCap: 1.5, surgeHours: "0-23" }, T), 200, (j) => j.surgeCap === 1.5);
+await eventually("quotes carry the surge for disclosure", () => call("POST", "/rides/quote", { service: "car", pickupId: places[0].id, dropId: places[1].id }),
   (r) => r.status === 200 && r.json.every((q) => q.surge === 1.5));
 await expect("fee from the first minute: 10%, capped at ₹100", call("PATCH", "/admin/settings", { rideCancelFreeMinutes: 0, rideCancelFeePercent: 10, rideCancelFeeCap: 100 }, T), 200);
 await eventually("fee settings reach the API", () => call("GET", "/config"), (r) => r.json?.settings?.rideCancelFreeMinutes === 0);
@@ -674,6 +705,17 @@ if (LOCAL) {
   await expect("content can't change settings", call("PATCH", "/admin/settings", { licenceAutoApprove: true }, content.token), 403);
   await expect("content can't read the audit log", call("GET", "/admin/audit", null, content.token), 403);
   await expect("content can edit the catalog", call("GET", "/admin/catalog/faq", null, content.token), 200);
+  // Prices need "pricing.edit" (owner, operations); content edits the text around them.
+  const roC = (await call("GET", "/admin/catalog/rideOption", null, T)).json[0];
+  await expect("content can change a ride type's description", call("PUT", `/admin/catalog/rideOption/${roC.id}`, { data: { ...roC.data, description: "Smoke description" } }, content.token), 200);
+  await expect("content can't change a fare", call("PUT", `/admin/catalog/rideOption/${roC.id}`, { data: { ...roC.data, perKm: roC.data.perKm + 1 } }, content.token), 403, (j) => /Only owners and operations/.test(j.message) && /Per km/.test(j.message));
+  await call("PUT", `/admin/catalog/rideOption/${roC.id}`, { data: roC.data }, T);
+  await expect("content can't add a priced holiday package", call("POST", "/admin/catalog/tour", { data: { ...tours[0].data, slug: "smoke-content", title: "Smoke content" } }, content.token), 403);
+  const ofC = (await call("GET", "/admin/catalog/offer", null, T)).json[0];
+  await expect("content can't switch an offer off", call("PUT", `/admin/catalog/offer/${ofC.id}`, { active: !ofC.active }, content.token), 403);
+  await expect("content can't change an offer's discount", call("PUT", `/admin/catalog/offer/${ofC.id}`, { data: { ...ofC.data, maxDiscount: ofC.data.maxDiscount + 1 } }, content.token), 403);
+  await expect("content can edit an offer's wording", call("PUT", `/admin/catalog/offer/${ofC.id}`, { data: { ...ofC.data, description: "Smoke wording" } }, content.token), 200);
+  await call("PUT", `/admin/catalog/offer/${ofC.id}`, { data: ofC.data }, T);
   await expect("content can't reset the catalog", call("POST", "/admin/catalog/reset", null, content.token), 403);
   await expect("content can't see bookings", call("GET", "/admin/bookings", null, content.token), 403);
   await expect("content can't review licences", call("GET", "/admin/licences", null, content.token), 403);

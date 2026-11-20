@@ -2,7 +2,7 @@ import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE,
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visibleById } from "./catalog";
-import { checkCoupon } from "./offers";
+import { checkCoupon, findOffer, totalUses } from "./offers";
 import { usableQuote } from "./quotes";
 import { ownRideWithTime } from "./rides";
 import { getSettings } from "./settings";
@@ -165,6 +165,9 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   const condParams: unknown[] = [];
   if (quoteId) { conditions.push("(SELECT used_at FROM quotes WHERE id = ?) = ?"); condParams.push(quoteId, id); }
   if (wallet) { conditions.push("(SELECT wallet_balance FROM users WHERE id = ?) >= ?"); condParams.push(userId, amount); }
+  // An offer with a total-uses limit is re-checked inside the batch, so two bookings can't take its last use.
+  const maxUses = coupon ? (await findOffer(db, coupon.code)).maxUses : null;
+  if (coupon && maxUses != null) { conditions.push("(SELECT COUNT(*) FROM bookings WHERE coupon_code = ? AND status <> 'cancelled') < ?"); condParams.push(coupon.code, maxUses); }
   if (departure) {
     conditions.push("(SELECT COALESCE(SUM(travellers), 0) FROM bookings WHERE departure_id = ? AND status <> 'cancelled') + ? <= ?");
     condParams.push(departure.id, departure.travellers, departure.seats);
@@ -244,6 +247,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
       const taken = await db.prepare("SELECT COALESCE(SUM(travellers), 0) AS n FROM bookings WHERE departure_id = ? AND status <> 'cancelled'").bind(departure.id).first<{ n: number }>();
       if ((taken?.n ?? 0) + departure.travellers > departure.seats) throw conflict("Those seats on this departure were just taken. Please check the seats left again.");
     }
+    if (coupon && maxUses != null && (await totalUses(db, coupon.code)) >= maxUses) throw conflict(`${coupon.code} has just been fully used. Remove it to book without the discount.`);
     if (plan.length && !wallet) throw conflict("Your QuikFly Credits just changed. Please try again.");
     throw badRequest("Not enough wallet balance. Choose another payment method.");
   }

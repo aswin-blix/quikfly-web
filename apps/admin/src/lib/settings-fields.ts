@@ -52,9 +52,9 @@ export const SETTING_GROUPS: SettingGroup[] = [
     title: "Rides",
     sub: "Bike, auto and cab fares come from each ride type in the catalog, multiplied by surge.",
     fields: [
-      { key: "surgeMultiplier", type: "number", unit: "×", step: 0.05, label: "Surge multiplier", help: "1 means no surge. 1.2 adds 20% during surge hours." },
+      { key: "surgeMultiplier", type: "number", unit: "×", step: 0.05, label: "Surge multiplier", help: "1 means no surge. 1.2 adds 20% during surge hours. Can't be above the surge cap." },
       { key: "surgeHours", type: "text", label: "Surge hours", help: 'India time, inclusive hour ranges like "8-10, 17-20". Empty means no surge.' },
-      { key: "surgeCap", type: "number", unit: "×", step: 0.1, label: "Surge cap", help: "Surge never goes above this, whatever the multiplier says. The 2025 aggregator guidelines allow up to 2×; some states ask for less (Maharashtra draft: 1.5×)." },
+      { key: "surgeCap", type: "number", unit: "×", step: 0.1, label: "Surge cap", help: "At most 2×: the 2025 aggregator guidelines allow up to twice the base fare; some states ask for less (Maharashtra: 1.5×)." },
       { key: "passPrice", type: "number", unit: "₹", label: "QuikFly Pass price", help: "Paid from the wallet. The pass takes the surge off every bike, auto and cab ride. Not sold while there are no surge hours." },
       { key: "passDays", type: "number", unit: "days", label: "QuikFly Pass length", help: "How long one pass lasts. Buying again adds these days after the current pass ends." },
       { key: "rideCancelFeePercent", type: "number", unit: "%", label: "Rider cancellation fee", help: "Charged when a rider cancels without a valid reason (guidelines: 10% of the fare)." },

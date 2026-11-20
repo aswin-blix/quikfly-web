@@ -308,9 +308,9 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   licenceAutoApprove: { type: "boolean" },
   welcomeCredit: money(5000),
   referralBonus: money(5000),
-  surgeMultiplier: { type: "number", min: 1, max: 3 },
+  surgeMultiplier: { type: "number", min: 1, max: 2 },
   surgeHours: { type: "text", max: 60, pattern: SURGE_HOURS, hint: 'Hour ranges like "8-10, 17-20" (0–23), or empty for no surge.' },
-  surgeCap: { type: "number", min: 1, max: 3 },
+  surgeCap: { type: "number", min: 1, max: 2 },
   passPrice: money(2000),
   passDays: { type: "number", min: 1, max: 365, integer: true },
   rideCancelFeePercent: percent,
@@ -401,6 +401,27 @@ export function checkSetting(key: string, value: unknown): string | null {
   if (rule.pattern && !rule.pattern.test(value)) return rule.hint ?? `"${key}" isn't in the right format.`;
   if (key === "surgeHours" && parseSurgeHours(value).some(([a, b]) => a > 23 || b > 23 || a > b)) return "Surge hours must be 0–23 with the start before the end.";
   if (key.startsWith("cancelPolicy")) return checkCancelPolicy(value);
+  return null;
+}
+
+/**
+ * Rules between settings (pricing audit R3). Each lists the keys it reads; `changed` limits the
+ * check to rules touching a key being saved, so an old value elsewhere can't block an unrelated
+ * save. Returns the first problem, or null.
+ */
+const CROSS_RULES: { keys: (keyof Settings)[]; check: (s: Settings) => string | null }[] = [
+  { keys: ["surgeMultiplier", "surgeCap"], check: (s) => s.surgeMultiplier > s.surgeCap ? `The surge multiplier (×${s.surgeMultiplier}) is above the surge cap (×${s.surgeCap}). Lower the multiplier or raise the cap (at most ×2).` : null },
+  { keys: ["rentProtectionStandardPerDay", "rentProtectionPeacePerDay"], check: (s) => s.rentProtectionPeacePerDay < s.rentProtectionStandardPerDay ? `Peace-of-mind protection (₹${s.rentProtectionPeacePerDay}/day) can't cost less than Standard (₹${s.rentProtectionStandardPerDay}/day): it covers more.` : null },
+  { keys: ["rentExcessStandard", "rentExcessPeace"], check: (s) => s.rentExcessPeace > s.rentExcessStandard ? `Peace of mind's damage limit (₹${s.rentExcessPeace.toLocaleString("en-IN")}) can't be above Standard's (₹${s.rentExcessStandard.toLocaleString("en-IN")}).` : null },
+  { keys: ["busFareAc", "busFareNonAc"], check: (s) => s.busFareAc < s.busFareNonAc ? `The AC bus fare (₹${s.busFareAc}) can't be below the non-AC fare (₹${s.busFareNonAc}).` : null },
+];
+
+export function checkSettings(merged: Settings, changed: (keyof Settings)[] = Object.keys(merged) as (keyof Settings)[]): string | null {
+  for (const r of CROSS_RULES) {
+    if (!r.keys.some((k) => changed.includes(k))) continue;
+    const problem = r.check(merged);
+    if (problem) return problem;
+  }
   return null;
 }
 

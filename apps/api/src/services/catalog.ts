@@ -1,10 +1,10 @@
 // The live catalog (places, ride types, tours, cars, offers...) in D1. Customers only ever see
 // active items. The first read on a fresh database copies in the seed from @quikfly/shared.
 import {
-  CATALOG_DEFS, CATALOG_KINDS, CATALOG_SEED, isCatalogKind, validateCatalogData,
+  ACTIVE_IS_PRICING, CATALOG_DEFS, CATALOG_KINDS, CATALOG_SEED, isCatalogKind, pricingChanges, validateCatalogData,
   type CatalogItem, type CatalogItemMap, type CatalogKind,
 } from "@quikfly/shared";
-import { badRequest, conflict, notFound } from "../lib/errors";
+import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { auditStatement } from "./admin/audit";
 
@@ -92,16 +92,33 @@ async function assertUnique(db: D1Database, kind: CatalogKind, data: Record<stri
 
 export interface ItemInput { data: unknown; active?: boolean; sort?: number }
 
+/** Roles without "pricing.edit" (content) can't set or change prices (fields flagged `pricing` in catalog-kinds.ts). */
+function guardPricing(kind: CatalogKind, before: Record<string, unknown> | null, after: Record<string, unknown>, canPrice: boolean) {
+  if (canPrice) return;
+  const fields = pricingChanges(kind, before, after);
+  if (fields.length) throw forbidden(`Only owners and operations staff can ${before ? "change" : "set"} prices (${fields.join(", ")}).${before ? "" : ` Ask them to add this ${CATALOG_DEFS[kind].singular}.`}`);
+}
+
+/** A departure must belong to a holiday package that exists (shown or hidden). */
+async function assertRefs(db: D1Database, kind: CatalogKind, data: Record<string, unknown>) {
+  if (kind !== "departure") return;
+  const tour = await db.prepare("SELECT 1 FROM catalog_items WHERE kind = 'tour' AND id = ?").bind(String(data.tourId)).first();
+  if (!tour) throw badRequest(`No holiday package has the id "${data.tourId}". Copy the id from Holiday packages.`);
+}
+
 function clean(kind: CatalogKind, input: unknown, id: string) {
   const r = validateCatalogData(kind, input, id);
   if ("error" in r) throw badRequest(r.error);
   return r.data;
 }
 
-export async function createItem(db: D1Database, adminId: string, kind: CatalogKind, input: ItemInput): Promise<CatalogItem> {
+export async function createItem(db: D1Database, adminId: string, kind: CatalogKind, input: ItemInput, canPrice = true): Promise<CatalogItem> {
   await ensureSeeded(db);
   const id = uid(CATALOG_DEFS[kind].idPrefix.toUpperCase()).toLowerCase();
   const data = clean(kind, input.data, id);
+  guardPricing(kind, null, data, canPrice);
+  if (!canPrice && ACTIVE_IS_PRICING.includes(kind) && input.active !== false) throw forbidden(`Only owners and operations staff can turn on an ${CATALOG_DEFS[kind].singular}. Save it hidden, or ask them.`);
+  await assertRefs(db, kind, data);
   await assertUnique(db, kind, data, id);
   const sort = input.sort ?? ((await db.prepare("SELECT COALESCE(MAX(sort), 0) + 10 AS s FROM catalog_items WHERE kind = ?").bind(kind).first<{ s: number }>())!.s);
   const now = new Date().toISOString();
@@ -114,11 +131,16 @@ export async function createItem(db: D1Database, adminId: string, kind: CatalogK
   return toItem(await getRow(db, kind, id));
 }
 
-export async function updateItem(db: D1Database, adminId: string, kind: CatalogKind, id: string, input: ItemInput): Promise<CatalogItem> {
+export async function updateItem(db: D1Database, adminId: string, kind: CatalogKind, id: string, input: ItemInput, canPrice = true): Promise<CatalogItem> {
   const before = await getRow(db, kind, id);
   const data = input.data === undefined ? JSON.parse(before.data) : clean(kind, input.data, id);
-  if (input.data !== undefined) await assertUnique(db, kind, data, id);
+  if (input.data !== undefined) {
+    guardPricing(kind, JSON.parse(before.data), data, canPrice);
+    await assertRefs(db, kind, data);
+    await assertUnique(db, kind, data, id);
+  }
   const active = input.active === undefined ? before.active : input.active ? 1 : 0;
+  if (!canPrice && ACTIVE_IS_PRICING.includes(kind) && active !== before.active) throw forbidden(`Only owners and operations staff can turn an ${CATALOG_DEFS[kind].singular} on or off.`);
   const sort = input.sort ?? before.sort;
   await db.batch([
     db.prepare("UPDATE catalog_items SET data = ?, active = ?, sort = ?, updated_at = ? WHERE kind = ? AND id = ?")

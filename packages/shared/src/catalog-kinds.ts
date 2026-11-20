@@ -56,6 +56,8 @@ export interface CatalogField {
   hint?: string;
   /** Upper-cases text (codes, plates). */
   upper?: boolean;
+  /** Sets or changes what customers pay: only roles with "pricing.edit" may change it (admin.ts). */
+  pricing?: boolean;
 }
 
 export interface CatalogKindDef {
@@ -76,7 +78,7 @@ export interface CatalogKindDef {
 
 const SERVICES = ["bike", "car", "bus", "tours", "rent", "rentals"] as const;
 const name = (label = "Name"): CatalogField => ({ key: "name", label, type: "text", maxLength: 80 });
-const rupees = (key: string, label: string, max = 100_000): CatalogField => ({ key, label, type: "int", min: 0, max, hint: "In rupees" });
+const rupees = (key: string, label: string, max = 100_000): CatalogField => ({ key, label, type: "int", min: 0, max, hint: "In rupees", pricing: true });
 const rating: CatalogField = { key: "rating", label: "Rating", type: "number", min: 1, max: 5, hint: "1 to 5" };
 const inr = (n: unknown) => `₹${Number(n).toLocaleString("en-IN")}`;
 
@@ -99,8 +101,8 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
       { key: "description", label: "Description", type: "text", maxLength: 120 },
       { key: "seats", label: "Seats", type: "int", min: 1, max: 12 },
       rupees("baseFare", "Base fare", 2000),
-      { key: "perKm", label: "Per km", type: "number", min: 0, max: 500, hint: "In rupees" },
-      { key: "perMin", label: "Per minute", type: "number", min: 0, max: 100, hint: "In rupees" },
+      { key: "perKm", label: "Per km", type: "number", min: 0, max: 100, hint: "In rupees, up to ₹100", pricing: true },
+      { key: "perMin", label: "Per minute", type: "number", min: 0, max: 10, hint: "In rupees, up to ₹10", pricing: true },
       { key: "models", label: "Vehicle models", type: "list", maxLength: 60, hint: "One per line; a driver arrives in one of these" },
       { key: "riders", label: "Riders", type: "select", options: ["everyone", "women"], optional: true, hint: '"women": only women riders see it, and a woman captain drives' },
     ],
@@ -163,7 +165,7 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
       { key: "date", label: "Departure date", type: "date" },
       { key: "fromCity", label: "Departs from", type: "text", maxLength: 40, hint: 'e.g. "Chennai"' },
       { key: "seats", label: "Seats", type: "int", min: 1, max: 200 },
-      { key: "price", label: "Price per adult", type: "int", optional: true, min: 0, max: 2_000_000, hint: "In rupees; empty = the package price" },
+      { key: "price", label: "Price per adult", type: "int", optional: true, min: 0, max: 2_000_000, hint: "In rupees; empty = the package price", pricing: true },
     ],
     title: (d) => `${d.tourId} · ${d.date} from ${d.fromCity}`, detail: (d) => `${d.seats} seats${d.price ? ` · ${inr(d.price)}` : ""}`,
   },
@@ -188,8 +190,8 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
     description: "Tempo travellers, minibuses and coaches for group travel.",
     fields: [
       name(), { key: "seats", label: "Seats", type: "int", min: 2, max: 80 },
-      { key: "perKm", label: "Per km", type: "number", min: 0, max: 1000, hint: "In rupees" },
-      { key: "minKmPerDay", label: "Minimum km per day", type: "int", min: 0, max: 2000 },
+      { key: "perKm", label: "Per km", type: "number", min: 0, max: 200, hint: "In rupees, up to ₹200", pricing: true },
+      { key: "minKmPerDay", label: "Minimum km per day", type: "int", min: 0, max: 2000, pricing: true },
       rupees("driverBataPerDay", "Driver allowance per day", 10_000),
       rupees("localPackage", "Local package per day", 100_000),
       { key: "features", label: "Features", type: "list", maxLength: 40, hint: "One per line" },
@@ -199,7 +201,7 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
   groupDestination: {
     label: "Group destinations", singular: "group destination", group: "Rentals", idPrefix: "g", permission: "catalog.edit",
     description: "Outstation destinations for group travel, priced on the round-trip distance from Chennai.", unique: "name",
-    fields: [name("Destination"), { key: "km", label: "One-way distance", type: "int", min: 1, max: 3000, hint: "km from Chennai" }],
+    fields: [name("Destination"), { key: "km", label: "One-way distance", type: "int", min: 1, max: 3000, hint: "km from Chennai; sets the trip price", pricing: true }],
     title: (d) => String(d.name), detail: (d) => `${d.km} km one way`,
   },
   offer: {
@@ -209,11 +211,13 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
       { key: "code", label: "Code", type: "text", maxLength: 20, upper: true, pattern: /^[A-Z0-9]{3,20}$/, hint: "3–20 letters or digits, e.g. BUS150" },
       { key: "title", label: "Title", type: "text", maxLength: 80 },
       { key: "description", label: "Description", type: "text", maxLength: 160 },
-      { key: "service", label: "Works on", type: "select", options: ["all", ...SERVICES] },
-      { key: "percent", label: "Discount", type: "int", min: 1, max: 100, hint: "% of the total; 100 = flat amount up to the maximum" },
+      { key: "service", label: "Works on", type: "select", options: ["all", ...SERVICES], pricing: true },
+      { key: "percent", label: "Discount", type: "int", min: 1, max: 100, hint: "% of the total, up to the maximum. 100 = a flat discount of the maximum amount", pricing: true },
       rupees("maxDiscount", "Maximum discount", 100_000), rupees("minAmount", "Minimum booking total", 1_000_000),
-      { key: "validUntil", label: "Valid until", type: "date", optional: true, hint: "Last day (India time); empty = no end date" },
-      { key: "perUserLimit", label: "Uses per customer", type: "int", optional: true, min: 1, max: 100, hint: "Empty = unlimited" },
+      { key: "validFrom", label: "Valid from", type: "date", optional: true, hint: "First day (India time); empty = from now. Customers see the offer from this day", pricing: true },
+      { key: "validUntil", label: "Valid until", type: "date", optional: true, hint: "Last day (India time); empty = no end date", pricing: true },
+      { key: "perUserLimit", label: "Uses per customer", type: "int", optional: true, min: 1, max: 100, hint: "Empty = unlimited", pricing: true },
+      { key: "maxUses", label: "Total uses", type: "int", optional: true, min: 1, max: 1_000_000, hint: "All customers together; cancelled bookings give a use back. Empty = unlimited", pricing: true },
       { key: "hue", label: "Card colour", type: "int", min: 0, max: 360, hint: "Hue 0–360" },
     ],
     title: (d) => `${d.code} · ${d.title}`,
@@ -293,6 +297,32 @@ export function validateCatalogData(kind: CatalogKind, input: unknown, id: strin
   }
   // Cross-field rules.
   if (kind === "tour" && (out.nights as number) > (out.days as number)) return { error: "Nights can't be more than days." };
+  if (kind === "rideOption" && (out.baseFare as number) + (out.perKm as number) + (out.perMin as number) <= 0) return { error: "A ride type needs a fare: set a base fare, a per-km or a per-minute rate above ₹0." };
+  if (kind === "offer") {
+    if (out.validFrom && out.validUntil && (out.validFrom as string) > (out.validUntil as string)) return { error: "Valid from must be on or before valid until." };
+    // A flat discount (or 100%) with no minimum above it can make a booking free.
+    if ((out.percent as number) >= 100 && (out.minAmount as number) <= (out.maxDiscount as number)) {
+      return { error: `A flat discount needs a minimum booking total above the discount, or bookings can be free. Set the minimum above ₹${Number(out.maxDiscount).toLocaleString("en-IN")}.` };
+    }
+  }
   if (kind === "popularRoute" && String(out.from).toLowerCase() === String(out.to).toLowerCase()) return { error: "From and To must be different." };
   return { data: out };
+}
+
+/** Does this kind have fields only "pricing.edit" may change? */
+export const kindHasPricing = (kind: CatalogKind) => CATALOG_DEFS[kind].fields.some((f) => f.pricing);
+
+/** Offers: showing or hiding one turns a discount on or off, so it needs "pricing.edit" too. */
+export const ACTIVE_IS_PRICING: readonly CatalogKind[] = ["offer"];
+
+const sameValue = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/**
+ * Labels of the price fields an edit sets or changes (an empty list = no price change).
+ * `before` is null for a new item: then every price field with a value counts.
+ */
+export function pricingChanges(kind: CatalogKind, before: Record<string, unknown> | null, after: Record<string, unknown>): string[] {
+  return CATALOG_DEFS[kind].fields
+    .filter((f) => f.pricing && (before ? !sameValue(before[f.key], after[f.key]) : after[f.key] !== null && after[f.key] !== undefined && after[f.key] !== ""))
+    .map((f) => f.label);
 }
