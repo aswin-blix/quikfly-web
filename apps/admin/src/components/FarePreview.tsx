@@ -177,7 +177,7 @@ export function ItemFarePreview({ kind, original, edited }: { kind: CatalogKind;
         const e = edited as unknown as { id: string; from: string; to: string };
         const others = cat.busRoutes.filter((r) => r.id !== e.id);
         const saved = original ? [...others, { ...(original as object), id: e.id } as never] : others;
-        return busSamples(settings, settings, { routes: saved }, { routes: [...others, edited as never] }, { from: e.from, to: e.to });
+        return busSamples(settings, settings, { routes: saved, calendar: cat.fareCalendar }, { routes: [...others, edited as never], calendar: cat.fareCalendar }, { from: e.from, to: e.to });
       }
       case "fareCalendar": return peakSamples(cat, edited as never, settings);
       case "groupDestination": return cat.vehicles[0] ? groupSamples(cat.vehicles[0], before, settings, settings, cat.vehicles[0], after).slice(1) : [];
