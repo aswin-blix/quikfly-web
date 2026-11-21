@@ -143,15 +143,22 @@ class _BookingCardState extends ConsumerState<BookingCard> {
   Future<void> _cancel() async {
     final b = widget.booking;
     final (percent, refund) = refundPreview(ref.read(configProvider).value?.settings ?? const Settings({}), b);
-    final ok = await confirm(context,
-        title: 'Cancel this booking?',
-        message: refund == 0
-            ? "It's too close to the start for a refund under the cancellation policy."
-            : b.payment != 'wallet'
-                ? '${inr(refund)}${percent < 100 ? ' ($percent%)' : ''} is due back under the cancellation policy.'
-                : '${inr(refund)}${percent < 100 ? ' ($percent%)' : ''} goes back to your QuikFly wallet at once.',
-        yes: 'Cancel booking',
-        danger: true);
+    final String message;
+    if (b.deposit > 0) {
+      // Self-drive: the deposit always comes back in full; the policy applies to the rental fare only.
+      final rental = refund - (b.deposit < b.amount ? b.deposit : b.amount);
+      final to = b.payment == 'wallet' ? 'to your wallet' : 'to you';
+      message = rental <= 0
+          ? "Your ${inr(b.deposit)} deposit comes back $to in full. It's too close to pickup for a rental refund."
+          : 'Your ${inr(b.deposit)} deposit comes back in full, plus ${inr(rental)}${percent < 100 ? ' ($percent%)' : ''} of the rental, $to.';
+    } else if (refund == 0) {
+      message = "It's too close to the start for a refund under the cancellation policy.";
+    } else if (b.payment != 'wallet') {
+      message = '${inr(refund)}${percent < 100 ? ' ($percent%)' : ''} is due back under the cancellation policy.';
+    } else {
+      message = '${inr(refund)}${percent < 100 ? ' ($percent%)' : ''} goes back to your QuikFly wallet at once.';
+    }
+    final ok = await confirm(context, title: 'Cancel this booking?', message: message, yes: 'Cancel booking', danger: true);
     if (!ok || !mounted) return;
     setState(() => _busy = true);
     try {
@@ -163,7 +170,10 @@ class _BookingCardState extends ConsumerState<BookingCard> {
         toast(context, back == 0 ? 'Cancelled. No refund under the cancellation policy.' : b.payment != 'wallet' ? 'Cancelled. Refund due: ${inr(back)}.' : 'Cancelled. ${inr(back)} refunded to your wallet.');
       }
     } catch (e) {
-      if (mounted) toast(context, errorText(e));
+      // The request may have failed before or after the API acted (e.g. a network blip after the
+      // cancel went through), so reload the list to show the real state and say what happened.
+      ref.invalidate(bookingsProvider);
+      if (mounted) toast(context, "Cancel didn't go through: ${errorText(e)} The list was refreshed; try again if it still shows Confirmed.");
     }
     if (mounted) setState(() => _busy = false);
   }
@@ -231,7 +241,8 @@ class _BookingCardState extends ConsumerState<BookingCard> {
             '${refund == 0 ? 'No refund under the cancellation policy.' : b.payment == 'wallet' ? '${inr(refund)} refunded to your wallet.' : 'Refund due: ${inr(refund)}.'}');
       }
     } catch (e) {
-      if (mounted) toast(context, errorText(e));
+      ref.invalidate(bookingsProvider);
+      if (mounted) toast(context, "Seat cancel didn't go through: ${errorText(e)} The list was refreshed; try again if the seats are still booked.");
     }
     if (mounted) setState(() => _busy = false);
   }

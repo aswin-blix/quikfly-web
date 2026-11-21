@@ -239,7 +239,7 @@ class _PassCardState extends ConsumerState<_PassCard> {
     final surge = s.effectiveSurge.toStringAsFixed(s.effectiveSurge % 1 == 0 ? 0 : 1);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SectionTitle('QuikFly Pass'),
-      _sub(context, 'Peak hours (${s.surgeHours}) add a ×$surge surge to ride fares. With the pass you pay the normal fare on every bike, auto and cab ride for ${s.passDays} days.'),
+      _sub(context, '${(ref.watch(configProvider).value?.surgeRules.isNotEmpty ?? false) ? 'Busy times (${s.surgeHours}, and more by ride type and day) add up to a ×$surge surge' : 'Peak hours (${s.surgeHours}) add a ×$surge surge'} to ride fares. With the pass you pay the normal fare on every bike, auto and cab ride for ${s.passDays} days.'),
       Panel(
         child: Row(children: [
           Icon(Icons.confirmation_number_outlined, color: c.accent, size: 30),

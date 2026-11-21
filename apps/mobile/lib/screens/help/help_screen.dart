@@ -85,7 +85,9 @@ class _HelpScreenState extends ConsumerState<HelpScreen> {
               icon: const Icon(Icons.phone_callback_outlined, size: 18),
               label: const Text('Request a callback'),
             ),
+            // The WhatsApp button spaces itself when shown, so the gap stays the same without it.
             const WhatsAppButton(text: 'Hi QuikFly, I need help with '),
+            const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => context.push('/support'),
               icon: const Icon(Icons.chat_bubble_outline, size: 18),

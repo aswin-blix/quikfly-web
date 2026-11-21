@@ -65,6 +65,11 @@ const bad = await expect("login: wrong password", login({ email: OWNER.email, pa
 await expect("login: unknown email gives the same message", login({ email: "nobody@quikfly.test", password: "nope-nope-nope" }), 401, (j) => j.message === bad.message);
 await expect("login: missing fields", login({ email: OWNER.email }), 400);
 const owner = await expect("login: owner", login(OWNER), 200, (j) => j.token && j.admin.email === OWNER.email && j.admin.role === "owner" && !("password_hash" in j.admin));
+if (!owner?.token) {
+  // Without an owner token every later check fails and some would still write (e.g. a test licence).
+  console.error("Owner login failed; stopping before anything is written.");
+  process.exit(1);
+}
 const T = owner.token;
 await expect("GET /admin/auth/me", call("GET", "/admin/auth/me", null, T), 200, (j) => j.email === OWNER.email && j.lastLoginAt);
 

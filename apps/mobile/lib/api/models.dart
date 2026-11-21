@@ -801,6 +801,7 @@ class AppConfig {
     required this.groupDestinations,
     required this.offers,
     required this.faqs,
+    this.surgeRules = const [],
   });
   final Settings settings;
   final List<Place> places;
@@ -810,6 +811,9 @@ class AppConfig {
   final List<GroupDestination> groupDestinations;
   final List<Offer> offers;
   final List<Faq> faqs;
+  /// Staff-made surge rules by ride type, weekday and hours (catalog kind `surgeRule`). The API
+  /// prices them into each quote's `surge`; the app only needs to know whether any exist.
+  final List<SurgeRule> surgeRules;
 
   factory AppConfig.fromJson(Json j) => AppConfig(
         settings: Settings((j['settings'] as Json?) ?? const {}),
@@ -821,6 +825,27 @@ class AppConfig {
         groupDestinations: _list(j['groupDestinations'], GroupDestination.fromJson),
         offers: _list(j['offers'], Offer.fromJson),
         faqs: _list(j['faqs'], Faq.fromJson),
+        surgeRules: _list(j['surgeRules'], SurgeRule.fromJson),
+      );
+}
+
+/// Mirrors `SurgeRule` in packages/shared/src/types.ts.
+class SurgeRule {
+  const SurgeRule({required this.id, required this.name, required this.appliesTo, required this.days, required this.hours, required this.multiplier});
+  final String id, name;
+  /// "all", "bike", "auto" or "cab".
+  final String appliesTo;
+  /// India-time weekdays ("Mon".."Sun") and inclusive hour ranges like "8-10, 17-20".
+  final List<String> days;
+  final String hours;
+  final double multiplier;
+  factory SurgeRule.fromJson(Json j) => SurgeRule(
+        id: j['id'] as String,
+        name: (j['name'] as String?) ?? '',
+        appliesTo: (j['appliesTo'] as String?) ?? 'all',
+        days: ((j['days'] as List?) ?? const []).cast<String>(),
+        hours: (j['hours'] as String?) ?? '',
+        multiplier: ((j['multiplier'] as num?) ?? 1).toDouble(),
       );
 }
 
