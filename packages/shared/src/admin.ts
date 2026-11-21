@@ -1,6 +1,6 @@
 // Admin panel: roles, permissions and the shapes the /admin API returns.
 // The API enforces permissions; the admin app uses the same map to hide what a role can't do.
-import type { Booking, ServiceKey, WalletTransaction } from "./types";
+import type { Booking, ServiceKey, WalletTransaction, LicenceStatus } from "./types";
 
 export const ADMIN_ROLES = ["owner", "operations", "content"] as const;
 export type AdminRole = (typeof ADMIN_ROLES)[number];
@@ -25,6 +25,14 @@ export const PERMISSIONS = {
   "pricing.edit": ["owner", "operations"],
   "settings.edit": ["owner"],
   "audit.view": ["owner"],
+  /** The Customers screen: search, profile, wallet history, bookings. */
+  "customers.view": ["owner", "operations"],
+  /** Wallet adjustments, suspend / lift, sign out everywhere, cancel a scheduled deletion. */
+  "customers.manage": ["owner", "operations"],
+  /** SOS alerts: acknowledge and close. */
+  "sos.manage": ["owner", "operations"],
+  /** The Team screen: staff accounts, roles, password resets, disabling. */
+  "team.manage": ["owner"],
 } as const satisfies Record<string, readonly AdminRole[]>;
 export type Permission = keyof typeof PERMISSIONS;
 
@@ -43,6 +51,13 @@ export const ADMIN_RULES = {
   reasonMin: 5,
   /** Longest range the dashboard can show. */
   statsMaxDays: 90,
+  /** Largest single wallet credit or debit staff can make (₹). */
+  walletAdjustMax: 10_000,
+  /** Rows in one CSV export (the free D1 plan and a browser download both prefer a bound). */
+  exportMaxRows: 5000,
+  /** Internal booking notes. */
+  noteMin: 2,
+  noteMax: 500,
 } as const;
 
 export interface AdminUser {
@@ -101,6 +116,16 @@ export interface AdminBookingDetail {
   partner: { vendorId: string; vendorName: string; vehicleId: string; regNumber: string; driverName: string | null } | null;
   /** ₹ of toll estimate in this active group trip's quote: completing it needs the actual tolls (`tollsActual`). Null otherwise. */
   tollEstimate: number | null;
+  /** Internal staff notes, oldest first (missing from APIs older than Phase 6). */
+  notes?: BookingNote[];
+}
+
+/** An internal note a staff member attached to a booking. Customers never see these. */
+export interface BookingNote {
+  id: string;
+  body: string;
+  admin: { id: string; name: string };
+  createdAt: string;
 }
 
 export const BOOKING_STATUSES = ["confirmed", "ongoing", "completed", "cancelled"] as const;
@@ -147,7 +172,79 @@ export interface AdminStats {
   byService: { service: ServiceKey; bookings: number; revenue: number }[];
   /** One entry per day in the range, oldest first (YYYY-MM-DD, India time). */
   byDay: { date: string; bookings: number; revenue: number; cancelled: number }[];
-  /** returnsToSettle: self-drive cars returned by the customer, waiting for staff to settle the deposit. */
-  queues: { pendingLicences: number; pendingDeletions: number; returnsToSettle: number };
+  /** returnsToSettle: self-drive cars returned by the customer, waiting for staff to settle the deposit. openSos: SOS alerts nobody has acknowledged (missing from older APIs). */
+  queues: { pendingLicences: number; pendingDeletions: number; returnsToSettle: number; openSos?: number };
   recent: AdminBooking[];
+}
+
+/* ───────────── Phase 6: customers, SOS, team ───────────── */
+
+export const CUSTOMER_STATUSES = ["active", "suspended", "deleting", "erased"] as const;
+/** deleting: the customer asked to delete the account (30-day grace); erased: personal details removed. */
+export type CustomerStatus = (typeof CUSTOMER_STATUSES)[number];
+
+export interface AdminCustomer {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  createdAt: string;
+  lastActiveAt: string | null;
+  walletBalance: number;
+  /** All bookings ever, any status. */
+  bookings: number;
+  status: CustomerStatus;
+  suspendReason: string | null;
+  suspendedAt: string | null;
+  deletedAt: string | null;
+  licenceStatus: LicenceStatus;
+  /** The partner application's status when this person is (or applied to be) a vehicle owner. */
+  vendorStatus: string | null;
+}
+
+export interface CustomerFilters {
+  /** Name, phone, email or customer id. */
+  q?: string;
+  status?: CustomerStatus;
+  page?: number;
+}
+
+export interface AdminCustomerDetail {
+  customer: AdminCustomer;
+  /** Wallet history, newest first (up to 100). */
+  wallet: WalletTransaction[];
+  /** The newest 10 bookings. */
+  bookings: AdminBooking[];
+  /** Staff actions on this customer (wallet adjustments, suspensions...). */
+  history: AuditEntry[];
+  /** Live sign-in sessions right now. */
+  sessions: number;
+}
+
+export const SOS_STATUSES = ["open", "acknowledged", "closed"] as const;
+export type SosStatus = (typeof SOS_STATUSES)[number];
+
+/** An SOS press, as staff see it: who, where (when shared), which ride, and who is handling it. */
+export interface SosAlert {
+  id: string;
+  customer: CustomerRef;
+  rideId: string | null;
+  bookingId: string | null;
+  lat: number | null;
+  lng: number | null;
+  note: string | null;
+  status: SosStatus;
+  createdAt: string;
+  handledBy: { id: string; name: string } | null;
+  handledAt: string | null;
+  handledNote: string | null;
+  /** The ride at the time of the press, when there was one. */
+  ride: { driverName: string; vehicle: string; plate: string; pickup: string; drop: string; status: string } | null;
+}
+
+/** A staff account on the Team screen. */
+export interface TeamMember extends AdminUser {
+  disabledAt: string | null;
+  /** Locked out after too many wrong passwords until this time (ms since epoch), when set. */
+  lockedUntil: number | null;
 }

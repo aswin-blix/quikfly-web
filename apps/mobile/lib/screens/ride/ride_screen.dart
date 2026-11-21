@@ -892,7 +892,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       Row(children: [
         FilledButton.icon(
           style: FilledButton.styleFrom(backgroundColor: c.danger, foregroundColor: Brand.onGold, minimumSize: const Size(0, 48)),
-          onPressed: () => showSafetySheet(context, onShare: _share),
+          onPressed: () => showSafetySheet(context, onShare: _share, rideId: _ride?.id),
           icon: const Icon(Icons.sos, size: 18),
           label: const Text('SOS'),
         ),

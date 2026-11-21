@@ -1,16 +1,17 @@
 // Bookings for staff: search across all customers, detail with wallet entries, and
 // cancel (with wallet refund) or complete. Each action is audited.
-import { ADMIN_RULES, TOLL_LINE, TOLLS_MAX, TOLLS_SETTLED_LINE, tollSettlement, type AdminBookingDetail, type BookingFilters, type FareLine, type Page, type WalletTransaction } from "@quikfly/shared";
+import { ADMIN_RULES, TOLL_LINE, TOLLS_MAX, TOLLS_SETTLED_LINE, tollSettlement, type AdminBooking, type AdminBookingDetail, type BookingFilters, type BookingNote, type FareLine, type Page, type WalletTransaction } from "@quikfly/shared";
 import { uid } from "../../lib/random";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { cancelBookingRow, completeBookingRow, refundFor, refundText } from "../bookings";
 import { notify } from "../notifications";
-import { audit, listAudit } from "./audit";
+import { audit, auditStatement, listAudit } from "./audit";
 import { LOCAL_DATE, toAdminBooking, type AdminBookingRow } from "./stats";
 
 const SELECT = "SELECT b.*, u.name AS customer_name, u.phone AS customer_phone, (SELECT CASE WHEN settlement IS NOT NULL THEN 'settled' WHEN return_at IS NOT NULL THEN 'returned' WHEN pickup_at IS NOT NULL THEN 'on_trip' ELSE 'booked' END FROM rentals WHERE booking_id = b.id) AS rental_state FROM bookings b JOIN users u ON u.id = b.user_id";
 
-export async function searchBookings(db: D1Database, f: BookingFilters): Promise<Page<ReturnType<typeof toAdminBooking>>> {
+/** The WHERE clause and its parameters for a booking search (shared by the list and the CSV export). */
+function bookingFilter(f: BookingFilters): { filter: string; params: unknown[] } {
   const where: string[] = [];
   const params: unknown[] = [];
   if (f.q) {
@@ -24,7 +25,53 @@ export async function searchBookings(db: D1Database, f: BookingFilters): Promise
   if (f.service) { where.push("b.service = ?"); params.push(f.service); }
   if (f.from) { where.push(`${LOCAL_DATE("b.created_at")} >= ?`); params.push(f.from); }
   if (f.to) { where.push(`${LOCAL_DATE("b.created_at")} <= ?`); params.push(f.to); }
-  const filter = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  return { filter: where.length ? `WHERE ${where.join(" AND ")}` : "", params };
+}
+
+/** Up to ADMIN_RULES.exportMaxRows bookings matching the filters, newest first, for the CSV export. */
+export async function exportBookings(db: D1Database, f: BookingFilters): Promise<AdminBooking[]> {
+  const { filter, params } = bookingFilter(f);
+  const { results } = await db.prepare(`${SELECT} ${filter} ORDER BY b.created_at DESC LIMIT ?`).bind(...params, ADMIN_RULES.exportMaxRows).all<AdminBookingRow>();
+  return results.map(toAdminBooking);
+}
+
+/** One CSV line per booking; a header first. Fields with commas, quotes or line breaks are quoted. */
+export function bookingsCsv(rows: AdminBooking[]): string {
+  const cell = (v: unknown) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, "\"\"")}"` : s;
+  };
+  const header = ["booking_id", "created_at", "service", "status", "title", "subtitle", "customer_name", "customer_phone", "payment", "amount_inr", "discount_inr", "credits_used_inr", "deposit_inr", "refund_inr", "cancel_fee_inr", "cancel_reason", "starts_at", "trip_id"];
+  const lines = rows.map((b) => [
+    b.id, b.createdAt, b.service, b.status, b.title, b.subtitle, b.customer.name, b.customer.phone, b.payment, b.amount, b.discount, b.creditsUsed,
+    b.deposit, b.refundAmount ?? "", b.cancelFee, b.cancelReason ?? "", b.startsAt ?? "", b.tripId ?? "",
+  ].map(cell).join(","));
+  return [header.join(","), ...lines].join("\r\n") + "\r\n";
+}
+
+interface NoteRow { id: string; body: string; admin_id: string; admin_name: string | null; created_at: string }
+const toNote = (n: NoteRow): BookingNote => ({ id: n.id, body: n.body, admin: { id: n.admin_id, name: n.admin_name ?? "Staff" }, createdAt: n.created_at });
+
+export async function listNotes(db: D1Database, bookingId: string): Promise<BookingNote[]> {
+  const { results } = await db.prepare(
+    "SELECT n.id, n.body, n.admin_id, a.name AS admin_name, n.created_at FROM booking_notes n LEFT JOIN admin_users a ON a.id = n.admin_id WHERE n.booking_id = ? ORDER BY n.created_at",
+  ).bind(bookingId).all<NoteRow>();
+  return results.map(toNote);
+}
+
+/** Adds an internal note (customers never see it) and audits it in the same batch. */
+export async function addNote(db: D1Database, adminId: string, bookingId: string, body: string): Promise<BookingNote[]> {
+  const exists = await db.prepare("SELECT 1 FROM bookings WHERE id = ?").bind(bookingId).first();
+  if (!exists) throw notFound("Booking not found.");
+  await db.batch([
+    db.prepare("INSERT INTO booking_notes (id, booking_id, admin_id, body, created_at) VALUES (?, ?, ?, ?, ?)").bind(uid("BN"), bookingId, adminId, body, new Date().toISOString()),
+    auditStatement(db, { adminId, action: "booking.note", entity: "booking", entityId: bookingId, detail: { body } }),
+  ]);
+  return listNotes(db, bookingId);
+}
+
+export async function searchBookings(db: D1Database, f: BookingFilters): Promise<Page<ReturnType<typeof toAdminBooking>>> {
+  const { filter, params } = bookingFilter(f);
   const page = Math.max(1, f.page ?? 1);
   const pageSize = ADMIN_RULES.pageSize;
 
@@ -47,7 +94,7 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
   if (!row) throw notFound("Booking not found.");
   const active = row.status === "confirmed" || row.status === "ongoing";
   const tollEstimate = active && row.service === "rentals" ? await quotedTolls(db, row.quote_id) : null;
-  const [{ results: txns }, history, partner] = await Promise.all([
+  const [{ results: txns }, history, partner, notes] = await Promise.all([
     db.prepare("SELECT * FROM wallet_transactions WHERE booking_id = ? ORDER BY created_at").bind(id).all<TxnRow>(),
     listAudit(db, 1, "booking", id),
     row.vendor_vehicle_id
@@ -55,6 +102,7 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
           JOIN users u ON u.id = ve.user_id LEFT JOIN vendor_drivers d ON d.id = ? WHERE vv.id = ?`).bind(row.vendor_driver_id, row.vendor_vehicle_id)
         .first<{ reg_number: string; vendor_name: string; driver_name: string | null }>()
       : Promise.resolve(null),
+    listNotes(db, id),
   ]);
   return {
     booking: toAdminBooking(row),
@@ -66,6 +114,7 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
       ? { vendorId: row.vendor_id, vendorName: partner.vendor_name, vehicleId: row.vendor_vehicle_id, regNumber: partner.reg_number, driverName: partner.driver_name }
       : null,
     tollEstimate,
+    notes,
   };
 }
 

@@ -857,3 +857,10 @@ abstract final class Rules {
 
   static bool isNightHour(int h) => nightHours.$1 > nightHours.$2 ? h >= nightHours.$1 || h < nightHours.$2 : h >= nightHours.$1 && h < nightHours.$2;
 }
+
+/// The API's answer to an SOS press (`SosReceipt` in packages/shared/src/types.ts): a reference to quote to support.
+class SosReceipt {
+  const SosReceipt({required this.id, required this.createdAt, required this.status});
+  final String id, createdAt, status;
+  factory SosReceipt.fromJson(Json j) => SosReceipt(id: j['id'] as String, createdAt: '${j['createdAt']}', status: (j['status'] as String?) ?? 'open');
+}

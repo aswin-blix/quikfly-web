@@ -8,9 +8,9 @@ import type { Settings } from "./settings";
 
 export const PRIVACY_NOTICE = {
   /** Stored with each consent. Change it (a new date) when the notice's meaning changes. */
-  version: "2026-11-19",
+  version: "2026-11-21",
   /** Shown as "Last updated". */
-  updated: "2026-11-19",
+  updated: "2026-11-21",
 } as const;
 
 /** Inactive accounts are told this long before erasure at the latest (the Rules ask for 48 hours). */
@@ -93,7 +93,8 @@ export function privacyNotice(s: Settings): PrivacyNotice {
           "Payments: wallet and QuikFly Credits history, invoices, and GST details if you add them. We never store card or UPI details.",
           "Self-drive: your driving licence number and expiry, and the car photos you take at pickup and return.",
           "Partners: city, bank account, your photo, vehicle documents (RC, insurance) and your drivers' licences.",
-          "Support: your requests, callbacks and messages to us.",
+          "Support: your requests, callbacks and messages to us, and the notes our staff add to a booking while helping you.",
+          "Safety: if you press SOS, the time, the ride it was about and the location your phone shared, so our team can act on it.",
           "Your phone: a notification token, so we can send trip updates.",
         ],
       },

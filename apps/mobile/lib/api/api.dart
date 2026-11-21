@@ -201,6 +201,10 @@ class QuikFlyApi {
   Future<List<Traveller>> removeTraveller(String id) => _delete('/me/travellers/$id', _listOf(Traveller.fromJson));
 
   Future<List<EmergencyContact>> contacts() => _get('/me/contacts', _listOf(EmergencyContact.fromJson));
+
+  /// SOS from the safety sheet: a record for the QuikFly safety desk (admin → SOS). Nothing is dispatched automatically yet.
+  Future<SosReceipt> raiseSos({String? rideId, String? bookingId, double? lat, double? lng, String? note}) =>
+      _post('/me/sos', (d) => SosReceipt.fromJson(d as Json), {'rideId': ?rideId, 'bookingId': ?bookingId, 'lat': ?lat, 'lng': ?lng, 'note': ?note});
   Future<List<EmergencyContact>> addContact(String name, String phone, {String? relation}) =>
       _post('/me/contacts', _listOf(EmergencyContact.fromJson), {'name': name, 'phone': phone, 'relation': ?relation});
   Future<List<EmergencyContact>> removeContact(String id) => _delete('/me/contacts/$id', _listOf(EmergencyContact.fromJson));

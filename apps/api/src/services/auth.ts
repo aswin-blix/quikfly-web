@@ -1,12 +1,15 @@
 import { DELETION_GRACE_DAYS, type AutoShareMode, type AuthResult, type Gender, type LicenceStatus, type User } from "@quikfly/shared";
 import { ACTIVITY_TOUCH_HOURS, DEFAULT_USER_NAME, PHONE_COUNTRY_CODE, PHONE_DIGITS, SESSION_TTL_DAYS } from "../config";
-import { badRequest } from "../lib/errors";
+import { badRequest, forbidden } from "../lib/errors";
 import { randomToken, sha256, uid } from "../lib/random";
 import { getSettings } from "./settings";
 import { eraseAccounts } from "./privacy";
 import { CREDIT_BALANCE_COLUMN } from "./credits";
 import { PASS_UNTIL_COLUMN } from "./pass";
 import { txnStatement } from "./wallet";
+
+/** What a suspended customer is told at sign-in (staff lift suspensions in admin → Customers). */
+export const SUSPENDED_MESSAGE = "This account is suspended. Please contact QuikFly support.";
 
 export interface UserRow {
   id: string; name: string; phone: string; wallet_balance: number; created_at: string;
@@ -15,6 +18,8 @@ export interface UserRow {
   licence_number: string | null; licence_expiry: string | null; licence_submitted_at: string | null;
   licence_status: LicenceStatus; licence_note: string | null; licence_reviewed_at: string | null;
   gstin: string | null; gst_name: string | null; auto_share_night: number; deleted_at: string | null;
+  /** Set by staff (admin → Customers → Suspend); sign-in and sessions are refused while set. */
+  suspended_at?: string | null;
   auto_share_mode: AutoShareMode | null; ride_pin: string | null;
   privacy_version: string | null; last_active_at: string | null; erased_at: string | null;
   /** Computed by CREDIT_BALANCE_COLUMN; absent when a query didn't ask for it. */
@@ -99,6 +104,8 @@ export async function verifyOtp(db: D1Database, docs: R2Bucket | undefined, demo
     }
   }
   row ??= await createUser(db, phone);
+  // Staff suspended the account (admin → Customers): no new session until they lift it.
+  if (row.suspended_at) throw forbidden(SUSPENDED_MESSAGE);
 
   const token = randomToken();
   await db.batch([
@@ -116,7 +123,7 @@ export async function endSession(db: D1Database, token: string) {
 
 export async function userForToken(db: D1Database, token: string): Promise<User | null> {
   const row = await db.prepare(
-    `SELECT u.*, ${CREDIT_BALANCE_COLUMN}, ${PASS_UNTIL_COLUMN} FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.deleted_at IS NULL`,
+    `SELECT u.*, ${CREDIT_BALANCE_COLUMN}, ${PASS_UNTIL_COLUMN} FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.deleted_at IS NULL AND u.suspended_at IS NULL`,
   ).bind(await sha256(token), Date.now()).first<UserRow>();
   if (!row) return null;
   // Remember the account is in use (for the inactivity sweep), at most once a day.

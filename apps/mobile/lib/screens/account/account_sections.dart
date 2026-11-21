@@ -21,7 +21,7 @@ import 'privacy_screens.dart';
 /// Refund timings shown on the wallet page (apps/web/src/lib/account.ts REFUND_TIMINGS).
 const refundTimings = [('QuikFly wallet', 'Instant'), ('UPI', '1–3 working days'), ('Card / net banking', '5–7 working days')];
 
-const walletKindLabel = {'welcome': 'Welcome credit', 'payment': 'Payment', 'refund': 'Refund', 'referral': 'Referral bonus', 'opening': 'Opening balance'};
+const walletKindLabel = {'welcome': 'Welcome credit', 'payment': 'Payment', 'refund': 'Refund', 'referral': 'Referral bonus', 'opening': 'Opening balance', 'adjustment': 'Adjustment by QuikFly'};
 
 /// Opens one account section, or asks to sign in first.
 class AccountSectionScreen extends ConsumerWidget {

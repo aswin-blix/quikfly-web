@@ -11,19 +11,25 @@ import { Link } from "@/lib/nav";
 import { useApp } from "./AppProvider";
 import { Modal } from "./ui";
 
-export function SafetySheet({ open, onClose, onShare }: { open: boolean; onClose: () => void; onShare: () => void }) {
+export function SafetySheet({ open, rideId, onClose, onShare }: { open: boolean; /** The live ride, so staff see the driver and route. */ rideId?: string; onClose: () => void; onShare: () => void }) {
   const SAFETY = { emergency: EMERGENCY_NUMBER, safetyLine: useSettings().safetyLine };
   const { toast } = useApp();
   const [contacts, setContacts] = useState<EmergencyContact[] | null>(null);
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     if (open) api.contacts.list().then(setContacts, () => setContacts([]));
   }, [open]);
 
-  const alertContacts = () => {
-    if (!contacts?.length) return;
-    toast(`Alert with your live location sent to ${contacts.map((c) => c.name.split(" ")[0]).join(", ")} (demo: no SMS sent)`);
-    onShare();
+  /** The SOS reaches staff (admin → SOS) for real; the SMS to contacts is still simulated and says so. */
+  const alertAll = async () => {
+    setSending(true);
+    let ref = "";
+    try { ref = (await api.sos.raise({ rideId })).id; } catch { ref = ""; }
+    setSending(false);
+    const names = contacts?.length ? ` Trip link to ${contacts.map((c) => c.name.split(" ")[0]).join(", ")} (demo: no SMS sent).` : "";
+    toast(ref ? `QuikFly's safety desk has your SOS (ref ${ref}).${names}` : `Couldn't reach QuikFly's safety desk. Call ${SAFETY.emergency} if you are in danger.${names}`);
+    if (contacts?.length) onShare();
     onClose();
   };
 
@@ -47,11 +53,13 @@ export function SafetySheet({ open, onClose, onShare }: { open: boolean; onClose
         <button type="button" className={rowCls} onClick={() => { onShare(); onClose(); }}>
           <Row icon={<Share2 size={18} />} title="Share live trip" sub="Send a link to follow this ride on a map" />
         </button>
-        {contacts && contacts.length > 0 ? (
-          <button type="button" className={rowCls} onClick={alertContacts}>
-            <Row icon={<BellRing size={18} />} title="Alert my emergency contacts" sub={`Sends your trip link to ${contacts.length} contact${contacts.length > 1 ? "s" : ""}`} />
+        {contacts && (
+          <button type="button" className={rowCls} onClick={alertAll} disabled={sending} aria-busy={sending}>
+            <Row icon={<BellRing size={18} />} title={contacts.length > 0 ? "Alert QuikFly and my contacts" : "Alert QuikFly safety desk"}
+              sub={contacts.length > 0 ? `Our safety desk sees your SOS now; your trip link goes to ${contacts.length} contact${contacts.length > 1 ? "s" : ""}` : "Our team sees your SOS now and calls you back"} />
           </button>
-        ) : contacts && (
+        )}
+        {contacts && contacts.length === 0 && (
           <Link href="/account?tab=safety" onClick={onClose} className={rowCls}>
             <Row icon={<ShieldAlert size={18} />} title="Add emergency contacts" sub="So we can alert them with one tap next time" />
           </Link>

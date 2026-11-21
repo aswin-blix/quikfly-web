@@ -607,6 +607,13 @@ await expect("GET /share/:token is public", call("GET", `/share/${shared.token}`
 await expect("GET /share/:token unknown is 404", call("GET", "/share/nope", null, false), 404);
 await expect("sharing someone else's ride is 404", call("POST", `/rides/${ride.id}/share`, null, tokenB), 404);
 
+// SOS (safety sheet): a record for staff; nothing is dispatched
+const sos = await expect("POST /me/sos with a ride", call("POST", "/me/sos", { rideId: ride.id, lat: 13.0827, lng: 80.2707, note: "smoke test, ignore" }), 201, (j) => j.id?.startsWith("SOS") && j.status === "open" && j.createdAt);
+await expect("sos: someone else's ride is 404", call("POST", "/me/sos", { rideId: ride.id }, tokenB), 404);
+await expect("sos: a bad latitude is refused", call("POST", "/me/sos", { lat: 123 }), 400);
+await expect("sos: a long note is refused", call("POST", "/me/sos", { note: "x".repeat(201) }), 400);
+await expect("sos: shows up in the data export", call("GET", "/me/export"), 200, (j) => (j.data.sos_alerts ?? []).some((a) => a.id === sos.id));
+
 // Notification inbox: the bus booking and its cancellation from earlier are in it.
 await expect("GET /me/notifications needs sign-in", call("GET", "/me/notifications", null, false), 401);
 await expect("GET /me/notifications lists booking events", call("GET", "/me/notifications"), 200,
@@ -736,7 +743,7 @@ const exportRes = await fetch(`${BASE}/me/export`, { headers: { Authorization: `
 const exported = await exportRes.json().catch(() => null);
 check("GET /me/export is a download of this account's data",
   exportRes.status === 200 && /attachment; filename="quikfly-data-/.test(exportRes.headers.get("content-disposition") ?? "") && /no-store/.test(exportRes.headers.get("cache-control") ?? "")
-    && exported?.data?.account?.[0]?.phone === `+91 ${PHONE}` && exported.data.bookings.length > 0 && exported.data.privacy_consents.length === 1
+    && exported?.data?.account?.[0]?.phone === `+91 ${PHONE}` && exported.data.bookings.length > 0 && exported.data.privacy_consents.length >= 1 && exported.data.privacy_consents.some((c) => c.version === notice?.version)
     && !JSON.stringify(exported).includes("token_hash"),
   `${exportRes.status} ${JSON.stringify(exported)?.slice(0, 200)}`);
 await expect("export needs sign-in", call("GET", "/me/export", null, false), 401);

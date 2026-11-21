@@ -22,6 +22,7 @@ import { buyPass } from "../services/pass";
 import { customerClose, customerReply, myTicket, myTickets, openTicket } from "../services/support";
 import { listNotifications, markRead, registerDevice, removeDevice } from "../services/notifications";
 import { exportData, giveConsent } from "../services/privacy";
+import { raiseSos } from "../services/sos";
 
 type Json = Record<string, unknown>;
 const NAME = [LIMITS.nameMin, LIMITS.nameMax] as const;
@@ -138,6 +139,15 @@ export const me = new Hono<AppEnv>()
   .delete("/contacts/:id", async (c) => c.json(await removeContact(c.env.DB, c.var.user.id, c.req.param("id"))))
 
   .get("/wallet", async (c) => c.json(await listTransactions(c.env.DB, c.var.user.id)))
+
+  // SOS from the safety sheet: { rideId?, bookingId?, lat?, lng?, note? } → 201 receipt. Staff see it in admin → SOS.
+  .post("/sos", async (c) => {
+    const body = await jsonBody(c);
+    return c.json(await raiseSos(c.env.DB, c.var.user.id, {
+      rideId: optStr(body, "rideId", 40), bookingId: optStr(body, "bookingId", 40),
+      lat: body.lat as number | undefined, lng: body.lng as number | undefined, note: body.note as string | undefined,
+    }), 201);
+  })
   // QuikFly Credits: balance, the soonest expiry, and history (newest first).
   .get("/credits", async (c) => c.json(await creditSummary(c.env.DB, c.var.user.id)))
   // Support tickets: a thread with QuikFly staff, optionally about one of the customer's bookings.

@@ -3,7 +3,7 @@ import type {
   ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
   WalletTransaction, AppNotification, CreditSummary, DataExport,
 } from "@quikfly/shared";
-import type { CallbackTime, FareLine, PublicTicket, Rental, RentalPhotoSide, RentalStage, RideCancelReason, SupportTicket, SupportTopic, VendorApplication, VendorDocument, VendorSection } from "@quikfly/shared";
+import type { CallbackTime, FareLine, PublicTicket, Rental, RentalPhotoSide, RentalStage, RideCancelReason, SosReceipt, SosRequest, SupportTicket, SupportTopic, VendorApplication, VendorDocument, VendorSection } from "@quikfly/shared";
 
 /**
  * The single contract between the UI and the backend.
@@ -68,6 +68,10 @@ export interface QuikflyApi {
     add(t: { name: string; age: number; gender: Gender }): Promise<Traveller[]>;
     /** DELETE /me/travellers/:id */
     remove(id: string): Promise<Traveller[]>;
+  };
+  sos: {
+    /** POST /me/sos: records an SOS press for the QuikFly safety desk (admin → SOS). Nothing is dispatched automatically yet. */
+    raise(req: SosRequest): Promise<SosReceipt>;
   };
   contacts: {
     /** GET /me/contacts */

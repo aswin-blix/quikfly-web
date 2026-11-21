@@ -2,8 +2,8 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { CheckCircle2, ChevronLeft, XCircle } from "lucide-react";
-import { COUPON_LINE, TOLLS_MAX, type AdminBookingDetail, RIDE_CANCEL_REASONS, termLines, tollSettlement } from "@quikfly/shared";
+import { CheckCircle2, ChevronLeft, StickyNote, XCircle } from "lucide-react";
+import { ADMIN_RULES, COUPON_LINE, TOLLS_MAX, type AdminBookingDetail, type BookingNote, RIDE_CANCEL_REASONS, termLines, tollSettlement } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ReasonDialog } from "@/components/ReasonDialog";
 import { Badge, Button, ErrorBox, PageHeader } from "@/components/ui";
@@ -14,7 +14,7 @@ import { PartnerAssign } from "@/components/PartnerAssign";
 import { RentalReview } from "@/components/RentalReview";
 import { useLoad } from "@/lib/useLoad";
 
-const KIND_LABEL: Record<string, string> = { payment: "Paid from wallet", refund: "Refunded to wallet", welcome: "Welcome credit", referral: "Referral", opening: "Opening balance" };
+const KIND_LABEL: Record<string, string> = { payment: "Paid from wallet", refund: "Refunded to wallet", welcome: "Welcome credit", referral: "Referral", opening: "Opening balance", adjustment: "Adjusted by staff" };
 
 function Detail({ id }: { id: string }) {
   const { can } = useSession();
@@ -81,7 +81,9 @@ function Detail({ id }: { id: string }) {
             <p className="text-sm text-fg">{b.customer.name}</p>
             <a href={`tel:${b.customer.phone.replace(/\s/g, "")}`} className="text-sm text-accent hover:underline">{b.customer.phone}</a>
             <Link href={`/bookings?q=${encodeURIComponent(b.customer.phone.replace(/\D/g, "").slice(-10))}`} className="block text-xs text-muted hover:text-fg mt-2">All bookings by this customer →</Link>
+            {can("customers.view") && <Link href={`/customers/view?id=${encodeURIComponent(b.customer.id)}`} className="block text-xs text-muted hover:text-fg mt-1">Customer profile and wallet →</Link>}
           </section>
+          <Notes bookingId={b.id} notes={data.notes ?? []} canAdd={can("bookings.manage")} onAdded={(notes) => setData({ ...data, notes })} />
           <section className="card p-5" aria-labelledby="terms">
             <h2 id="terms" className="font-semibold text-strong mb-1">Sold under</h2>
             <p className="text-xs text-subtle mb-3">The terms kept with this booking. Refunds, the deposit settlement and the invoice use these, whatever the settings say now.</p>
@@ -169,6 +171,47 @@ function Detail({ id }: { id: string }) {
         {actionError && <p className="text-sm text-danger mt-2" role="alert">{actionError}</p>}
       </ConfirmDialog>
     </>
+  );
+}
+
+/** Internal notes: what staff agreed with the customer, what to watch for. Customers never see them. */
+function Notes({ bookingId, notes, canAdd, onAdded }: { bookingId: string; notes: BookingNote[]; canAdd: boolean; onAdded: (notes: BookingNote[]) => void }) {
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const tooShort = body.trim().length < ADMIN_RULES.noteMin;
+  const add = async () => {
+    setBusy(true); setErr("");
+    try { onAdded(await adminApi.bookings.addNote(bookingId, body.trim())); setBody(""); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Couldn't save the note."); }
+    finally { setBusy(false); }
+  };
+  return (
+    <section className="card p-5" aria-labelledby="notes">
+      <h2 id="notes" className="font-semibold text-strong mb-1">Staff notes</h2>
+      <p className="text-xs text-subtle mb-3">Internal. The customer never sees these.</p>
+      {notes.length === 0 ? <p className="text-sm text-muted">No notes yet.</p> : (
+        <ul className="grid gap-2 text-sm">
+          {notes.map((n) => (
+            <li key={n.id} className="rounded-xl border border-line px-3 py-2">
+              <p className="whitespace-pre-wrap text-fg">{n.body}</p>
+              <p className="text-[11px] text-subtle mt-1">{n.admin.name} · {dateTime(n.createdAt)}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {canAdd && (
+        <div className="mt-3 grid gap-2">
+          <label htmlFor="note-body" className="sr-only">New note</label>
+          <textarea id="note-body" className="field w-full min-h-[72px] text-sm" maxLength={ADMIN_RULES.noteMax} placeholder="e.g. Customer called: will pick up 30 min late." value={body} onChange={(e) => setBody(e.target.value)} />
+          {err && <p className="text-sm text-danger" role="alert">{err}</p>}
+          <div className="flex justify-between items-center gap-2">
+            <span className="text-xs text-subtle">{body.length}/{ADMIN_RULES.noteMax}</span>
+            <Button size="sm" variant="primary" loading={busy} disabled={busy || tooShort} onClick={add}><StickyNote size={14} /> Add note</Button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

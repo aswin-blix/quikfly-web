@@ -7,7 +7,9 @@ import type { AppEnv } from "../../env";
 import { badRequest } from "../../lib/errors";
 import { jsonBody, text } from "../../lib/validate";
 import { requireAdmin } from "../../middleware/admin";
-import { adminCancel, adminComplete, bookingDetail, searchBookings } from "../../services/admin/bookings";
+import { addNote, adminCancel, adminComplete, bookingDetail, bookingsCsv, exportBookings, searchBookings } from "../../services/admin/bookings";
+import { audit } from "../../services/admin/audit";
+import { businessDate } from "../../config";
 import { adminRental, rentalPhoto, settleRental, settlementPreview } from "../../services/rentals";
 import { licenceQueue, reviewLicence } from "../../services/admin/licences";
 import { finishReview, markSticker, reviewSection, vendorDetail, vendorDocument, vendorQueue } from "../../services/admin/vendors";
@@ -28,22 +30,37 @@ const date = (v: string | undefined, name: string) => {
 };
 const reason = (body: Record<string, unknown>) => text(body, "reason", ADMIN_RULES.reasonMin, ADMIN_RULES.reasonMax);
 
+/** The booking list's filters from the query string (shared by the list and the CSV export). */
+function bookingFilters(q: Record<string, string>): BookingFilters {
+  return {
+    q: q.q?.trim().slice(0, 60) || undefined,
+    status: pick(q.status, BOOKING_STATUSES, "status"),
+    service: pick(q.service, SERVICE_KEYS, "service"),
+    from: date(q.from, "from"),
+    to: date(q.to, "to"),
+    rental: q.rental === "returned" ? "returned" : undefined,
+    page: Math.max(1, parseInt(q.page ?? "1", 10) || 1),
+  };
+}
+
 export const adminBookings = new Hono<AppEnv>()
   // ?q=&status=&service=&from=&to=&page=
-  .get("/", requireAdmin("bookings.view"), async (c) => {
-    const q = c.req.query();
-    const f: BookingFilters = {
-      q: q.q?.trim().slice(0, 60) || undefined,
-      status: pick(q.status, BOOKING_STATUSES, "status"),
-      service: pick(q.service, SERVICE_KEYS, "service"),
-      from: date(q.from, "from"),
-      to: date(q.to, "to"),
-      rental: q.rental === "returned" ? "returned" : undefined,
-      page: Math.max(1, parseInt(q.page ?? "1", 10) || 1),
-    };
-    return c.json(await searchBookings(c.env.DB, f));
+  .get("/", requireAdmin("bookings.view"), async (c) => c.json(await searchBookings(c.env.DB, bookingFilters(c.req.query()))))
+  // Same filters, as a CSV download (newest first, up to ADMIN_RULES.exportMaxRows rows). Audited.
+  .get("/export.csv", requireAdmin("bookings.view"), async (c) => {
+    const f = bookingFilters(c.req.query());
+    const rows = await exportBookings(c.env.DB, f);
+    await audit(c.env.DB, { adminId: c.var.admin.id, action: "bookings.export", entity: "bookings", detail: { filters: { ...f, page: undefined }, rows: rows.length } });
+    return c.body(bookingsCsv(rows), 200, {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="quikfly-bookings-${businessDate()}.csv"`,
+      "Cache-Control": "no-store",
+    });
   })
   .get("/:id", requireAdmin("bookings.view"), async (c) => c.json(await bookingDetail(c.env.DB, c.req.param("id"))))
+  // { body }: an internal note on the booking (customers never see it) → the booking's notes
+  .post("/:id/notes", requireAdmin("bookings.manage"), async (c) =>
+    c.json(await addNote(c.env.DB, c.var.admin.id, c.req.param("id"), text(await jsonBody(c), "body", ADMIN_RULES.noteMin, ADMIN_RULES.noteMax)), 201))
   // { reason } — refunds a wallet payment to the customer's wallet.
   // { vehicleId | null } — give a group-travel booking to a live partner vehicle (or take it back)
   .post("/:id/vendor", requireAdmin("bookings.manage"), async (c) => {

@@ -1,5 +1,5 @@
 // Sidebar entries. Each is shown only to roles with its permission (PERMISSIONS in @quikfly/shared).
-import { ClipboardList, Handshake, Headphones, IdCard, LayoutDashboard, Map, ScrollText, Settings, TicketPercent, type LucideIcon } from "lucide-react";
+import { ClipboardList, Handshake, Headphones, IdCard, LayoutDashboard, Map, ScrollText, Settings, Siren, TicketPercent, Users, UsersRound, type LucideIcon } from "lucide-react";
 import type { Permission } from "@quikfly/shared";
 
 export interface NavItem {
@@ -12,17 +12,20 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
   { href: "/bookings", label: "Bookings", icon: ClipboardList, permission: "bookings.view" },
+  { href: "/customers", label: "Customers", icon: Users, permission: "customers.view" },
+  { href: "/sos", label: "SOS alerts", icon: Siren, permission: "sos.manage" },
   { href: "/licences", label: "Licence reviews", icon: IdCard, permission: "licences.review" },
   { href: "/vendors", label: "Partners", icon: Handshake, permission: "vendors.review" },
   { href: "/support", label: "Support", icon: Headphones, permission: "support.manage" },
   { href: "/catalog", label: "Catalog", icon: Map, permission: "catalog.edit" },
   { href: "/catalog/list?kind=offer", label: "Offers", icon: TicketPercent, permission: "offers.edit" },
   { href: "/settings", label: "Settings", icon: Settings, permission: "dashboard.view" },
+  { href: "/team", label: "Team", icon: UsersRound, permission: "team.manage" },
   { href: "/audit", label: "Audit log", icon: ScrollText, permission: "audit.view" },
 ];
 
 /** Routes that exist so far; entries for later slices stay hidden until their page ships. */
-export const LIVE_ROUTES = new Set(["/", "/bookings", "/licences", "/vendors", "/support", "/catalog", "/catalog/list?kind=offer", "/settings", "/audit"]);
+export const LIVE_ROUTES = new Set(["/", "/bookings", "/customers", "/sos", "/licences", "/vendors", "/support", "/catalog", "/catalog/list?kind=offer", "/settings", "/team", "/audit"]);
 
 /** `full` is the path plus query string, so /catalog/list?kind=offer can be told apart from other catalog lists. */
 export function isActive(href: string, path: string, full = path) {
