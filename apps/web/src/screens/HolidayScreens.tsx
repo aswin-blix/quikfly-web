@@ -92,7 +92,7 @@ export function HolidaysScreen() {
           <AnimatePresence mode="popLayout">
             {shown.map((t) => (
               <motion.div key={t.id} layout initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.94 }} transition={{ duration: 0.3 }}>
-                <TourCard t={t} />
+                <TourCard t={t} filter={{ month, fromCity }} />
               </motion.div>
             ))}
           </AnimatePresence>
@@ -111,11 +111,17 @@ function transportFact(t: TourPackage): [typeof Hotel, string] {
 
 const monthLabel = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
 
-/** The next bookable group departure (or "any start date"). */
-function NextDeparture({ t }: { t: TourPackage }) {
+/** The departures the list filters ask for; a card shows the next one of these first. */
+type DepartureFilter = { month?: string; fromCity?: string };
+const departureMatches = (d: DepartureView, f: DepartureFilter) => (!f.month || departureMonth(d) === f.month) && (!f.fromCity || d.fromCity === f.fromCity);
+
+/** The next bookable group departure (or "any start date"), preferring the filtered month and city. */
+function NextDeparture({ t, filter = {} }: { t: TourPackage; filter?: DepartureFilter }) {
   const deps = t.departures ?? [];
   if (!deps.length) return <p className="text-xs text-subtle">Private trip · start any date</p>;
-  const next = deps.find((d) => d.seatsLeft > 0) ?? deps[0];
+  const wanted = deps.filter((d) => departureMatches(d, filter));
+  const pool = wanted.length ? wanted : deps;
+  const next = pool.find((d) => d.seatsLeft > 0) ?? pool[0];
   const status = departureStatus(next);
   return (
     <p className="text-xs text-soft flex flex-wrap gap-x-2">
@@ -127,7 +133,7 @@ function NextDeparture({ t }: { t: TourPackage }) {
   );
 }
 
-function TourCard({ t }: { t: TourPackage }) {
+function TourCard({ t, filter }: { t: TourPackage; filter?: DepartureFilter }) {
   const settings = useSettings();
   return (
     <Tilt max={5}>
@@ -149,7 +155,7 @@ function TourCard({ t }: { t: TourPackage }) {
             <span className="flex items-center gap-1"><Utensils size={13} />{t.meals}</span>
           </div>
           <ul className="text-sm text-soft space-y-1">{t.highlights.map((h) => <li key={h} className="flex gap-2"><Check size={14} className="text-gold mt-0.5 shrink-0" />{h}</li>)}</ul>
-          <NextDeparture t={t} />
+          <NextDeparture t={t} filter={filter} />
           <div className="flex items-end justify-between pt-3 border-t border-line">
             <div><p className="text-[11px] text-subtle">per person{settings.gstTours ? " + GST" : ""}</p><p className="text-xl font-bold text-gold">{inr(t.price)}</p></div>
             <span className="text-sm text-gold group-hover:translate-x-1 transition-transform">View details →</span>

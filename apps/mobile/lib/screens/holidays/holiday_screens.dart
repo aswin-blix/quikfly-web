@@ -179,7 +179,7 @@ class _HolidaysScreenState extends ConsumerState<HolidaysScreen> {
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
                   childAspectRatio: wide ? 1.35 : 1.25,
-                  children: [for (final t in shown) _TourCard(t)],
+                  children: [for (final t in shown) _TourCard(t, month: _month, city: _city)],
                 ),
             ],
           );
@@ -190,8 +190,10 @@ class _HolidaysScreenState extends ConsumerState<HolidaysScreen> {
 }
 
 class _TourCard extends StatelessWidget {
-  const _TourCard(this.t);
+  const _TourCard(this.t, {this.month, this.city});
   final TourPackage t;
+  /// The list's departure filters: the card shows the next departure that matches them first.
+  final String? month, city;
 
   @override
   Widget build(BuildContext context) {
@@ -221,7 +223,9 @@ class _TourCard extends StatelessWidget {
               const SizedBox(height: 4),
               Builder(builder: (_) {
                 if (t.departures.isEmpty) return Text('Private trip · start any date', style: TextStyle(color: c.fgSubtle, fontSize: 12));
-                final next = t.departures.firstWhere((d) => !d.soldOut, orElse: () => t.departures.first);
+                final wanted = t.departures.where((d) => (month == null || d.date.startsWith(month!)) && (city == null || d.fromCity == city)).toList();
+                final pool = wanted.isEmpty ? t.departures : wanted;
+                final next = pool.firstWhere((d) => !d.soldOut, orElse: () => pool.first);
                 return Text(
                   'Group departure ${shortDate(next.day)} from ${next.fromCity} · ${next.soldOut ? 'Sold out' : '${next.seatsLeft} seats left'}${next.filling ? ' · Filling fast' : ''}',
                   maxLines: 1,

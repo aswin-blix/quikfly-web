@@ -30,10 +30,14 @@ class WhatsAppButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final uri = whatsappLink(ref.watch(configProvider).value?.settings.whatsappNumber ?? '', text);
     if (uri == null) return const SizedBox.shrink();
-    return OutlinedButton.icon(
-      onPressed: () => launchUrl(uri, mode: LaunchMode.externalApplication),
-      icon: const Icon(Icons.chat_outlined, size: 18),
-      label: const Text('Chat on WhatsApp'),
+    // Carries its own top gap so lists of buttons keep an even rhythm whether or not it shows.
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: OutlinedButton.icon(
+        onPressed: () => launchUrl(uri, mode: LaunchMode.externalApplication),
+        icon: const Icon(Icons.chat_outlined, size: 18),
+        label: const Text('Chat on WhatsApp'),
+      ),
     );
   }
 }
@@ -199,7 +203,6 @@ class SupportListScreen extends ConsumerWidget {
             Text('Your questions to QuikFly and our replies. You\'ll get a notification when we answer.', style: TextStyle(color: c.fgMuted)),
             const SizedBox(height: 12),
             GoldButton(label: 'New ticket', icon: Icons.add, onPressed: () => context.push('/support/new')),
-            const SizedBox(height: 8),
             const WhatsAppButton(text: 'Hi QuikFly, I need help with '),
             const SizedBox(height: 12),
             if (items.isEmpty)
