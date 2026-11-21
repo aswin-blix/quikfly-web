@@ -20,15 +20,17 @@ final contactsProvider = FutureProvider<List<EmergencyContact>>((ref) async {
 
 void call(String number) => launchUrl(Uri(scheme: 'tel', path: number.replaceAll(' ', '')));
 
-Future<void> showSafetySheet(BuildContext context, {required VoidCallback onShare}) => showModalBottomSheet<void>(
+Future<void> showSafetySheet(BuildContext context, {required VoidCallback onShare, String? rideId}) => showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _SafetySheet(onShare: onShare),
+      builder: (_) => _SafetySheet(onShare: onShare, rideId: rideId),
     );
 
 class _SafetySheet extends ConsumerWidget {
-  const _SafetySheet({required this.onShare});
+  const _SafetySheet({required this.onShare, this.rideId});
   final VoidCallback onShare;
+  /// The live ride the SOS is about, so staff see the driver and route.
+  final String? rideId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -93,18 +95,28 @@ class _SafetySheet extends ConsumerWidget {
             loading: () => const [Skeleton(height: 68)],
             error: (_, _) => const [],
             data: (list) => [
-              if (list.isNotEmpty)
-                row(
-                  icon: Icons.notifications_active_outlined,
-                  title: 'Alert my emergency contacts',
-                  sub: 'Sends your trip link to ${list.length} contact${list.length > 1 ? 's' : ''}',
-                  onTap: () {
-                    Navigator.pop(context);
-                    toast(context, 'Alert with your live location sent to ${list.map((x) => x.name.split(' ').first).join(', ')} (demo: no SMS sent)');
-                    onShare();
-                  },
-                )
-              else
+              row(
+                icon: Icons.notifications_active_outlined,
+                title: list.isNotEmpty ? 'Alert QuikFly and my contacts' : 'Alert QuikFly safety desk',
+                sub: list.isNotEmpty
+                    ? 'Our safety desk sees your SOS now; your trip link goes to ${list.length} contact${list.length > 1 ? 's' : ''}'
+                    : 'Our team sees your SOS now and calls you back',
+                onTap: () async {
+                  // The record reaches staff (admin → SOS) even when the SMS to contacts is only simulated.
+                  String receipt = '';
+                  try {
+                    receipt = (await ref.read(apiProvider).raiseSos(rideId: rideId)).id;
+                  } catch (_) {
+                    receipt = '';
+                  }
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  final names = list.isEmpty ? '' : ' Trip link to ${list.map((x) => x.name.split(' ').first).join(', ')} (demo: no SMS sent).';
+                  toast(context, receipt.isNotEmpty ? "QuikFly's safety desk has your SOS (ref $receipt).$names" : "Couldn't reach QuikFly's safety desk. Call 112 if you are in danger.$names");
+                  if (list.isNotEmpty) onShare();
+                },
+              ),
+              if (list.isEmpty)
                 row(
                   icon: Icons.person_add_alt,
                   title: 'Add emergency contacts',

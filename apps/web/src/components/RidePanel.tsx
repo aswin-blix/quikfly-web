@@ -481,7 +481,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
                 </div>
               </div>
             )}
-            <SafetySheet open={sosOpen} onClose={() => setSosOpen(false)} onShare={() => shareTrip()} />
+            <SafetySheet open={sosOpen} rideId={ride?.id} onClose={() => setSosOpen(false)} onShare={() => shareTrip()} />
           </div>
         )}
 

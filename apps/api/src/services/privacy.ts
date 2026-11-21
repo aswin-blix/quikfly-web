@@ -56,6 +56,8 @@ export async function exportData(db: D1Database, userId: string): Promise<DataEx
     ["push_devices", "SELECT platform, created_at, last_seen FROM push_devices WHERE user_id = ?1"],
     byUser("support_tickets"),
     ["support_messages", "SELECT * FROM support_messages WHERE ticket_id IN (SELECT id FROM support_tickets WHERE user_id = ?1)"],
+    byUser("sos_alerts"),
+    ["booking_notes", "SELECT booking_id, body, created_at FROM booking_notes WHERE booking_id IN (SELECT id FROM bookings WHERE user_id = ?1)"],
     byUser("vendors"),
     byVendor("vendor_vehicles"),
     byVendor("vendor_drivers"),
@@ -91,8 +93,9 @@ export async function eraseAccounts(db: D1Database, bucket: R2Bucket | undefined
   const now = new Date().toISOString();
   const forUsers = (sql: string) => db.prepare(sql).bind(list);
   await db.batch([
-    ...["sessions", "saved_places", "travellers", "emergency_contacts", "push_devices", "notifications", "ride_shares", "support_tickets"]
+    ...["sessions", "saved_places", "travellers", "emergency_contacts", "push_devices", "notifications", "ride_shares", "support_tickets", "sos_alerts"]
       .map((t) => forUsers(`DELETE FROM ${t} WHERE user_id IN ${IN_USERS}`)),
+    forUsers(`DELETE FROM booking_notes WHERE booking_id IN (SELECT id FROM bookings WHERE user_id IN ${IN_USERS})`),
     forUsers(`UPDATE vendor_vehicles SET rc_key = NULL, insurance_key = NULL WHERE vendor_id IN ${IN_VENDORS}`),
     forUsers(`UPDATE vendor_drivers SET dl_key = NULL WHERE vendor_id IN ${IN_VENDORS}`),
     db.prepare(`UPDATE vendors SET bank_holder = NULL, bank_ifsc = NULL, bank_account = NULL, photo_key = NULL, updated_at = ?2 WHERE user_id IN ${IN_USERS}`)
@@ -100,7 +103,7 @@ export async function eraseAccounts(db: D1Database, bucket: R2Bucket | undefined
     db.prepare(
       `UPDATE users SET name = 'Erased account', phone = 'erased:' || id, email = NULL, gender = NULL, dob = NULL,
          licence_number = NULL, licence_expiry = NULL, licence_note = NULL, gstin = NULL, gst_name = NULL, ride_pin = NULL,
-         erased_at = ?2
+         suspend_reason = NULL, erased_at = ?2
        WHERE id IN ${IN_USERS}`,
     ).bind(list, now),
   ]);

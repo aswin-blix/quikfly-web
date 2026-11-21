@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, IdCard, KeyRound, UserMinus } from "lucide-react";
+import { ArrowRight, IdCard, KeyRound, Siren, UserMinus } from "lucide-react";
 import type { AdminStats } from "@quikfly/shared";
 import { BarList, ColumnChart } from "@/components/charts";
 import { Badge, Empty, ErrorBox, PageHeader, Segmented } from "@/components/ui";
@@ -89,6 +89,8 @@ function Dashboard({ s }: { s: AdminStats }) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+        <Queue icon={Siren} label="SOS alerts open" count={s.queues.openSos ?? 0}
+          href={can("sos.manage") ? "/sos" : undefined} />
         <Queue icon={IdCard} label="Licences to review" count={s.queues.pendingLicences}
           href={LIVE_ROUTES.has("/licences") && can("licences.review") ? "/licences" : undefined} />
         <Queue icon={UserMinus} label="Accounts waiting to be deleted" count={s.queues.pendingDeletions} />

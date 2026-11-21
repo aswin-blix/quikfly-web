@@ -141,6 +141,10 @@ export const mockApi: QuikflyApi = {
   account: mockAccount,
   savedPlaces: mockSavedPlaces,
   travellers: mockTravellers,
+  sos: {
+    // Demo: the "safety desk" is this browser; the receipt looks like the API's.
+    async raise() { await wait(250); signedInUser(); return { id: `SOS${Date.now().toString(36).toUpperCase()}`, createdAt: new Date().toISOString(), status: "open" as const }; },
+  },
   contacts: mockContacts,
 
   places: {

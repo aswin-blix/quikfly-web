@@ -349,6 +349,13 @@ void main() {
     await api.updateProfile({'gst': null});
   });
 
+  test('SOS press returns a receipt', () async {
+    final r = await api.raiseSos(note: 'contract test, ignore');
+    expect(r.id, startsWith('SOS'));
+    expect(r.status, 'open');
+    expect(r.createdAt, isNotEmpty);
+  });
+
   test('wallet and saved lists parse', () async {
     expect(await api.wallet(), isA<List<WalletTransaction>>());
     expect(await api.savedPlaces(), isA<List<SavedPlace>>());

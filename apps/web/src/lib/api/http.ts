@@ -98,6 +98,9 @@ export const httpApi: QuikflyApi = {
     add: (t) => req("POST", "/me/travellers", t),
     remove: (id) => req("DELETE", `/me/travellers/${id}`),
   },
+  sos: {
+    raise: (r) => req("POST", "/me/sos", r),
+  },
   contacts: {
     list: () => req("GET", "/me/contacts"),
     add: (c) => req("POST", "/me/contacts", c),

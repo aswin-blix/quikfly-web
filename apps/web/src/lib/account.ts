@@ -34,6 +34,7 @@ export const WALLET_KIND_LABEL: Record<WalletTxnKind, string> = {
   payment: "Payment",
   refund: "Refund",
   referral: "Referral",
+  adjustment: "Adjustment by QuikFly",
   opening: "Opening balance",
 };
 

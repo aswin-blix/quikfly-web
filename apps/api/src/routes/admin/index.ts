@@ -13,6 +13,7 @@ import { adminLogin, endAdminSession } from "../../services/admin/auth";
 import { dashboardStats } from "../../services/admin/stats";
 import { getSettings, updateSettings } from "../../services/settings";
 import { adminCatalog } from "./catalog";
+import { adminCustomers, adminSos, adminTeam } from "./customers";
 import { adminBookings, adminLicences, adminSupport, adminVendors } from "./operations";
 
 /** Positive page number from `?page=`, default 1. */
@@ -75,4 +76,7 @@ export const admin = new Hono<AppEnv>()
   .route("/bookings", adminBookings)
   .route("/licences", adminLicences)
   .route("/vendors", adminVendors)
-  .route("/support", adminSupport);
+  .route("/support", adminSupport)
+  .route("/customers", adminCustomers)
+  .route("/sos", adminSos)
+  .route("/team", adminTeam);

@@ -2,8 +2,8 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ClipboardList, Search, X } from "lucide-react";
-import { BOOKING_STATUSES, type BookingFilters, type ServiceKey } from "@quikfly/shared";
+import { ClipboardList, Download, Search, X } from "lucide-react";
+import { ADMIN_RULES, BOOKING_STATUSES, type BookingFilters, type ServiceKey } from "@quikfly/shared";
 import { Badge, Button, Empty, ErrorBox, PageHeader, Pager } from "@/components/ui";
 import { adminApi } from "@/lib/api";
 import { SERVICE_LABEL, STATUS_STYLE, cx, dateTime, inr } from "@/lib/format";
@@ -42,6 +42,8 @@ function BookingsList() {
   const key = JSON.stringify(f);
   const { data, error, loading, reload } = useLoad(() => adminApi.bookings.search(f), [key]);
   const filtered = !!(f.q || f.status || f.service || f.from || f.to || f.rental);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   return (
     <>
@@ -74,8 +76,13 @@ function BookingsList() {
         <div className="flex gap-2 col-span-2">
           <Button type="submit" variant="primary" className="flex-1">Search</Button>
           {filtered && <Button type="button" variant="ghost" aria-label="Clear filters" onClick={() => { setQ(""); setF({ q: undefined, status: undefined, service: undefined, from: undefined, to: undefined }); }}><X size={16} /></Button>}
+          <Button type="button" title={`Download these bookings as CSV (newest first, up to ${ADMIN_RULES.exportMaxRows.toLocaleString("en-IN")} rows)`} loading={exporting} disabled={exporting || !data?.total}
+            onClick={async () => { setExporting(true); setExportError(""); try { await adminApi.bookings.exportCsv(f); } catch (e) { setExportError(e instanceof Error ? e.message : "Couldn't export."); } finally { setExporting(false); } }}>
+            <Download size={16} /> CSV
+          </Button>
         </div>
       </form>
+      {exportError && <ErrorBox message={exportError} />}
 
       {error && <ErrorBox message={error} onRetry={reload} />}
       {!data && !error && <div className="card p-5 grid gap-3">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-12" />)}</div>}

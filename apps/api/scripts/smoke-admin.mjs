@@ -850,6 +850,102 @@ if (LOCAL) {
   await expect("locked account refuses the right password too", login(LOCKME), 429);
 }
 
+// ───────── Phase 6: customers, booking notes, CSV export, SOS, team ─────────
+{
+  const found = await expect("GET /admin/customers?q=<phone>", call("GET", `/admin/customers?q=${CUSTOMER_PHONE}`, null, T), 200,
+    (j) => j.items.some((x) => x.phone.replace(/\D/g, "").endsWith(CUSTOMER_PHONE)) && typeof j.total === "number");
+  const customer = found.items.find((x) => x.phone.replace(/\D/g, "").endsWith(CUSTOMER_PHONE));
+  await expect("GET /admin/customers?status=nope is 400", call("GET", "/admin/customers?status=nope", null, T), 400);
+  const detail = await expect("GET /admin/customers/:id", call("GET", `/admin/customers/${customer.id}`, null, T), 200,
+    (j) => j.customer.id === customer.id && Array.isArray(j.wallet) && Array.isArray(j.bookings) && typeof j.sessions === "number");
+  const balance = detail.customer.walletBalance;
+  await expect("wallet credit needs a reason", call("POST", `/admin/customers/${customer.id}/wallet`, { amount: 50 }, T), 400);
+  await expect("wallet credit ₹50", call("POST", `/admin/customers/${customer.id}/wallet`, { amount: 50, reason: "Smoke test credit" }, T), 200,
+    (j) => j.customer.walletBalance === balance + 50 && j.wallet[0].kind === "adjustment" && j.wallet[0].amount === 50 && j.wallet[0].note === "Smoke test credit");
+  await expect("wallet debit ₹50 (back to where it was)", call("POST", `/admin/customers/${customer.id}/wallet`, { amount: -50, reason: "Smoke test debit" }, T), 200,
+    (j) => j.customer.walletBalance === balance && j.history[0].action === "customer.wallet_debit");
+  await expect("a debit below zero is 409", call("POST", `/admin/customers/${customer.id}/wallet`, { amount: -(balance + 1), reason: "Too much, refuse" }, T), 409);
+  await expect("a ₹0 adjustment is 400", call("POST", `/admin/customers/${customer.id}/wallet`, { amount: 0, reason: "Nothing at all" }, T), 400);
+  // The customer smoke test schedules this account's deletion at its end (sign-in restores it), so either state is possible here.
+  await expect(detail.customer.status === "deleting" ? "POST /admin/customers/:id/cancel-deletion" : "cancel-deletion when none is scheduled is 409",
+    call("POST", `/admin/customers/${customer.id}/cancel-deletion`, { reason: "Smoke: keep this account" }, T), detail.customer.status === "deleting" ? 200 : 409,
+    (j) => detail.customer.status !== "deleting" || j.customer.status === "active");
+  await expect("customer sees the adjustment in the wallet", call("GET", "/me/wallet", null, (await call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: OTP })).json.token), 200,
+    (j) => j[0].kind === "adjustment" && j[0].amount === -50);
+
+  // Booking notes (internal) and the CSV export
+  const page1 = (await call("GET", "/admin/bookings", null, T)).json;
+  const anyBooking = page1?.items?.[0];
+  if (anyBooking) {
+    await expect("a one-letter note is refused", call("POST", `/admin/bookings/${anyBooking.id}/notes`, { body: "x" }, T), 400);
+    const notes = await expect("POST /admin/bookings/:id/notes", call("POST", `/admin/bookings/${anyBooking.id}/notes`, { body: "Smoke note: customer called about this trip." }, T), 201,
+      (j) => j.at(-1).body.startsWith("Smoke note") && j.at(-1).admin.name);
+    await expect("the note is on the booking detail", call("GET", `/admin/bookings/${anyBooking.id}`, null, T), 200, (j) => j.notes.length === notes.length && j.history[0].action === "booking.note");
+  }
+  await expect("note on an unknown booking is 404", call("POST", "/admin/bookings/nope/notes", { body: "Smoke note for nobody" }, T), 404);
+  {
+    const res = await fetch(BASE + "/admin/bookings/export.csv?status=cancelled", { headers: { Authorization: `Bearer ${T}` } });
+    const text = await res.text();
+    const lines = text.trim().split(/\r?\n/);
+    check("GET /admin/bookings/export.csv", res.status === 200 && /text\/csv/.test(res.headers.get("content-type") || "") && /attachment; filename="quikfly-bookings-/.test(res.headers.get("content-disposition") || "")
+      && lines[0].startsWith("booking_id,created_at,service,status"), `${res.status} ${lines[0]?.slice(0, 80)} rows=${lines.length - 1}`);
+    await expect("the export is audited", call("GET", "/admin/audit?entity=bookings", null, T), 200, (j) => j.items[0]?.action === "bookings.export" && j.items[0].detail.rows === lines.length - 1);
+  }
+
+  // SOS: the customer presses it; staff acknowledge and close
+  const custToken = (await call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: OTP })).json.token;
+  const sos = await expect("customer: POST /me/sos", call("POST", "/me/sos", { note: "Smoke SOS, ignore" }, custToken), 201, (j) => j.status === "open");
+  await expect("GET /admin/sos lists it open", call("GET", "/admin/sos", null, T), 200, (j) => j.some((a) => a.id === sos.id && a.customer.id === customer.id && a.note === "Smoke SOS, ignore"));
+  await expect("closing without a note is 400", call("POST", `/admin/sos/${sos.id}/close`, {}, T), 400);
+  await expect("POST /admin/sos/:id/acknowledge", call("POST", `/admin/sos/${sos.id}/acknowledge`, { note: "Calling the customer" }, T), 200, (j) => j.status === "acknowledged" && j.handledBy?.name);
+  await expect("acknowledging twice is 409", call("POST", `/admin/sos/${sos.id}/acknowledge`, {}, T), 409);
+  await expect("POST /admin/sos/:id/close", call("POST", `/admin/sos/${sos.id}/close`, { reason: "Smoke test: false alarm, customer fine" }, T), 200, (j) => j.status === "closed" && /false alarm/.test(j.handledNote));
+  await expect("closing twice is 409", call("POST", `/admin/sos/${sos.id}/close`, { reason: "Smoke test again" }, T), 409);
+  await expect("GET /admin/sos?status=closed has it", call("GET", "/admin/sos?status=closed", null, T), 200, (j) => j.some((a) => a.id === sos.id));
+  await expect("the dashboard counts open SOS", call("GET", "/admin/stats?days=1", null, T), 200, (j) => typeof j.queues.openSos === "number");
+
+  if (LOCAL) {
+    // Suspend: sessions end and sign-in is refused until lifted
+    const before = (await call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: OTP })).json.token;
+    await expect("POST /admin/customers/:id/suspend", call("POST", `/admin/customers/${customer.id}/suspend`, { reason: "Smoke: testing suspension" }, T), 200, (j) => j.customer.status === "suspended" && j.sessions === 0);
+    await expect("a suspended customer's old token is 401", call("GET", "/auth/me", null, before), 401);
+    await expect("a suspended customer can't sign in (403)", call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: OTP }), 403, (j) => /suspended/i.test(j.message));
+    await expect("suspending twice is 409", call("POST", `/admin/customers/${customer.id}/suspend`, { reason: "Smoke: again" }, T), 409);
+    await expect("POST /admin/customers/:id/unsuspend", call("POST", `/admin/customers/${customer.id}/unsuspend`, { reason: "Smoke: lifting it" }, T), 200, (j) => j.customer.status === "active");
+    await expect("sign-in works again", call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: OTP }), 200, (j) => j.token);
+    const live = (await call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: OTP })).json.token;
+    await expect("POST /admin/customers/:id/sign-out", call("POST", `/admin/customers/${customer.id}/sign-out`, { reason: "Smoke: lost phone" }, T), 200, (j) => j.sessions === 0);
+    await expect("signed-out token is 401", call("GET", "/auth/me", null, live), 401);
+    await expect("GET /admin/customers?status=suspended", call("GET", "/admin/customers?status=suspended", null, T), 200, (j) => !j.items.some((x) => x.id === customer.id));
+
+    // Roles: content can't see customers, SOS or the team
+    const ct = (await login(CONTENT)).json.token;
+    await expect("content role can't list customers", call("GET", "/admin/customers", null, ct), 403);
+    await expect("content role can't see SOS", call("GET", "/admin/sos", null, ct), 403);
+    await expect("content role can't see the team", call("GET", "/admin/team", null, ct), 403);
+
+    // Team (owners only)
+    const email = `smoke-${Date.now().toString(36)}@quikfly.test`;
+    await expect("team: a bad email is 400", call("POST", "/admin/team", { email: "nope", name: "Smoke Member", role: "operations" }, T), 400);
+    const made = await expect("POST /admin/team", call("POST", "/admin/team", { email, name: "Smoke Member", role: "operations" }, T), 201,
+      (j) => j.member.email === email && j.member.role === "operations" && j.password?.length >= 10 && !("password_hash" in j.member));
+    await expect("the same email twice is 409", call("POST", "/admin/team", { email, name: "Smoke Member", role: "operations" }, T), 409);
+    await expect("GET /admin/team lists it", call("GET", "/admin/team", null, T), 200, (j) => j.some((m) => m.id === made.member.id && m.disabledAt === null));
+    const first = await expect("the new member can sign in", login({ email, password: made.password }), 200, (j) => j.admin.role === "operations");
+    await expect("operations can't open the team", call("GET", "/admin/team", null, first.token), 403);
+    await expect("PATCH /admin/team/:id role", call("PATCH", `/admin/team/${made.member.id}`, { role: "content" }, T), 200, (j) => j.role === "content");
+    await expect("a role change ends their sessions", call("GET", "/admin/auth/me", null, first.token), 401);
+    await expect("you can't change your own role", call("PATCH", `/admin/team/${owner.admin.id}`, { role: "content" }, T), 409);
+    const reset = await expect("POST /admin/team/:id/reset-password", call("POST", `/admin/team/${made.member.id}/reset-password`, null, T), 200, (j) => j.password && j.password !== made.password);
+    await expect("the old password no longer works", login({ email, password: made.password }), 401);
+    await expect("the new password works", login({ email, password: reset.password }), 200);
+    await expect("PATCH /admin/team/:id disabled", call("PATCH", `/admin/team/${made.member.id}`, { disabled: true }, T), 200, (j) => j.disabledAt);
+    await expect("a disabled member can't sign in (403)", login({ email, password: reset.password }), 403);
+    await expect("you can't disable yourself", call("PATCH", `/admin/team/${owner.admin.id}`, { disabled: true }, T), 409);
+    await expect("team changes are audited", call("GET", "/admin/audit?entity=admin", null, T), 200, (j) => j.items[0]?.action === "team.update" && j.items.some((a) => a.action === "team.create"));
+  }
+}
+
 // Sign out
 await expect("POST /admin/auth/logout", call("POST", "/admin/auth/logout", null, T), 200, (j) => j.signedOut === true);
 await expect("token is rejected after logout", call("GET", "/admin/auth/me", null, T), 401);

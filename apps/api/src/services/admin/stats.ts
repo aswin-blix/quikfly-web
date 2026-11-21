@@ -52,7 +52,8 @@ export async function dashboardStats(db: D1Database, days: number): Promise<Admi
     ).bind(since),
     db.prepare(
       `SELECT SUM(licence_status = 'pending' AND deleted_at IS NULL) AS pending_licences, SUM(deleted_at IS NOT NULL) AS pending_deletions,
-              (SELECT COUNT(*) FROM rentals WHERE return_at IS NOT NULL AND settlement IS NULL) AS returns_to_settle FROM users`,
+              (SELECT COUNT(*) FROM rentals WHERE return_at IS NOT NULL AND settlement IS NULL) AS returns_to_settle,
+              (SELECT COUNT(*) FROM sos_alerts WHERE status = 'open') AS open_sos FROM users`,
     ),
     db.prepare(
       `SELECT b.*, u.name AS customer_name, u.phone AS customer_phone, (SELECT CASE WHEN settlement IS NOT NULL THEN 'settled' WHEN return_at IS NOT NULL THEN 'returned' WHEN pickup_at IS NOT NULL THEN 'on_trip' ELSE 'booked' END FROM rentals WHERE booking_id = b.id) AS rental_state FROM bookings b JOIN users u ON u.id = b.user_id
@@ -62,7 +63,7 @@ export async function dashboardStats(db: D1Database, days: number): Promise<Admi
 
   const t = totals.results[0] as { bookings: number; revenue: number; cancelled: number | null };
   const c = customers.results[0] as { new_customers: number | null; customers: number; wallet: number };
-  const q = queues.results[0] as { pending_licences: number | null; pending_deletions: number | null; returns_to_settle: number | null };
+  const q = queues.results[0] as { pending_licences: number | null; pending_deletions: number | null; returns_to_settle: number | null; open_sos: number | null };
 
   // Fill in days with no bookings so charts have a bar per day.
   const dayRows = new Map((byDay.results as AdminStats["byDay"]).map((d) => [d.date, d]));
@@ -80,7 +81,7 @@ export async function dashboardStats(db: D1Database, days: number): Promise<Admi
     },
     byService: byService.results as AdminStats["byService"],
     byDay: allDays,
-    queues: { pendingLicences: q.pending_licences ?? 0, pendingDeletions: q.pending_deletions ?? 0, returnsToSettle: q.returns_to_settle ?? 0 },
+    queues: { pendingLicences: q.pending_licences ?? 0, pendingDeletions: q.pending_deletions ?? 0, returnsToSettle: q.returns_to_settle ?? 0, openSos: q.open_sos ?? 0 },
     recent: (recent.results as AdminBookingRow[]).map(toAdminBooking),
   };
 }

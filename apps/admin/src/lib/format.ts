@@ -1,5 +1,5 @@
 // Formatting helpers (no React). Indian number grouping and dates in India time.
-import type { BookingStatus, ServiceKey, VendorStatus } from "@quikfly/shared";
+import type { BookingStatus, CustomerStatus, ServiceKey, VendorStatus } from "@quikfly/shared";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -43,4 +43,12 @@ export const pct = (part: number, whole: number) => (whole ? Math.round((part / 
 /** Partner application status, as the admin panel names it. */
 export const VENDOR_TAB_LABEL: Record<VendorStatus, string> = {
   submitted: "To review", draft: "Being filled", onboarding: "Onboarding", active: "Live", rejected: "Rejected", blocked: "Blocked",
+};
+
+/** Account state badges on the Customers screens. */
+export const CUSTOMER_STATUS_STYLE: Record<CustomerStatus, { label: string; cls: string }> = {
+  active: { label: "Active", cls: "bg-success/10 text-success" },
+  suspended: { label: "Suspended", cls: "bg-danger/10 text-danger" },
+  deleting: { label: "Deletion scheduled", cls: "bg-warning/10 text-warning" },
+  erased: { label: "Erased", cls: "bg-raised text-subtle" },
 };

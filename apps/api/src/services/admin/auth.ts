@@ -1,13 +1,15 @@
 // Staff sign-in: email + password, lockout after repeated failures, bearer sessions
 // (hash stored, like customer sessions). Accounts are created by scripts/create-admin.mjs.
 import { ADMIN_RULES, type AdminLoginResult, type AdminRole, type AdminUser } from "@quikfly/shared";
-import { tooMany, unauthorized } from "../../lib/errors";
+import { forbidden, tooMany, unauthorized } from "../../lib/errors";
 import { hashPassword, verifyPassword } from "../../lib/password";
 import { randomToken, sha256 } from "../../lib/random";
 
 export interface AdminRow {
   id: string; email: string; name: string; role: AdminRole; password_hash: string;
   failed_logins: number; locked_until: number | null; last_login_at: string | null; created_at: string;
+  /** Set when an owner disabled the account (admin → Team). */
+  disabled_at?: string | null;
 }
 
 export const toAdmin = (r: AdminRow): AdminUser => ({
@@ -23,6 +25,10 @@ export async function adminLogin(db: D1Database, emailInput: string, password: s
     // Same work and the same message as a wrong password, so an attacker can't tell which emails exist.
     await hashPassword(password);
     throw unauthorized(BAD_LOGIN);
+  }
+  if (row.disabled_at) {
+    await hashPassword(password);
+    throw forbidden("This staff account is disabled. Ask an owner to enable it.");
   }
   if (row.locked_until && row.locked_until > Date.now()) {
     const minutes = Math.max(1, Math.ceil((row.locked_until - Date.now()) / 60_000));
@@ -50,7 +56,7 @@ export async function adminLogin(db: D1Database, emailInput: string, password: s
 
 export async function adminForToken(db: D1Database, token: string): Promise<AdminUser | null> {
   const row = await db.prepare(
-    "SELECT u.* FROM admin_sessions s JOIN admin_users u ON u.id = s.admin_id WHERE s.token_hash = ? AND s.expires_at > ?",
+    "SELECT u.* FROM admin_sessions s JOIN admin_users u ON u.id = s.admin_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.disabled_at IS NULL",
   ).bind(await sha256(token), Date.now()).first<AdminRow>();
   return row ? toAdmin(row) : null;
 }

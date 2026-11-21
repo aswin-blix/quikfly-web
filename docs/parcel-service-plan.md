@@ -145,7 +145,7 @@ What this cannot make issue-free: the commercial agreements, the GST classificat
 
 ## 4. Data model
 
-New migration `0027_parcels.sql` (never edit an applied one).
+New migration `0028_parcels.sql` (0027 is Phase 6; never edit an applied one).
 
 ```sql
 CREATE TABLE parcels (
@@ -283,7 +283,7 @@ Each step is one PR from `main`, off by default behind `serviceParcel`, with doc
 | # | Step | Size | Done when |
 |---|---|---|---|
 | 0 | **Decisions** (section 10) and the accountant's answer on `gstParcel` | — | The owner has answered 10.1–10.9 |
-| 1 | **Foundation**: `parcel.ts` (legs, transitions, declaration), `ServiceKey`, settings, operator-aware catalog kinds and seed, migration 0027 (`parcels`, `parcel_legs`, `parcel_events`), `priceParcelIntercity` + `priceParcelCity`, the two quote shapes, `advanceLeg` with the `simulated` and `staff` carriers, `/track/:lr`, cron, privacy export and erasure, notice bump, smoke checks, README rows, mock API | L | `npm run typecheck` and `npm run smoke` pass locally; a bus parcel can be quoted, booked, tracked and cancelled over curl; refunds follow `cancelPolicyParcel`; `GET /me/export` lists it |
+| 1 | **Foundation**: `parcel.ts` (legs, transitions, declaration), `ServiceKey`, settings, operator-aware catalog kinds and seed, migration 0028 (`parcels`, `parcel_legs`, `parcel_events`), `priceParcelIntercity` + `priceParcelCity`, the two quote shapes, `advanceLeg` with the `simulated` and `staff` carriers, `/track/:lr`, cron, privacy export and erasure, notice bump, smoke checks, README rows, mock API | L | `npm run typecheck` and `npm run smoke` pass locally; a bus parcel can be quoted, booked, tracked and cancelled over curl; refunds follow `cancelPolicyParcel`; `GET /me/export` lists it |
 | 2 | **Bus parcel in admin and on the website**: parcels queue and counter actions with audit; Settings tab; the website Parcels page (intercity only, counter to counter), tracking page, trip card, invoice | L | Smoke-admin walks a parcel through every state; browser check at 390 px and desktop, both themes; the demo shows "demo: simulated transit" |
 | 3 | **Quick parcel (city)**: the ride engine carries a package: quote, captain, pickup OTP, simulated trip, delivery OTP, returned-to-sender path; website form and tracker | M | A city parcel books from the wallet, completes in the simulation, earns credits, and the invoice prints |
 | 4 | **Door pickup and delivery as trips**: the intercity quote adds Quick parcel legs; one total, one tracking page across legs, `tripId` groups the bookings | M | A door-to-door intercity parcel shows three bookings in one trip with one timeline |
@@ -324,4 +324,4 @@ Decisions this plan would add to `decisions.md` when step 1 lands:
 
 Paste into a new chat after the decisions above are answered:
 
-> Implement step 1 of docs/parcel-service-plan.md (foundation for the parcel service). Read AGENTS.md, docs/roadmap.md, docs/decisions.md and the plan first. Branch from main. Follow Rule 1 (shared types → API route + service + migration 0027 → web contract/http/mock → smoke → API README). Keep `serviceParcel` off by default. Add the decisions listed in section 9 to docs/decisions.md and a Phase 7 row to docs/roadmap.md. Run `npm run typecheck` and `npm run smoke` against a local API on a free port; do not touch production. Commit at each checkpoint and open a PR.
+> Implement step 1 of docs/parcel-service-plan.md (foundation for the parcel service). Read AGENTS.md, docs/roadmap.md, docs/decisions.md and the plan first. Branch from main. Follow Rule 1 (shared types → API route + service + migration 0028 → web contract/http/mock → smoke → API README). Keep `serviceParcel` off by default. Add the decisions listed in section 9 to docs/decisions.md and a Phase 7 row to docs/roadmap.md. Run `npm run typecheck` and `npm run smoke` against a local API on a free port; do not touch production. Commit at each checkpoint and open a PR.

@@ -98,7 +98,27 @@ export interface EmergencyContact {
   relation: string | null;
 }
 
-export type WalletTxnKind = "welcome" | "payment" | "refund" | "referral" | "opening";
+/** adjustment: a credit or debit made by staff (the note says why). */
+export type WalletTxnKind = "welcome" | "payment" | "refund" | "referral" | "opening" | "adjustment";
+
+/** What the safety sheet sends when someone presses SOS. Location only when the app has it. */
+export interface SosRequest {
+  rideId?: string;
+  bookingId?: string;
+  lat?: number;
+  lng?: number;
+  /** Optional, e.g. "driver took a wrong turn" (SOS_NOTE_MAX). */
+  note?: string;
+}
+export const SOS_NOTE_MAX = 200;
+
+/** The API's answer to an SOS press: a reference the customer can quote to support. */
+export interface SosReceipt {
+  id: string;
+  createdAt: string;
+  /** Always "open" when raised. */
+  status: "open" | "acknowledged" | "closed";
+}
 
 export interface WalletTransaction {
   id: string;

@@ -1,6 +1,9 @@
 // The admin panel's only door to the backend. Screens call `adminApi`, never fetch().
 // Endpoints are listed in apps/api/README.md (Admin section).
-import type { AdminRental, AdminSupportTicket, RentalPhotoSide, RentalSettlement, RentalStage, SupportStatus } from "@quikfly/shared";
+import type {
+  AdminCustomer, AdminCustomerDetail, AdminRental, AdminRole, AdminSupportTicket, BookingNote, CustomerFilters, RentalPhotoSide, RentalSettlement, RentalStage,
+  SosAlert, SosStatus, SupportStatus, TeamMember,
+} from "@quikfly/shared";
 import type {
   AdminBooking, AdminBookingDetail, AdminLoginResult, AdminStats, AdminUser, AuditEntry, BookingFilters, CatalogItem, CatalogKind, LicenceQueueStatus,
   LicenceReview, Page, Settings, AdminVendorDetail, AdminPayout, AssignableVehicle, FleetReviewItem, VehicleDocument, VendorDocument, VendorSection, VendorStatus, VendorSummary,
@@ -64,6 +67,28 @@ export function qs(params: Record<string, string | number | undefined | null>) {
 }
 
 export const adminApi = {
+  customers: {
+    search: (f: CustomerFilters) => req<Page<AdminCustomer>>("GET", `/admin/customers${qs({ ...f })}`),
+    get: (id: string) => req<AdminCustomerDetail>("GET", `/admin/customers/${encodeURIComponent(id)}`),
+    /** amount in ₹, negative to debit; the reason goes on the wallet entry the customer sees. */
+    wallet: (id: string, amount: number, reason: string) => req<AdminCustomerDetail>("POST", `/admin/customers/${encodeURIComponent(id)}/wallet`, { amount, reason }),
+    suspend: (id: string, reason: string) => req<AdminCustomerDetail>("POST", `/admin/customers/${encodeURIComponent(id)}/suspend`, { reason }),
+    unsuspend: (id: string, reason: string) => req<AdminCustomerDetail>("POST", `/admin/customers/${encodeURIComponent(id)}/unsuspend`, { reason }),
+    signOut: (id: string, reason: string) => req<AdminCustomerDetail>("POST", `/admin/customers/${encodeURIComponent(id)}/sign-out`, { reason }),
+    cancelDeletion: (id: string, reason: string) => req<AdminCustomerDetail>("POST", `/admin/customers/${encodeURIComponent(id)}/cancel-deletion`, { reason }),
+  },
+  sos: {
+    list: (status: SosStatus) => req<SosAlert[]>("GET", `/admin/sos${qs({ status })}`),
+    get: (id: string) => req<SosAlert>("GET", `/admin/sos/${encodeURIComponent(id)}`),
+    acknowledge: (id: string, note?: string) => req<SosAlert>("POST", `/admin/sos/${encodeURIComponent(id)}/acknowledge`, note ? { note } : {}),
+    close: (id: string, reason: string) => req<SosAlert>("POST", `/admin/sos/${encodeURIComponent(id)}/close`, { reason }),
+  },
+  team: {
+    list: () => req<TeamMember[]>("GET", "/admin/team"),
+    create: (body: { email: string; name: string; role: AdminRole }) => req<{ member: TeamMember; password: string }>("POST", "/admin/team", body),
+    update: (id: string, patch: { role?: AdminRole; name?: string; disabled?: boolean }) => req<TeamMember>("PATCH", `/admin/team/${encodeURIComponent(id)}`, patch),
+    resetPassword: (id: string) => req<{ member: TeamMember; password: string }>("POST", `/admin/team/${encodeURIComponent(id)}/reset-password`),
+  },
   auth: {
     async login(email: string, password: string) {
       const r = await req<AdminLoginResult>("POST", "/admin/auth/login", { email, password });
@@ -92,6 +117,19 @@ export const adminApi = {
     rentalPhoto: (id: string, stage: RentalStage, side: RentalPhotoSide) => photo(`/admin/bookings/${encodeURIComponent(id)}/rental/photos/${stage}/${side}`),
     settlementPreview: (id: string, damage: number) => req<RentalSettlement>("GET", `/admin/bookings/${encodeURIComponent(id)}/rental/settlement${qs({ damage })}`),
     settle: (id: string, damage: number, damageNote: string) => req<AdminRental>("POST", `/admin/bookings/${encodeURIComponent(id)}/rental/settle`, { damage, damageNote }),
+    addNote: (id: string, body: string) => req<BookingNote[]>("POST", `/admin/bookings/${encodeURIComponent(id)}/notes`, { body }),
+    /** Downloads the CSV of the current filters (the API audits every export). */
+    exportCsv: async (f: BookingFilters) => {
+      const token = getToken();
+      const res = await fetch(`${BASE}/admin/bookings/export.csv${qs({ ...f, page: undefined })}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new ApiError(res.status, ((await res.json().catch(() => ({}))) as { message?: string }).message || "Couldn't export.");
+      const name = res.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ?? "quikfly-bookings.csv";
+      const url = URL.createObjectURL(await res.blob());
+      const a = Object.assign(document.createElement("a"), { href: url, download: name });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      return name;
+    },
   },
   support: {
     list: (status: SupportStatus) => req<AdminSupportTicket[]>("GET", `/admin/support${qs({ status })}`),
