@@ -378,6 +378,7 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 ## Backlog (agreed ideas, not scheduled)
 
 - Phase 6 items above (customers screen, booking notes, SOS in admin, team screen, CSV export)
+- **Parcel service** (KPN-style bus parcels and a bike courier as a seventh service): research, design and a 7-step plan in [parcel-service-plan.md](parcel-service-plan.md); waits for the owner's answers to its section 10
 - `smoke-admin.mjs`: stop right after a failed owner login (today it carries on and submits a test licence on production); offered to the owner 2026-11-20, not yet approved
 - Production offer GROUP500 (flat ₹500, ₹0 minimum): the step 2 rule asks for a minimum above ₹500 on its next edit; set one (e.g. ₹2,000, as in the seed)
 - Pricing plan steps 3–8 ([admin-settings-audit.md](admin-settings-audit.md) section 10)
