@@ -763,14 +763,18 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
 
   Widget _surgeNote(double surge, {bool sameSurge = true}) {
     final c = context.qf;
-    final s = ref.watch(configProvider).value?.settings ?? const Settings({});
+    final cfg = ref.watch(configProvider).value;
+    final s = cfg?.settings ?? const Settings({});
+    // The everyday hours are the whole story only while staff have added no surge rules
+    // (rules add hours by ride type and weekday; each quote already carries its own surge).
+    final listHours = sameSurge && s.surgeHours.isNotEmpty && (cfg?.surgeRules.isEmpty ?? true);
     String x(double v) => v.toStringAsFixed(v % 1 == 0 ? 0 : 1);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(color: c.warning.withValues(alpha: 0.1), border: Border.all(color: c.warning.withValues(alpha: 0.3)), borderRadius: BorderRadius.circular(10)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Busy hours: ${sameSurge ? 'these fares include a ×${x(surge)} surge' : 'some fares include a surge of up to ×${x(surge)}, shown on each ride'} (never more than ×${x(s.surgeCap)}).${sameSurge && s.surgeHours.isNotEmpty ? ' Surge hours: ${s.surgeHours}.' : ''}',
+        Text('Busy hours: ${sameSurge ? 'these fares include a ×${x(surge)} surge' : 'some fares include a surge of up to ×${x(surge)}, shown on each ride'} (never more than ×${x(s.surgeCap)}).${listHours ? ' Surge hours: ${s.surgeHours}.' : ''}',
             style: TextStyle(color: c.warning, fontSize: 12.5)),
         if (s.passOnSale)
           GestureDetector(

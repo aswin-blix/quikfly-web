@@ -430,6 +430,13 @@ export function BookingsScreen() {
   function confirmText(b: Booking) {
     const { percent, refund, fee } = preview(b);
     if (fee > 0) return `Cancel? A ${inr(fee)} cancellation fee applies${b.payment === "wallet" ? `; ${inr(refund)} comes back to your wallet.` : " (demo: not collected)."}`;
+    if (b.deposit > 0) {
+      // Self-drive: the deposit always comes back in full; the policy applies to the rental fare only.
+      const rental = refund - Math.min(b.deposit, b.amount);
+      const to = b.payment === "wallet" ? "to your wallet" : "to you";
+      if (rental <= 0) return `Cancel? Your ${inr(b.deposit)} deposit comes back ${to} in full. It's too close to pickup for a rental refund.`;
+      return `Cancel? Your ${inr(b.deposit)} deposit comes back in full, plus ${inr(rental)}${percent < 100 ? ` (${percent}%)` : ""} of the rental, ${to}.`;
+    }
     if (refund === 0) return "Cancel? It's too close to the start for a refund.";
     if (b.payment !== "wallet") return `Cancel? ${inr(refund)}${percent < 100 ? ` (${percent}%)` : ""} is due back under the cancellation policy.`;
     return `Cancel and get ${inr(refund)}${percent < 100 ? ` (${percent}%)` : ""} back in your wallet?`;
