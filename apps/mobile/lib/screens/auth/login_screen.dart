@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../api/api.dart';
 import '../../api/models.dart';
 import '../../core/env.dart';
 import '../../core/format.dart';
@@ -142,7 +143,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           // The profile is saved; let them fix the code or skip it.
           _code.clear();
           setState(() => _showCode = true);
-          throw Exception('${errorText(e)} You can try another code or continue without one.');
+          // errorText() shows only an ApiException's message.
+          throw ApiException('${errorText(e)} You can try another code or continue without one.');
         }
       }
       if (!mounted) return;
