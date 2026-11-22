@@ -560,7 +560,7 @@ export function BookingsScreen() {
                       <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
                         <div className="px-4 pb-4 border-t border-line pt-4">
                           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                            {b.lines.map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-subtle">{k}</dt><dd className="text-right">{v}</dd></div>)}
+                            {b.lines.map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-subtle shrink-0 max-w-[50%]">{k}</dt><dd className="text-right min-w-0 break-words">{v}</dd></div>)}
                             {b.startsAt && b.service !== "parcel" && !b.lines.some(([k]) => k === "Pickup time") && <div className="flex justify-between gap-3"><dt className="text-subtle">Starts</dt><dd className="text-right">{prettyDateTime(b.startsAt)}</dd></div>}
                             {b.deposit > 0 && b.status !== "cancelled" && <div className="flex justify-between gap-3"><dt className="text-subtle">Refundable deposit</dt><dd className="text-right">{b.status === "completed" ? `${inr(b.refundAmount ?? b.deposit)} ${b.payment === "wallet" ? "returned to wallet" : "due back"}` : `${inr(b.deposit)} (back after return)`}</dd></div>}
                             {b.status === "cancelled" && b.cancelFee > 0 && <div className="flex justify-between gap-3"><dt className="text-subtle">Cancellation fee</dt><dd className="text-right">{inr(b.cancelFee)}{b.payment === "wallet" ? " (kept)" : " (demo: not collected)"}</dd></div>}

@@ -57,6 +57,9 @@ export function PageTransition({ children, k }: { children: React.ReactNode; k?:
   );
 }
 
+/** More services than this don't fit in the header beside labelled Help, My Trips and account links. */
+const CROWDED_SERVICES = 6;
+
 function Header({ onOpenServices }: { onOpenServices: () => void }) {
   const path = usePath();
   const { user, requireAuth, signOut, bookings, toast, unread } = useApp();
@@ -74,6 +77,8 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
 
   const activeKey = SERVICES.find((s) => path.startsWith(s.href))?.key;
   const open = useOpenServices();
+  // The header never gets wider than 1280 px. Past six services the side links become icons to make room.
+  const crowded = open.length > CROWDED_SERVICES;
 
   return (
     <motion.header
@@ -91,12 +96,12 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
         <nav className="hidden xl:flex items-center ml-4" aria-label={t("navServices")}>
           {open.map((s) => (
             <Link key={s.key} href={s.href}
-              className={cx("relative px-3 py-2 text-sm rounded-lg transition-colors", activeKey === s.key ? "text-gold" : "text-soft hover:text-strong")}>
+              className={cx("relative py-2 text-sm rounded-lg transition-colors", crowded ? "px-1.5 text-center" : "px-3", activeKey === s.key ? "text-gold" : "text-soft hover:text-strong")}>
               {activeKey === s.key && <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-lg bg-gold/10 border border-gold/20" transition={{ type: "spring", stiffness: 380, damping: 30 }} />}
               <span className="relative">{s.nav}</span>
             </Link>
           ))}
-          <Link href="/offers" className={cx("px-3 py-2 text-sm", path === "/offers" ? "text-gold" : "text-soft hover:text-strong")}>{t("navOffers")}</Link>
+          <Link href="/offers" className={cx("py-2 text-sm", crowded ? "px-1.5" : "px-3", path === "/offers" ? "text-gold" : "text-soft hover:text-strong")}>{t("navOffers")}</Link>
         </nav>
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <LanguageMenu compact />
@@ -113,9 +118,9 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
             </Link>
           )}
           {/* Below lg these live in the bottom bar (BottomNav). */}
-          <Link href="/help" className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5"><HelpCircle size={17} />{t("navHelp")}</Link>
-          <Link href="/bookings" className="relative hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5">
-            <Ticket size={18} /><span>{t("navMyTrips")}</span>
+          <Link href="/help" title={t("navHelp")} className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5"><HelpCircle size={17} /><span className={cx(crowded && "xl:sr-only")}>{t("navHelp")}</span></Link>
+          <Link href="/bookings" title={t("navMyTrips")} className="relative hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-soft hover:bg-fg/5">
+            <Ticket size={18} /><span className={cx(crowded && "xl:sr-only")}>{t("navMyTrips")}</span>
             <AnimatePresence>
               {live > 0 && (
                 <motion.span key={live} initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
@@ -129,7 +134,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
               <Link href="/account" title={t("navMyAccount")}
                 className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border border-line hover:border-gold/50 text-sm">
                 <span className="w-7 h-7 rounded-full btn-gold grid place-items-center text-xs">{user.name[0]?.toUpperCase()}</span>
-                <span className="hidden sm:inline max-w-24 truncate">{user.name}</span><ChevronDown size={14} className="text-subtle" />
+                <span className={cx("hidden sm:inline max-w-24 truncate", crowded && "xl:sr-only")}>{user.name}</span><ChevronDown size={14} className="text-subtle" />
               </Link>
             </div>
           ) : (
