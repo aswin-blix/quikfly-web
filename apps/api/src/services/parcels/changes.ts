@@ -2,7 +2,7 @@
 // parcel along (that is legs.ts), but both take a new move id, so a move, a cancel and a change
 // can't overwrite each other.
 import {
-  canReweigh, parcelBandLabel, parcelRateFor, parcelTime, parseTerms, planBusChange, nextMoveAt, priceParcelIntercity, sumLines, withTerms,
+  PARCEL_RETURN_LOCKED, canReweigh, parcelBandLabel, parcelRateFor, parcelTime, parseTerms, planBusChange, nextMoveAt, priceParcelIntercity, sumLines, withTerms,
   type AdminParcel, type ParcelDeparture, type ParcelWeightBand, type WeightChange,
 } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../../lib/errors";
@@ -11,7 +11,7 @@ import { randomToken, uid } from "../../lib/random";
 import { auditIfStatement } from "../admin/audit";
 import { visible } from "../catalog";
 import { getSettings } from "../settings";
-import { loadParcels, type LoadedParcel } from "./legs";
+import { isReturn, loadParcels, type LoadedParcel } from "./legs";
 import { departuresBetween } from "./parcels";
 import { staffParcel } from "./staff";
 
@@ -99,6 +99,7 @@ export async function changeBus(db: D1Database, adminId: string, id: string, inp
 
 /** Both weights at today's tariff and the GST rate it was sold at: only the difference is charged or given back. */
 async function priceWeight(db: D1Database, { row, legs }: LoadedParcel, band: ParcelWeightBand): Promise<WeightChange> {
+  if (await isReturn(db, row.booking_id)) throw conflict(PARCEL_RETURN_LOCKED);
   const current = await getSettings(db);
   if (band === row.weight_band) throw badRequest("That's the weight it's booked at.");
   if (Number(band) > current.parcelMaxKg) throw badRequest(`Parcels can weigh up to ${current.parcelMaxKg} kg. Refuse it instead.`);
@@ -107,8 +108,9 @@ async function priceWeight(db: D1Database, { row, legs }: LoadedParcel, band: Pa
   const settings = withTerms(current, parseTerms(row.terms));
   const price = (b: ParcelWeightBand) => sumLines(priceParcelIntercity(rate, b, settings));
   const difference = price(band) - price(row.weight_band);
-  // Never more back than was paid (a coupon or credits may have paid part).
-  return { weightBand: band, charge: Math.max(difference, 0), refund: Math.min(Math.max(-difference, 0), row.amount) };
+  // A coupon or credits paid part of it, so only the share paid in money comes back.
+  const paidShare = row.amount / Math.max(row.amount + row.discount + row.credits_used, 1);
+  return { weightBand: band, charge: Math.max(difference, 0), refund: Math.min(Math.floor(Math.max(-difference, 0) * paidShare), row.amount) };
 }
 
 export async function weightChange(db: D1Database, id: string, band: ParcelWeightBand): Promise<WeightChange> {

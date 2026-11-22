@@ -2,7 +2,7 @@
 // hand-offs, the sender playing the captain (demo: there is no driver app). An operator's API
 // would be one more carrier in this file; all of them end in advanceLegs().
 import {
-  PARCEL_EARNS, PARCEL_RULES, PARCEL_WEIGHT_BANDS, parseTerms, planLegMove, planReturn, simulatedMove, withTerms,
+  PARCEL_EARNS, PARCEL_RETURN_LOCKED, PARCEL_RULES, PARCEL_WEIGHT_BANDS, parseTerms, planLegMove, planReturn, simulatedMove, withTerms,
   type AdminParcel, type LegMove, type Parcel, type ParcelLegState, type Settings,
 } from "@quikfly/shared";
 import { PARCEL_SIM_BATCH } from "../../config";
@@ -13,7 +13,7 @@ import { earnStatement, earnedNotice } from "../credits";
 import { notify } from "../notifications";
 import { getSettings } from "../settings";
 import { parcelRide } from "./courier";
-import { advanceLegs, loadParcels, type LoadedParcel } from "./legs";
+import { advanceLegs, isReturn, loadParcels, type LoadedParcel } from "./legs";
 import { toParcel } from "./parcels";
 import { staffParcel } from "./staff";
 
@@ -79,6 +79,7 @@ export async function staffMove(
   if (move.refuses) {
     const reason = input.note;
     if (!reason) throw badRequest("Say why the parcel is refused: the sender sees it.");
+    if (await isReturn(db, id)) throw conflict(PARCEL_RETURN_LOCKED);
     const cancelled = await cancelBookingRow(db, null, id, "Refund, parcel refused", null, { adminId, note: reason });
     if (!cancelled) throw conflict("This parcel just moved. Reload and try again.");
     await notify(db, cancelled.user_id, {
