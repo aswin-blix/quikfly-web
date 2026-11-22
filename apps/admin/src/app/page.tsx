@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRight, IdCard, KeyRound, Package, PackageCheck, PackageX, Siren, Truck, UserMinus } from "lucide-react";
 import type { AdminStats } from "@quikfly/shared";
 import { BarList, ColumnChart } from "@/components/charts";
@@ -161,6 +162,17 @@ function DashboardPage() {
   );
 }
 
+/** The panel opens here; a counter login's home is the parcels queue. */
+function Landing() {
+  const { can } = useSession();
+  const router = useRouter();
+  const toQueue = !can("dashboard.view") && can("parcels.manage");
+  useEffect(() => {
+    if (toQueue) router.replace("/parcels");
+  }, [toQueue, router]);
+  return toQueue ? null : <RequireAdmin permission="dashboard.view"><DashboardPage /></RequireAdmin>;
+}
+
 export default function Page() {
-  return <RequireAdmin permission="dashboard.view"><DashboardPage /></RequireAdmin>;
+  return <RequireAdmin><Landing /></RequireAdmin>;
 }

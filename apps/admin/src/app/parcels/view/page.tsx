@@ -30,7 +30,8 @@ function Person({ title, who }: { title: string; who: { name: string; phone: str
 }
 
 function Detail({ id }: { id: string }) {
-  const { can } = useSession();
+  const { can, admin } = useSession();
+  const scope = admin?.counter ?? null;
   const { data, setData, error, loading, reload } = useLoad(() => adminApi.parcels.get(id), [id]);
   const [move, setMove] = useState<StaffMove | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -58,7 +59,7 @@ function Detail({ id }: { id: string }) {
 
   if (!data) return error ? <ErrorBox message={error} onRetry={reload} /> : <div className="card p-6 grid gap-3">{[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-10" />)}</div>;
   const p = data;
-  const moves = movesFor(p);
+  const moves = movesFor(p, scope);
   const refund = can("bookings.manage") ? p.refundIfCancelled : null;
   const active = p.bookingStatus === "confirmed" || p.bookingStatus === "ongoing";
 
@@ -95,18 +96,22 @@ function Detail({ id }: { id: string }) {
               </div>
             ) : (
               <p className="text-sm text-muted mt-3">
-                {p.state === "unclaimed"
+                {scope && p.state === "unclaimed"
+                  ? "Nobody collected it. Keep it at the counter: QuikFly operations arrange the return."
+                  : scope && active
+                  ? "The other counter makes the next move."
+                  : p.state === "unclaimed"
                   ? `Nobody collected it. Ask the sender to book a bus parcel from ${p.to} to ${p.from}, then send this one back as that LR.`
                   : "Nothing left to do."}
               </p>
             )}
-            {active && canReweigh(p) && (
+            {active && can("parcels.change") && canReweigh(p) && (
               <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-line">
                 <Button onClick={() => openChange("bus")}>Change the bus</Button>
                 <Button onClick={() => openChange("weight")}>Correct the weight</Button>
               </div>
             )}
-            {active && p.state === "unclaimed" && <Button variant="primary" className="mt-3" onClick={() => openChange("return")}>Send back to the sender</Button>}
+            {active && can("parcels.change") && p.state === "unclaimed" && <Button variant="primary" className="mt-3" onClick={() => openChange("return")}>Send back to the sender</Button>}
             {active && p.state === "ready" && p.holdUntil && Date.parse(p.holdUntil) > Date.now() && (
               <p className="text-xs text-subtle mt-3">It can be marked unclaimed from {dateTime(p.holdUntil)}.</p>
             )}
@@ -155,7 +160,7 @@ function Detail({ id }: { id: string }) {
               <Row k="Status"><Badge className={STATUS_STYLE[p.bookingStatus].cls}>{STATUS_STYLE[p.bookingStatus].label}</Badge></Row>
               <Row k={p.payment === "cash" ? "To collect at pickup" : "Paid"}>{inr(p.amount)} by {p.payment.toUpperCase()}</Row>
             </dl>
-            <Link href={`/bookings/view?id=${encodeURIComponent(p.bookingId)}`} className="block text-xs text-muted hover:text-fg mt-3">Payment, terms and staff notes →</Link>
+            {can("bookings.view") && <Link href={`/bookings/view?id=${encodeURIComponent(p.bookingId)}`} className="block text-xs text-muted hover:text-fg mt-3">Payment, terms and staff notes →</Link>}
           </section>
         </div>
       </div>

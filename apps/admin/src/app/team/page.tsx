@@ -3,7 +3,7 @@
 // reset a password, disable or enable. You can't change or disable your own account here.
 import { useState } from "react";
 import { Copy, KeyRound, UserPlus, UsersRound } from "lucide-react";
-import { ADMIN_ROLES, ADMIN_ROLE_INFO, LIMITS, type AdminRole, type TeamMember } from "@quikfly/shared";
+import { ADMIN_ROLES, ADMIN_ROLE_INFO, LIMITS, type AdminRole, type CounterScope, type TeamMember } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Badge, Button, Empty, ErrorBox, Field, PageHeader } from "@/components/ui";
 import { adminApi } from "@/lib/api";
@@ -27,10 +27,39 @@ function OneTimePassword({ email, password, onDismiss }: { email: string; passwo
   );
 }
 
+const scopeKey = (c: CounterScope) => `${c.operatorId}|${c.city}`;
+
+/** One option per operator and city with a parcel counter. */
+function CounterSelect({ id, label, value, options, disabled, className, onPick }: {
+  id?: string; label?: string; value: CounterScope | null; options: { scope: CounterScope; name: string }[];
+  disabled?: boolean; className?: string; onPick: (c: CounterScope) => void;
+}) {
+  // A member's counter stays listed after it's hidden in the catalog.
+  const list = value && !options.some((o) => scopeKey(o.scope) === scopeKey(value)) ? [...options, { scope: value, name: value.city }] : options;
+  return (
+    <select id={id} aria-label={label} className={cx("field", className)} disabled={disabled} required value={value ? scopeKey(value) : ""}
+      onChange={(e) => { const o = list.find((x) => scopeKey(x.scope) === e.target.value); if (o) onPick(o.scope); }}>
+      <option value="" disabled>Choose a counter</option>
+      {list.map((o) => <option key={scopeKey(o.scope)} value={scopeKey(o.scope)}>{o.name}</option>)}
+    </select>
+  );
+}
+
 function Team() {
   const { admin } = useSession();
   const { data, setData, error, loading, reload } = useLoad(() => adminApi.team.list(), []);
-  const [form, setForm] = useState({ name: "", email: "", role: "operations" as AdminRole });
+  const [form, setForm] = useState({ name: "", email: "", role: "operations" as AdminRole, counter: null as CounterScope | null });
+  /** Picked "Counter" for someone: saved once their counter is chosen. */
+  const [becoming, setBecoming] = useState<string | null>(null);
+  const counterRows = useLoad(() => adminApi.catalog.list("parcelCounter"), []);
+  const counters = new Map<string, { scope: CounterScope; name: string }>();
+  for (const row of counterRows.data ?? []) {
+    const d = row.data as { operatorId?: string; city?: string; name?: string };
+    if (!d.operatorId || !d.city) continue;
+    const scope = { operatorId: d.operatorId, city: d.city };
+    if (!counters.has(scopeKey(scope))) counters.set(scopeKey(scope), { scope, name: d.name ?? d.city });
+  }
+  const counterOptions = [...counters.values()];
   const [busy, setBusy] = useState<string | null>(null);
   const [formError, setFormError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -43,17 +72,20 @@ function Team() {
     e.preventDefault();
     setBusy("create"); setFormError("");
     try {
-      const r = await adminApi.team.create({ name: form.name.trim(), email: form.email.trim(), role: form.role });
+      const r = await adminApi.team.create({ name: form.name.trim(), email: form.email.trim(), role: form.role, ...(form.role === "counter" ? { counter: form.counter } : {}) });
       setData((list) => [...(list ?? []), r.member]);
       setSecret({ email: r.member.email, password: r.password });
-      setForm({ name: "", email: "", role: "operations" });
+      setForm({ name: "", email: "", role: "operations", counter: null });
     } catch (err) { setFormError(err instanceof Error ? err.message : "Couldn't create the account."); }
     finally { setBusy(null); }
   };
 
-  const changeRole = async (m: TeamMember, role: AdminRole) => {
+  const changeRole = async (m: TeamMember, role: AdminRole, counter?: CounterScope) => {
+    if (role === "counter" && !counter) { setBecoming(m.id); return; }
+    setBecoming(null);
+    if (role === m.role && !counter) return;
     setBusy(m.id); setActionError("");
-    try { replace(await adminApi.team.update(m.id, { role })); }
+    try { replace(await adminApi.team.update(m.id, { role, ...(counter ? { counter } : {}) })); }
     catch (err) { setActionError(err instanceof Error ? err.message : "Couldn't change the role."); }
     finally { setBusy(null); }
   };
@@ -94,9 +126,13 @@ function Team() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                       <Badge className={state.cls}>{state.label}</Badge>
-                      <select className="field !w-auto !py-1.5 text-sm" value={m.role} aria-label={`Role of ${m.name}`} disabled={me || !!busy || !!m.disabledAt} onChange={(e) => changeRole(m, e.target.value as AdminRole)}>
+                      <select className="field !w-auto !py-1.5 text-sm" value={becoming === m.id ? "counter" : m.role} aria-label={`Role of ${m.name}`} disabled={me || !!busy || !!m.disabledAt} onChange={(e) => changeRole(m, e.target.value as AdminRole)}>
                         {ADMIN_ROLES.map((r) => <option key={r} value={r}>{ADMIN_ROLE_INFO[r].label}</option>)}
                       </select>
+                      {(m.role === "counter" || becoming === m.id) && (
+                        <CounterSelect label={`Counter of ${m.name}`} className="!w-auto max-w-full !py-1.5 text-sm" value={m.counter ?? null} options={counterOptions}
+                          disabled={me || !!busy || !!m.disabledAt} onPick={(counter) => changeRole(m, "counter", counter)} />
+                      )}
                       <Button size="sm" disabled={!!busy || !!m.disabledAt} onClick={() => setConfirm({ member: m, kind: "reset" })}><KeyRound size={14} /> Reset password</Button>
                       {!me && (m.disabledAt
                         ? <Button size="sm" variant="primary" disabled={!!busy} onClick={() => setConfirm({ member: m, kind: "enable" })}>Enable</Button>
@@ -121,6 +157,11 @@ function Team() {
               {ADMIN_ROLES.map((r) => <option key={r} value={r}>{ADMIN_ROLE_INFO[r].label}</option>)}
             </select>
           </Field>
+          {form.role === "counter" && (
+            <Field label="Works at" htmlFor="tm-counter" hint="They see and move only bus parcels to or from this city.">
+              <CounterSelect id="tm-counter" value={form.counter} options={counterOptions} onPick={(counter) => setForm({ ...form, counter })} />
+            </Field>
+          )}
           {formError && <p className="text-sm text-danger" role="alert">{formError}</p>}
           <Button type="submit" variant="primary" loading={busy === "create"} disabled={!!busy}>Create account</Button>
           <p className="text-xs text-subtle">A password is generated and shown once, here.</p>

@@ -61,7 +61,7 @@ function AccountFooter() {
   return (
     <div className="border-t border-line pt-3 mt-3">
       <p className="text-sm font-medium text-fg truncate">{admin.name}</p>
-      <p className="text-xs text-subtle truncate">{admin.email} · {ADMIN_ROLE_INFO[admin.role].label}</p>
+      <p className="text-xs text-subtle truncate">{admin.email} · {ADMIN_ROLE_INFO[admin.role].label}{admin.counter ? `, ${admin.counter.city}` : ""}</p>
       <div className="flex items-center justify-between mt-2">
         <button onClick={logout} className="inline-flex items-center gap-2 text-sm text-muted hover:text-danger py-1.5">
           <LogOut size={16} /> Sign out
