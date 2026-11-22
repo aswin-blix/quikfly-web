@@ -75,6 +75,7 @@ assets/                fonts (Outfit static weights, Archivo Black), images/ (lo
 - **Validation rules** are copied from `packages/shared/src/rules.ts` into `Rules` in `models.dart`. Change both together.
 - Every screen works at 390 px wide and on tablets (content is capped at 720 px), in light and dark mode.
 - Simulations are labelled honestly ("Demo: no SMS is sent").
+- Show errors with `FormError`, `ErrorBox` or a field's `errorText`; wrap one drawn another way in `LiveError`, or screen readers won't read it out (`test/error_announce_test.dart` checks).
 
 ## Parcels
 
