@@ -37,10 +37,13 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> with Po
 
   @override
   Future<void> poll() async {
-    if (!mounted || ref.read(userProvider) == null) return;
+    if (!mounted) return;
+    final asked = ref.read(userProvider)?.id;
+    if (asked == null) return;
     try {
       final p = await ref.read(apiProvider).parcel(widget.id);
-      if (!mounted) return;
+      // An answer for an account that has signed out since would leave its code on screen.
+      if (!mounted || ref.read(userProvider)?.id != asked) return;
       setState(() {
         _parcel = p;
         _error = null;
@@ -89,10 +92,10 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> with Po
     final live = !const {'collected', 'cancelled', 'unclaimed'}.contains(p.state);
     return ScreenList(onRefresh: poll, children: [
       if (_error != null) ...[ErrorBox(_error!, onRetry: poll), const SizedBox(height: 12)],
-      Row(children: [
-        Expanded(child: Text('${p.from} → ${p.to}', style: Theme.of(context).textTheme.titleLarge)),
-        const SizedBox(width: 8),
-        Flexible(child: Pill(parcelStateLabel(p.state), color: parcelStateColor(c, p.state))),
+      // The route gets the whole width; the status drops below it when they don't fit on one line.
+      Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 6, children: [
+        Text('${p.from} → ${p.to}', style: Theme.of(context).textTheme.titleLarge),
+        Pill(parcelStateLabel(p.state), color: parcelStateColor(c, p.state)),
       ]),
       const SizedBox(height: 12),
       if (p.collectOtp != null) ...[
