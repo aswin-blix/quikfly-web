@@ -95,7 +95,7 @@ Production still holds test traffic from development (test numbers +91 90000 000
 - **Phone network slow:** switch Wi-Fi ↔ mobile data; or continue the same step on the website on the laptop.
 - **App stuck or shows an error:** pull down to refresh; or close and reopen the app (sign-in is kept).
 - **Admin signed out:** sign in again (sessions last 12 hours).
-- **API unreachable (no internet at all):** open the single-file offline demo of the website on the laptop (`apps/web`, `npm run build:demo` in Git Bash, produces `quikfly-demo.html`; it runs on built-in sample data). Build it before the day.
+- **API unreachable (no internet at all):** open the single-file offline demo of the website on the laptop (`apps/web`, `npm run build:demo` in any shell, needs Python 3, produces `quikfly-demo.html`; it runs on built-in sample data). Build it before the day and open it once with Wi-Fi off; a copy built before 2026-11-22 may be calling the live API.
 
 ## After the demo
 
