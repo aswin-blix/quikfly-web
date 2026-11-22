@@ -24,12 +24,12 @@ npm install
 npm run typecheck
 npm run db:migrate:remote      # first, whenever apps/api/migrations has a new file
 npm run deploy -w @quikfly/api
+npm run deploy -w @quikfly/web # builds with .env.production, then uploads apps/web/out
+npm run deploy -w @quikfly/admin
 # wait until production answers with the new version everywhere (e.g. loop until a new endpoint stops returning 404
 # several times in a row); Cloudflare serves old and new versions for about a minute
 node apps/api/scripts/smoke.mjs https://quikfly-api.quikfly-api.workers.dev/v1   # once per deploy
 node apps/api/scripts/smoke-admin.mjs https://quikfly-api.quikfly-api.workers.dev/v1 <owner email> <password>
-npm run deploy -w @quikfly/web # builds with .env.production, then uploads apps/web/out
-npm run deploy -w @quikfly/admin
 ```
 
 **First admin account** (once, after the 0004 migration): `node apps/api/scripts/create-admin.mjs --remote <email> "<name>" owner`. It prints a generated password once. Re-run it to reset a forgotten password; there is no email-based reset.
