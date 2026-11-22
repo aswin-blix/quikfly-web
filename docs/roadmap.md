@@ -402,7 +402,7 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 
 ## Backlog (agreed ideas, not scheduled)
 
-- **Bug:** the website's `/offers` crashes ("This page couldn't load") as soon as a visible offer works on "all" services (`InfoScreens.tsx` looks the service up and finds none); reproduced locally during parcels step 2
+- `/offers` crash with an all-services offer (found during parcels step 2): fix is PR #123 from `main`; drop this line once it's merged
 - **Bug:** admin Bookings and Customers searches return 500 past 48 characters (D1 caps LIKE patterns at 50 bytes); reproduced locally during parcels step 2, whose own search is fixed
 - Before `featureLanguages` goes on: the Tamil header overflows by about 240 px from 1280 px wide with six services (found during parcels step 2; with seven it fits)
 - Website checkout says "256-bit secure · PCI-DSS compliant gateway" though payments are simulated (Rule 7); parcels don't show it, the other services still do
