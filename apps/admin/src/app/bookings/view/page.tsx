@@ -3,7 +3,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, ChevronLeft, StickyNote, XCircle } from "lucide-react";
-import { ADMIN_RULES, COUPON_LINE, TOLLS_MAX, type AdminBookingDetail, type BookingNote, RIDE_CANCEL_REASONS, termLines, tollSettlement } from "@quikfly/shared";
+import { ADMIN_RULES, COUPON_LINE, PARCEL_STATE_LABEL, TOLLS_MAX, type AdminBookingDetail, type BookingNote, RIDE_CANCEL_REASONS, termLines, tollSettlement } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ReasonDialog } from "@/components/ReasonDialog";
 import { Badge, Button, ErrorBox, PageHeader } from "@/components/ui";
@@ -45,8 +45,9 @@ function Detail({ id }: { id: string }) {
         sub={<>{SERVICE_LABEL[b.service]} · <span className="font-mono">{b.id}</span> · booked {dateTime(b.createdAt)}</>}
         actions={manage && (
           <>
-            {b.rentalState !== "returned" && <Button onClick={() => setDialog("complete")}><CheckCircle2 size={16} /> Mark completed</Button>}
-            <Button variant="danger" onClick={() => setDialog("cancel")}><XCircle size={16} /> Cancel booking</Button>
+            {/* Parcels complete at hand-over with the receiver's code, and can't be cancelled once on the bus. */}
+            {b.rentalState !== "returned" && b.service !== "parcel" && <Button onClick={() => setDialog("complete")}><CheckCircle2 size={16} /> Mark completed</Button>}
+            {(b.service !== "parcel" || refund) && <Button variant="danger" onClick={() => setDialog("cancel")}><XCircle size={16} /> Cancel booking</Button>}
           </>
         )}
       />
@@ -61,6 +62,7 @@ function Detail({ id }: { id: string }) {
           </div>
           <dl className="grid gap-2 text-sm">
             <Row k="Route / item" v={b.subtitle} />
+            {b.parcelState && <Row k="Parcel" v={PARCEL_STATE_LABEL[b.parcelState]} />}
             {/* The coupon has its own row by the amount below, so skip the booking's copy of it. */}
             {b.lines.filter(([k]) => k !== COUPON_LINE).map(([k, v], i) => <Row key={`${k}-${i}`} k={k} v={v} />)}
           </dl>
