@@ -268,7 +268,7 @@ class _PassCardState extends ConsumerState<_PassCard> {
           style: TextStyle(color: c.fgSubtle, fontSize: 12),
         ),
       ],
-      if (_error != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(_error!, style: TextStyle(color: c.danger, fontSize: 12.5))),
+      if (_error != null) Padding(padding: const EdgeInsets.only(top: 6), child: LiveError(child: Text(_error!, style: TextStyle(color: c.danger, fontSize: 12.5)))),
     ]);
   }
 }

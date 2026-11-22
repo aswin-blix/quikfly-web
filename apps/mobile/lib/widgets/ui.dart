@@ -76,6 +76,17 @@ class GoldButton extends StatelessWidget {
   }
 }
 
+/// An error screen readers read out when it appears or changes (test/error_announce_test.dart).
+/// `container` gives it a node of its own, so only the message is read, not what surrounds it.
+/// FormError and ErrorBox use it; wrap any error drawn another way.
+class LiveError extends StatelessWidget {
+  const LiveError({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Semantics(container: true, liveRegion: true, child: child);
+}
+
 /// Red message box for a failed action or load, with an optional retry.
 class ErrorBox extends StatelessWidget {
   const ErrorBox(this.message, {super.key, this.onRetry});
@@ -95,7 +106,7 @@ class ErrorBox extends StatelessWidget {
       child: Row(children: [
         Icon(Icons.error_outline, color: c.danger, size: 20),
         const SizedBox(width: 10),
-        Expanded(child: Text(message, style: TextStyle(color: c.danger))),
+        Expanded(child: LiveError(child: Text(message, style: TextStyle(color: c.danger)))),
         if (onRetry != null) TextButton(onPressed: onRetry, child: const Text('Retry')),
       ]),
     );
@@ -109,7 +120,10 @@ class FormError extends StatelessWidget {
   @override
   Widget build(BuildContext context) => message == null || message!.isEmpty
       ? const SizedBox.shrink()
-      : Padding(padding: const EdgeInsets.only(top: 4, bottom: 8), child: Text(message!, style: TextStyle(color: context.qf.danger)));
+      : Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: LiveError(child: Text(message!, style: TextStyle(color: context.qf.danger))),
+        );
 }
 
 /// Centered icon + message for empty lists.

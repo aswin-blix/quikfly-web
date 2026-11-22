@@ -785,7 +785,7 @@ class _SeatScreenState extends ConsumerState<SeatScreen> {
                         if (_live.loading)
                           const Padding(padding: EdgeInsets.only(top: 4), child: SizedBox(width: 80, child: LinearProgressIndicator()))
                         else if (_live.error != null)
-                          Text(_live.error!, maxLines: 2, style: TextStyle(color: c.danger, fontSize: 12))
+                          LiveError(child: Text(_live.error!, maxLines: 2, style: TextStyle(color: c.danger, fontSize: 12)))
                         else if (_live.quote != null)
                           Text('${inr(_live.quote!.total)} incl. GST', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
                       ]),
