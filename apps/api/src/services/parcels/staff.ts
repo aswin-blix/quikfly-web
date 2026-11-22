@@ -8,7 +8,7 @@ import {
 import { forbidden, notFound } from "../../lib/errors";
 import { LOCAL_DATE } from "../admin/stats";
 import { refundFor } from "../bookings";
-import { LEGS_JSON, loadParcels, parseLegs, type LoadedParcel } from "./legs";
+import { LEGS_JSON, isReturn, loadParcels, parseLegs, type LoadedParcel } from "./legs";
 import { toParcel } from "./parcels";
 
 /** A search that is only a number looks at phones; an LR number has digits in it too. */
@@ -133,7 +133,7 @@ export async function staffParcel(db: D1Database, id: string, scope: CounterScop
   if (!booking) throw notFound("Parcel not found.");
   const { row } = found;
   // A counter can't cancel, so it isn't shown what cancelling would refund.
-  const cancellable = !scope && (row.booking_status === "confirmed" || row.booking_status === "ongoing") && PARCEL_CANCELLABLE.includes(row.state);
+  const cancellable = !scope && (row.booking_status === "confirmed" || row.booking_status === "ongoing") && PARCEL_CANCELLABLE.includes(row.state) && !(await isReturn(db, id));
   const refund = cancellable
     ? await refundFor(db, { service: "parcel", payment: booking.payment, starts_at: booking.starts_at, created_at: booking.created_at, amount: row.amount, deposit: row.deposit, terms: row.terms })
     : null;

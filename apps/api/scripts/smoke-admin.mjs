@@ -189,6 +189,7 @@ async function parcelOpsChecks({ before, options, base, newPhone, contentStaff }
     const q = await quote(patch);
     const made = await call("POST", "/bookings", { service: "parcel", title: "x", subtitle: "x", payment: "wallet", lines: [], quoteId: q.id,
       receiver: { name: "Ops Receiver", phone: "9000000002" }, contents: "Operations test box", declaration: options.declaration.version, ...body }, O);
+    if (made.status !== 201) return { status: made.status, json: made.json };
     return { ...made.json, parcel: (await call("GET", `/bookings/${made.json.id}/parcel`, null, O)).json };
   };
   const staff = (id, path, body, as = T) => call(body ? "POST" : "GET", `/admin/parcels/${id}/${path}`, body, as);
@@ -265,6 +266,23 @@ async function parcelOpsChecks({ before, options, base, newPhone, contentStaff }
   await expect("ops: and the parcel is unchanged", call("GET", `/bookings/${poor.id}`, null, O), 200, (j) => j.amount === poor.amount);
   check("ops: the wallet never goes negative", (await balance()) === 0);
 
+  const code = `WEIGH${String(Date.now()).slice(-8)}`;
+  const offer = await expect("ops: a half-price coupon", call("POST", "/admin/catalog/offer",
+    { data: { code, title: "Smoke half price", description: "Smoke test", service: "all", percent: 50, maxDiscount: 5000, minAmount: 0, hue: 45 } }, T), 201);
+  try {
+    let heavy;
+    await eventually("ops: the coupon works", async () => {
+      const r = await book({ weightBand: "20" }, { payment: "upi", couponCode: code });
+      if (r.id) heavy = r;
+      return r;
+    }, () => !!heavy);
+    const light = (await preview(heavy.id, "2")).json;
+    const fair = Math.round((await quote()).total / 2);
+    check("ops: weighing lighter gives back only the share that was paid", Math.abs(heavy.amount - light.refund - fair) <= 1, `${heavy.amount} - ${light.refund} vs ${fair}`);
+  } finally {
+    await call("DELETE", `/admin/catalog/offer/${offer?.id ?? offer?.item?.id}`, null, T);
+  }
+
   const city = (await call("GET", "/config")).json.places;
   const quick = await call("POST", "/quotes", { service: "parcel", mode: "city", pickupId: city[0].id, dropId: city[1].id, category: "documents", weightBand: "2", size: "backpack", declaredValue: 100 });
   const qb = await call("POST", "/bookings", { service: "parcel", title: "x", subtitle: "x", payment: "upi", lines: [], quoteId: quick.json.id,
@@ -295,6 +313,13 @@ async function parcelOpsChecks({ before, options, base, newPhone, contentStaff }
   const otherLr = (await call("GET", `/bookings/${other.json.id}/parcel`, null, S2)).json.lr;
   await expect("ops: someone else's parcel isn't a return", staff(lost.id, "return", { lr: otherLr }), 400);
   await expect("ops: returned as the parcel the sender booked", staff(lost.id, "return", { lr: back.parcel.lr.toLowerCase() }), 200, (j) => j.state === "returned" && j.bookingStatus === "completed");
+  const locked = (j) => /bringing an unclaimed one back/.test(j.message);
+  await expect("ops: a linked return can't be cancelled by the sender", call("POST", `/bookings/${back.id}/cancel`, {}, O), 409, locked);
+  await expect("ops: nor by staff", call("POST", `/admin/bookings/${back.id}/cancel`, { reason: "Smoke: linked return" }, T), 409);
+  await expect("ops: nor refused for a full refund", leg(back.id, 0, { to: "failed", note: "Smoke: linked return" }), 409, locked);
+  await expect("ops: nor re-weighed", preview(back.id, "5"), 409, locked);
+  await expect("ops: staff aren't offered a refund for it", call("GET", `/admin/parcels/${back.id}`, null, T), 200, (j) => j.refundIfCancelled === null);
+  await expect("ops: nor on the booking page", call("GET", `/admin/bookings/${back.id}`, null, T), 200, (j) => j.refundIfCancelled === null);
   await expect("ops: returned once", staff(lost.id, "return", { lr: back.parcel.lr }), 409);
   await expect("ops: the sender sees it going back", call("GET", `/bookings/${lost.id}/parcel`, null, O), 200,
     (j) => j.state === "returned" && j.collectOtp === null && j.events.at(-1).note.includes(back.parcel.lr));

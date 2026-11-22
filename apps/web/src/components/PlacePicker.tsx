@@ -1,6 +1,6 @@
 "use client";
 // A pickup or drop field: search the places, saved ones first. Used by rides and Quick parcels.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Clock } from "lucide-react";
 import type { Place, SavedPlace } from "@quikfly/shared";
 import { api } from "@/lib/api";
@@ -11,6 +11,7 @@ export function PlacePicker({
 }: { id?: string; label?: string; icon: React.ReactNode; placeholder: string; value: Place | null; onChange: (p: Place | null) => void; exclude?: string; autoFocus?: boolean; saved?: SavedPlace[] }) {
   const [q, setQ] = useState(value?.name ?? "");
   const [open, setOpen] = useState(false);
+  const closing = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [results, setResults] = useState<Place[]>([]);
   useEffect(() => setQ(value?.name ?? ""), [value]);
   const browsing = q === "" || q === value?.name;
@@ -22,11 +23,15 @@ export function PlacePicker({
   const savedHere = browsing ? saved.filter((s) => s.place.id !== exclude) : [];
 
   return (
-    <div className="relative">
+    // Closes only when focus leaves the field and its list, so Tab can reach an option and Enter pick it.
+    // The delay lets a click land where a button doesn't take focus (Safari).
+    <div className="relative"
+      onFocus={() => clearTimeout(closing.current)}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) closing.current = setTimeout(() => setOpen(false), 150); }}>
       <div className="flex items-center gap-3 field !pr-12">
         {icon}
         <input id={id} aria-label={label ?? placeholder} autoComplete="off" className="bg-transparent outline-none flex-1 min-w-0" placeholder={placeholder} value={q} autoFocus={autoFocus && !value}
-          onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onFocus={() => setOpen(true)}
           onChange={(e) => { setQ(e.target.value); if (!e.target.value) onChange(null); }} />
       </div>
       {open && (results.length > 0 || savedHere.length > 0) && (

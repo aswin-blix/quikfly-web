@@ -10,9 +10,22 @@ import { auditIfStatement } from "../admin/audit";
 
 const ACTIVE = "('confirmed', 'ongoing')";
 
-/** SQL, true for a bookings row that may be cancelled: not a parcel, or one not yet on the bus or with a captain. */
-export const CANCELLABLE_SQL = `(bookings.service <> 'parcel' OR EXISTS (
-  SELECT 1 FROM parcels cp WHERE cp.booking_id = bookings.id AND cp.state IN (${PARCEL_CANCELLABLE.map((s) => `'${s}'`).join(", ")})))`;
+const BEFORE_LEAVING = `(${PARCEL_CANCELLABLE.map((s) => `'${s}'`).join(", ")})`;
+/** SQL: some unclaimed parcel was closed against `booking` (an SQL expression), so that one is its paid return. */
+const carriesReturn = (booking: string) => `EXISTS (SELECT 1 FROM parcel_legs rl WHERE rl.kind = 'counter' AND rl.leg_booking_id = ${booking})`;
+
+/**
+ * SQL, true for a bookings row that may be cancelled: not a parcel, or one not yet on the bus or
+ * with a captain, that no unclaimed parcel is going back as.
+ */
+export const CANCELLABLE_SQL = `(bookings.service <> 'parcel' OR (EXISTS (
+  SELECT 1 FROM parcels cp WHERE cp.booking_id = bookings.id AND cp.state IN ${BEFORE_LEAVING}) AND NOT ${carriesReturn("bookings.id")}))`;
+
+/** Is this the return of an unclaimed parcel? */
+export async function isReturn(db: D1Database, bookingId: string): Promise<boolean> {
+  const row = await db.prepare(`SELECT ${carriesReturn("?1")} AS linked`).bind(bookingId).first<{ linked: number }>();
+  return !!row?.linked;
+}
 
 export interface ParcelRow {
   booking_id: string; user_id: string; lr: string; mode: "city" | "intercity"; state: ParcelState; move_id: string;
@@ -21,7 +34,7 @@ export interface ParcelRow {
   contents: string; receiver_name: string; receiver_phone: string; declaration_version: string;
   collect_otp: string | null; hold_until: string | null;
   // From the booking
-  title: string; amount: number; deposit: number; terms: string | null; booking_status: BookingStatus;
+  title: string; amount: number; deposit: number; discount: number; credits_used: number; terms: string | null; booking_status: BookingStatus;
 }
 export interface LoadedParcel { row: ParcelRow; legs: ParcelLeg[] }
 
@@ -37,7 +50,7 @@ export const parseLegs = (json: string) => (JSON.parse(json) as ParcelLeg[]).sor
  */
 export async function loadParcels(db: D1Database, where: string, ...params: unknown[]): Promise<LoadedParcel[]> {
   const { results } = await db.prepare(
-    `SELECT p.*, b.title, b.amount, b.deposit, b.terms, b.status AS booking_status, ${LEGS_JSON} AS legs_json
+    `SELECT p.*, b.title, b.amount, b.deposit, b.discount, b.credits_used, b.terms, b.status AS booking_status, ${LEGS_JSON} AS legs_json
      FROM parcels p JOIN bookings b ON b.id = p.booking_id WHERE ${where}`,
   ).bind(...params).all<ParcelRow & { legs_json: string }>();
   return results.map(({ legs_json, ...row }) => ({ row, legs: parseLegs(legs_json) }));
@@ -72,6 +85,8 @@ export async function advanceLegs(
         id: row.booking_id, prev: row.move_id, token, from: row.state, state: move.state,
         status: PARCEL_COMPLETES.includes(move.state) ? "completed" : "ongoing",
         holdUntil: move.holdUntil, nextAt: move.nextAt,
+        // Only a move that closes a parcel against its return sets this.
+        goesBackAs: move.legs.find((l, i) => l.returnedAs && !legs[i].returnedAs)?.returnedAs ?? null,
         otp: move.issuesCode ? randomDigits(PARCEL_RULES.collectOtpDigits) : null,
         kind: notice?.kind ?? null, title: notice?.title ?? null, body: notice?.body ?? null,
       },
@@ -85,6 +100,11 @@ export async function advanceLegs(
        FROM json_each(?1) m
        WHERE parcels.booking_id = ${field("id")} AND parcels.move_id = ${field("prev")}
          AND EXISTS (SELECT 1 FROM bookings b WHERE b.id = parcels.booking_id AND b.status IN ${ACTIVE})
+         -- The return must still be paid for, waiting, and nobody else's when the link is written.
+         AND (${field("goesBackAs")} IS NULL OR (
+           EXISTS (SELECT 1 FROM parcels rp JOIN bookings rb ON rb.id = rp.booking_id
+             WHERE rp.booking_id = ${field("goesBackAs")} AND rp.state IN ${BEFORE_LEAVING} AND rb.status IN ${ACTIVE})
+           AND NOT ${carriesReturn(field("goesBackAs"))}))
        RETURNING booking_id`,
     ).bind(list, at),
     db.prepare(
