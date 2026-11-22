@@ -10,7 +10,7 @@ import { cx } from "@/lib/format";
 import { RequireAdmin, useSession } from "@/lib/session";
 import { useLoad } from "@/lib/useLoad";
 
-const GROUPS: CatalogKindDef["group"][] = ["Rides", "Bus", "Holidays", "Rentals", "Marketing"];
+const GROUPS: CatalogKindDef["group"][] = ["Rides", "Bus", "Holidays", "Rentals", "Parcels", "Marketing"];
 
 function Overview() {
   const { can } = useSession();

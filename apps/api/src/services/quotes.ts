@@ -1,18 +1,19 @@
-// Server-side prices for bus, holiday, self-drive and group bookings. The website shows
+// Server-side prices for bus, holiday, self-drive, group and parcel bookings. The website shows
 // a quote's lines; POST /bookings charges its total. Rides are priced by services/rides.ts.
 import {
   BOOKING_LIMITS, QUOTE_TTL_MINUTES, fareDateFor, generateSeats, switchError, priceBus, seatRuleError, priceGroup, priceRent, priceTour, quoteStartsAt, rentHours, sumLines,
-  type FareLine, type PriceQuote, type QuoteRequest, type Seat, type ServiceKey,
+  type FareLine, type ParcelQuoteInfo, type PriceQuote, type QuoteRequest, type Seat, type ServiceKey,
 } from "@quikfly/shared";
 import { badRequest, conflict } from "../lib/errors";
 import { uid } from "../lib/random";
 import { findBus, seatHolds } from "./buses";
 import { departuresOf } from "./departures";
 import { visible, visibleById } from "./catalog";
+import { priceParcel } from "./parcels/parcels";
 import { getSettings } from "./settings";
 
 /** The price lines and when the trip starts (for the cancellation policy). */
-async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLine[]; startsAt: string; seatPrices?: number[] }> {
+async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLine[]; startsAt: string | null; seatPrices?: number[]; request?: QuoteRequest; parcel?: ParcelQuoteInfo }> {
   const settings = await getSettings(db);
   const off = switchError(settings, {
     service: req.service,
@@ -20,6 +21,10 @@ async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLi
     groupTrip: req.service === "rentals" ? req.trip : undefined,
   });
   if (off) throw conflict(off);
+  if (req.service === "parcel") {
+    const { lines, startsAt, request, info } = await priceParcel(db, settings, req);
+    return { lines, startsAt, request, parcel: info };
+  }
   // Peak and festival dates move holiday, car and group prices on the trip's start date (bus fares move inside the timetable).
   const calendar = req.service === "bus" ? [] : await visible(db, "fareCalendar");
   switch (req.service) {
@@ -69,10 +74,11 @@ async function price(db: D1Database, req: QuoteRequest): Promise<{ lines: FareLi
 }
 
 export async function createQuote(db: D1Database, req: QuoteRequest): Promise<PriceQuote> {
-  const { lines, startsAt, seatPrices } = await price(db, req);
-  const quote: PriceQuote = { id: uid("QT"), service: req.service, lines, total: sumLines(lines), expiresAt: new Date(Date.now() + QUOTE_TTL_MINUTES * 60_000).toISOString() };
+  const { lines, startsAt, seatPrices, request, parcel } = await price(db, req);
+  const quote: PriceQuote = { id: uid("QT"), service: req.service, lines, total: sumLines(lines), expiresAt: new Date(Date.now() + QUOTE_TTL_MINUTES * 60_000).toISOString(),
+    ...(parcel ? { parcel } : {}) };
   await db.prepare("INSERT INTO quotes (id, service, request, lines, total, expires_at, starts_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .bind(quote.id, quote.service, JSON.stringify(seatPrices ? { ...req, seatPrices } : req), JSON.stringify(lines), quote.total, Date.parse(quote.expiresAt), startsAt).run();
+    .bind(quote.id, quote.service, JSON.stringify(seatPrices ? { ...req, seatPrices } : request ?? req), JSON.stringify(lines), quote.total, Date.parse(quote.expiresAt), startsAt).run();
   return quote;
 }
 

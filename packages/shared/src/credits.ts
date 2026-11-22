@@ -15,6 +15,7 @@ export function creditPercent(settings: Settings, service: ServiceKey) {
     case "tours": return settings.creditsTours;
     case "rent": return settings.creditsRent;
     case "rentals": return settings.creditsGroup;
+    case "parcel": return settings.creditsParcel;
   }
 }
 

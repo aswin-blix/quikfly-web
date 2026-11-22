@@ -14,6 +14,7 @@ import { dashboardStats } from "../../services/admin/stats";
 import { getSettings, updateSettings } from "../../services/settings";
 import { adminCatalog } from "./catalog";
 import { adminCustomers, adminSos, adminTeam } from "./customers";
+import { adminParcels } from "./parcels";
 import { adminBookings, adminLicences, adminSupport, adminVendors } from "./operations";
 
 /** Positive page number from `?page=`, default 1. */
@@ -78,5 +79,6 @@ export const admin = new Hono<AppEnv>()
   .route("/vendors", adminVendors)
   .route("/support", adminSupport)
   .route("/customers", adminCustomers)
+  .route("/parcels", adminParcels)
   .route("/sos", adminSos)
   .route("/team", adminTeam);

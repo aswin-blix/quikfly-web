@@ -13,6 +13,7 @@ import { vendor } from "./routes/vendor";
 import { bookings } from "./routes/bookings";
 import { buses } from "./routes/buses";
 import { config, rentals, tours } from "./routes/catalog";
+import { parcels, track } from "./routes/parcels";
 import { offers, quotes } from "./routes/quotes";
 import { places } from "./routes/places";
 import { privacy } from "./routes/privacy";
@@ -49,6 +50,8 @@ const v1 = new Hono<AppEnv>()
   .route("/tours", tours)
   .route("/rentals", rentals)
   .route("/bookings", bookings)
+  .route("/parcels", parcels)
+  .route("/track", track)
   .route("/vendor", vendor)
   .route("/admin", admin);
 

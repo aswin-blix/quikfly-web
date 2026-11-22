@@ -5,6 +5,7 @@
 import type {
   BusOperator, City, DriverProfile, Faq, GroupDestination, Offer, Place, PopularRoute, RentalCar, RideOption, TourDeparture, TourPackage, TravelVehicle,
 } from "./types";
+import type { ParcelCounter, ParcelRate } from "./parcel";
 
 /**
  * Bus boarding points (as the timetable names them) that are also places on the ride map,
@@ -83,6 +84,29 @@ export const BUS_OPERATORS: BusOperator[] = [
   { id: "bo5", name: "Orange Tours" },
   { id: "bo6", name: "YBM Travels" },
   { id: "bo7", name: "IntrCity SmartBus" },
+];
+
+// Parcels (demo): QuikFly's own counters in every bus city and illustrative rates on the popular
+// routes; no other operator carries parcels until there's an agreement. Databases seeded before
+// parcels get the same rows from migration 0029; change them in a new migration, not only here.
+const parcelCounter = (n: number, city: string): ParcelCounter => ({
+  id: `pc${n}`, operatorId: "bo1", city, name: `QuikFly Parcel, ${city}`, address: `Main bus stand, ${city} (demo address)`,
+  hours: "6 AM – 10 PM", phone: "1800 123 4567",
+});
+export const PARCEL_COUNTERS: ParcelCounter[] = CITIES.map((c, i) => parcelCounter(i + 1, c.name));
+
+const parcelRate = (n: number, from: string, to: string, price2: number, price5: number, price10: number, price20: number): ParcelRate => ({
+  id: `pr${n}`, operatorId: "bo1", from, to, price2, price5, price10, price20, transitHours: null, cutoffMinutes: null,
+});
+export const PARCEL_RATES: ParcelRate[] = [
+  parcelRate(1, "Chennai", "Bengaluru", 70, 100, 150, 260),
+  parcelRate(2, "Chennai", "Coimbatore", 80, 120, 180, 300),
+  parcelRate(3, "Chennai", "Madurai", 80, 110, 170, 280),
+  parcelRate(4, "Bengaluru", "Hyderabad", 90, 130, 190, 320),
+  parcelRate(5, "Chennai", "Pondicherry", 60, 70, 110, 200),
+  parcelRate(6, "Coimbatore", "Kochi", 60, 80, 120, 210),
+  parcelRate(7, "Chennai", "Trichy", 70, 95, 140, 250),
+  parcelRate(8, "Madurai", "Bengaluru", 80, 110, 160, 270),
 ];
 
 export const TOURS: TourPackage[] = [

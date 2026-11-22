@@ -3,9 +3,10 @@
 // panel's list and edit forms, and the seed copied into D1. To add a field: add it to the
 // type in types.ts, here, and to the seed in catalog.ts.
 import type { Permission } from "./admin";
+import type { ParcelCounter, ParcelRate } from "./parcel";
 import { HOUR_RANGES, hourRangesError } from "./settings";
 import {
-  BUS_OPERATORS, CITIES, DEPARTURES, DRIVERS, FAQS, GROUP_DESTINATIONS, OFFERS, PLACES, POPULAR_ROUTES, RENTAL_CARS, RIDE_OPTIONS, TOURS, TRAVEL_VEHICLES,
+  BUS_OPERATORS, CITIES, DEPARTURES, DRIVERS, FAQS, GROUP_DESTINATIONS, OFFERS, PARCEL_COUNTERS, PARCEL_RATES, PLACES, POPULAR_ROUTES, RENTAL_CARS, RIDE_OPTIONS, TOURS, TRAVEL_VEHICLES,
 } from "./catalog";
 import type {
   BusOperator, BusRoute, City, DriverProfile, Faq, FareDate, GroupDestination, Offer, Place, PopularRoute, RentalCar, RideOption, SurgeRule, TourDeparture, TourPackage, TravelVehicle,
@@ -28,6 +29,8 @@ export interface CatalogItemMap {
   travelVehicle: TravelVehicle;
   groupDestination: GroupDestination;
   offer: Offer;
+  parcelCounter: ParcelCounter;
+  parcelRate: ParcelRate;
   faq: Faq;
 }
 export type CatalogKind = keyof CatalogItemMap;
@@ -68,7 +71,7 @@ export interface CatalogKindDef {
   label: string;
   singular: string;
   /** Admin panel grouping. */
-  group: "Rides" | "Bus" | "Holidays" | "Rentals" | "Marketing";
+  group: "Rides" | "Bus" | "Holidays" | "Rentals" | "Parcels" | "Marketing";
   description: string;
   idPrefix: string;
   permission: Permission;
@@ -80,6 +83,7 @@ export interface CatalogKindDef {
   detail: (d: Record<string, unknown>) => string;
 }
 
+// Coupons can't target parcels alone yet: app 0.1.16 reads an unknown service as cabs (parcel plan, step 5).
 const SERVICES = ["bike", "car", "bus", "tours", "rent", "rentals"] as const;
 const name = (label = "Name"): CatalogField => ({ key: "name", label, type: "text", maxLength: 80 });
 const rupees = (key: string, label: string, max = 100_000): CatalogField => ({ key, label, type: "int", min: 0, max, hint: "In rupees", pricing: true });
@@ -257,6 +261,32 @@ export const CATALOG_DEFS: Record<CatalogKind, CatalogKindDef> = {
     ],
     title: (d) => String(d.name), detail: (d) => `${d.service === "all" ? "All services" : d.service} · ${d.from} to ${d.to} · ${Number(d.percent) > 0 ? "+" : ""}${d.percent}%`,
   },
+  parcelCounter: {
+    label: "Parcel counters", singular: "parcel counter", group: "Parcels", idPrefix: "pc", permission: "catalog.edit",
+    description: "Where parcels are handed in and collected. An operator carries parcels between cities where it has a counter at both ends.",
+    fields: [
+      { key: "operatorId", label: "Operator id", type: "text", maxLength: 30, hint: 'The bus operator\'s id, e.g. "bo1" for QuikFly Travels' },
+      { key: "city", label: "City", type: "text", maxLength: 60, hint: "As spelled in Catalog → Cities" },
+      name(),
+      { key: "address", label: "Address", type: "text", maxLength: 160 },
+      { key: "hours", label: "Opening hours", type: "text", maxLength: 60, hint: 'e.g. "6 AM – 10 PM"' },
+      { key: "phone", label: "Phone", type: "text", maxLength: 20, pattern: /^\+?[\d\s-]{8,20}$/, hint: "e.g. +91 98400 12345" },
+    ],
+    title: (d) => String(d.name), detail: (d) => `${d.city} · ${d.hours}`,
+  },
+  parcelRate: {
+    label: "Parcel rates", singular: "parcel rate", group: "Parcels", idPrefix: "pr", permission: "catalog.edit",
+    description: "Bus parcel prices per route and weight, either direction, before handling and GST. Routes not listed use the per-kg rate in Settings.",
+    fields: [
+      { key: "operatorId", label: "Operator id", type: "text", maxLength: 30, hint: 'The bus operator\'s id, e.g. "bo1" for QuikFly Travels', pricing: true },
+      { key: "from", label: "From city", type: "text", maxLength: 60, pricing: true },
+      { key: "to", label: "To city", type: "text", maxLength: 60, pricing: true },
+      rupees("price2", "Up to 2 kg", 10_000), rupees("price5", "Up to 5 kg", 10_000), rupees("price10", "Up to 10 kg", 10_000), rupees("price20", "Up to 20 kg", 10_000),
+      { key: "transitHours", label: "Transit hours", type: "number", min: 1, max: 72, optional: true, hint: "Empty = the bus's own journey time" },
+      { key: "cutoffMinutes", label: "Hand-in cut-off", type: "int", min: 0, max: 720, optional: true, hint: "Minutes before departure; empty = the cut-off in Settings" },
+    ],
+    title: (d) => `${d.from} ⇄ ${d.to}`, detail: (d) => `2 kg ${inr(d.price2)} · 5 kg ${inr(d.price5)} · 10 kg ${inr(d.price10)} · 20 kg ${inr(d.price20)}`,
+  },
   offer: {
     label: "Offers and coupons", singular: "offer", group: "Marketing", idPrefix: "of", permission: "offers.edit",
     description: "Coupon codes. The API checks them when a booking is made; hidden or expired codes stop working within 30 seconds.", unique: "code",
@@ -296,6 +326,7 @@ export const CATALOG_SEED: { [K in CatalogKind]: CatalogItemMap[K][] } = {
   place: PLACES, rideOption: RIDE_OPTIONS, surgeRule: [], busRoute: [], fareCalendar: [], driver: DRIVERS, city: CITIES, busOperator: BUS_OPERATORS,
   popularRoute: POPULAR_ROUTES, tour: TOURS, departure: DEPARTURES, rentalCar: RENTAL_CARS, travelVehicle: TRAVEL_VEHICLES,
   groupDestination: GROUP_DESTINATIONS, offer: OFFERS, faq: FAQS,
+  parcelCounter: PARCEL_COUNTERS, parcelRate: PARCEL_RATES,
 };
 
 /**
@@ -360,6 +391,11 @@ export function validateCatalogData(kind: CatalogKind, input: unknown, id: strin
   }
   if (kind === "popularRoute" && String(out.from).toLowerCase() === String(out.to).toLowerCase()) return { error: "From and To must be different." };
   if (kind === "busRoute" && String(out.from).trim().toLowerCase() === String(out.to).trim().toLowerCase()) return { error: "From and To must be different." };
+  if (kind === "parcelRate") {
+    if (String(out.from).toLowerCase() === String(out.to).toLowerCase()) return { error: "From and To must be different." };
+    const prices = [out.price2, out.price5, out.price10, out.price20] as number[];
+    if (prices.some((p, i) => i > 0 && p < prices[i - 1])) return { error: "A heavier band can't cost less than a lighter one." };
+  }
   if (kind === "fareCalendar" && (out.from as string) > (out.to as string)) return { error: "From must be on or before To." };
   if (kind === "fareCalendar" && out.percent === 0) return { error: "A change of 0% does nothing. Set a percentage up or down." };
   if (kind === "surgeRule" && (!String(out.hours).trim() || hourRangesError(String(out.hours)))) return { error: 'Hours must be ranges from 0 to 23 with the start before the end, like "8-10, 17-20". Split a window over midnight: "22-23, 0-2".' };
@@ -371,7 +407,7 @@ export function validateCatalogData(kind: CatalogKind, input: unknown, id: strin
 export const kindHasPricing = (kind: CatalogKind) => CATALOG_DEFS[kind].fields.some((f) => f.pricing);
 
 /** Offers: showing or hiding one turns a discount on or off, so it needs "pricing.edit" too. */
-export const ACTIVE_IS_PRICING: readonly CatalogKind[] = ["offer", "surgeRule", "busRoute", "fareCalendar"];
+export const ACTIVE_IS_PRICING: readonly CatalogKind[] = ["offer", "surgeRule", "busRoute", "fareCalendar", "parcelRate"];
 
 const sameValue = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 

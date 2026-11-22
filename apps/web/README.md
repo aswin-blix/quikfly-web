@@ -102,6 +102,7 @@ src/
     api/
       contract.ts QuikflyApi interface: the only thing screens depend on
       mock.ts     demo implementation (seeded data, simulated latency, localStorage)
+      mock-parcels.ts parcels in the demo (transit follows the clock). No Parcels page until step 2 of docs/parcel-service-plan.md
       http.ts     real REST implementation (Bearer token, JSON)
       index.ts    mock or http, based on NEXT_PUBLIC_API_URL
   components/ConfigProvider.tsx  loads GET /config once: useConfig() (places, ride types, cities, bus operators,

@@ -2,7 +2,7 @@
 // /notifications: the customer's inbox (booking confirmed, refunds, licence decisions, ride
 // reminders). Opening it marks everything read; unread ones keep their highlight until you leave.
 import { useEffect, useState } from "react";
-import { Bell, BadgeCheck, CalendarClock, CircleX, Coins, Handshake, Headphones, IdCard, RotateCcw, Ticket, Wallet } from "lucide-react";
+import { Bell, BadgeCheck, CalendarClock, CircleX, Coins, Handshake, Headphones, IdCard, Package, PackageCheck, RotateCcw, Ticket, Wallet } from "lucide-react";
 import type { AppNotification, NotificationKind } from "@quikfly/shared";
 import { useApp } from "@/components/AppProvider";
 import { Empty, GoldButton, Spinner } from "@/components/ui";
@@ -21,6 +21,10 @@ const ICON: Record<NotificationKind, typeof Bell> = {
   "ride.reminder": CalendarClock,
   "credits.earned": Coins,
   "support.reply": Headphones,
+  "parcel.moved": Package,
+  "parcel.ready": PackageCheck,
+  "parcel.collected": PackageCheck,
+  "parcel.unclaimed": Package,
   // Partner notifications are read in the QuikFly Partner app; listed here in case one shows up.
   "vendor.changes": Handshake,
   "vendor.approved": Handshake,

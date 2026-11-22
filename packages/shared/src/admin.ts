@@ -29,6 +29,8 @@ export const PERMISSIONS = {
   "customers.view": ["owner", "operations"],
   /** Wallet adjustments, suspend / lift, sign out everywhere, cancel a scheduled deletion. */
   "customers.manage": ["owner", "operations"],
+  /** Parcels: counter actions (hand in, load, hand over, refuse). */
+  "parcels.manage": ["owner", "operations"],
   /** SOS alerts: acknowledge and close. */
   "sos.manage": ["owner", "operations"],
   /** The Team screen: staff accounts, roles, password resets, disabling. */

@@ -15,6 +15,8 @@ export function serviceOn(settings: Settings, service: ServiceKey) {
     case "tours": return settings.serviceTours;
     case "rent": return settings.serviceRent;
     case "rentals": return settings.serviceGroup;
+    // Missing (an API from before parcels) counts as off.
+    case "parcel": return settings.serviceParcel === true;
   }
 }
 
