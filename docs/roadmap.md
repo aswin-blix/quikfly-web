@@ -395,7 +395,7 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 - [ ] 4. Door pickup and delivery as trips (**waits for the owner**: two questions in the [plan](parcel-service-plan.md), section 11)
 - [x] 5. Customer app, and the guard that keeps parcels from older installs (merged and deployed, **app not released**; `serviceParcel` stays off until the release and the owner's word)
 - [x] 6. Operations polish: return to sender, re-weighing, moving to another bus, dashboard, CSV (built on `feat/parcel-ops`, stacked on step 3, **not merged**)
-- [ ] 7. Counter role and operators as partners
+- [ ] 7. Counter role (built on `feat/parcel-counter`, stacked on step 6, migration `0030`, **not merged**) and operators as partners (**waits for the owner**: an agreement and a share)
 
 ### Step 5 notes
 
@@ -412,6 +412,11 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 
 - 2026-11-23 (branch `feat/parcel-ops`, no migration): bus change, weight check, return against the sender's LR, dashboard tiles equal to their queue filters, export columns. Cancelling refunds only from the amount it read.
 - Verified: typecheck, both smoke suites twice, the app's suite, app 0.1.16 against the new API, the new screens in a browser plus both earlier parcel browser suites. **Not checked:** a phone, hosted D1.
+
+### Step 7 notes
+
+- 2026-11-23 (branch `feat/parcel-counter`, migration `0030_counter_role`: one nullable column, run it before the API): counter logins scoped to an operator and city, set in Team. The smoke test derives the admin routes from the source and expects 403 on every one a counter shouldn't reach (67).
+- Verified: typecheck, both smoke suites twice, 0030 rehearsed on a database seeded by `main` (no row changed) with a rollback, browser runs of the counter login and all earlier parcel suites, app 0.1.16 against the new API. **Not checked:** hosted D1, production.
 
 ### Phase 7 work log
 
