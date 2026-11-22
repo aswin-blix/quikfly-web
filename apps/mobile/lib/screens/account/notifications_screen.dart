@@ -20,6 +20,8 @@ IconData _icon(String kind) => switch (kind) {
       'ride.reminder' => Icons.schedule,
       'credits.earned' => Icons.toll_outlined,
       'support.reply' => Icons.support_agent,
+      'parcel.moved' || 'parcel.unclaimed' => Icons.inventory_2_outlined,
+      'parcel.ready' || 'parcel.collected' => Icons.inventory,
       'vendor.approved' || 'vendor.active' => Icons.verified_outlined,
       'vendor.changes' => Icons.edit_note,
       'vendor.rejected' => Icons.cancel_outlined,
@@ -79,6 +81,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         ? () => context.push('/account/wallet')
                         : n.kind == 'support.reply'
                         ? () => context.push('/support')
+                        : n.bookingId != null && n.kind.startsWith('parcel.')
+                        ? () => context.push('/parcel/${n.bookingId}')
                         : n.bookingId != null
                         ? () => context.go('/trips')
                         : n.kind.startsWith('licence')

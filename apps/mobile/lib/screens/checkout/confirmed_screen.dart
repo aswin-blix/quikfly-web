@@ -45,7 +45,13 @@ class ConfirmedScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               Text('Booking confirmed!', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 6),
-              Text("We've saved the details in My Trips. Have a great trip!", textAlign: TextAlign.center, style: TextStyle(color: c.fgMuted)),
+              Text(
+                b.service == ServiceKey.parcel
+                    ? "Hand it in before the cut-off below. When it's ready, the collection code appears in My Trips: pass it to the receiver (demo: no SMS is sent)."
+                    : "We've saved the details in My Trips. Have a great trip!",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.fgMuted),
+              ),
               const SizedBox(height: 20),
               Panel(
                 highlighted: true,
@@ -104,6 +110,14 @@ class ConfirmedScreen extends ConsumerWidget {
                 ];
               }(),
               const SizedBox(height: 20),
+              if (b.service == ServiceKey.parcel) ...[
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/parcel/${b.id}'),
+                  icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                  label: const Text('Track parcel'),
+                ),
+                const SizedBox(height: 10),
+              ],
               GoldButton(label: 'View my trips', onPressed: () => context.go('/trips')),
               const SizedBox(height: 10),
               Row(children: [

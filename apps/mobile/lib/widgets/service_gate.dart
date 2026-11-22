@@ -21,8 +21,20 @@ class ServiceGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(configProvider).value?.settings;
-    if (settings == null || settings.serviceOn(service)) return child;
+    final config = ref.watch(configProvider);
+    final settings = config.value?.settings;
+    if (settings == null) {
+      if (const Settings({}).serviceOn(service)) return child;
+      // A service that's off by default can't be shown, or called paused, before the settings arrive.
+      return Scaffold(
+        appBar: AppBar(title: Text(serviceOf(service).action)),
+        body: ScreenList(children: [
+          const SizedBox(height: 12),
+          if (config.hasError) ErrorBox(errorText(config.error!), onRetry: () => ref.invalidate(configProvider)) else const Skeleton(height: 220),
+        ]),
+      );
+    }
+    if (settings.serviceOn(service)) return child;
     final c = context.qf;
     return Scaffold(
       appBar: AppBar(title: Text(serviceOf(service).action)),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
+import '../../api/parcel_models.dart';
 import '../../core/bus_changes.dart';
 import '../../core/cancellation.dart';
 import '../../core/format.dart';
@@ -13,6 +14,7 @@ import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
 import '../auth/login_screen.dart';
+import '../parcel/parcel_widgets.dart' show parcelStateColor;
 
 class TripsScreen extends ConsumerWidget {
   const TripsScreen({super.key});
@@ -27,7 +29,7 @@ class TripsScreen extends ConsumerWidget {
           EmptyState(
             icon: Icons.confirmation_number_outlined,
             title: 'Sign in to see your trips',
-            message: 'Rides, bus tickets, holidays and rentals you book show up here.',
+            message: 'Rides, bus tickets, holidays, rentals and anything else you book show up here.',
             action: GoldButton(label: 'Login or sign up', expand: false, onPressed: () => ensureSignedIn(context, ref)),
           ),
         ]),
@@ -173,7 +175,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       // The request may have failed before or after the API acted (e.g. a network blip after the
       // cancel went through), so reload the list to show the real state and say what happened.
       ref.invalidate(bookingsProvider);
-      if (mounted) toast(context, "Cancel didn't go through: ${errorText(e)} The list was refreshed; try again if it still shows Confirmed.");
+      if (mounted) toast(context, "Cancel didn't go through: ${errorText(e)} The list was refreshed; try again if it still shows as booked.");
     }
     if (mounted) setState(() => _busy = false);
   }
@@ -253,7 +255,10 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     final b = widget.booking;
     final s = serviceOf(b.service);
     final settings = ref.watch(configProvider).value?.settings ?? const Settings({});
-    final statusColor = switch (b.status) {
+    final parcel = b.parcelState;
+    // A parcel is ongoing at the counter and can still be cancelled until it's on the bus.
+    final cancellable = b.status.active && (parcel == null || parcelCancellable.contains(parcel));
+    final statusColor = parcel != null ? parcelStateColor(c, parcel) : switch (b.status) {
       BookingStatus.cancelled => c.danger,
       BookingStatus.completed => c.fgMuted,
       _ => c.success,
@@ -279,7 +284,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                   if (b.subtitle.isNotEmpty) Text(b.subtitle, style: TextStyle(color: c.fgMuted, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 6),
                   Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                    Pill(statusLabel(b.status), color: statusColor),
+                    Pill(parcel != null ? parcelStateLabel(parcel) : statusLabel(b.status), color: statusColor),
                     Text(dateTime(b.createdAt), style: TextStyle(color: c.fgSubtle, fontSize: 12)),
                   ]),
                 ]),
@@ -304,7 +309,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
               const SizedBox(height: 6),
               KeyValue('Booking ID', b.id),
               for (final l in b.lines) KeyValue(l.$1, l.$2),
-              if (b.startsAt != null && !b.lines.any((l) => l.$1 == 'Pickup time')) KeyValue('Starts', dateTime(b.startsAt!)),
+              if (b.startsAt != null && b.service != ServiceKey.parcel && !b.lines.any((l) => l.$1 == 'Pickup time')) KeyValue('Starts', dateTime(b.startsAt!)),
               if (b.deposit > 0 && b.status != BookingStatus.cancelled)
                 KeyValue(
                     'Refundable deposit',
@@ -326,6 +331,15 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                       ? Text('Driver assigned ${Rules.rideStartWindowMinutes} min before pickup; start the ride here then.', style: TextStyle(color: c.fgMuted, fontSize: 12.5))
                       : GoldButton(label: 'Start ride', onPressed: () => context.push('/ride/${b.service == ServiceKey.bike ? 'bike' : 'car'}?ride=${b.rideId}&booking=${b.id}')),
                 ),
+              if (b.service == ServiceKey.parcel)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: GoldButton(
+                    label: parcel == 'ready' ? 'Show collection code' : 'Track parcel',
+                    icon: Icons.inventory_2_outlined,
+                    onPressed: () => context.push('/parcel/${b.id}'),
+                  ),
+                ),
               // Self-drive: the pickup/return checklist, extensions and the deposit settlement.
               if (b.rentalState != null && b.status != BookingStatus.cancelled)
                 Padding(
@@ -346,7 +360,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                     label: const Text('Invoice'),
                   ),
                 ),
-                if (b.status.active) ...[
+                if (cancellable) ...[
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton(

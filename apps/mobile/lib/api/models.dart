@@ -16,9 +16,20 @@ enum ServiceKey {
   bus,
   tours,
   rent,
-  rentals;
+  rentals,
+  parcel;
 
   static ServiceKey parse(String s) => ServiceKey.values.firstWhere((k) => k.name == s, orElse: () => ServiceKey.car);
+
+  /// False for a service newer than this app: never show one as another service.
+  static bool known(Object? s) => ServiceKey.values.any((k) => k.name == s);
+
+  /// Services added after the app first shipped (DECLARED_SERVICES in packages/shared/src/clients.ts).
+  /// Declaring one promises this app shows it everywhere a booking can appear.
+  static const declared = [ServiceKey.parcel];
+
+  /// The `Accept` every request sends (CLIENT_ACCEPT); without it the API keeps those services from us.
+  static String get clientAccept => 'application/json; services=${declared.map((s) => s.name).join('+')}';
 }
 
 enum PaymentMethod { upi, card, netbanking, wallet, cash }
@@ -472,7 +483,7 @@ class TravelVehicle {
 class Booking {
   const Booking(this.id, this.service, this.title, this.subtitle, this.amount, this.status, this.createdAt, this.payment, this.lines,
       {this.startsAt, this.refundAmount, this.deposit = 0, this.cancelReason, this.cancelFee = 0, this.rideId, this.tripId, this.creditsUsed = 0,
-      this.discount = 0, this.seats = const [], this.ticketToken, this.rescheduledAt, this.rentalState, this.terms});
+      this.discount = 0, this.seats = const [], this.ticketToken, this.rescheduledAt, this.rentalState, this.parcelState, this.terms});
   final String id, title, subtitle, payment;
   final ServiceKey service;
   final int amount;
@@ -517,6 +528,9 @@ class Booking {
   /// Self-drive bookings: booked, on_trip, returned or settled (details from GET /bookings/:id/rental); null otherwise.
   final String? rentalState;
 
+  /// Parcels: where the parcel is (parcel_models.dart has the labels); null for everything else.
+  final String? parcelState;
+
   /// The settings this booking was sold under (packages/shared/src/terms.ts): cancellation policy, ride fee,
   /// GST rate, self-drive rates. Null for bookings made before terms were kept. Use [Settings.withTerms].
   final Json? terms;
@@ -547,6 +561,7 @@ class Booking {
         ticketToken: j['ticketToken'] as String?,
         rescheduledAt: j['rescheduledAt'] == null ? null : DateTime.tryParse('${j['rescheduledAt']}')?.toLocal(),
         rentalState: j['rentalState'] as String?,
+        parcelState: j['parcelState'] as String?,
         terms: j['terms'] is Map ? Map<String, dynamic>.from(j['terms'] as Map) : null,
       );
 }
@@ -626,14 +641,18 @@ class FareLine {
 
 /// A price worked out by the API. Bookings refer to it by id (valid until expiresAt, once).
 class PriceQuote {
-  const PriceQuote(this.id, this.service, this.lines, this.total, this.expiresAt);
+  const PriceQuote(this.id, this.service, this.lines, this.total, this.expiresAt, {this.liability});
   final String id;
   final ServiceKey service;
   final List<FareLine> lines;
   final int total;
   final DateTime expiresAt;
+
+  /// Parcels: the most QuikFly pays if it's lost or damaged.
+  final int? liability;
   factory PriceQuote.fromJson(Json j) => PriceQuote(j['id'] as String, ServiceKey.parse('${j['service']}'), _list(j['lines'], FareLine.fromJson),
-      _int(j['total']), DateTime.tryParse('${j['expiresAt']}') ?? DateTime.now());
+      _int(j['total']), DateTime.tryParse('${j['expiresAt']}') ?? DateTime.now(),
+      liability: ((j['parcel'] as Map?)?['liability'] as num?)?.round());
 }
 
 class CouponCheck {
@@ -672,6 +691,8 @@ class Settings {
         ServiceKey.tours => _b('serviceTours'),
         ServiceKey.rent => _b('serviceRent'),
         ServiceKey.rentals => _b('serviceGroup'),
+        // Off unless the API says otherwise: it launches switched off, and an older API doesn't send it.
+        ServiceKey.parcel => _raw['serviceParcel'] == true,
       };
   String get servicePausedMessage => _s('servicePausedMessage', 'This service is paused for now. Please check back soon.');
 
@@ -750,6 +771,7 @@ class Settings {
         ServiceKey.tours => _i('creditsTours', 3),
         ServiceKey.rent => _i('creditsRent', 3),
         ServiceKey.rentals => _i('creditsGroup', 3),
+        ServiceKey.parcel => _i('creditsParcel', 2),
       };
   int get creditsCap => _i('creditsCap', 150);
   int get creditsExpiryDays => _i('creditsExpiryDays', 60);
@@ -761,6 +783,12 @@ class Settings {
       .map((x) => x.trim())
       .where((x) => x.isNotEmpty)
       .toList();
+  /// Parcels.
+  int get parcelMaxKg => _i('parcelMaxKg', 20);
+  int get parcelMaxDeclaredValue => _i('parcelMaxDeclaredValue', 10000);
+  int get parcelCounterHoldDays => _i('parcelCounterHoldDays', 7);
+  bool get parcelSimulateTransit => _b('parcelSimulateTransit');
+
   String get safetyLine => _s('safetyLine', '1800 123 4567');
 
   /// Refund tiers per service ("15d:100, 7d:50"); see core/cancellation.dart. Rides have none.
@@ -769,6 +797,7 @@ class Settings {
         ServiceKey.tours => _s('cancelPolicyTours', '15d:100, 7d:50'),
         ServiceKey.rent => _s('cancelPolicyRent', '24h:100'),
         ServiceKey.rentals => _s('cancelPolicyGroup', '48h:100'),
+        ServiceKey.parcel => _s('cancelPolicyParcel', '3h:100, 1h:50'),
         ServiceKey.bike || ServiceKey.car => '',
       };
   String get companyName => _s('companyName', 'QuikFly Mobility Pvt. Ltd.');
@@ -786,6 +815,7 @@ class Settings {
         ServiceKey.tours => _i('gstTours', 5),
         ServiceKey.rent => _i('gstRent', 18),
         ServiceKey.rentals => _i('gstGroup', 5),
+        ServiceKey.parcel => _i('gstParcel', 18),
       };
 }
 

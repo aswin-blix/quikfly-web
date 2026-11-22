@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
+import '../../api/parcel_models.dart';
 import '../../core/format.dart';
 import '../../core/services.dart';
 import '../../core/trips.dart';
@@ -45,7 +46,7 @@ class TripScreen extends ConsumerWidget {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(b.title, style: const TextStyle(fontWeight: FontWeight.w700)),
                         if (b.subtitle.isNotEmpty) Text(b.subtitle, style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
-                        Text('${dateTime(bookingWhen(b))} · ${statusLabel(b.status)}', style: TextStyle(color: c.fgSubtle, fontSize: 12)),
+                        Text('${dateTime(bookingWhen(b))} · ${b.parcelState != null ? parcelStateLabel(b.parcelState!) : statusLabel(b.status)}', style: TextStyle(color: c.fgSubtle, fontSize: 12)),
                       ]),
                     ),
                     Column(crossAxisAlignment: CrossAxisAlignment.end, children: [

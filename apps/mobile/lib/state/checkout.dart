@@ -6,6 +6,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api.dart';
 import '../api/models.dart';
 
+/// What a parcel booking needs besides its quote. Never in `summary` or booking lines.
+class ParcelDraft {
+  const ParcelDraft({
+    required this.receiverName,
+    required this.receiverPhone,
+    required this.contents,
+    required this.declaration,
+    required this.declaredValue,
+  });
+  final String receiverName, receiverPhone, contents, declaration;
+  final int declaredValue;
+}
+
 class CheckoutDraft {
   const CheckoutDraft({
     required this.service,
@@ -17,6 +30,7 @@ class CheckoutDraft {
     required this.travellers,
     this.needsLicence = false,
     required this.policy,
+    this.parcel,
   });
   final ServiceKey service;
   final String title, subtitle, policy;
@@ -27,6 +41,7 @@ class CheckoutDraft {
   /// Labels for traveller name fields, e.g. ["Seat L4", "Seat L5"].
   final List<String> travellers;
   final bool needsLicence;
+  final ParcelDraft? parcel;
 }
 
 class CheckoutNotifier extends Notifier<CheckoutDraft?> {
@@ -94,6 +109,7 @@ class LiveQuote extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
+    _seq++; // an answer still on its way mustn't notify a disposed listener
     super.dispose();
   }
 }

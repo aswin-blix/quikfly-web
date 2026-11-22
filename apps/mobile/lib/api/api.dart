@@ -4,6 +4,7 @@
 import 'package:dio/dio.dart';
 import '../core/env.dart';
 import 'models.dart';
+import 'parcel_models.dart';
 import 'rental_models.dart';
 import 'support_models.dart';
 import 'vendor_models.dart';
@@ -27,6 +28,7 @@ class QuikFlyApi {
           connectTimeout: const Duration(seconds: 15),
           receiveTimeout: const Duration(seconds: 20),
           contentType: 'application/json',
+          headers: {'Accept': ServiceKey.clientAccept},
         )) {
     _dio.interceptors.add(InterceptorsWrapper(onRequest: (o, h) {
       if (token != null) o.headers['Authorization'] = 'Bearer $token';
@@ -267,7 +269,9 @@ class QuikFlyApi {
   Future<CouponCheck> checkCoupon(String code, {String? quoteId, String? rideId}) =>
       _post('/offers/check', (d) => CouponCheck.fromJson(d as Json), {'code': code, 'quoteId': ?quoteId, 'rideId': ?rideId});
 
-  Future<List<Booking>> bookings() => _get('/bookings', _listOf(Booking.fromJson));
+  /// Leaves out any service newer than this app, rather than showing it as another one.
+  Future<List<Booking>> bookings() => _get(
+      '/bookings', (d) => [for (final b in d as List) if (ServiceKey.known((b as Json)['service'])) Booking.fromJson(b)]);
   Future<Booking> booking(String id) => _get('/bookings/$id', (d) => Booking.fromJson(d as Json));
   Future<Booking> createBooking({
     required ServiceKey service,
@@ -280,6 +284,9 @@ class QuikFlyApi {
     String? couponCode,
     String? tripOf,
     bool useCredits = false,
+    ({String name, String phone})? receiver,
+    String? contents,
+    String? declaration,
   }) =>
       _post('/bookings', (d) => Booking.fromJson(d as Json), {
         'service': service.name,
@@ -292,7 +299,20 @@ class QuikFlyApi {
         'couponCode': ?couponCode,
         'tripOf': ?tripOf,
         if (useCredits) 'useCredits': true,
+        if (receiver != null) 'receiver': {'name': receiver.name, 'phone': receiver.phone},
+        'contents': ?contents,
+        'declaration': ?declaration,
       });
+
+  // ── Parcels (packages/shared/src/parcel.ts): priced by quote(), booked by createBooking() ──
+  Future<ParcelOptions> parcelOptions(String from, String to) =>
+      _get('/parcels/options', (d) => ParcelOptions.fromJson(d as Json), {'from': from, 'to': to});
+
+  /// The sender's parcel, with the collection code while it's ready.
+  Future<Parcel> parcel(String bookingId) => _get('/bookings/$bookingId/parcel', (d) => Parcel.fromJson(d as Json));
+
+  /// Public: no sign-in, first names only.
+  Future<ParcelTracking> trackParcel(String lr) => _get('/track/${Uri.encodeComponent(lr)}', (d) => ParcelTracking.fromJson(d as Json));
   /// [reason] is a ride cancel reason key; a valid one waives the ride cancellation fee.
   Future<Booking> cancelBooking(String id, {String? reason}) =>
       _post('/bookings/$id/cancel', (d) => Booking.fromJson(d as Json), {'reason': ?reason});
