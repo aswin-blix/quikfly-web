@@ -2,7 +2,7 @@
 import { RentalPanel } from "@/components/RentalPanel";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BadgePercent, Building2, CarTaxiFront, ChevronDown, Coins, CreditCard, FileText, Info, LifeBuoy, Lock, QrCode, RotateCcw, Route, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
+import { Banknote, ArrowLeft, BadgePercent, Building2, CarTaxiFront, ChevronDown, Coins, CreditCard, FileText, Info, LifeBuoy, Lock, QrCode, RotateCcw, Route, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { TweenNumber } from "@/components/motion";
 import { Empty, GhostLink, GoldButton, Spinner } from "@/components/ui";
@@ -11,7 +11,7 @@ import { cx, inr, prettyDateTime } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
-import { CREDITS_LINE, DEPOSIT_LINE, GSTIN_LINE, PARCEL_CANCELLABLE, PARCEL_STATE_LABEL, RIDE_SCHEDULE, cancelPolicyFor, creditsEarned, creditsUsable, formatLicence, minutesUntilStart, refundAmount, refundPercent, rescheduleError, rideCancelFee, seatCancelRefund, withTerms, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
+import { CREDITS_LINE, DEPOSIT_LINE, GSTIN_LINE, isQuickParcel, PARCEL_CANCELLABLE, PARCEL_STATE_LABEL, RIDE_SCHEDULE, cancelPolicyFor, creditsEarned, creditsUsable, formatLicence, minutesUntilStart, refundAmount, refundPercent, rescheduleError, rideCancelFee, seatCancelRefund, withTerms, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { bookingWhen, rideOffer } from "@/lib/trips";
 import { LicenceBadge, LicenceForm, licenceMessage, useLicencePolling } from "@/components/account/LicenceSection";
@@ -29,7 +29,7 @@ export function CheckoutScreen() {
   const [email, setEmail] = useState("");
   const [gstInvoice, setGstInvoice] = useState(false);
   const [savedTravellers, setSavedTravellers] = useState<Traveller[]>([]);
-  const [method, setMethod] = useState<Exclude<PaymentMethod, "cash">>("upi");
+  const [method, setMethod] = useState<PaymentMethod>("upi");
   const [code, setCode] = useState("");
   const [coupon, setCoupon] = useState<{ code: string; off: number } | null>(null);
   const [couponErr, setCouponErr] = useState("");
@@ -135,7 +135,8 @@ export function CheckoutScreen() {
   }
 
   const methods = [["upi", "UPI", Smartphone, "GPay, PhonePe, Paytm"], ["card", "Card", CreditCard, "Credit / debit"], ["netbanking", "Net banking", Building2, "All major banks"],
-    ["wallet", "QuikFly wallet", Wallet, user ? `Balance ${inr(user.walletBalance)}${walletShort ? " · not enough" : ""}` : "Instant refunds"]] as const;
+    ["wallet", "QuikFly wallet", Wallet, user ? `Balance ${inr(user.walletBalance)}${walletShort ? " · not enough" : ""}` : "Instant refunds"],
+    ...(parcel?.request.mode === "city" && settings.featureCashRides ? [["cash", "Cash on pickup", Banknote, "Pay the captain"] as const] : [])] as const;
 
   return (
     <div className="max-w-6xl mx-auto px-4 pt-8">
@@ -168,7 +169,7 @@ export function CheckoutScreen() {
                         <div key={k} className="flex justify-between gap-3"><dt className="text-subtle shrink-0">{k}</dt><dd className="text-right break-words min-w-0">{v}</dd></div>
                       ))}
                     </dl>
-                    <p className="text-xs text-muted">The collection code appears only on your screen, in My Trips. You pass it to the receiver (demo: no SMS sent).</p>
+                    <p className="text-xs text-muted">The {parcel.request.mode === "city" ? "delivery" : "collection"} code appears only on your screen, in My Trips. You pass it to the receiver (demo: no SMS sent).</p>
                   </div>
                 ) : (<>
                 <div className="panel p-5 space-y-4">
@@ -255,7 +256,7 @@ export function CheckoutScreen() {
                   {DEMO_MODE && <p className="text-xs text-gold-pale/80 mt-4">Demo mode: no payment is taken. The live site will redirect to the payment gateway (e.g. Razorpay) here.</p>}
                 </div>
                 <GoldButton className="w-full text-base !py-4" loading={paying} onClick={pay}>
-                  {paying ? "Processing payment…" : <><Lock size={16} />Pay {inr(total)}</>}
+                  {paying ? "Processing payment…" : method === "cash" ? <>Book, pay {inr(total)} at pickup</> : <><Lock size={16} />Pay {inr(total)}</>}
                 </GoldButton>
                 {!parcel && <p className="text-xs text-subtle flex items-center justify-center gap-1"><ShieldCheck size={13} className="text-success" />256-bit secure · PCI-DSS compliant gateway</p>}
               </motion.div>
@@ -291,7 +292,7 @@ export function CheckoutScreen() {
               <div className="flex justify-between items-end pt-3 mt-2 border-t border-line">
                 <span className="font-semibold">Total</span><TweenNumber value={total} format={inr} className="text-2xl font-bold text-gold" />
               </div>
-              {earns > 0 && <p className="text-xs text-muted flex items-center gap-1.5 pt-1"><Coins size={13} className="text-gold shrink-0" />Earn {inr(earns)} QuikFly Credits when {parcel ? "the parcel is collected" : "this trip is completed"}.</p>}
+              {earns > 0 && <p className="text-xs text-muted flex items-center gap-1.5 pt-1"><Coins size={13} className="text-gold shrink-0" />Earn {inr(earns)} QuikFly Credits when {parcel ? (parcel.request.mode === "city" ? "the parcel is delivered" : "the parcel is collected") : "this trip is completed"}.</p>}
             </div>
           </div>
           {user && user.creditBalance > 0 && (
@@ -371,7 +372,9 @@ export function ConfirmedScreen() {
         </motion.svg>
       </div>
       <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }} className="font-display text-3xl sm:text-4xl mt-6">Booking confirmed!</motion.h1>
-      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }} className="text-muted mt-2">{b.service === "parcel"
+      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }} className="text-muted mt-2">{isQuickParcel(b)
+        ? "A captain is assigned. The pickup code is in My Trips, and the delivery code appears there once the captain has the parcel: pass it to the receiver (demo: no SMS sent)."
+        : b.service === "parcel"
         ? "Hand it in before the cut-off below. When it's ready, the collection code appears in My Trips: pass it to the receiver (demo: no SMS sent)."
         : "We've sent the details to your phone. Have a great trip!"}</motion.p>
 
@@ -383,7 +386,7 @@ export function ConfirmedScreen() {
         </div>
         <dl className="p-5 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           {b.lines.map(([k, v]) => <div key={k} className="contents"><dt className="text-subtle">{k}</dt><dd className="text-right min-w-0 break-words">{v}</dd></div>)}
-          <dt className="text-subtle border-t border-line pt-2">Amount paid</dt><dd className="text-right font-bold text-gold border-t border-line pt-2">{inr(b.amount)}</dd>
+          <dt className="text-subtle border-t border-line pt-2">{b.payment === "cash" ? "To pay at pickup" : "Amount paid"}</dt><dd className="text-right font-bold text-gold border-t border-line pt-2">{inr(b.amount)}</dd>
         </dl>
       </motion.div>
       {(() => {
@@ -454,10 +457,12 @@ export function BookingsScreen() {
   /** What cancelling now gives back under the terms it was booked under (the API applies the same rule). */
   function preview(b: Booking) {
     const sold = withTerms(settings, b.terms);
-    if (b.service === "bike" || b.service === "car") {
+    const quick = isQuickParcel(b);
+    if (quick || b.service === "bike" || b.service === "car") {
       // No reason from My Trips, so the fee applies after the free minutes.
       const fee = rideCancelFee(sold, b.amount, null, b.createdAt, Date.now(), b.startsAt);
-      return { percent: 100, refund: b.amount - fee, fee };
+      // Cash for a parcel is paid at pickup, and it can only be cancelled before that.
+      return { percent: 100, refund: quick && b.payment === "cash" ? 0 : b.amount - fee, fee };
     }
     const percent = refundPercent(cancelPolicyFor(sold, b.service), b.startsAt);
     return { percent, refund: refundAmount(b.amount, percent, b.deposit ?? 0), fee: 0 };
@@ -472,6 +477,7 @@ export function BookingsScreen() {
       if (rental <= 0) return `Cancel? Your ${inr(b.deposit)} deposit comes back ${to} in full. It's too close to pickup for a rental refund.`;
       return `Cancel? Your ${inr(b.deposit)} deposit comes back in full, plus ${inr(rental)}${percent < 100 ? ` (${percent}%)` : ""} of the rental, ${to}.`;
     }
+    if (b.service === "parcel" && b.payment === "cash") return "Cancel? Nothing has been paid, so nothing is owed.";
     if (refund === 0) return "Cancel? It's too close to the start for a refund.";
     if (b.payment !== "wallet") return `Cancel? ${inr(refund)}${percent < 100 ? ` (${percent}%)` : ""} is due back under the cancellation policy.`;
     return `Cancel and get ${inr(refund)}${percent < 100 ? ` (${percent}%)` : ""} back in your wallet?`;
@@ -564,7 +570,7 @@ export function BookingsScreen() {
                             {b.startsAt && b.service !== "parcel" && !b.lines.some(([k]) => k === "Pickup time") && <div className="flex justify-between gap-3"><dt className="text-subtle">Starts</dt><dd className="text-right">{prettyDateTime(b.startsAt)}</dd></div>}
                             {b.deposit > 0 && b.status !== "cancelled" && <div className="flex justify-between gap-3"><dt className="text-subtle">Refundable deposit</dt><dd className="text-right">{b.status === "completed" ? `${inr(b.refundAmount ?? b.deposit)} ${b.payment === "wallet" ? "returned to wallet" : "due back"}` : `${inr(b.deposit)} (back after return)`}</dd></div>}
                             {b.status === "cancelled" && b.cancelFee > 0 && <div className="flex justify-between gap-3"><dt className="text-subtle">Cancellation fee</dt><dd className="text-right">{inr(b.cancelFee)}{b.payment === "wallet" ? " (kept)" : " (demo: not collected)"}</dd></div>}
-                            {b.status === "cancelled" && b.refundAmount !== null && <div className="flex justify-between gap-3"><dt className="text-subtle">{b.payment === "wallet" ? "Refunded to wallet" : "Refund due"}</dt><dd className="text-right">{b.refundAmount ? inr(b.refundAmount) : "Nothing (cancelled too late)"}</dd></div>}
+                            {b.status === "cancelled" && b.refundAmount !== null && !(b.service === "parcel" && b.payment === "cash") && <div className="flex justify-between gap-3"><dt className="text-subtle">{b.payment === "wallet" ? "Refunded to wallet" : "Refund due"}</dt><dd className="text-right">{b.refundAmount ? inr(b.refundAmount) : "Nothing (cancelled too late)"}</dd></div>}
                           </dl>
                           {b.service === "parcel" && <ParcelPanel booking={b} />}
                           {b.rentalState && b.status !== "cancelled" && <RentalPanel booking={b} />}

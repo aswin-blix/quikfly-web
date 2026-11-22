@@ -40,6 +40,8 @@ function useFilters(): [ParcelFilters, (patch: Partial<ParcelFilters>) => void] 
   return [f, set];
 }
 
+/** Only bus parcels have a departure. */
+const route = (p: AdminParcelRow) => (p.departAt ? `${p.from} → ${p.to}` : `Quick parcel, ${p.to}`);
 const viewHref = (p: AdminParcelRow) => `/parcels/view?id=${encodeURIComponent(p.bookingId)}`;
 const StateBadge = ({ p }: { p: AdminParcelRow }) => <Badge className={PARCEL_STATE_STYLE[p.state]}>{PARCEL_STATE_LABEL[p.state]}</Badge>;
 const Person = ({ who }: { who: { name: string; phone: string } }) => (
@@ -60,7 +62,7 @@ function Queue() {
 
   return (
     <>
-      <PageHeader title="Parcels" sub="Bus parcels at every counter, the soonest bus first. Open one to receive it, load it or hand it over."
+      <PageHeader title="Parcels" sub="Bus and Quick parcels, the most urgent first. Open one to receive it, move it or hand it over."
         actions={<Button loading={loading} onClick={reload}><RefreshCw size={16} /> Refresh</Button>} />
 
       <form className="card p-3 mb-4 grid gap-2 grid-cols-2 lg:grid-cols-6 items-end" onSubmit={(e) => { e.preventDefault(); setF({ q: q.trim() || undefined }); }}>
@@ -77,7 +79,7 @@ function Queue() {
           <select className="field" value={state} onChange={(e) => setF({ state: e.target.value as ParcelQueueState })}>
             {PARCEL_QUEUE_STATES.map((s) => <option key={s} value={s}>{stateLabel(s)}</option>)}
           </select></label>
-        <label className="grid gap-1"><span className="label">Bus date</span>
+        <label className="grid gap-1"><span className="label">Date</span>
           <input type="date" className="field min-w-0" value={f.date ?? ""} onChange={(e) => setF({ date: e.target.value || undefined })} /></label>
         <div className="flex gap-2">
           <Button type="submit" variant="primary" className="flex-1">Search</Button>
@@ -102,7 +104,7 @@ function Queue() {
                     <th className="font-medium px-5 py-3">Parcel</th>
                     <th className="font-medium px-3 py-3">Sender</th>
                     <th className="font-medium px-3 py-3">Receiver</th>
-                    <th className="font-medium px-3 py-3">Bus</th>
+                    <th className="font-medium px-3 py-3">Travels</th>
                     <th className="font-medium px-3 py-3">Status</th>
                     <th className="font-medium px-5 py-3">Next</th>
                   </tr>
@@ -112,13 +114,13 @@ function Queue() {
                     <tr key={p.bookingId} className="hover:bg-raised/50">
                       <td className="px-5 py-3">
                         <Link href={viewHref(p)} className="block group">
-                          <span className="block text-fg font-medium group-hover:text-accent">{p.from} → {p.to}</span>
+                          <span className="block text-fg font-medium group-hover:text-accent">{route(p)}</span>
                           <span className="block text-xs text-subtle"><span className="font-mono whitespace-nowrap">{p.lr}</span> · {parcelBandLabel(p.weightBand)}</span>
                         </Link>
                       </td>
                       <td className="px-3 py-3"><Person who={p.sender} /></td>
                       <td className="px-3 py-3"><Person who={p.receiver} /></td>
-                      <td className="px-3 py-3 text-fg whitespace-nowrap">{p.departAt ? dateTime(p.departAt) : ""}</td>
+                      <td className="px-3 py-3 text-fg whitespace-nowrap">{p.departAt ? dateTime(p.departAt) : "With a captain"}</td>
                       <td className="px-3 py-3"><StateBadge p={p} /></td>
                       <td className="px-5 py-3 text-fg">{nextAction(p)}</td>
                     </tr>
@@ -130,7 +132,7 @@ function Queue() {
                   <li key={p.bookingId}>
                     <Link href={viewHref(p)} className="block px-4 py-3 active:bg-raised">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-medium text-fg min-w-0">{p.from} → {p.to}</p>
+                        <p className="text-sm font-medium text-fg min-w-0">{route(p)}</p>
                         <StateBadge p={p} />
                       </div>
                       <p className="text-xs text-subtle mt-0.5"><span className="font-mono">{p.lr}</span> · {parcelBandLabel(p.weightBand)}{p.departAt ? ` · ${dateTime(p.departAt)}` : ""}</p>

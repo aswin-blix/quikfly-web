@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { Link } from "@/lib/nav";
 import { PARCEL_POLL_MS, parcelShareText, parcelTrackPath, parcelTrackUrl } from "@/lib/parcels";
+import { CourierSteps } from "./CourierSteps";
 import { ParcelQr } from "./ParcelQr";
 import { ParcelTimeline, SimulatedNote } from "./ParcelTimeline";
 
@@ -51,7 +52,7 @@ export function ParcelPanel({ booking }: { booking: Booking }) {
 
   async function share() {
     const url = parcelTrackUrl(p.lr);
-    const text = parcelShareText(p.lr, p.from, p.to);
+    const text = parcelShareText(p.lr, p.mode, p.from, p.to);
     if (navigator.share) { try { await navigator.share({ title: "QuikFly parcel", text, url }); return; } catch { /* dismissed: fall back to copy */ } }
     try {
       await navigator.clipboard.writeText(`${text} ${url}`);
@@ -61,22 +62,26 @@ export function ParcelPanel({ booking }: { booking: Booking }) {
     }
   }
 
+  const city = p.mode === "city";
+  const codeName = city ? "Delivery code" : "Collection code";
   return (
     <div className="mt-4 rounded-xl border border-line p-4 space-y-4">
       {p.collectOtp && (
         <div className="no-print rounded-xl border border-gold/50 bg-gold/[0.06] p-4">
-          <p className="label !text-gold">Collection code</p>
-          <p className="font-mono text-3xl tracking-[0.2em] text-strong mt-1" aria-label={`Collection code ${p.collectOtp.split("").join(" ")}`}>{p.collectOtp}</p>
+          <p className="label !text-gold">{codeName}</p>
+          <p className="font-mono text-3xl tracking-[0.2em] text-strong mt-1" aria-label={`${codeName} ${p.collectOtp.split("").join(" ")}`}>{p.collectOtp}</p>
           <p className="text-xs text-muted mt-2">
-            Give these {PARCEL_RULES.collectOtpDigits} digits only to {p.receiver.name || "the receiver"}. The counter hands the parcel over to whoever has them. Demo: no SMS is sent.
+            Give these {PARCEL_RULES.collectOtpDigits} digits only to {p.receiver.name || "the receiver"}. {city ? "The captain" : "The counter"} hands the parcel over to whoever has them. Demo: no SMS is sent.
             {p.holdUntil && ` It's held until ${parcelTime(p.holdUntil)}.`}
           </p>
         </div>
       )}
+      {city && <CourierSteps parcel={p} onChange={setParcel} />}
+      {p.state === "returned" && <p className="text-sm text-danger">The captain couldn&apos;t deliver it and brought it back to you. The fare isn&apos;t refunded.</p>}
       {p.state === "unclaimed" && <p className="text-sm text-danger">Nobody collected it within the hold period. Use Get help and we&apos;ll agree how it comes back to you.</p>}
 
       <div className="grid sm:grid-cols-2 gap-5">
-        <ParcelTimeline state={p.state} events={p.events} departAt={p.departAt} readyAt={p.readyAt} />
+        <ParcelTimeline mode={p.mode} state={p.state} events={p.events} departAt={p.departAt} readyAt={p.readyAt} />
         <div className="space-y-4 min-w-0">
           <Counter title="Hand in at" counter={p.fromCounter} />
           <Counter title="Collect at" counter={p.toCounter} when={p.readyAt ? `Expected ${parcelTime(p.readyAt)}` : undefined} />
@@ -100,7 +105,7 @@ export function ParcelPanel({ booking }: { booking: Booking }) {
           </div>
         </div>
       </div>
-      {live && p.simulated && p.state !== "unclaimed" && <SimulatedNote />}
+      {live && p.simulated && p.state !== "unclaimed" && <SimulatedNote mode={p.mode} />}
     </div>
   );
 }

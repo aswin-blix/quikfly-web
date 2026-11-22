@@ -23,7 +23,7 @@ export const SERVICES: ServiceMeta[] = [
   { key: "rent", title: "Rental Car", action: "Rent a Car", nav: "Rent a Car", href: "/rent-a-car", tagline: "Drive yourself", blurb: "Self-drive or chauffeur cars by the hour, day or week.", image: "/assets/services/rent-a-car.webp", icon: KeyRound },
   { key: "rentals", title: "Rental Trip", action: "Travel Rentals", nav: "Group Travel", href: "/travel-rentals", tagline: "Travel together", blurb: "Tempo travellers, Urbanias & coaches for family and group trips.", image: "/assets/services/travel-rentals.webp", icon: Caravan },
   // Listed only while `serviceParcel` is on (useOpenServices).
-  { key: "parcel", title: "Parcel", action: "Send a Parcel", nav: "Parcels", href: "/parcels", tagline: "Send it by bus", blurb: "Parcels between cities on the bus, counter to counter.", image: "/assets/services/parcel.webp", icon: Package },
+  { key: "parcel", title: "Parcel", action: "Send a Parcel", nav: "Parcels", href: "/parcels", tagline: "Send it by bus", blurb: "Across Chennai with a captain, or between cities on the bus.", image: "/assets/services/parcel.webp", icon: Package },
 ];
 export const serviceByKey = (k: ServiceKey) => SERVICES.find((s) => s.key === k)!;
 

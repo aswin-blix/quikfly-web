@@ -3,7 +3,7 @@
 // It works while the service is off, so parcels already sent can still be followed.
 import { useEffect, useState } from "react";
 import { Package, Search } from "lucide-react";
-import { PARCEL_STATE_LABEL, parcelTime, type PublicTracking } from "@quikfly/shared";
+import { PARCEL_SETTLED, PARCEL_STATE_LABEL, parcelTime, type PublicTracking } from "@quikfly/shared";
 import { ParcelTimeline, SimulatedNote } from "@/components/parcel/ParcelTimeline";
 import { PageHeader, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -46,13 +46,13 @@ export function TrackParcelScreen() {
             <section className="panel p-5 space-y-5 min-w-0">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h2 className="font-display text-2xl text-strong">{t.from} → {t.to}</h2>
+                  <h2 className="font-display text-2xl text-strong">{t.mode === "city" ? `Quick parcel in ${t.to}` : `${t.from} → ${t.to}`}</h2>
                   <p className="font-mono text-sm text-muted break-all">{t.lr}</p>
                 </div>
                 <span className={cx("text-xs font-semibold px-2.5 py-1 rounded-full", PARCEL_CHIP[t.state])}>{PARCEL_STATE_LABEL[t.state]}</span>
               </div>
-              <ParcelTimeline state={t.state} events={t.events} departAt={t.departAt} readyAt={t.readyAt} />
-              {t.simulated && !["collected", "cancelled", "unclaimed"].includes(t.state) && <SimulatedNote />}
+              <ParcelTimeline mode={t.mode} state={t.state} events={t.events} departAt={t.departAt} readyAt={t.readyAt} />
+              {t.simulated && !PARCEL_SETTLED.includes(t.state) && <SimulatedNote mode={t.mode} />}
             </section>
             <aside className="panel p-5 h-fit space-y-4 text-sm min-w-0">
               {(t.sender || t.receiver) && (
@@ -70,8 +70,12 @@ export function TrackParcelScreen() {
                   {t.state === "ready" && t.holdUntil && <p className="text-xs text-soft mt-1">Held until {parcelTime(t.holdUntil)}</p>}
                 </div>
               )}
-              {!["collected", "cancelled", "unclaimed"].includes(t.state) && (
-                <p className="text-xs text-muted">To collect it you need a code. The sender gets it when the parcel is ready and passes it to you (demo: no SMS is sent).</p>
+              {!PARCEL_SETTLED.includes(t.state) && (
+                <p className="text-xs text-muted">
+                  {t.mode === "city"
+                    ? "The captain hands it over for a code. The sender gets it when the captain picks the parcel up and passes it to you (demo: no SMS is sent)."
+                    : "To collect it you need a code. The sender gets it when the parcel is ready and passes it to you (demo: no SMS is sent)."}
+                </p>
               )}
             </aside>
           </div>

@@ -688,7 +688,7 @@ export interface CheckoutDraft {
   policy: string;
   /** Parcels: what POST /bookings needs besides the quote. Never put in `summary` or booking lines. */
   parcel?: {
-    request: Extract<QuoteRequest, { service: "parcel"; mode: "intercity" }>;
+    request: Extract<QuoteRequest, { service: "parcel" }>;
     receiver: { name: string; phone: string };
     contents: string;
     declaration: string;

@@ -149,6 +149,8 @@ export const httpApi: QuikflyApi = {
   parcels: {
     options: (from, to) => req("GET", `/parcels/options${qs({ from, to })}`),
     get: (id) => req("GET", `/bookings/${encodeURIComponent(id)}/parcel`),
+    handover: (id, otp) => req("POST", `/bookings/${encodeURIComponent(id)}/parcel/handover`, { otp }),
+    deliver: (id, otp) => req("POST", `/bookings/${encodeURIComponent(id)}/parcel/deliver`, { otp }),
     track: (lr) => req("GET", `/track/${encodeURIComponent(lr)}`),
   },
   tickets: {

@@ -16,7 +16,7 @@ import { useLoad } from "@/lib/useLoad";
 
 const HISTORY_LABEL: Record<string, string> = {
   "booking.cancel": "Cancelled", "booking.complete": "Marked completed", "rental.settle": "Deposit settled",
-  "parcel.move": "Moved the parcel", "parcel.refuse": "Refused the parcel", "parcel.code_wrong": "Wrong collection code",
+  "parcel.move": "Moved the parcel", "parcel.refuse": "Refused the parcel", "parcel.code_wrong": "Wrong receiver's code",
 };
 const KIND_LABEL: Record<string, string> = { payment: "Paid from wallet", refund: "Refunded to wallet", welcome: "Welcome credit", referral: "Referral", opening: "Opening balance", adjustment: "Adjusted by staff" };
 
@@ -78,7 +78,7 @@ function Detail({ id }: { id: string }) {
           </div>
         </section>
         {b.service === "parcel" && can("parcels.manage") && (
-          <Link href={`/parcels/view?id=${encodeURIComponent(b.id)}`} className="card p-5 text-sm text-accent hover:underline">Parcel journey, receiver and counter actions →</Link>
+          <Link href={`/parcels/view?id=${encodeURIComponent(b.id)}`} className="card p-5 text-sm text-accent hover:underline">Parcel journey, receiver and staff actions →</Link>
         )}
         {b.rentalState && <RentalReview bookingId={b.id} canManage={can("bookings.manage")} onSettled={() => { reload(); setNotice("Deposit settled and booking completed."); }} />}
         </div>
