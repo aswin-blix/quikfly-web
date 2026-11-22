@@ -412,7 +412,8 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 
 ## Backlog (agreed ideas, not scheduled)
 
-- **Bug, sign-in:** the app's OTP box is under `Opacity(0)`, so a screen reader gets no text field on that step (both apps; reproduced in a widget test during parcels step 5, TalkBack not tried)
+- **Fixed on `fix/otp-screen-reader` (2026-11-22), reaches phones with the next app build:** the OTP field was dropped from what screen readers get (`Opacity(0)`), so they had no field to type the code into (both apps; `test/login_otp_test.dart`). **Try it with TalkBack in that release's phone check.**
+- The app's form errors (`FormError`, e.g. a wrong OTP) aren't live regions, so a screen reader doesn't read them out when they appear; the user has to swipe to them (found while fixing the OTP field)
 - **Before any custom domain:** set `workers_dev: true` beside the routes (installed apps use workers.dev; adding routes turns it off), and stop `smoke.mjs` and the app's contract test recognising production by "workers.dev" (on another host they would write test data to production)
 - The app's notification bell keeps the count from launch until the inbox is opened (found during parcels step 5)
 - The home page's phone mock-up gets the parcel tile when an app with parcels is released
