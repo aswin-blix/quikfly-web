@@ -1,6 +1,6 @@
 # Parcel service: research and implementation plan
 
-How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then open decisions (10). **Nothing here is implemented yet.**
+How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then the owner's decisions (10) and what changed while building (11). **Step 1 is built (2026-11-22), off behind `serviceParcel`; where sections 1–9 differ from section 11, section 11 wins.**
 
 - **Date:** 2026-11-20. **Code:** `main` at `021b718` (after PR #112). No app code was changed.
 - **Read first:** [AGENTS.md](../AGENTS.md), [roadmap.md](roadmap.md), [decisions.md](decisions.md). The plan keeps every recorded decision; where a step leans on one it names it.
@@ -257,7 +257,7 @@ Smoke: `scripts/smoke.mjs` books both modes, tracks, cancels one by policy and c
 
 **Website** (`apps/web`):
 - `src/lib/services.ts`: the seventh tile (`key: "parcel"`, nav "Parcels", `href: "/parcels"`, a new photo under `/assets/services/`).
-- `src/app/parcels/page.tsx` + `src/screens/ParcelScreens.tsx` (chooser, Quick parcel form, Bus parcel form with departures, receiver and declaration, quote panel reusing the `RidePanel` patterns) and `src/app/track/[lr]` → `TrackParcelScreen` (public). Both added to `src/spa/SpaApp.tsx` (Rule 9).
+- `src/app/parcels/page.tsx` + `src/screens/ParcelScreens.tsx` (chooser, Quick parcel form, Bus parcel form with departures, receiver and declaration, quote panel reusing the `RidePanel` patterns) and `src/app/parcels/track` (`?lr=`) → `TrackParcelScreen` (public; `/track` is already the shared-ride page, and a static export can't serve `[lr]`). Both added to `src/spa/SpaApp.tsx` (Rule 9).
 - `TripScreen.tsx`: a parcel card shows the LR, the state chip and "Track"; `InvoiceScreen.tsx` prints the LR and the liability line.
 - `lib/api/contract.ts`, `http.ts`, `mock.ts`: the new endpoints; the mock simulates transit in localStorage for the single-file demo.
 - New text goes through `useT()` where the string catalog already covers the screen.
@@ -308,6 +308,20 @@ Decisions this plan would add to `decisions.md` when step 1 lands:
 
 ## 10. Decisions for the owner
 
+**Answered 2026-11-22:**
+
+| Question | Answer |
+|---|---|
+| 10.1, 10.9 name and order | "QuikFly Parcel": Bus parcel first, then Quick parcel. One step per PR; step 1 first |
+| 10.2, 10.8 network and carrier | QuikFly's own demo counters in all 8 bus cities (Salem isn't one). Rates on the popular routes, per kg elsewhere. No other operator until an agreement exists |
+| 10.3 caps | 20 kg, ₹10,000 declared value |
+| 10.4 liability | The lower of the declared value and ₹5,000; no insurance |
+| 10.5 GST | 18%, provisional until the accountant answers |
+| 10.6 counters in the demo | Simulation on and labelled; staff can also move parcels |
+| 10.7 receiver without an account | The code is on the sender's screen only, never in the receiver's inbox |
+
+The questions as they were asked:
+
 1. **Name and positioning.** "QuikFly Parcel" with "Quick parcel" (city) and "Bus parcel" (intercity)? Or lead with the KPN-style bus parcel only and add the city courier later (steps 3–4 move after 5)?
 2. **Which cities and routes first.** Counters in all bus cities in the seed, or Chennai, Coimbatore, Madurai, Salem and Bengaluru to start? Rates per route (catalog) or one per-kg tariff (settings) for the demo?
 3. **Weight and value caps.** 20 kg and ₹10,000 declared value as proposed, or lower for launch?
@@ -320,8 +334,32 @@ Decisions this plan would add to `decisions.md` when step 1 lands:
 
 ---
 
+## 11. What changed while building step 1
+
+| Plan said | Built | Why |
+|---|---|---|
+| Seed the counters and rates in `catalog.ts` | Also inserted by migration 0029 | The seed runs once and production is already seeded |
+| A city quote starts "now", under `cancelPolicyParcel` | No start time; step 3 applies the ride cancellation rules | "3h:100, 1h:50" counted to now refunds 0% at the moment of booking |
+| Hash the code; also show it to the sender and the receiver's inbox | Readable while ready, sender only, 6 digits, 5 tries | A hash can't be shown again; the demo login exposes inboxes (decision 10.7) |
+| The receiver can open `/bookings/:id/parcel` and is notified | Sender only; receivers use `/track/:lr` | The same |
+| LR with 4 random characters | 8 | It opens a public page with names |
+| `advanceLeg` per parcel, 20 a cron run | `advanceLegs`, set-based | 20 batches would be over 100 queries; the cap is 50 |
+| `declaration: true` | The version the sender saw, from `GET /parcels/options` | The stored version has to be what they agreed to |
+| No endpoint for departures | `GET /parcels/options`; quotes take `busId` + `departAt` | A client can't quote a departure it can't list |
+| `parcelCityMaxKg` | `parcelMaxKg`, both modes | The owner's 20 kg cap applies to both |
+| Terms: policy, GST, liability | Also `parcelCounterHoldDays` | The hold is promised at booking |
+| Cancel "by policy" and refusal "full refund", one action | Cancel by policy; refusing is its own leg move | They refund differently |
+| Admin Complete and Cancel work as for other bookings | Complete refuses parcels; Cancel refuses once on the bus | They would have bypassed the code and the state rules |
+| A choice of evening buses | One QuikFly departure a day per route, about 4–6 PM | Only QuikFly Travels carries parcels and the timetable gives it one bus |
+| Switch on when the owner likes after step 2 | Not in production before step 5's app release | App 0.1.16 reads an unknown service as a cab ride |
+| `/track/[lr]` on the website | `/parcels/track?lr=` | `/track` is taken, and static export has no dynamic routes |
+
+Left to their steps: bike legs and their transitions (3), door legs (4), return to sender, re-weighing and moving a parcel to another bus (6).
+
+---
+
 ## Prompt to start step 1
 
-Paste into a new chat after the decisions above are answered:
+Used 2026-11-22 (step 1 is done). For step 2, ask to implement step 2 of this plan, reading section 11 first. The original prompt:
 
 > Implement step 1 of docs/parcel-service-plan.md (foundation for the parcel service). Read AGENTS.md, docs/roadmap.md, docs/decisions.md and the plan first. Branch from main. Follow Rule 1 (shared types → API route + service + migration 0029 → web contract/http/mock → smoke → API README). Keep `serviceParcel` off by default. Add the decisions listed in section 9 to docs/decisions.md and a Phase 7 row to docs/roadmap.md. Run `npm run typecheck` and `npm run smoke` against a local API on a free port; do not touch production. Commit at each checkpoint and open a PR.
