@@ -1,4 +1,4 @@
-import { PARCEL_NOT_CANCELLABLE, UPDATE_TO_SEE, isQuickParcel, type ParcelState, type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
+import { PARCEL_NOT_CANCELLABLE, PARCEL_RETURN_LOCKED, UPDATE_TO_SEE, isQuickParcel, type ParcelState, type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visibleById } from "./catalog";
@@ -9,7 +9,7 @@ import { getSettings } from "./settings";
 import { notify } from "./notifications";
 import { creditExpiry, earnStatement, earnedNotice, spendPlan } from "./credits";
 import { settlementStatements } from "./partner-trips";
-import { CANCELLABLE_SQL, cancelParcelStatements } from "./parcels/legs";
+import { CANCELLABLE_SQL, cancelParcelStatements, isReturn } from "./parcels/legs";
 import { newParcel, parcelStates } from "./parcels/parcels";
 
 export interface BookingRow {
@@ -283,6 +283,7 @@ async function notActive(db: D1Database, userId: string, id: string): Promise<ne
   const row = await db.prepare("SELECT service, status FROM bookings WHERE id = ? AND user_id = ?").bind(id, userId)
     .first<{ service: ServiceKey; status: BookingStatus }>();
   if (!row) throw notFound("Booking not found.");
+  if (row.service === "parcel" && (row.status === "confirmed" || row.status === "ongoing") && (await isReturn(db, id))) throw conflict(PARCEL_RETURN_LOCKED);
   if (row.service === "parcel" && row.status === "ongoing") throw conflict(PARCEL_NOT_CANCELLABLE);
   throw conflict(`This booking is already ${row.status}.`);
 }

@@ -6,6 +6,7 @@ import { badRequest, conflict, notFound } from "../../lib/errors";
 import { cancelBookingRow, completeBookingRow, refundFor, refundText } from "../bookings";
 import { notify } from "../notifications";
 import { audit, auditStatement, listAudit } from "./audit";
+import { isReturn } from "../parcels/legs";
 import { LOCAL_DATE, toAdminBooking, type AdminBookingRow } from "./stats";
 
 const SELECT = "SELECT b.*, u.name AS customer_name, u.phone AS customer_phone, (SELECT CASE WHEN settlement IS NOT NULL THEN 'settled' WHEN return_at IS NOT NULL THEN 'returned' WHEN pickup_at IS NOT NULL THEN 'on_trip' ELSE 'booked' END FROM rentals WHERE booking_id = b.id) AS rental_state, (SELECT state FROM parcels WHERE booking_id = b.id) AS parcel_state FROM bookings b JOIN users u ON u.id = b.user_id";
@@ -101,7 +102,8 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
   const row = await db.prepare(`${SELECT} WHERE b.id = ?`).bind(id).first<AdminBookingRow & { coupon_code: string | null; discount: number; vendor_id: string | null; vendor_vehicle_id: string | null; vendor_driver_id: string | null; quote_id: string | null }>();
   if (!row) throw notFound("Booking not found.");
   const active = row.status === "confirmed" || row.status === "ongoing";
-  const cancellable = active && (row.service !== "parcel" || (!!row.parcel_state && PARCEL_CANCELLABLE.includes(row.parcel_state)));
+  const cancellable = active
+    && (row.service !== "parcel" || (!!row.parcel_state && PARCEL_CANCELLABLE.includes(row.parcel_state) && !(await isReturn(db, id))));
   const tollEstimate = active && row.service === "rentals" ? await quotedTolls(db, row.quote_id) : null;
   const [{ results: txns }, history, partner, notes] = await Promise.all([
     db.prepare("SELECT * FROM wallet_transactions WHERE booking_id = ? ORDER BY created_at").bind(id).all<TxnRow>(),

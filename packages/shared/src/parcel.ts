@@ -229,6 +229,8 @@ export const PARCEL_SETTLED: readonly ParcelState[] = ["collected", "delivered",
 export const PARCEL_CANCELLABLE: readonly ParcelState[] = ["booked", "at_counter"];
 export const PARCEL_NOT_CANCELLABLE = "This parcel is already on its way, so it can't be cancelled. Contact support if something is wrong.";
 
+export const PARCEL_RETURN_LOCKED = "This parcel is bringing an unclaimed one back, so it can't be cancelled, refused or re-weighed. Contact support if something is wrong.";
+
 export interface ParcelEvent {
   state: ParcelState;
   at: string;
