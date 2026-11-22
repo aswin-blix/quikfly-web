@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quikfly/api/api.dart';
 import 'package:quikfly/api/models.dart';
+import 'package:quikfly/api/parcel_models.dart';
 import 'package:quikfly/api/rental_models.dart';
 import 'package:quikfly/api/support_models.dart';
 import 'package:quikfly/core/env.dart';
@@ -314,6 +315,48 @@ void main() {
     final back = await api.endRental(b.id, 41150, 7);
     expect(back.state, 'returned');
     expect(back.dropoff?.fuel, 7);
+  });
+
+  test('parcel: options, quote, booking, tracking, cancel', () async {
+    // Production: no parcels in the real counters' queue. Elsewhere it runs while parcels are switched on.
+    if (apiUrl.contains('workers.dev') || !config.settings.serviceOn(ServiceKey.parcel)) {
+      markTestSkipped('parcels are off here, or this is production');
+      return;
+    }
+    final options = await api.parcelOptions('Chennai', 'Coimbatore');
+    expect(options.declaration.prohibited, isNotEmpty);
+    expect(options.departures, isNotEmpty);
+    final d = options.departures.last;
+    expect(d.cutoffAt.isBefore(d.departAt), isTrue);
+    expect(d.toCounter.address, isNotEmpty);
+    final q = await api.quote({
+      'service': 'parcel', 'mode': 'intercity', 'from': d.from, 'to': d.to, 'busId': d.busId, 'departAt': d.departIso,
+      'category': parcelCategories.keys.first, 'weightBand': parcelWeightBands.first, 'size': parcelSizes.keys.first,
+      'declaredValue': 1500, 'pickup': 'counter', 'delivery': 'counter',
+    });
+    expect(q.service, ServiceKey.parcel);
+    expect(q.liability, 1500);
+    final b = await api.createBooking(
+      service: ServiceKey.parcel, title: 'x', subtitle: 'x', payment: PaymentMethod.upi, lines: const [], quoteId: q.id,
+      receiver: (name: 'Contract Receiver', phone: '9000000002'), contents: 'Contract test shirts', declaration: options.declaration.version,
+    );
+    expect(b.service, ServiceKey.parcel);
+    expect(b.parcelState, 'booked');
+    expect(b.terms?['gstParcel'], isA<num>());
+    expect(b.line(parcelLrLine), startsWith('QFP-'));
+    expect((await api.bookings()).map((x) => x.id), contains(b.id), reason: 'this app declares parcels in Accept');
+    expect((await api.notifications()).items.map((n) => n.bookingId), contains(b.id));
+    final p = await api.parcel(b.id);
+    expect(p.lr, b.line(parcelLrLine));
+    expect(p.receiverName, 'Contract Receiver');
+    expect(p.collectOtp, isNull);
+    expect(p.events.first.state, 'booked');
+    final t = await api.trackParcel(p.lr.toLowerCase());
+    expect(t.receiver, 'Contract');
+    expect(t.collectAt, isNotNull);
+    final cancelled = await api.cancelBooking(b.id);
+    expect(cancelled.parcelState, 'cancelled');
+    expect(cancelled.refundAmount, q.total);
   });
 
   test('credits summary parses', () async {
