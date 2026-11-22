@@ -15,10 +15,14 @@ const OTP = "1234";
 let failed = 0;
 const check = (name, ok, detail = "") => { if (!ok) failed++; console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok ? "" : `  -> ${detail}`}`); };
 
-async function call(method, path, body, token = "") {
+// These tests act as a client that can show parcels (CLIENT_ACCEPT in packages/shared/src/clients.ts);
+// OLD_CLIENT is what app 0.1.16 and any other client from before that rule sends.
+const SHOWS_PARCELS = "application/json; services=parcel";
+const OLD_CLIENT = "application/json";
+async function call(method, path, body, token = "", accept = SHOWS_PARCELS) {
   const res = await fetch(BASE + path, {
     method,
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: { "Content-Type": "application/json", Accept: accept, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   return { status: res.status, json: await res.json().catch(() => null) };
@@ -1009,6 +1013,26 @@ if (LOCAL) {
     const p = await expect("the sender reads the parcel", call("GET", `/bookings/${b.id}/parcel`, null, S), 200, (j) => j.state === "booked" && j.collectOtp === null);
     await expect("the receiver's account gets no access", call("GET", `/bookings/${b.id}/parcel`, null, R), 404);
 
+    // A client that can't show parcels (app 0.1.16) gets none of them.
+    const old = (method, path, body) => call(method, path, body, S, OLD_CLIENT);
+    const ride = await (async () => {
+      const opts = await call("POST", "/rides/quote", { service: "car", pickupId: places[0].id, dropId: places[1].id });
+      const made = await call("POST", "/rides", { optionId: opts.json[0].option.id, pickupId: places[0].id, dropId: places[1].id, payment: "upi" }, S);
+      return (await call("POST", "/bookings", { service: "car", title: "Old client ride", subtitle: "A → B", payment: "upi", lines: [], rideId: made.json.id }, S)).json;
+    })();
+    await expect("a client that shows parcels lists it", call("GET", "/bookings", null, S), 200, (j) => j.some((x) => x.id === b.id) && j.some((x) => x.id === ride.id));
+    await expect("an old client's My Trips has no parcel, and keeps the rest", old("GET", "/bookings"), 200, (j) => !j.some((x) => x.service === "parcel") && j.some((x) => x.id === ride.id));
+    await expect("an old client still opens its other bookings", old("GET", `/bookings/${ride.id}`), 200, (j) => j.id === ride.id);
+    await expect("an old client can't open a parcel booking", old("GET", `/bookings/${b.id}`), 404, (j) => /Update QuikFly/.test(j.message));
+    await expect("an old client can't read the parcel or its code", old("GET", `/bookings/${b.id}/parcel`), 404);
+    await expect("an old client can't cancel on a cab's refund promise", old("POST", `/bookings/${b.id}/cancel`, {}), 404);
+    await expect("an old client can't complete one either", old("POST", `/bookings/${b.id}/complete`, {}), 404);
+    await expect("an old client can't book one", old("POST", "/bookings", bodyFor((await quoteOf()).id)), 409, (j) => /Update QuikFly/.test(j.message));
+    for (const accept of ["*/*", "text/html", "application/json; services=", "application/json; services=parcels"]) {
+      await expect(`"${accept}" doesn't declare parcels`, call("GET", "/bookings", null, S, accept), 200, (j) => !j.some((x) => x.service === "parcel"));
+    }
+    await expect("parcels among several declared services", call("GET", "/bookings", null, S, "application/json; services=other+parcel"), 200, (j) => j.some((x) => x.id === b.id));
+    await expect("someone else's parcel is still just not found", call("GET", `/bookings/${b.id}`, null, R, OLD_CLIENT), 404, (j) => !/Update QuikFly/.test(j.message));
     const contentStaff = (await login(CONTENT)).json.token;
     const queue = (query = "", as = T) => call("GET", `/admin/parcels${query}`, null, as);
     const listed = (j) => j.items.some((x) => x.bookingId === b.id);
@@ -1060,6 +1084,13 @@ if (LOCAL) {
     await expect("the code isn't in the queue", queue(`?q=${p.lr}`), 200, (j) => j.items[0].state === "ready" && !JSON.stringify(j).includes(code));
     await expect("staff read who moved it, never the code", queue(`/${b.id}`), 200,
       (j) => !JSON.stringify(j).includes(code) && j.collectOtp === null && j.refundIfCancelled === null && j.events.filter((e) => e.by).length === 4);
+    const inbox = (await call("GET", "/me/notifications", null, S)).json;
+    const about = inbox.items.filter((n) => n.bookingId === b.id);
+    await expect("an old client's inbox has nothing about the parcel", old("GET", "/me/notifications"), 200,
+      (j) => about.length >= 2 && !j.items.some((n) => n.bookingId === b.id) && j.unread < inbox.unread && j.items.every((n) => !n.kind.startsWith("parcel.")));
+    await expect("an old client's 'mark all read' reads only what it showed", old("POST", "/me/notifications/read", {}), 200, (j) => j.unread === 0);
+    await expect("the parcel's notifications are still unread where they show", call("GET", "/me/notifications", null, S), 200,
+      (j) => j.items.filter((n) => n.bookingId === b.id).every((n) => n.readAt === null) && j.unread >= about.length);
     await expect("the receiver's inbox has nothing about it", call("GET", "/me/notifications", null, R), 200, (j) => !j.items.some((n) => n.kind.startsWith("parcel.")));
     await expect("the tracking page is public and private", call("GET", `/track/${p.lr.toLowerCase()}`), 200,
       (j) => j.state === "ready" && j.receiver === "Ravi" && ![receiverPhone, senderPhone, contents, code, "8000"].some((v) => JSON.stringify({ ...j, events: j.events.map((e) => e.state) }).includes(v)));
@@ -1076,6 +1107,7 @@ if (LOCAL) {
     await expect("collected leaves the open queue", queue(`?state=open&q=${p.lr}`), 200, (j) => j.total === 0);
     await expect("but a search still finds it", queue(`?q=${p.lr}`), 200, listed);
     await expect("collected completes the booking", call("GET", `/bookings/${b.id}`, null, S), 200, (j) => j.status === "completed" && j.parcelState === "collected");
+    await expect("collected stays out of an old client's Past trips", old("GET", "/bookings"), 200, (j) => !j.some((x) => x.id === b.id));
     await expect("collection earns credits once", call("GET", "/me/credits", null, S), 200,
       (j) => j.items.filter((x) => x.bookingId === b.id && x.kind === "earned").length === (Math.floor((priced.total * before.creditsParcel) / 100) ? 1 : 0));
     await expect("every move is audited once", call("GET", `/admin/audit?entity=booking&entityId=${b.id}`, null, T), 200,

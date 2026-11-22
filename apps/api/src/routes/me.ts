@@ -2,7 +2,7 @@
 // licence, saved places, travellers, emergency contacts and wallet history.
 import { Hono } from "hono";
 import {
-  AUTO_SHARE_MODES, GENDERS, LIMITS, PATTERNS, RIDE_PIN, SUPPORT_RULES, SUPPORT_TOPICS, SAVED_PLACE_KINDS, ageFrom, compactCode, type ProfileUpdate,
+  AUTO_SHARE_MODES, GENDERS, LIMITS, PATTERNS, RIDE_PIN, SUPPORT_RULES, SUPPORT_TOPICS, SAVED_PLACE_KINDS, ageFrom, compactCode, hiddenServices, type ProfileUpdate,
 } from "@quikfly/shared";
 import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
@@ -168,13 +168,13 @@ export const me = new Hono<AppEnv>()
   .post("/pass", async (c) => c.json(await buyPass(c.env.DB, c.var.user.id), 201))
 
   // Notification inbox
-  .get("/notifications", async (c) => c.json(await listNotifications(c.env.DB, c.var.user.id)))
+  .get("/notifications", async (c) => c.json(await listNotifications(c.env.DB, c.var.user.id, hiddenServices(c.req.header("Accept")))))
   // { ids: [...] } marks those read; {} or { all: true } marks everything read.
   .post("/notifications/read", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const ids = body.ids;
     if (ids !== undefined && (!Array.isArray(ids) || ids.length > 100 || ids.some((x) => typeof x !== "string"))) throw badRequest('"ids" must be a list of notification ids.');
-    return c.json(await markRead(c.env.DB, c.var.user.id, (ids as string[] | undefined) ?? null));
+    return c.json(await markRead(c.env.DB, c.var.user.id, (ids as string[] | undefined) ?? null, hiddenServices(c.req.header("Accept"))));
   })
 
   // Push devices (Firebase tokens from the app)

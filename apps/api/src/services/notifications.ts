@@ -1,7 +1,7 @@
 // The customer's notification inbox. Events write a row (once per event: user + kind + ref
 // is unique); the every-minute cron (scheduled.ts) pushes new rows to the customer's phones
 // when Firebase is configured. Notifications never carry money: they describe what happened.
-import type { AppNotification, NotificationKind } from "@quikfly/shared";
+import type { AppNotification, NotificationKind, ServiceKey } from "@quikfly/shared";
 import { NOTIFICATIONS_PAGE } from "../config";
 import { uid } from "../lib/random";
 
@@ -29,26 +29,37 @@ export async function notify(db: D1Database, userId: string, n: NewNotification)
   ).bind(uid("NT"), userId, n.kind, n.ref, n.title, n.body, n.bookingId ?? null, new Date().toISOString()).run();
 }
 
-/** The newest notifications and how many are unread. */
-export async function listNotifications(db: D1Database, userId: string) {
+/**
+ * SQL: this client can show the notification (?2 = JSON of the services it can't). Left out are a
+ * hidden service's own kinds ("parcel.ready") and the booking.* ones about its bookings, which
+ * would open a My Trips without that booking. Credits and support replies stay: they open their own pages.
+ */
+const SHOWN = `NOT EXISTS (
+  SELECT 1 FROM json_each(?2) h WHERE notifications.kind LIKE h.value || '.%'
+    OR (notifications.kind LIKE 'booking.%' AND EXISTS (SELECT 1 FROM bookings b WHERE b.id = notifications.booking_id AND b.service = h.value)))`;
+
+/** The newest notifications this client can show, and how many of those are unread. */
+export async function listNotifications(db: D1Database, userId: string, hidden: ServiceKey[]) {
+  const list = JSON.stringify(hidden);
   const [items, unread] = await db.batch([
-    db.prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?").bind(userId, NOTIFICATIONS_PAGE),
-    db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL").bind(userId),
+    db.prepare(`SELECT * FROM notifications WHERE user_id = ?1 AND ${SHOWN} ORDER BY created_at DESC LIMIT ?3`).bind(userId, list, NOTIFICATIONS_PAGE),
+    db.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE user_id = ?1 AND ${SHOWN} AND read_at IS NULL`).bind(userId, list),
   ]);
   return { items: (items.results as NotificationRow[]).map(toNotification), unread: (unread.results[0] as { n: number }).n };
 }
 
-/** Marks the given notifications (or all of them) as read; returns what is still unread. */
-export async function markRead(db: D1Database, userId: string, ids: string[] | null) {
+/** Marks the given notifications (or all this client can show) as read; returns what is still unread of those. */
+export async function markRead(db: D1Database, userId: string, ids: string[] | null, hidden: ServiceKey[]) {
   const now = new Date().toISOString();
+  const list = JSON.stringify(hidden);
   if (ids === null) {
-    await db.prepare("UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL").bind(now, userId).run();
+    await db.prepare(`UPDATE notifications SET read_at = ?3 WHERE user_id = ?1 AND ${SHOWN} AND read_at IS NULL`).bind(userId, list, now).run();
   } else if (ids.length) {
     await db.prepare(
       `UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL AND id IN (SELECT value FROM json_each(?))`,
     ).bind(now, userId, JSON.stringify(ids)).run();
   }
-  const row = await db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL").bind(userId).first<{ n: number }>();
+  const row = await db.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE user_id = ?1 AND ${SHOWN} AND read_at IS NULL`).bind(userId, list).first<{ n: number }>();
   return { unread: row?.n ?? 0 };
 }
 

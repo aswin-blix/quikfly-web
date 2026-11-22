@@ -17,3 +17,4 @@ export * from "./vendor";
 export * from "./privacy";
 export * from "./terms";
 export * from "./parcel";
+export * from "./clients";

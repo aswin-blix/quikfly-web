@@ -34,8 +34,8 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "serviceRent", type: "toggle", label: "Rent a car", help: "Self-drive and chauffeur rentals." },
       { key: "serviceGroup", type: "toggle", label: "Group travel", help: "Tempo travellers, buses and outstation cabs." },
       {
-        key: "serviceParcel", type: "toggle", label: "Parcels", help: "Bus parcels between counters. Off until a QuikFly app release shows parcels.",
-        warnOn: "QuikFly app 0.1.16 and older show a parcel as a cab ride. Switch this on in production only after an app release that shows parcels.",
+        key: "serviceParcel", type: "toggle", label: "Parcels", help: "Bus parcels between counters, on the website and in the app at once.",
+        warnOn: "QuikFly app 0.1.16 and older can't show parcels, so their users won't see a parcel, or its collection code, until they update (the website shows both). Switch this on only when the app with parcels is published and the rates, counters and GST rate are real.",
       },
       { key: "servicePausedMessage", type: "text", label: "Message for a paused service", help: "Shown where a paused service would be, and when someone tries to book it." },
     ],
