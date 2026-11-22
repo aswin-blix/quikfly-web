@@ -16,6 +16,7 @@ Legend: ✅ done · 🔄 in progress · ⬜ not started
 - **App 0.1.15 published** 2026-11-20 ([app-v0.1.15](https://github.com/aswin-blix/quikfly-web/releases/tag/app-v0.1.15)): new QuikFly icon; holiday "+ GST"; refunds, bus changes and invoices by booking terms; per-ride surge, night charge and airport fee shown; toll wording on group trips. Still to see on a phone: the Partner ⋮ menu from 0.1.14 and Google's number picker (the owner signs in to the Partner app first).
 - 🔄 **Pricing plan** ([admin-settings-audit.md](admin-settings-audit.md): findings H1–H6/M1–M10/L1–L11, research, R1–R25, an 8-step plan). **Steps 1 and 2 are live** (2026-11-20, PRs #98 and #100): honest holiday GST wording, damage capped at the protection excess, atomic settings audit, ride fares expire after 30 min, fresh website prices; rules between settings, tighter catalog limits, offer start dates and total-use limits, and a `pricing.edit` permission so content staff can't change prices. The app part of step 1 ships in the next app release after 0.1.14. **Step 7 is live** (2026-11-20, PR #110): bus route fares, peak and festival dates, an airport fee and toll estimates settled on actuals, all off until staff add them. **Step 6 is live** (2026-11-20, PR #108): minimum fares, included km, night charge, surge rules by ride type and day, and a discount floor, all off by default. **Step 5 is live** (2026-11-20, PR #106): Settings tabs, search, defaults and reset, per-setting history, review before save, row editors and "Try a fare". **Step 3 is live** (2026-11-20, PR #103): every booking keeps the terms it was sold under (cancellation policy, ride fee, bus change, GST rate, self-drive rates); admin shows them as "Sold under". Steps 4–8 wait for the owner; step 4 (GST model, TCS) needs the accountant first.
 - **Release rhythm:** each Phase 5 item ships to website/API/admin when its PR is merged; the app part follows in the next app release (owner builds, Claude verifies, phone-checks and publishes). Details in [operations.md](operations.md) and [apps/mobile/README.md](../apps/mobile/README.md).
+- 🔄 **Parcels step 5 (customer app) built 2026-11-22 on `feat/parcel-app`, not merged, deployed or released.** It replaces the "0.1.16 shows parcels as cab rides" reason given above: the API now keeps parcels from apps that don't declare them, so those installs see no parcel and no code until they update. To launch: merge → deploy API, website and admin (no migration) → app release with a phone check (contact picker, TalkBack) → real rates, counters and GST → the owner switches `serviceParcel` on.
 
 ## Phases
 
@@ -392,9 +393,14 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 - [x] 2. Bus parcel in admin (queue, counter buttons, Settings tab) and on the website (page, tracking at `/parcels/track?lr=`, trip card)
 - [ ] 3. Quick parcel (city), with the ride cancellation rules
 - [ ] 4. Door pickup and delivery as trips
-- [ ] 5. Customer app; only after its release can `serviceParcel` go on in production
+- [x] 5. Customer app, and the guard that keeps parcels from older installs (built, **not released**; `serviceParcel` stays off until the release and the owner's word)
 - [ ] 6. Operations polish: return to sender, re-weighing, moving to another bus, dashboard, CSV
 - [ ] 7. Counter role and operators as partners
+
+### Step 5 notes
+
+- 2026-11-22 (branch `feat/parcel-app`, no migration): the `Accept` guard; app form, checkout, confirmation, parcel screen with the code, tracking, My Trips, invoice QR, notifications, contact picker. Fixed on the way: the inbox now reloads when opened (both apps showed the list from launch), pills wrap, the services sheet scrolls.
+- Verified: typecheck, both smoke suites, the app's tests with parcels off and on, app 0.1.16's own code against the new API (gets no parcel), the new app and website against the API now live, and the app's web build through the whole journey at 390/820/1366 px, both themes. **Not checked:** a phone, the contact picker on Android, TalkBack, hosted D1.
 
 ### Phase 7 work log
 
@@ -403,6 +409,9 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 
 ## Backlog (agreed ideas, not scheduled)
 
+- **Bug, sign-in:** the app's OTP box is under `Opacity(0)`, so a screen reader gets no text field on that step (both apps; reproduced in a widget test during parcels step 5, TalkBack not tried)
+- The app's notification bell keeps the count from launch until the inbox is opened (found during parcels step 5)
+- The home page's phone mock-up gets the parcel tile when an app with parcels is released
 - **Bug:** admin Bookings and Customers searches return 500 past 48 characters (D1 caps LIKE patterns at 50 bytes); reproduced locally during parcels step 2, whose own search is fixed
 - Before `featureLanguages` goes on: the Tamil header overflows by about 240 px from 1280 px wide with six services (found during parcels step 2; with seven it fits)
 - Website checkout says "256-bit secure · PCI-DSS compliant gateway" though payments are simulated (Rule 7); parcels don't show it, the other services still do

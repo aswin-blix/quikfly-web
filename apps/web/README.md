@@ -106,7 +106,7 @@ src/
       contract.ts QuikflyApi interface: the only thing screens depend on
       mock.ts     demo implementation (seeded data, simulated latency, localStorage)
       mock-parcels.ts parcels in the demo (transit follows the clock). Shown only when built with NEXT_PUBLIC_DEMO_PARCELS=1
-      http.ts     real REST implementation (Bearer token, JSON)
+      http.ts     real REST implementation (Bearer token, JSON; Accept says which newer services the site shows)
       index.ts    mock or http, based on NEXT_PUBLIC_API_URL
   components/ConfigProvider.tsx  loads GET /config once: useConfig() (places, ride types, cities, bus operators,
                                   routes, destinations, offers, FAQs) and useSettings() (fares, GST, bonuses, company...)
@@ -128,7 +128,7 @@ Set `NEXT_PUBLIC_API_URL` (see `.env.example`) to switch to the real API in `app
 ## Before production
 
 - **Images:** the service photos are cropped from the client's small banner (about 120×80 px each) and look soft at large sizes. Get high-resolution originals of the vehicles, plus real photos for holiday packages (currently illustrated SVG scenes).
-- **Service photos:** `public/assets/services/<service>.webp` (1200 px WebP, about 70–110 KB). `SERVICES` in `src/lib/services.ts` holds each path in full (the single-file demo build inlines images by exact path), and other screens reuse them through `serviceByKey(key).image`. The app ships the same files in `apps/mobile/assets/images/services/`; replace both together (`parcel.webp`, a drawn illustration, is website only until the app has parcels).
+- **Service photos:** `public/assets/services/<service>.webp` (1200 px WebP, about 70–110 KB). `SERVICES` in `src/lib/services.ts` holds each path in full (the single-file demo build inlines images by exact path), and other screens reuse them through `serviceByKey(key).image`. The app ships the same files in `apps/mobile/assets/images/services/`; replace both together (`parcel.webp` is a drawn illustration).
 - **Logo:** `public/assets/logo.svg`, a copy of `brand/quikfly-logo.svg` made by `node scripts/logo.mjs` (never edit the copy). Transparent with dark outlines, so it works in light and dark without a background.
 - **Maps:** replace the illustrated map in `CityMap.tsx` with Google Maps, Mapbox or Ola Maps; the props stay the same.
 - **Live tracking:** WebSockets (e.g. Laravel Reverb or Socket.IO) instead of the simulated vehicle animation.

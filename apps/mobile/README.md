@@ -4,7 +4,7 @@ Two Android apps from one Flutter project, on the same REST API as the website (
 
 | App | Flavor | Package id | Entry point |
 |---|---|---|---|
-| **QuikFly** (customers, all six services) | `customer` (default) | `com.quikfly.app` | `lib/main.dart` |
+| **QuikFly** (customers, seven services; parcels show only while switched on) | `customer` (default) | `com.quikfly.app` | `lib/main.dart` |
 | **QuikFly Partner** (vehicle owners: registration, onboarding, vehicles, drivers, renewals, trips, revenue dashboard, statements and payouts) | `partner` | `com.quikfly.partner` | `lib/main_partner.dart`, screens in `lib/partner/` |
 
 They share `lib/api`, `lib/theme`, `lib/widgets` and the login screen. On Android the login screen first opens Google's "Choose a phone number" sheet (`lib/core/phone_hint.dart`, `smart_auth` plugin, free via Play services); elsewhere the number is typed. `pubspec.yaml` sets `default-flavor: customer`, so plain `flutter run` / `flutter build apk` build the customer app; add `--flavor partner -t lib/main_partner.dart` for the Partner app.
@@ -46,7 +46,7 @@ flutter analyze                                                   # must be clea
 flutter test --dart-define=API_URL=http://127.0.0.1:8787/v1      # contract test against a running API
 ```
 
-`test/api_contract_test.dart` signs in a throwaway number, then parses real responses into the Dart models and checks the flows the app uses: config, user, ride booking + share link, catalog, quote + coupon + booking, bus seats, rent and group quotes, licence, account writes (profile, places, travellers, contacts, GST), wallet. Run it whenever `packages/shared/src/types.ts` changes. Without `API_URL` it runs against production with the test number +91 90000 00002.
+`test/api_contract_test.dart` signs in a throwaway number, then parses real responses into the Dart models and checks the flows the app uses: config, user, ride booking + share link, catalog, quote + coupon + booking, bus seats, rent and group quotes, licence, account writes (profile, places, travellers, contacts, GST), wallet, and a parcel booked, tracked and cancelled (skipped on production and while parcels are off). Run it whenever `packages/shared/src/types.ts` changes. Without `API_URL` it runs against production with the test number +91 90000 00002.
 
 ## Layout
 
@@ -54,13 +54,13 @@ flutter test --dart-define=API_URL=http://127.0.0.1:8787/v1      # contract test
 lib/
   main.dart            ProviderScope + MaterialApp.router (light/dark themes)
   router.dart          every screen's path: tab shell (/, /offers, /trips, /account) + full-screen routes
-  core/                env.dart (dart-defines) · format.dart (₹, dates, phone) · services.dart (the six services)
+  core/                env.dart (dart-defines) · format.dart (₹, dates, phone) · services.dart (the seven services) · parcels.dart (India times, tracking link, share text) · contact_picker.dart
   theme/               tokens.dart (colours, fonts, radii; mirrors apps/web tokens.css) · theme.dart (Material themes from tokens)
-  api/                 api.dart (one method per endpoint, ApiException) · models.dart (mirrors packages/shared types + Rules) · vendor_models.dart · support_models.dart · rental_models.dart
+  api/                 api.dart (one method per endpoint, ApiException) · models.dart (mirrors packages/shared types + Rules) · vendor_models.dart · support_models.dart · rental_models.dart · parcel_models.dart
   state/               providers.dart (api, /config, session, theme mode) · catalog.dart (tours, cars, vehicles, bookings)
   widgets/             ui.dart (Panel, GoldButton, ErrorBox, EmptyState, Skeleton, Pill, KeyValue, toast, confirm, ScreenList) · art.dart · logo.dart · offer_card.dart
   screens/             auth, home, offers, trips (+ bus m-ticket with QR, self-drive rental and its photo checklist in rental_screen.dart), account (hub + account_sections, notifications inbox opened from the Home bell, privacy_screens: `/privacy` notice, `PrivacyGate` consent page above the router in both apps, Privacy & data with the JSON export), help (+ support_screens: tickets, thread, new ticket, callback sheet, WhatsApp button), ride (+ place search),
-                       bus, holidays, checkout (checkout, confirmed, invoice), rent (cars, group travel), not_found
+                       bus, holidays, checkout (checkout, confirmed, invoice), rent (cars, group travel), parcel (`/parcels` form, `/parcels/track` public tracking, `/parcel/:id` with the code), not_found
   state/checkout.dart  CheckoutDraft (what a service screen hands to checkout) + LiveQuote (debounced POST /quotes)
   widgets/             also city_map.dart (painted demo map), safety_sheet.dart, licence_panel.dart, counter.dart
 assets/                fonts (Outfit static weights, Archivo Black), images/ (logo) and images/services/ (one 1200 px WebP per service,
@@ -75,6 +75,13 @@ assets/                fonts (Outfit static weights, Archivo Black), images/ (lo
 - **Validation rules** are copied from `packages/shared/src/rules.ts` into `Rules` in `models.dart`. Change both together.
 - Every screen works at 390 px wide and on tablets (content is capped at 720 px), in light and dark mode.
 - Simulations are labelled honestly ("Demo: no SMS is sent").
+
+## Parcels
+
+- Every request declares the services this app shows (`ServiceKey.clientAccept`); without it the API keeps parcels back. Add a service to `ServiceKey.declared` only when every screen that lists bookings can show it. Bookings of a service the app doesn't know are dropped, never shown as a cab.
+- The collection code shows only on `/parcel/:id`. A receiver's details live in the checkout draft (memory only, dropped at sign-out), never in booking lines.
+- The receiver can be picked from contacts: `MainActivity.kt` opens Android's own picker over the `quikfly/contact_picker` channel. No contacts permission, so don't add a plugin that declares one.
+- Times are shown in India time whatever the phone's zone.
 
 ## Languages
 
