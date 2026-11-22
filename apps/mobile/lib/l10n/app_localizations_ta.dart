@@ -171,6 +171,22 @@ class LTa extends L {
       'குடும்ப, குழுப் பயணங்களுக்கு டெம்போ டிராவலர், அர்பேனியா, கோச் வாகனங்கள்.';
 
   @override
+  String get serviceParcelTitle => 'பார்சல்';
+
+  @override
+  String get serviceParcelAction => 'பார்சல் அனுப்பு';
+
+  @override
+  String get serviceParcelNav => 'பார்சல்';
+
+  @override
+  String get serviceParcelTagline => 'பஸ்ஸில் அனுப்புங்கள்';
+
+  @override
+  String get serviceParcelBlurb =>
+      'நகரங்களுக்கு இடையே பஸ்ஸில் பார்சல், கவுண்டரிலிருந்து கவுண்டருக்கு.';
+
+  @override
   String get servicesSheetTitle => 'எதை முன்பதிவு செய்ய விரும்புகிறீர்கள்?';
 
   @override

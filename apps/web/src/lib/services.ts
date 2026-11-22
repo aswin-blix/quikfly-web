@@ -22,22 +22,16 @@ export const SERVICES: ServiceMeta[] = [
   { key: "tours", title: "Holiday Trip", action: "Tour Packages", nav: "Holidays", href: "/holidays", tagline: "Curated getaways", blurb: "Handpicked holidays across India and abroad, all-inclusive.", image: "/assets/services/tour-packages.webp", icon: Palmtree },
   { key: "rent", title: "Rental Car", action: "Rent a Car", nav: "Rent a Car", href: "/rent-a-car", tagline: "Drive yourself", blurb: "Self-drive or chauffeur cars by the hour, day or week.", image: "/assets/services/rent-a-car.webp", icon: KeyRound },
   { key: "rentals", title: "Rental Trip", action: "Travel Rentals", nav: "Group Travel", href: "/travel-rentals", tagline: "Travel together", blurb: "Tempo travellers, Urbanias & coaches for family and group trips.", image: "/assets/services/travel-rentals.webp", icon: Caravan },
+  // Listed only while `serviceParcel` is on (useOpenServices).
+  { key: "parcel", title: "Parcel", action: "Send a Parcel", nav: "Parcels", href: "/parcels", tagline: "Send it by bus", blurb: "Parcels between cities on the bus, counter to counter.", image: "/assets/services/parcel.webp", icon: Package },
 ];
-
-// Parcels get their page and tile in step 2 (docs/parcel-service-plan.md). Until then this only
-// names a parcel booking in My Trips and on its invoice; it isn't listed in SERVICES.
-const PARCEL_SERVICE: ServiceMeta = {
-  key: "parcel", title: "Parcel", action: "Parcel", nav: "Parcels", href: "/trips", tagline: "Send it by bus",
-  blurb: "Parcels between cities on the bus network.", image: "/assets/services/bus-booking.webp", icon: Package,
-};
-export const serviceByKey = (k: ServiceKey) => (k === "parcel" ? PARCEL_SERVICE : SERVICES.find((s) => s.key === k)!);
+export const serviceByKey = (k: ServiceKey) => SERVICES.find((s) => s.key === k)!;
 
 /** The ARB key prefix of each service's texts (serviceBikeTitle, serviceBikeAction, ...). */
 const TEXT_KEY: Record<ServiceKey, string> = { bike: "Bike", car: "Car", bus: "Bus", tours: "Tours", rent: "Rent", rentals: "Rentals", parcel: "Parcel" };
 
 /** The service with its texts in the visitor's language (t from useT()). */
 export function localizeService(s: ServiceMeta, t: (key: string) => string): ServiceMeta {
-  if (s.key === "parcel") return s; // its texts join the string catalog with the Parcels page
   const k = `service${TEXT_KEY[s.key]}`;
   return { ...s, title: t(`${k}Title`), action: t(`${k}Action`), nav: t(`${k}Nav`), tagline: t(`${k}Tagline`), blurb: t(`${k}Blurb`) };
 }

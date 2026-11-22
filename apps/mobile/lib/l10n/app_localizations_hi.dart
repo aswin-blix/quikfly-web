@@ -170,6 +170,22 @@ class LHi extends L {
       'परिवार और ग्रुप यात्राओं के लिए टेम्पो ट्रैवलर, अर्बानिया और कोच।';
 
   @override
+  String get serviceParcelTitle => 'पार्सल';
+
+  @override
+  String get serviceParcelAction => 'पार्सल भेजें';
+
+  @override
+  String get serviceParcelNav => 'पार्सल';
+
+  @override
+  String get serviceParcelTagline => 'बस से भेजें';
+
+  @override
+  String get serviceParcelBlurb =>
+      'शहरों के बीच बस से पार्सल, काउंटर से काउंटर तक।';
+
+  @override
   String get servicesSheetTitle => 'आप क्या बुक करना चाहेंगे?';
 
   @override

@@ -2,7 +2,7 @@
 // the database. Transit catches up with the clock whenever parcels are read. There are no staff
 // here, so nothing is handed over: a parcel waits as "ready" until its hold period ends.
 import {
-  CATALOG_SEED, PARCEL_DECLARATION, PARCEL_LR, PARCEL_NOT_CANCELLABLE, PARCEL_CANCELLABLE, PARCEL_RULES, PATTERNS, isWomenOnly, nextMoveAt,
+  CATALOG_SEED, GSTIN_LINE, PARCEL_DECLARATION, PARCEL_LR, PARCEL_NOT_CANCELLABLE, PARCEL_CANCELLABLE, PARCEL_RULES, PATTERNS, isWomenOnly, nextMoveAt,
   parcelBookingText, parcelDepartures, parcelLiability, parcelLr, parcelNotice, parcelRateFor, planLegMove, planLegs, priceParcelCity,
   priceParcelIntercity, rideQuotes, rideTimeAt, simulatedMove, switchError,
   type AppNotification, type FareLine, type NewBooking, type Parcel, type ParcelOptions, type ParcelQuoteInfo, type ParcelState,
@@ -73,8 +73,11 @@ export function mockNewParcel(settings: Settings, req: ParcelRequest, input: New
   if (Date.parse(departure.cutoffAt) <= Date.now()) fail("The hand-in time for that bus has passed. Pick another departure.");
 
   const lr = parcelLr(req.from, req.to, crypto.getRandomValues(new Uint8Array(PARCEL_LR.randomLength)));
+  const text = parcelBookingText(departure, req.weightBand, lr, liability);
+  const gst = currentUser().gst;
+  if (gst && input.lines.some(([k]) => k === GSTIN_LINE)) text.lines.push([GSTIN_LINE, `${gst.gstin} · ${gst.name}`]);
   return {
-    ...parcelBookingText(departure, req.weightBand, lr, liability),
+    ...text,
     save(bookingId: string, createdAt: string) {
       const legs = planLegs(departure);
       const parcel: StoredParcel = {

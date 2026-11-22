@@ -1,11 +1,7 @@
 // Invoice maths. Prices are GST-inclusive, so tax is backed out of the paid amount.
 // The GST rate is the one the booking was sold under (booking terms), so an old invoice never
 // changes when staff change a rate; bookings made before terms were stored use today's settings.
-import { gstRate, withTerms, type Booking, type Settings } from "@quikfly/shared";
-
-/** Booking line that carries the customer's GSTIN when they asked for a GST invoice. */
-export const GSTIN_LINE = "GSTIN";
-
+import { GSTIN_LINE, gstRate, withTerms, type Booking, type Settings } from "@quikfly/shared";
 
 /** Lines shown in the booking details but not repeated on the invoice. */
 const HIDDEN_ON_INVOICE = new Set([GSTIN_LINE, "Ride OTP", "Paid via", "Payment"]);

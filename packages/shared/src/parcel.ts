@@ -248,6 +248,9 @@ export interface PublicTracking {
 export const parcelTime = (iso: string) =>
   new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
 
+/** The booking line with the LR number. */
+export const PARCEL_LR_LINE = "LR number";
+
 /**
  * A parcel booking's title, subtitle and lines. The API writes them rather than the client, so no
  * name, number or contents end up in a row that erasure keeps for tax law.
@@ -257,7 +260,7 @@ export function parcelBookingText(d: ParcelDeparture, band: ParcelWeightBand, lr
     title: `${d.from} → ${d.to}`,
     subtitle: `Bus parcel · ${parcelBandLabel(band)}`,
     lines: [
-      ["LR number", lr],
+      [PARCEL_LR_LINE, lr],
       ["Hand in at", `${d.fromCounter.name}, by ${parcelTime(d.cutoffAt)}`],
       ["Departs", `${parcelTime(d.departAt)} · ${d.operator}`],
       ["Collect at", `${d.toCounter.name}, from ${parcelTime(d.readyAt)}`],

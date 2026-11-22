@@ -171,6 +171,22 @@ class LEn extends L {
       'Tempo travellers, Urbanias & coaches for family and group trips.';
 
   @override
+  String get serviceParcelTitle => 'Parcel';
+
+  @override
+  String get serviceParcelAction => 'Send a Parcel';
+
+  @override
+  String get serviceParcelNav => 'Parcels';
+
+  @override
+  String get serviceParcelTagline => 'Send it by bus';
+
+  @override
+  String get serviceParcelBlurb =>
+      'Parcels between cities on the bus, counter to counter.';
+
+  @override
   String get servicesSheetTitle => 'What would you like to book?';
 
   @override

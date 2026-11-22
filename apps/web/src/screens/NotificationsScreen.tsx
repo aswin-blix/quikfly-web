@@ -8,7 +8,7 @@ import { useApp } from "@/components/AppProvider";
 import { Empty, GoldButton, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { cx, prettyDateTime } from "@/lib/format";
-import { Link } from "@/lib/nav";
+import { Link, qs } from "@/lib/nav";
 
 const ICON: Record<NotificationKind, typeof Bell> = {
   "booking.confirmed": Ticket,
@@ -38,7 +38,7 @@ const ICON: Record<NotificationKind, typeof Bell> = {
 
 /** Where tapping a notification goes. */
 const target = (n: AppNotification) =>
-  n.kind === "credits.earned" ? "/account?tab=wallet" : n.kind === "support.reply" ? "/account?tab=support" : n.bookingId ? "/bookings" : n.kind.startsWith("licence") ? "/account?tab=licence" : null;
+  n.kind === "credits.earned" ? "/account?tab=wallet" : n.kind === "support.reply" ? "/account?tab=support" : n.bookingId ? (n.kind.startsWith("parcel.") ? `/bookings${qs({ open: n.bookingId })}` : "/bookings") : n.kind.startsWith("licence") ? "/account?tab=licence" : null;
 
 export function NotificationsScreen() {
   const { user, requireAuth, refreshNotifications } = useApp();

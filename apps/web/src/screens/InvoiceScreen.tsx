@@ -11,6 +11,8 @@ import { inr2, invoiceFor } from "@/lib/invoice";
 import { Link, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
 import { useSettings } from "@/components/ConfigProvider";
+import { ParcelQr } from "@/components/parcel/ParcelQr";
+import { parcelLrOf } from "@/lib/parcels";
 
 export function InvoiceScreen() {
   const settings = useSettings();
@@ -33,6 +35,7 @@ export function InvoiceScreen() {
 
   const inv = invoiceFor(booking, settings);
   const svc = serviceByKey(booking.service);
+  const lr = booking.service === "parcel" ? parcelLrOf(booking) : null;
 
   return (
     <div className="max-w-3xl mx-auto px-4 pt-6 pb-16">
@@ -77,6 +80,12 @@ export function InvoiceScreen() {
           </dl>
         )}
 
+        {lr && (
+          <div className="py-6 border-b paper-line flex items-center gap-4">
+            <ParcelQr lr={lr} className="!w-24 !h-24" />
+            <p className="paper-muted min-w-0">Scan to track parcel <span className="font-mono break-all">{lr}</span>. Collection needs the sender&apos;s code, which is never printed here.</p>
+          </div>
+        )}
         <table className="w-full mt-6">
           <tbody>
             <tr><td className="py-1.5 paper-muted">Taxable value</td><td className="py-1.5 text-right tabular-nums">{inr2(inv.taxable)}</td></tr>
