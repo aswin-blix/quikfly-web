@@ -398,3 +398,5 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 - After client sign-off (paid): SMS OTP, payment gateway, real maps, live tracking, Play Store listing, custom domain, Truecaller/Google login, EMI, ride insurance, WhatsApp Business API / email replies for support
 
 Done from the old backlog: B5 ride scheduling, B6 bus reschedule, B8 women-only bikes, B9 partner applications, support tickets, partner payouts. B7 (modify a rental) is part of Phase 5 #10.
+
+Bug fixes: 2026-11-22 `/offers` crashed when a visible offer worked on all services, and its service filters hid those offers (branch `fix/offers-all-services`; website only, not deployed until merged).

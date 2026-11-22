@@ -1,7 +1,7 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
-import { BadgeCheck, BadgePercent, CarTaxiFront, CircleCheck, ClipboardList, Copy, Download, Handshake, Headphones, Mail, MessageCircle, Phone, PhoneCall, Search } from "lucide-react";
+import { BadgeCheck, BadgePercent, CarTaxiFront, CircleCheck, ClipboardList, Copy, Download, Handshake, Headphones, LayoutGrid, Mail, MessageCircle, Phone, PhoneCall, Search } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { Reveal, Tilt } from "@/components/motion";
 import { Accordion, Empty, GhostLink, PageHeader } from "@/components/ui";
@@ -13,16 +13,18 @@ import { CallbackForm } from "@/components/support/CallbackForm";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { PARTNER_APP } from "@/lib/site";
 import { useOpenServices } from "@/components/ServiceGate";
+import { useT } from "@/components/LanguageProvider";
 
 /* ───────────── /offers ───────────── */
 
 export function OffersScreen() {
   const OFFERS = useConfig()?.offers ?? [];
   const { toast } = useApp();
+  const t = useT();
   const [filter, setFilter] = useState<string>("all");
   const open = useOpenServices();
-  // Coupons for paused services can't be used, so they aren't shown.
-  const shown = OFFERS.filter((o) => (o.service === "all" || open.some((s) => s.key === o.service)) && (filter === "all" || o.service === filter));
+  // Coupons for paused services can't be used, so they aren't shown. All-services coupons show under every filter, as in the app.
+  const shown = OFFERS.filter((o) => o.service === "all" || (open.some((s) => s.key === o.service) && (filter === "all" || o.service === filter)));
   return (
     <>
       <PageHeader crumbs={[["Home", "/"], ["Offers"]]} title="Offers & coupons" icon={<BadgePercent className="text-gold" size={36} />} sub="Tap a code to copy it, then apply at checkout.">
@@ -35,18 +37,20 @@ export function OffersScreen() {
         <motion.div layout className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           <AnimatePresence mode="popLayout">
             {shown.map((o) => {
-              const s = SERVICES.find((x) => x.key === o.service)!;
+              // None for a coupon that works on all services.
+              const s = SERVICES.find((x) => x.key === o.service);
+              const Icon = s?.icon ?? LayoutGrid;
               return (
                 <motion.div key={o.id} layout initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.94 }}>
                   <Tilt max={6}>
                     <div className="relative rounded-2xl overflow-hidden border border-line p-6 h-full" style={{ background: `radial-gradient(120% 90% at 100% 0%, hsl(${o.hue} 70% 40% / .35), transparent 60%), var(--surface)` }}>
-                      <div className="flex items-center justify-between"><span className="label flex items-center gap-1.5"><s.icon size={14} />{s.action}</span><BadgePercent className="text-gold" /></div>
+                      <div className="flex items-center justify-between"><span className="label flex items-center gap-1.5"><Icon size={14} />{s?.action ?? t("navAllServices")}</span><BadgePercent className="text-gold" /></div>
                       <p className="font-display text-2xl mt-4 leading-tight">{o.title}</p>
                       <p className="text-sm text-muted mt-2">{o.description}</p>
                       <div className="mt-6 flex items-center justify-between gap-3 border-t border-dashed border-line pt-4">
                         <motion.button whileTap={{ scale: 0.92 }} onClick={() => { try { navigator.clipboard.writeText(o.code); } catch { /* ignore */ } toast(`Code ${o.code} copied`); }}
                           className="flex items-center gap-2 font-mono border border-dashed border-gold/60 text-gold px-3 py-1.5 rounded-lg hover:bg-gold/10"><Copy size={14} />{o.code}</motion.button>
-                        <Link href={s.href} className="text-sm text-soft hover:text-gold">Book now →</Link>
+                        <Link href={s?.href ?? "/"} className="text-sm text-soft hover:text-gold">{s ? "Book now" : "See services"} →</Link>
                       </div>
                     </div>
                   </Tilt>
