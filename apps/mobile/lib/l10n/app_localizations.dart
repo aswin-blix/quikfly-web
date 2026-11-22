@@ -399,6 +399,36 @@ abstract class L {
   /// **'Tempo travellers, Urbanias & coaches for family and group trips.'**
   String get serviceRentalsBlurb;
 
+  /// No description provided for @serviceParcelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Parcel'**
+  String get serviceParcelTitle;
+
+  /// No description provided for @serviceParcelAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a Parcel'**
+  String get serviceParcelAction;
+
+  /// No description provided for @serviceParcelNav.
+  ///
+  /// In en, this message translates to:
+  /// **'Parcels'**
+  String get serviceParcelNav;
+
+  /// No description provided for @serviceParcelTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Send it by bus'**
+  String get serviceParcelTagline;
+
+  /// No description provided for @serviceParcelBlurb.
+  ///
+  /// In en, this message translates to:
+  /// **'Parcels between cities on the bus, counter to counter.'**
+  String get serviceParcelBlurb;
+
   /// No description provided for @servicesSheetTitle.
   ///
   /// In en, this message translates to:

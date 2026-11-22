@@ -78,8 +78,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     setUser(null);
+    // A parcel draft holds someone else's name and number.
+    if (draft?.parcel) setDraft(null);
     await api.auth.signOut();
-  }, [setUser]);
+  }, [setUser, setDraft, draft]);
 
   // The API rejected the stored session (expired or revoked): sign out here too.
   useEffect(() => {

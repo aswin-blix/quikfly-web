@@ -20,7 +20,8 @@ const creditExpiry = () => new Date(Date.now() + settings.creditsExpiryDays * 86
 
 export { MOCK_OTP } from "./mock-store";
 
-const settings = DEFAULT_SETTINGS;
+// The demo has no admin panel to switch parcels on, so a build opts in: NEXT_PUBLIC_DEMO_PARCELS=1.
+const settings = process.env.NEXT_PUBLIC_DEMO_PARCELS === "1" ? { ...DEFAULT_SETTINGS, serviceParcel: true } : DEFAULT_SETTINGS;
 const seed = CATALOG_SEED;
 /** Listed bus route fares and peak dates for the generated timetable, like the API. */
 const busPricing = { routes: seed.busRoute, calendar: seed.fareCalendar };

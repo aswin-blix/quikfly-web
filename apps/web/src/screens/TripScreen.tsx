@@ -2,6 +2,7 @@
 // /trip?id=TRIP_ID: the bookings of one trip on a timeline, each with its own tax invoice
 // (services carry different GST rates and invoice numbers), and the trip total. Printable.
 import { ArrowLeft, FileText, Printer, Route } from "lucide-react";
+import { PARCEL_STATE_LABEL } from "@quikfly/shared";
 import { useApp } from "@/components/AppProvider";
 import { Empty, GoldButton } from "@/components/ui";
 import { cx, inr, prettyDateTime } from "@/lib/format";
@@ -44,7 +45,7 @@ export function TripScreen() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold">{b.title}</p>
                   <p className="paper-muted">{b.subtitle}</p>
-                  <p className="paper-muted text-xs mt-0.5">{s.action} · {prettyDateTime(bookingWhen(b))} · <span className="capitalize">{b.status}</span> · <span className="font-mono">{b.id}</span></p>
+                  <p className="paper-muted text-xs mt-0.5">{s.action} · {prettyDateTime(bookingWhen(b))} · {b.parcelState ? PARCEL_STATE_LABEL[b.parcelState] : <span className="capitalize">{b.status}</span>} · <span className="font-mono">{b.id}</span></p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="font-semibold">{inr(b.amount)}</p>

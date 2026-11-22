@@ -11,11 +11,12 @@ import { cx, inr, prettyDateTime } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs, useNav, useQuery } from "@/lib/nav";
 import { serviceByKey } from "@/lib/services";
-import { CREDITS_LINE, DEPOSIT_LINE, RIDE_SCHEDULE, cancelPolicyFor, creditsEarned, creditsUsable, formatLicence, minutesUntilStart, refundAmount, refundPercent, rescheduleError, rideCancelFee, seatCancelRefund, withTerms, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
+import { CREDITS_LINE, DEPOSIT_LINE, GSTIN_LINE, PARCEL_CANCELLABLE, PARCEL_STATE_LABEL, RIDE_SCHEDULE, cancelPolicyFor, creditsEarned, creditsUsable, formatLicence, minutesUntilStart, refundAmount, refundPercent, rescheduleError, rideCancelFee, seatCancelRefund, withTerms, type Booking, type BookingStatus, type PaymentMethod, type Traveller } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { bookingWhen, rideOffer } from "@/lib/trips";
 import { LicenceBadge, LicenceForm, licenceMessage, useLicencePolling } from "@/components/account/LicenceSection";
-import { GSTIN_LINE } from "@/lib/invoice";
+import { ParcelPanel } from "@/components/parcel/ParcelPanel";
+import { PARCEL_CHIP, parcelLrOf, parcelTrackPath } from "@/lib/parcels";
 
 /* ───────────── /checkout ───────────── */
 
@@ -53,6 +54,7 @@ export function CheckoutScreen() {
   }
 
   const svc = serviceByKey(draft.service);
+  const parcel = draft.parcel;
   // The API priced this booking (draft.quote) and checks coupons against that price.
   const subtotal = draft.quote.total;
   const afterCoupon = Math.max(0, subtotal - (coupon?.off ?? 0));
@@ -84,6 +86,8 @@ export function CheckoutScreen() {
 
   function next() {
     const e: Record<string, string> = {};
+    // A parcel's details were checked on its page, and it has no travellers.
+    if (parcel) return requireAuth(() => { setStep(2); window.scrollTo({ top: 0, behavior: "smooth" }); });
     names.forEach((n, i) => { if (!n.trim()) e[`n${i}`] = "Required"; });
     if (!/^\d{10}$/.test(phone)) e.phone = "Enter a 10-digit mobile number";
     if (email && !/^\S+@\S+\.\S+$/.test(email)) e.email = "Enter a valid email";
@@ -112,13 +116,14 @@ export function CheckoutScreen() {
     setPaying(true);
     try {
       await new Promise((r) => setTimeout(r, 1400));
+      const gstLine: [string, string][] = gstInvoice && user?.gst ? [[GSTIN_LINE, `${user.gst.gstin} · ${user.gst.name}`]] : [];
       const b = await api.bookings.create({
         service: draft!.service, title: draft!.title, subtitle: draft!.subtitle, payment: method,
         quoteId: draft!.quote.id, couponCode: coupon?.code, useCredits: creditsOff > 0,
-        lines: [
-          ...draft!.summary, ["Traveller names", names.join(", ")], ["Paid via", method.toUpperCase()],
-          ...(gstInvoice && user?.gst ? [[GSTIN_LINE, `${user.gst.gstin} · ${user.gst.name}`] as [string, string]] : []),
-        ],
+        // The API writes a parcel's lines itself; a GST invoice is the only one to ask for.
+        ...(parcel
+          ? { receiver: parcel.receiver, contents: parcel.contents, declaration: parcel.declaration, lines: gstLine }
+          : { lines: [...draft!.summary, ["Traveller names", names.join(", ")], ["Paid via", method.toUpperCase()], ...gstLine] }),
       });
       await refreshBookings();
       setDraft(null);
@@ -138,7 +143,7 @@ export function CheckoutScreen() {
       <div className="mt-4 mb-8">
         <h1 className="font-display text-3xl sm:text-4xl">Review & pay</h1>
         <div className="mt-5 flex items-center gap-3 max-w-md">
-          {["Traveller details", "Payment"].map((l, i) => (
+          {[parcel ? "Parcel details" : "Traveller details", "Payment"].map((l, i) => (
             <div key={l} className="flex-1">
               <div className="h-1.5 rounded-full bg-line overflow-hidden"><motion.div className="h-full bg-gradient-to-r from-gold-deep to-gold" initial={false} animate={{ width: step > i ? "100%" : "0%" }} transition={{ duration: 0.5 }} /></div>
               <p className={cx("text-xs mt-2", step > i ? "text-gold" : "text-subtle")}>{i + 1}. {l}</p>
@@ -152,6 +157,20 @@ export function CheckoutScreen() {
           <AnimatePresence mode="wait">
             {step === 1 ? (
               <motion.div key="s1" initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-5">
+                {parcel ? (
+                  <div className="panel p-5 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold">Parcel details</p>
+                      <Link href="/parcels" className="text-sm text-gold">Edit</Link>
+                    </div>
+                    <dl className="text-sm space-y-1.5">
+                      {([["Receiver", parcel.receiver.name], ["Receiver's mobile", `+91 ${parcel.receiver.phone}`], ["Contents", parcel.contents], ["Declared value", inr(parcel.request.declaredValue)]] as const).map(([k, v]) => (
+                        <div key={k} className="flex justify-between gap-3"><dt className="text-subtle shrink-0">{k}</dt><dd className="text-right break-words min-w-0">{v}</dd></div>
+                      ))}
+                    </dl>
+                    <p className="text-xs text-muted">The collection code appears only on your screen, in My Trips. You pass it to the receiver (demo: no SMS sent).</p>
+                  </div>
+                ) : (<>
                 <div className="panel p-5 space-y-4">
                   <p className="font-semibold">Traveller details</p>
                   {savedTravellers.length > 0 && (
@@ -182,6 +201,7 @@ export function CheckoutScreen() {
                   <div><label className="label" htmlFor="cp">Mobile</label><input id="cp" className={cx("field mt-1.5", errors.phone && "!border-danger/60")} inputMode="numeric" maxLength={10} value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))} placeholder="98765 43210" />{errors.phone && <p className="text-xs text-danger mt-1">{errors.phone}</p>}</div>
                   <div><label className="label" htmlFor="ce">Email (optional)</label><input id="ce" className={cx("field mt-1.5", errors.email && "!border-danger/60")} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />{errors.email && <p className="text-xs text-danger mt-1">{errors.email}</p>}</div>
                 </div>
+                </>)}
                 {draft.needsLicence && (
                   <div className={cx("panel p-5 space-y-4", errors.licence && "!border-danger/60")}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -210,7 +230,7 @@ export function CheckoutScreen() {
                     <span className="text-sm text-soft">Get a GST invoice for <b>{user.gst.name}</b> <span className="font-mono text-xs text-subtle">({user.gst.gstin})</span></span>
                   </label>
                 ) : user && (
-                  <p className="text-xs text-muted">Travelling for work? <Link href="/account?tab=business" className="text-gold">Add GST details</Link> to get a GST invoice.</p>
+                  <p className="text-xs text-muted">{parcel ? "Sending for work?" : "Travelling for work?"} <Link href="/account?tab=business" className="text-gold">Add GST details</Link> to get a GST invoice.</p>
                 )}
                 <div className="flex items-start gap-2 text-xs text-muted"><Info size={14} className="shrink-0 mt-0.5 text-gold" />{draft.policy}</div>
                 <GoldButton className="w-full sm:w-auto" onClick={next}>Continue to payment</GoldButton>
@@ -231,12 +251,13 @@ export function CheckoutScreen() {
                       ))}
                     </div>
                   </LayoutGroup>
+                  {parcel && !DEMO_MODE && <p className="text-xs text-muted mt-4">Demo: UPI, card and net banking are simulated, so no money is taken. The wallet&apos;s balance does change.</p>}
                   {DEMO_MODE && <p className="text-xs text-gold-pale/80 mt-4">Demo mode: no payment is taken. The live site will redirect to the payment gateway (e.g. Razorpay) here.</p>}
                 </div>
                 <GoldButton className="w-full text-base !py-4" loading={paying} onClick={pay}>
                   {paying ? "Processing payment…" : <><Lock size={16} />Pay {inr(total)}</>}
                 </GoldButton>
-                <p className="text-xs text-subtle flex items-center justify-center gap-1"><ShieldCheck size={13} className="text-success" />256-bit secure · PCI-DSS compliant gateway</p>
+                {!parcel && <p className="text-xs text-subtle flex items-center justify-center gap-1"><ShieldCheck size={13} className="text-success" />256-bit secure · PCI-DSS compliant gateway</p>}
               </motion.div>
             )}
           </AnimatePresence>
@@ -270,7 +291,7 @@ export function CheckoutScreen() {
               <div className="flex justify-between items-end pt-3 mt-2 border-t border-line">
                 <span className="font-semibold">Total</span><TweenNumber value={total} format={inr} className="text-2xl font-bold text-gold" />
               </div>
-              {earns > 0 && <p className="text-xs text-muted flex items-center gap-1.5 pt-1"><Coins size={13} className="text-gold shrink-0" />Earn {inr(earns)} QuikFly Credits when this trip is completed.</p>}
+              {earns > 0 && <p className="text-xs text-muted flex items-center gap-1.5 pt-1"><Coins size={13} className="text-gold shrink-0" />Earn {inr(earns)} QuikFly Credits when {parcel ? "the parcel is collected" : "this trip is completed"}.</p>}
             </div>
           </div>
           {user && user.creditBalance > 0 && (
@@ -350,7 +371,9 @@ export function ConfirmedScreen() {
         </motion.svg>
       </div>
       <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }} className="font-display text-3xl sm:text-4xl mt-6">Booking confirmed!</motion.h1>
-      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }} className="text-muted mt-2">We&apos;ve sent the details to your phone. Have a great trip!</motion.p>
+      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }} className="text-muted mt-2">{b.service === "parcel"
+        ? "Hand it in before the cut-off below. When it's ready, the collection code appears in My Trips: pass it to the receiver (demo: no SMS sent)."
+        : "We've sent the details to your phone. Have a great trip!"}</motion.p>
 
       <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1, type: "spring" }} className="panel gold-border text-left mt-8 overflow-hidden">
         <div className="flex items-center gap-3 p-5 border-b border-dashed border-line">
@@ -359,7 +382,7 @@ export function ConfirmedScreen() {
           <div className="text-right"><p className="text-[11px] text-subtle">Booking ID</p><p className="font-mono text-gold text-sm">{b.id}</p></div>
         </div>
         <dl className="p-5 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          {b.lines.map(([k, v]) => <div key={k} className="contents"><dt className="text-subtle">{k}</dt><dd className="text-right">{v}</dd></div>)}
+          {b.lines.map(([k, v]) => <div key={k} className="contents"><dt className="text-subtle">{k}</dt><dd className="text-right min-w-0 break-words">{v}</dd></div>)}
           <dt className="text-subtle border-t border-line pt-2">Amount paid</dt><dd className="text-right font-bold text-gold border-t border-line pt-2">{inr(b.amount)}</dd>
         </dl>
       </motion.div>
@@ -378,7 +401,8 @@ export function ConfirmedScreen() {
         );
       })()}
       <div className="flex flex-wrap justify-center gap-3 mt-8">
-        <Link href="/bookings" className="btn-gold rounded-xl px-6 py-3">View my trips</Link>
+        <Link href={b.service === "parcel" ? `/bookings${qs({ open: b.id })}` : "/bookings"} className="btn-gold rounded-xl px-6 py-3">View my trips</Link>
+        {b.service === "parcel" && parcelLrOf(b) && <GhostLink href={parcelTrackPath(parcelLrOf(b)!)}>Track</GhostLink>}
         <GhostLink href={`/invoice${qs({ id: b.id })}`}>Invoice</GhostLink>
         <GhostLink href="/">Back to home</GhostLink>
       </div>
@@ -404,6 +428,17 @@ export function BookingsScreen() {
   const [busy, setBusy] = useState(false);
   /** Bus seats ticked for cancelling, for the booking whose seat picker is open. */
   const [seatPick, setSeatPick] = useState<{ id: string; seats: string[] } | null>(null);
+  // ?open=<booking id>: a parcel notification lands on its parcel, with the code.
+  const wanted = useQuery().get("open");
+  const shown = useRef("");
+  useEffect(() => {
+    const b = wanted && shown.current !== wanted ? bookings.find((x) => x.id === wanted) : undefined;
+    if (!b) return;
+    shown.current = b.id;
+    setTab(b.status === "cancelled" ? "cancelled" : b.status === "completed" ? "past" : "upcoming");
+    setOpen(b.id);
+    setTimeout(() => document.getElementById(`booking-${b.id}`)?.scrollIntoView({ block: "start" }), 400);
+  }, [wanted, bookings]);
 
   const match: Record<typeof tab, BookingStatus[]> = { upcoming: ["confirmed", "ongoing"], past: ["completed"], cancelled: ["cancelled"] };
   const list = bookings.filter((b) => match[tab].includes(b.status));
@@ -504,17 +539,19 @@ export function BookingsScreen() {
                 </motion.div>
               ) : null;
               return [header, (
-                <motion.div key={b.id} layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -40 }} className={cx("panel overflow-hidden", grouped && "ml-3 border-l-2 !border-l-gold/60")}>
+                <motion.div key={b.id} id={`booking-${b.id}`} layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -40 }} className={cx("panel overflow-hidden scroll-mt-24", grouped && "ml-3 border-l-2 !border-l-gold/60")}>
                   <button className="w-full flex items-center gap-4 p-4 text-left" onClick={() => setOpen(isOpen ? null : b.id)} aria-expanded={isOpen}>
                     <img src={s.image} alt="" className="w-14 h-14 rounded-xl object-cover" />
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{b.title}</p>
                       <p className="text-xs text-muted truncate">{b.subtitle}</p>
+                      {/* Parcel states are long, so their chip sits here rather than by the amount. */}
+                      {b.parcelState && <span className={cx("inline-block text-[11px] px-2 py-0.5 rounded-full mt-1", PARCEL_CHIP[b.parcelState])}>{PARCEL_STATE_LABEL[b.parcelState]}</span>}
                       <p className="text-[11px] text-subtle mt-1">{s.action} · {b.id} · {prettyDateTime(b.createdAt)}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-gold">{inr(b.amount)}</p>
-                      <span className={cx("text-[11px] px-2 py-0.5 rounded-full capitalize", STATUS_STYLE[b.status])}>{b.status}</span>
+                      {!b.parcelState && <span className={cx("text-[11px] px-2 py-0.5 rounded-full capitalize", STATUS_STYLE[b.status])}>{b.status}</span>}
                     </div>
                     <motion.span animate={{ rotate: isOpen ? 180 : 0 }}><ChevronDown size={18} className="text-subtle" /></motion.span>
                   </button>
@@ -523,12 +560,13 @@ export function BookingsScreen() {
                       <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
                         <div className="px-4 pb-4 border-t border-line pt-4">
                           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                            {b.lines.map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-subtle">{k}</dt><dd className="text-right">{v}</dd></div>)}
-                            {b.startsAt && !b.lines.some(([k]) => k === "Pickup time") && <div className="flex justify-between gap-3"><dt className="text-subtle">Starts</dt><dd className="text-right">{prettyDateTime(b.startsAt)}</dd></div>}
+                            {b.lines.map(([k, v]) => <div key={k} className="flex justify-between gap-3"><dt className="text-subtle shrink-0 max-w-[50%]">{k}</dt><dd className="text-right min-w-0 break-words">{v}</dd></div>)}
+                            {b.startsAt && b.service !== "parcel" && !b.lines.some(([k]) => k === "Pickup time") && <div className="flex justify-between gap-3"><dt className="text-subtle">Starts</dt><dd className="text-right">{prettyDateTime(b.startsAt)}</dd></div>}
                             {b.deposit > 0 && b.status !== "cancelled" && <div className="flex justify-between gap-3"><dt className="text-subtle">Refundable deposit</dt><dd className="text-right">{b.status === "completed" ? `${inr(b.refundAmount ?? b.deposit)} ${b.payment === "wallet" ? "returned to wallet" : "due back"}` : `${inr(b.deposit)} (back after return)`}</dd></div>}
                             {b.status === "cancelled" && b.cancelFee > 0 && <div className="flex justify-between gap-3"><dt className="text-subtle">Cancellation fee</dt><dd className="text-right">{inr(b.cancelFee)}{b.payment === "wallet" ? " (kept)" : " (demo: not collected)"}</dd></div>}
                             {b.status === "cancelled" && b.refundAmount !== null && <div className="flex justify-between gap-3"><dt className="text-subtle">{b.payment === "wallet" ? "Refunded to wallet" : "Refund due"}</dt><dd className="text-right">{b.refundAmount ? inr(b.refundAmount) : "Nothing (cancelled too late)"}</dd></div>}
                           </dl>
+                          {b.service === "parcel" && <ParcelPanel booking={b} />}
                           {b.rentalState && b.status !== "cancelled" && <RentalPanel booking={b} />}
                           {b.rescheduledAt && b.status === "confirmed" && <p className="text-xs text-subtle mt-3">Changed to this bus on {prettyDateTime(b.rescheduledAt)}. A ticket can be changed once.</p>}
                           {b.status !== "cancelled" && (
@@ -548,7 +586,8 @@ export function BookingsScreen() {
                               {b.service === "bus" && b.status === "confirmed" && b.seats.length > 1 && confirming !== b.id && (
                                 <button onClick={() => setSeatPick(seatPick?.id === b.id ? null : { id: b.id, seats: [] })} className="text-sm text-danger">Cancel some seats</button>
                               )}
-                              {b.status === "confirmed" && (confirming === b.id ? (
+                              {/* A parcel is ongoing at the counter and can still be cancelled until it's on the bus. */}
+                              {(b.status === "confirmed" || (b.status === "ongoing" && !!b.parcelState && PARCEL_CANCELLABLE.includes(b.parcelState))) && (confirming === b.id ? (
                                 <>
                                   <span className="text-sm text-soft">{confirmText(b)}</span>
                                   <button disabled={busy} onClick={() => cancel(b)} className="text-sm px-3 py-1.5 rounded-lg bg-danger/15 text-danger hover:bg-danger/25">{busy ? "Cancelling…" : "Yes, cancel"}</button>

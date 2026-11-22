@@ -12,6 +12,8 @@ export interface SettingField {
   step?: number;
   /** A row editor instead of the raw text: surge windows or cancellation tiers. */
   editor?: "hours" | "tiers";
+  /** A toggle that needs thought: shown when reviewing a change that switches it on. */
+  warnOn?: string;
 }
 
 export interface SettingGroup {
@@ -31,6 +33,10 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "serviceTours", type: "toggle", label: "Holidays", help: "Holiday packages." },
       { key: "serviceRent", type: "toggle", label: "Rent a car", help: "Self-drive and chauffeur rentals." },
       { key: "serviceGroup", type: "toggle", label: "Group travel", help: "Tempo travellers, buses and outstation cabs." },
+      {
+        key: "serviceParcel", type: "toggle", label: "Parcels", help: "Bus parcels between counters. Off until a QuikFly app release shows parcels.",
+        warnOn: "QuikFly app 0.1.16 and older show a parcel as a cab ride. Switch this on in production only after an app release that shows parcels.",
+      },
       { key: "servicePausedMessage", type: "text", label: "Message for a paused service", help: "Shown where a paused service would be, and when someone tries to book it." },
     ],
   },
@@ -111,6 +117,25 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { key: "groupLocalKmPerDay", type: "number", unit: "km", label: "Group local km per day", help: "Kilometres included in the local group package." },
       { key: "groupOneWaySurchargePercent", type: "number", unit: "%", label: "One-way surcharge", help: "One-way outstation trips cost this much more per km (the vehicle returns empty)." },
       { key: "groupDriverNightAllowance", type: "number", unit: "₹", label: "Driver night allowance", help: "Per night of a multi-day round trip. 0 = none." },
+    ],
+  },
+  {
+    title: "Parcels",
+    sub: "Counter-to-counter bus parcels. Counters and route prices are in Catalog → Parcels; the switch is under Services.",
+    fields: [
+      { key: "parcelMaxKg", type: "number", unit: "kg", label: "Heaviest parcel", help: "Weight bands above this aren't offered. Can't be more than 20 kg." },
+      { key: "parcelMaxDeclaredValue", type: "number", unit: "₹", label: "Highest declared value", help: "Parcels worth more are refused. Stays below ₹50,000, where goods need a GST e-way bill." },
+      { key: "parcelLiabilityCap", type: "number", unit: "₹", label: "Liability cap", help: "QuikFly pays the declared value up to this for a lost or damaged parcel. Parcels aren't insured." },
+      { key: "parcelIntercityMinCharge", type: "number", unit: "₹", label: "Minimum charge", help: "The least a bus parcel costs, before handling and GST." },
+      { key: "parcelIntercityPerKg", type: "number", unit: "₹", label: "Rate per kg", help: "For routes without a rate in Catalog → Parcels, on the band's heaviest weight." },
+      { key: "parcelHandlingFee", type: "number", unit: "₹", label: "Handling fee", help: "Added to every bus parcel. 0 = none." },
+      { key: "parcelCutoffMinutes", type: "number", unit: "min", label: "Hand-in closes", help: "Minutes before the bus leaves. A route's rate in the catalog can set its own." },
+      { key: "parcelCounterHoldDays", type: "number", unit: "days", label: "Held for collection", help: "After this a parcel can be marked unclaimed." },
+      { key: "cancelPolicyParcel", type: "text", editor: "tiers", label: "Cancellation", help: "Counted to the bus's departure. Nothing can be cancelled once it's on the bus; refusing on sight always refunds it all." },
+      { key: "gstParcel", type: "number", unit: "%", label: "GST", help: "Added on top, so it changes what customers pay. 18 is provisional: confirm with your accountant." },
+      { key: "creditsParcel", type: "number", unit: "%", label: "Credits earned", help: "Share of the amount paid, earned on collection." },
+      { key: "parcelCityBandExtra", type: "text", label: "Quick parcel: extra by weight", help: "For the in-city parcel, which can't be booked yet. Weight in kg, then rupees, e.g. 2:0, 5:10, 10:25, 20:50." },
+      { key: "parcelSimulateTransit", type: "toggle", label: "Simulated transit (demo)", help: "Parcels move by the timetable on their own and screens say so. Handing over still needs staff and the code. Off once counters are staffed." },
     ],
   },
   {
@@ -223,6 +248,7 @@ export const SETTING_TABS: SettingTab[] = [
   { id: "rides", label: "Rides", groups: ["Rides"], preview: ["ride"] },
   { id: "bus", label: "Bus", groups: ["Bus fares"], preview: ["bus"] },
   { id: "holidays", label: "Holidays & rentals", groups: ["Holidays and rentals"], preview: ["tour", "rent", "group"] },
+  { id: "parcels", label: "Parcels", groups: ["Parcels"] },
   { id: "cancellation", label: "Cancellation", groups: ["Cancellation policies"] },
   { id: "money", label: "GST & credits", groups: ["GST", "Wallet", "QuikFly Credits"], preview: ["bus", "tour"] },
   { id: "partners", label: "Partners", groups: ["Partners", "Licence checks"] },

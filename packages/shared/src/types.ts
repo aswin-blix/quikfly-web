@@ -682,4 +682,11 @@ export interface CheckoutDraft {
   travellers: string[];          // labels for name fields, e.g. ["Seat L4", "Seat L5"]
   needsLicence?: boolean;
   policy: string;
+  /** Parcels: what POST /bookings needs besides the quote. Never put in `summary` or booking lines. */
+  parcel?: {
+    request: Extract<QuoteRequest, { service: "parcel"; mode: "intercity" }>;
+    receiver: { name: string; phone: string };
+    contents: string;
+    declaration: string;
+  };
 }

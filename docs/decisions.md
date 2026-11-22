@@ -4,6 +4,11 @@ Why the project is built the way it is. Add an entry when you make a trade-off, 
 
 | Date | Decision | Why | Revisit when |
 |---|---|---|---|
+| 2026-11-22 | **A parcel's GST-invoice line comes from the sender's profile**, never from the request | The API writes a parcel's booking lines so no receiver data lands in them; the GSTIN is the one thing the sender may add | — |
+| 2026-11-22 | **The parcels queue, reads included, needs `parcels.manage`, and its search stays out of the panel's address** | It shows a third party's number; a search is often that number | A counter role exists (step 7) |
+| 2026-11-22 | **The offline demo build shows parcels only with `NEXT_PUBLIC_DEMO_PARCELS=1`** | It has no admin to switch them on, and every step ships switched off | `serviceParcel` is on in production |
+| 2026-11-22 | **Past six services the desktop header shows Help, My Trips and the account as icons** | The header is at most 1280 px wide; hiding the service links would cost more | The navigation is redesigned |
+| 2026-11-22 | **The Parcel tile is a drawn illustration** | No photo exists and none was to be bought (free tier) | The owner supplies a photo |
 | 2026-11-22 | **Parcels are one service with two modes (city, intercity)**, Bus parcel first, QuikFly's own counters in all 8 bus cities | One tile, switch, GST rate and policy. Owner's choice: no other operator's brand carries parcels without an agreement | An operator signs, or bikes become the main operation |
 | 2026-11-22 | **A parcel is a booking plus a `parcels` row whose journey is ordered legs with an event log**; the state is derived, and every move goes through one shared transition table and one writer (`advanceLegs`) | Counter, door and transfer journeys become data; staff, the simulation and a later operator API can't disagree or double-move | — |
 | 2026-11-22 | **Every counter, rate and bus leg names an operator** (QuikFly is one) | Own counters, aggregated and partner operators are data, not code paths | — |

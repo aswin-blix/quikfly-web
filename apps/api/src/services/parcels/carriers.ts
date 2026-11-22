@@ -1,6 +1,6 @@
 // Who moves parcels: staff at the counters and, in the demo, a simulated carrier run by the cron.
 // An operator's API would be a third carrier in this file; all of them end in advanceLegs().
-import { PARCEL_RULES, parseTerms, planLegMove, simulatedMove, withTerms, type Parcel, type ParcelLegState, type Settings } from "@quikfly/shared";
+import { PARCEL_RULES, parseTerms, planLegMove, simulatedMove, withTerms, type AdminParcel, type ParcelLegState, type Settings } from "@quikfly/shared";
 import { PARCEL_SIM_BATCH } from "../../config";
 import { badRequest, conflict, notFound, tooMany } from "../../lib/errors";
 import { audit } from "../admin/audit";
@@ -9,7 +9,7 @@ import { earnStatement, earnedNotice } from "../credits";
 import { notify } from "../notifications";
 import { getSettings } from "../settings";
 import { advanceLegs, loadParcels, type LoadedParcel } from "./legs";
-import { staffParcel } from "./parcels";
+import { staffParcel } from "./staff";
 
 /** A parcel as planLegMove reads it, with the hold period it was sold under. */
 const journey = (settings: Settings, { row, legs }: LoadedParcel) => ({
@@ -61,7 +61,7 @@ async function checkCollectOtp(db: D1Database, adminId: string, id: string, otp:
 export async function staffMove(
   db: D1Database, adminId: string, id: string, seq: number,
   input: { to: ParcelLegState; note?: string; otp?: string },
-): Promise<Parcel> {
+): Promise<AdminParcel> {
   const parcel = (await loadParcels(db, "p.booking_id = ?", id))[0];
   if (!parcel) throw notFound("Parcel not found.");
   const { row } = parcel;

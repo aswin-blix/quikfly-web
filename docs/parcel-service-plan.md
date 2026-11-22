@@ -1,6 +1,6 @@
 # Parcel service: research and implementation plan
 
-How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then the owner's decisions (10) and what changed while building (11). **Step 1 is built (2026-11-22), off behind `serviceParcel`; where sections 1–9 differ from section 11, section 11 wins.**
+How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then the owner's decisions (10) and what changed while building (11). **Steps 1 and 2 are built (2026-11-22), off behind `serviceParcel`; where sections 1–9 differ from section 11, section 11 wins.**
 
 - **Date:** 2026-11-20. **Code:** `main` at `021b718` (after PR #112). No app code was changed.
 - **Read first:** [AGENTS.md](../AGENTS.md), [roadmap.md](roadmap.md), [decisions.md](decisions.md). The plan keeps every recorded decision; where a step leans on one it names it.
@@ -334,7 +334,9 @@ The questions as they were asked:
 
 ---
 
-## 11. What changed while building step 1
+## 11. What changed while building
+
+### Step 1
 
 | Plan said | Built | Why |
 |---|---|---|
@@ -354,12 +356,24 @@ The questions as they were asked:
 | Switch on when the owner likes after step 2 | Not in production before step 5's app release | App 0.1.16 reads an unknown service as a cab ride |
 | `/track/[lr]` on the website | `/parcels/track?lr=` | `/track` is taken, and static export has no dynamic routes |
 
+### Step 2
+
+| Plan said | Built | Why |
+|---|---|---|
+| A seventh photo | A drawn illustration | No photo exists |
+| A hero or booking-widget entry wasn't specified | Tile, header, services sheet and footer; not the home booking widget | The form needs more than a quick search holds |
+| The sender's details go in checkout like other services | Receiver, contents and declaration travel in the draft, never in booking lines | Rule in section 2.4 and step 1 |
+| Load on bus: pick the bus | Confirms the booked bus | Moving to another bus is step 6 |
+| Receive: confirm weight, re-price | A check in the dialog, or refuse | Re-weighing is step 6 |
+| The mock shows parcels in the single-file demo | Only when built with `NEXT_PUBLIC_DEMO_PARCELS=1` | Steps ship switched off |
+| Queue search by LR or phone | Also by booking id; a search looks beyond open parcels | Staff search for finished ones too |
+
 Left to their steps: bike legs and their transitions (3), door legs (4), return to sender, re-weighing and moving a parcel to another bus (6).
 
 ---
 
 ## Prompt to start step 1
 
-Used 2026-11-22 (step 1 is done). For step 2, ask to implement step 2 of this plan, reading section 11 first. The original prompt:
+Used 2026-11-22 (steps 1 and 2 are done). For the next step, ask for it by number, reading section 11 first. The original prompt:
 
 > Implement step 1 of docs/parcel-service-plan.md (foundation for the parcel service). Read AGENTS.md, docs/roadmap.md, docs/decisions.md and the plan first. Branch from main. Follow Rule 1 (shared types → API route + service + migration 0029 → web contract/http/mock → smoke → API README). Keep `serviceParcel` off by default. Add the decisions listed in section 9 to docs/decisions.md and a Phase 7 row to docs/roadmap.md. Run `npm run typecheck` and `npm run smoke` against a local API on a free port; do not touch production. Commit at each checkpoint and open a PR.

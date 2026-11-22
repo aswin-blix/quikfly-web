@@ -1,7 +1,7 @@
 // Parcels for customers: departures, prices, the rows a booking creates, and reading one back.
 // Moving a parcel is legs.ts; who moves it is carriers.ts.
 import {
-  PARCEL_DECLARATION, PARCEL_LR, parcelBookingText, parcelDepartures, parcelLiability, parcelLr, parcelRateFor, planLegs, nextMoveAt,
+  GSTIN_LINE, PARCEL_DECLARATION, PARCEL_LR, parcelBookingText, parcelDepartures, parcelLiability, parcelLr, parcelRateFor, planLegs, nextMoveAt,
   priceParcelCity, priceParcelIntercity, rideQuotes, rideTimeAt, switchError, isWomenOnly,
   type FareLine, type NewBooking, type Parcel, type ParcelEvent, type ParcelOptions, type ParcelQuoteInfo, type ParcelState, type PublicTracking,
   type QuoteRequest, type Settings,
@@ -101,9 +101,15 @@ export async function newParcel(db: D1Database, userId: string, req: ParcelReque
   const lr = parcelLr(req.from, req.to, crypto.getRandomValues(new Uint8Array(PARCEL_LR.randomLength)));
   const legs = planLegs(departure);
   const firstEvent = randomToken(12);
+  const text = parcelBookingText(departure, req.weightBand, lr, liability);
+  // A GST invoice is the one line the sender can ask for; its value comes from their profile, not the request.
+  if (input.lines.some(([k]) => k === GSTIN_LINE)) {
+    const gst = await db.prepare("SELECT gstin, gst_name FROM users WHERE id = ?").bind(userId).first<{ gstin: string | null; gst_name: string | null }>();
+    if (gst?.gstin && gst.gst_name) text.lines.push([GSTIN_LINE, `${gst.gstin} · ${gst.gst_name}`]);
+  }
 
   return {
-    ...parcelBookingText(departure, req.weightBand, lr, liability),
+    ...text,
     statements: (id, createdAt) => [
       db.prepare(
         `INSERT INTO parcels (booking_id, user_id, lr, mode, state, move_id, next_at, from_city, to_city, depart_at, ready_at, from_counter, to_counter,
@@ -143,7 +149,7 @@ async function eventsOf(db: D1Database, id: string) {
   return results;
 }
 
-async function toParcel(db: D1Database, { row, legs }: LoadedParcel, forSender: boolean): Promise<Parcel> {
+export async function toParcel(db: D1Database, { row, legs }: LoadedParcel, forSender: boolean): Promise<Parcel> {
   const [settings, events] = await Promise.all([getSettings(db), eventsOf(db, row.booking_id)]);
   return {
     bookingId: row.booking_id, lr: row.lr, mode: row.mode, state: row.state, from: row.from_city, to: row.to_city,
@@ -163,13 +169,6 @@ export async function myParcel(db: D1Database, userId: string, id: string): Prom
   const found = (await loadParcels(db, "p.booking_id = ? AND p.user_id = ?", id, userId))[0];
   if (!found) throw notFound("Parcel not found.");
   return toParcel(db, found, true);
-}
-
-/** A parcel for staff: everything but the collection code. */
-export async function staffParcel(db: D1Database, id: string): Promise<Parcel> {
-  const found = (await loadParcels(db, "p.booking_id = ?", id))[0];
-  if (!found) throw notFound("Parcel not found.");
-  return toParcel(db, found, false);
 }
 
 const firstName = (name: string | null) => name?.trim().split(/\s+/)[0] || null;

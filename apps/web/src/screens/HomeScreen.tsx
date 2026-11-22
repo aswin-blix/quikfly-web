@@ -8,7 +8,7 @@ import { BookingWidget } from "@/components/BookingWidget";
 import { SceneArt } from "@/components/SceneArt";
 import { CountUp, fadeUp, Magnetic, Marquee, Parallax, Reveal, SplitHeadline, StaggerGroup, Tilt } from "@/components/motion";
 import { Accordion, GhostLink, SectionTitle } from "@/components/ui";
-import { inr, todayISO } from "@/lib/format";
+import { cx, inr, todayISO } from "@/lib/format";
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { Link, qs } from "@/lib/nav";
 import { serviceByKey, SERVICES } from "@/lib/services";
@@ -100,7 +100,7 @@ function ServicesGrid() {
   return (
     <section className="max-w-7xl mx-auto px-4 py-12">
       <SectionTitle eyebrow="Our services" title="Where do you want to go today?" />
-      <StaggerGroup className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+      <StaggerGroup className={cx("grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4", open.length > 6 ? "lg:grid-cols-4 xl:grid-cols-7" : "lg:grid-cols-6")}>
         {open.map((s) => (
           <motion.div key={s.key} variants={fadeUp}>
             <Tilt>
@@ -330,7 +330,8 @@ function PhoneMock() {
       <div className="p-3 space-y-2">
         <img src="/assets/logo.svg" alt="" width={2059} height={495} className="w-full h-auto" />
         <div className="grid grid-cols-3 gap-1.5">
-          {SERVICES.map((s) => <div key={s.key} className="rounded-lg overflow-hidden border border-gold/20"><img src={s.image} alt="" className="aspect-square object-cover" /><p className="text-[8px] text-center py-0.5">{s.nav}</p></div>)}
+          {/* The app: it has no parcels until step 5 of docs/parcel-service-plan.md. */}
+          {SERVICES.filter((s) => s.key !== "parcel").map((s) => <div key={s.key} className="rounded-lg overflow-hidden border border-gold/20"><img src={s.image} alt="" className="aspect-square object-cover" /><p className="text-[8px] text-center py-0.5">{s.nav}</p></div>)}
         </div>
         <div className="rounded-lg bg-smoke p-2 text-[9px] space-y-1">
           <p className="flex items-center gap-1"><MapPin size={9} className="text-success" />T. Nagar</p>

@@ -244,8 +244,12 @@ export interface PublicTracking {
   simulated: boolean;
 }
 
-const indiaTime = (iso: string) =>
+/** Parcel times are always India time, like the timetable, whatever the viewer's time zone. */
+export const parcelTime = (iso: string) =>
   new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
+
+/** The booking line with the LR number. */
+export const PARCEL_LR_LINE = "LR number";
 
 /**
  * A parcel booking's title, subtitle and lines. The API writes them rather than the client, so no
@@ -256,10 +260,10 @@ export function parcelBookingText(d: ParcelDeparture, band: ParcelWeightBand, lr
     title: `${d.from} → ${d.to}`,
     subtitle: `Bus parcel · ${parcelBandLabel(band)}`,
     lines: [
-      ["LR number", lr],
-      ["Hand in at", `${d.fromCounter.name}, by ${indiaTime(d.cutoffAt)}`],
-      ["Departs", `${indiaTime(d.departAt)} · ${d.operator}`],
-      ["Collect at", `${d.toCounter.name}, from ${indiaTime(d.readyAt)}`],
+      [PARCEL_LR_LINE, lr],
+      ["Hand in at", `${d.fromCounter.name}, by ${parcelTime(d.cutoffAt)}`],
+      ["Departs", `${parcelTime(d.departAt)} · ${d.operator}`],
+      ["Collect at", `${d.toCounter.name}, from ${parcelTime(d.readyAt)}`],
       ["Liability", `Up to ₹${liability.toLocaleString("en-IN")}, not insured`],
     ],
   };
@@ -382,6 +386,28 @@ export function planLegMove(
   const holdUntil = state === "ready" ? new Date(now + parcel.holdDays * 86_400_000).toISOString() : parcel.holdUntil;
   return { legs: next, state, holdUntil, nextAt: nextMoveAt(next, holdUntil), needsOtp: !!rule.otp, refuses: !!rule.refuses };
 }
+
+export interface StaffMove {
+  seq: number;
+  to: ParcelLegState;
+  /** The parcel's state afterwards: what the button is called. */
+  state: ParcelState;
+  needsOtp: boolean;
+  refuses: boolean;
+}
+
+/** Every move staff can make now, the next step first: the admin's buttons, from the rules the API applies. */
+export function staffMoves(legs: ParcelLeg[], holdUntil: string | null, now = Date.now()): StaffMove[] {
+  const moves = legs.flatMap(({ seq }) => (["active", "done", "failed"] as const).flatMap((to): StaffMove[] => {
+    // The hold period only dates the next state, so it doesn't change which moves exist.
+    const move = planLegMove({ legs, holdUntil, holdDays: 0 }, seq, to, "staff", now);
+    return "error" in move ? [] : [{ seq, to, state: move.state, needsOtp: move.needsOtp, refuses: move.refuses }];
+  }));
+  return [...moves.filter((m) => !m.refuses), ...moves.filter((m) => m.refuses)];
+}
+
+/** The states a parcel passes through when nothing goes wrong, for timelines. */
+export const PARCEL_JOURNEY: readonly ParcelState[] = ["booked", "at_counter", "on_bus", "reached", "ready", "collected"];
 
 /** What the sender is told after a move; null = nothing (cancelling has its own notification). */
 export function parcelNotice(state: ParcelState, lr: string): { kind: "parcel.moved" | "parcel.ready" | "parcel.collected" | "parcel.unclaimed"; title: string; body: string } | null {

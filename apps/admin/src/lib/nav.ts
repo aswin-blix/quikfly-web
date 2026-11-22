@@ -1,5 +1,5 @@
 // Sidebar entries. Each is shown only to roles with its permission (PERMISSIONS in @quikfly/shared).
-import { ClipboardList, Handshake, Headphones, IdCard, LayoutDashboard, Map, ScrollText, Settings, Siren, TicketPercent, Users, UsersRound, type LucideIcon } from "lucide-react";
+import { ClipboardList, Handshake, Headphones, IdCard, LayoutDashboard, Map, Package, ScrollText, Settings, Siren, TicketPercent, Users, UsersRound, type LucideIcon } from "lucide-react";
 import type { Permission } from "@quikfly/shared";
 
 export interface NavItem {
@@ -12,6 +12,7 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
   { href: "/bookings", label: "Bookings", icon: ClipboardList, permission: "bookings.view" },
+  { href: "/parcels", label: "Parcels", icon: Package, permission: "parcels.manage" },
   { href: "/customers", label: "Customers", icon: Users, permission: "customers.view" },
   { href: "/sos", label: "SOS alerts", icon: Siren, permission: "sos.manage" },
   { href: "/licences", label: "Licence reviews", icon: IdCard, permission: "licences.review" },
@@ -25,7 +26,7 @@ export const NAV: NavItem[] = [
 ];
 
 /** Routes that exist so far; entries for later slices stay hidden until their page ships. */
-export const LIVE_ROUTES = new Set(["/", "/bookings", "/customers", "/sos", "/licences", "/vendors", "/support", "/catalog", "/catalog/list?kind=offer", "/settings", "/team", "/audit"]);
+export const LIVE_ROUTES = new Set(["/", "/bookings", "/parcels", "/customers", "/sos", "/licences", "/vendors", "/support", "/catalog", "/catalog/list?kind=offer", "/settings", "/team", "/audit"]);
 
 /** `full` is the path plus query string, so /catalog/list?kind=offer can be told apart from other catalog lists. */
 export function isActive(href: string, path: string, full = path) {
