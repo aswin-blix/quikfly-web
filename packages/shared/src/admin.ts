@@ -176,7 +176,7 @@ export interface AdminStats {
   /** One entry per day in the range, oldest first (YYYY-MM-DD, India time). */
   byDay: { date: string; bookings: number; revenue: number; cancelled: number }[];
   /** returnsToSettle: self-drive cars returned by the customer, waiting for staff to settle the deposit. openSos: SOS alerts nobody has acknowledged (missing from older APIs). */
-  queues: { pendingLicences: number; pendingDeletions: number; returnsToSettle: number; openSos?: number };
+  queues: { pendingLicences: number; pendingDeletions: number; parcelsToday?: number; parcelsOnBus?: number; parcelsReady?: number; parcelsUnclaimed?: number; returnsToSettle: number; openSos?: number };
   recent: AdminBooking[];
 }
 

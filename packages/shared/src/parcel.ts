@@ -193,6 +193,8 @@ export interface ParcelLeg {
   plannedAt: string | null;
   startedAt: string | null;
   endedAt: string | null;
+  /** The last leg of an unclaimed parcel: the booking it went back to the sender as (staff only link it). */
+  returnedAs?: string | null;
 }
 
 export const PARCEL_STATES = [
@@ -403,7 +405,7 @@ export function parcelState(legs: ParcelLeg[]): ParcelState {
   if (failed >= 0) {
     if (failed !== last) return "cancelled";
     // A counter's last leg fails by the hold running out, a captain's by bringing it back (or, never picked up, by refusal).
-    if (legs[failed].kind === "counter") return "unclaimed";
+    if (legs[failed].kind === "counter") return legs[failed].returnedAs ? "returned" : "unclaimed";
     return legs[failed].startedAt ? "returned" : "cancelled";
   }
   if (legs.every((l) => l.state === "done")) return legs[last].kind === "bike" ? "delivered" : "collected";
@@ -483,6 +485,42 @@ export function planLegMove(
   };
 }
 
+/** An unclaimed parcel goes back as another parcel, which the sender booked and paid for. */
+export function planReturn(legs: ParcelLeg[], returnBookingId: string): LegMove | { error: string } {
+  if (parcelState(legs) !== "unclaimed") return { error: "Only an unclaimed parcel can be sent back." };
+  const next = legs.map((l, i) => (i === legs.length - 1 ? { ...l, returnedAs: returnBookingId } : l));
+  return { legs: next, state: parcelState(next), holdUntil: null, nextAt: null, needsOtp: false, needsReason: false, refuses: false, issuesCode: false };
+}
+
+/** The bus can change while the parcel hasn't left: the legs on the new departure. */
+export function planBusChange(legs: ParcelLeg[], d: ParcelDeparture): { legs: ParcelLeg[] } | { error: string } {
+  const bus = legs.findIndex((l) => l.kind === "bus");
+  if (bus < 1 || bus + 1 >= legs.length || legs[bus].state !== "pending" || legs.some((l) => l.state === "failed")) {
+    return { error: "The bus can be changed only before the parcel leaves." };
+  }
+  if (legs[bus].busId === d.busId && legs[bus].departAt === d.departAt) return { error: "Pick a different bus." };
+  if (legs[bus].operatorId !== d.operatorId || legs[bus - 1].counterId !== d.fromCounter.id || legs[bus + 1].counterId !== d.toCounter.id) {
+    return { error: "Pick a bus of the same operator, between the same counters." };
+  }
+  return {
+    legs: legs.map((l, i): ParcelLeg =>
+      i === bus ? { ...l, busId: d.busId, busDate: d.date, departAt: d.departAt, plannedAt: d.departAt }
+        : i === bus - 1 ? { ...l, plannedAt: d.cutoffAt }
+          : i === bus + 1 ? { ...l, plannedAt: d.readyAt }
+            : l),
+  };
+}
+
+/** A bus parcel can be weighed again until it's on the bus. */
+export const canReweigh = (p: { mode: ParcelMode; state: ParcelState }) => p.mode === "intercity" && PARCEL_CANCELLABLE.includes(p.state);
+
+/** What checking the weight does to the money: one of the two is 0. */
+export interface WeightChange {
+  weightBand: ParcelWeightBand;
+  charge: number;
+  refund: number;
+}
+
 export interface StaffMove {
   seq: number;
   to: ParcelLegState;
@@ -520,7 +558,7 @@ export function parcelNotice(state: ParcelState, lr: string): { kind: "parcel.mo
     case "collected": return { kind: "parcel.collected", title, body: "The receiver collected your parcel." };
     case "in_transit": return { kind: "parcel.moved", title, body: "The captain has your parcel. Open it to see the delivery code and give it to the receiver (demo: no SMS sent)." };
     case "delivered": return { kind: "parcel.collected", title, body: "The receiver has your parcel." };
-    case "returned": return { kind: "parcel.moved", title, body: "The captain couldn't deliver your parcel and brought it back. The fare isn't refunded." };
+    case "returned": return { kind: "parcel.moved", title, body: "Your parcel is coming back to you. What you paid to send it isn't refunded." };
     case "unclaimed": return { kind: "parcel.unclaimed", title, body: "Nobody collected your parcel within the hold period. Contact support to get it back." };
     default: return null;
   }

@@ -27,7 +27,7 @@ export interface LoadedParcel { row: ParcelRow; legs: ParcelLeg[] }
 
 /** SQL: a parcel's legs (`p`) as a JSON list. */
 export const LEGS_JSON = `(SELECT json_group_array(json_object('seq', l.seq, 'kind', l.kind, 'state', l.state, 'operatorId', l.operator_id, 'counterId', l.counter_id,
-    'busId', l.bus_id, 'busDate', l.bus_date, 'departAt', l.depart_at, 'plannedAt', l.planned_at, 'startedAt', l.started_at, 'endedAt', l.ended_at))
+    'busId', l.bus_id, 'busDate', l.bus_date, 'departAt', l.depart_at, 'plannedAt', l.planned_at, 'startedAt', l.started_at, 'endedAt', l.ended_at, 'returnedAs', CASE WHEN l.kind = 'counter' THEN l.leg_booking_id END))
   FROM parcel_legs l WHERE l.booking_id = p.booking_id)`;
 export const parseLegs = (json: string) => (JSON.parse(json) as ParcelLeg[]).sort((a, b) => a.seq - b.seq);
 
@@ -67,7 +67,7 @@ export async function advanceLegs(
     const notice = parcelNotice(move.state, row.lr);
     return {
       row, token,
-      changed: move.legs.filter((l, i) => l.state !== legs[i].state).map((l) => ({ ...l, id: row.booking_id, token })),
+      changed: move.legs.filter((l, i) => l.state !== legs[i].state || (l.returnedAs ?? null) !== (legs[i].returnedAs ?? null)).map((l) => ({ ...l, id: row.booking_id, token })),
       data: {
         id: row.booking_id, prev: row.move_id, token, from: row.state, state: move.state,
         status: PARCEL_COMPLETES.includes(move.state) ? "completed" : "ongoing",
@@ -88,7 +88,8 @@ export async function advanceLegs(
        RETURNING booking_id`,
     ).bind(list, at),
     db.prepare(
-      `UPDATE parcel_legs SET state = ${field("state")}, started_at = ${field("startedAt")}, ended_at = ${field("endedAt")}
+      `UPDATE parcel_legs SET state = ${field("state")}, started_at = ${field("startedAt")}, ended_at = ${field("endedAt")},
+         leg_booking_id = COALESCE(${field("returnedAs")}, parcel_legs.leg_booking_id)
        FROM ${MOVED}
        WHERE parcel_legs.booking_id = p.booking_id AND parcel_legs.seq = ${field("seq")}`,
     ).bind(JSON.stringify(planned.flatMap((p) => p.changed))),

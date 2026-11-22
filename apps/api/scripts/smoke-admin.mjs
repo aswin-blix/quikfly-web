@@ -62,6 +62,139 @@ async function eventually(name, make, test) {
   check(name, false, `${r.status} ${JSON.stringify(r.json)?.slice(0, 200)}`);
 }
 
+/** Operations: another bus, the weight at the counter, returns, the dashboard and the export. */
+async function parcelOpsChecks({ before, options, base, newPhone, contentStaff }) {
+  const phone = newPhone();
+  const O = (await call("POST", "/auth/verify", { phone, otp: OTP })).json.token;
+  const me = async () => (await call("GET", "/auth/me", null, O)).json;
+  const { id: userId } = await me();
+  await expect("ops: wallet money for the test", call("POST", `/admin/customers/${userId}/wallet`, { amount: 3000, reason: "Smoke: parcel operations" }, T), 200);
+  const balance = async () => (await me()).walletBalance;
+  const quote = async (patch = {}) => (await call("POST", "/quotes", { ...base, ...patch })).json;
+  const book = async (patch = {}, body = {}) => {
+    const q = await quote(patch);
+    const made = await call("POST", "/bookings", { service: "parcel", title: "x", subtitle: "x", payment: "wallet", lines: [], quoteId: q.id,
+      receiver: { name: "Ops Receiver", phone: "9000000002" }, contents: "Operations test box", declaration: options.declaration.version, ...body }, O);
+    return { ...made.json, parcel: (await call("GET", `/bookings/${made.json.id}/parcel`, null, O)).json };
+  };
+  const staff = (id, path, body, as = T) => call(body ? "POST" : "GET", `/admin/parcels/${id}/${path}`, body, as);
+  const leg = (id, seq, body) => call("POST", `/admin/parcels/${id}/legs/${seq}`, body, T);
+  const audited = (id, action) => call("GET", `/admin/audit?entity=booking&entityId=${id}`, null, T).then((r) => r.json.items.filter((a) => a.action === action).length);
+
+  // Another bus
+  const first = options.departures[0], last = options.departures.at(-1);
+  const b = await book();
+  const buses = await expect("ops: the buses it can move to", staff(b.id, "buses"), 200,
+    (j) => j.length === options.departures.length - 1 && !j.some((d) => d.departAt === last.departAt));
+  await expect("ops: content staff can't list them", staff(b.id, "buses", null, contentStaff), 403);
+  const to = buses[0];
+  const busBody = { busId: to.busId, departAt: to.departAt, note: "The booked bus was cancelled" };
+  await expect("ops: content staff can't move it", staff(b.id, "bus", busBody, contentStaff), 403);
+  await expect("ops: a bus change needs a reason", staff(b.id, "bus", { ...busBody, note: "" }), 400);
+  await expect("ops: a made-up bus is refused", staff(b.id, "bus", { ...busBody, departAt: "2031-01-01T12:00:00.000Z" }), 400);
+  const moved = await Promise.all([1, 2, 3].map(() => staff(b.id, "bus", busBody)));
+  check("ops: three bus changes at once, one wins", moved.filter((r) => r.status === 200).length === 1, moved.map((r) => r.status).join(","));
+  await expect("ops: the same LR on the new bus", staff(b.id, "").then(() => call("GET", `/admin/parcels/${b.id}`, null, T)), 200,
+    (j) => j.lr === b.parcel.lr && j.departAt === to.departAt && j.readyAt === to.readyAt && j.state === "booked" && j.legs[1].departAt === to.departAt && j.legs[2].plannedAt === to.readyAt);
+  await expect("ops: same price, and the refund still counts to the later bus", call("GET", `/bookings/${b.id}`, null, O), 200,
+    (j) => j.amount === b.amount && Date.parse(j.startsAt) === Date.parse(last.departAt) && j.lines.some(([k]) => k === "Departs") && JSON.stringify(j.lines) !== JSON.stringify(b.lines));
+  check("ops: the bus change is audited once", (await audited(b.id, "parcel.bus")) === 1);
+  await expect("ops: tracking shows the new bus, not a second Booked or the note", call("GET", `/track/${b.parcel.lr}`), 200,
+    (j) => j.departAt === to.departAt && j.events.length === 1 && !JSON.stringify(j).includes("cancelled"));
+  await expect("ops: the sender is told", call("GET", "/me/notifications", null, O), 200, (j) => j.items.some((n) => n.bookingId === b.id && /Bus changed/.test(n.title)));
+  check("ops: the test uses two different buses", first.departAt !== last.departAt);
+
+  // The weight
+  const preview = (id, band) => staff(id, `weight?band=${band}`);
+  const up = await expect("ops: a heavier band's difference", preview(b.id, "10"), 200, (j) => j.charge > 0 && j.refund === 0);
+  const five = await quote({ weightBand: "10" }), two = await quote();
+  check("ops: the difference is the two quotes'", up.charge === five.total - two.total, `${up.charge} vs ${five.total - two.total}`);
+  await expect("ops: the same band is refused", preview(b.id, "2"), 400);
+  await expect("ops: content staff can't weigh", staff(b.id, "weight", { ...up, senderAgreed: true }, contentStaff), 403);
+  await expect("ops: a charge needs the sender's agreement", staff(b.id, "weight", { ...up, senderAgreed: false }), 400);
+  await expect("ops: a stale difference is refused", staff(b.id, "weight", { ...up, charge: up.charge + 1, senderAgreed: true }), 409);
+  let wallet = await balance();
+  const weighed = await Promise.all([1, 2, 3].map(() => staff(b.id, "weight", { ...up, senderAgreed: true })));
+  check("ops: three weighings at once, one wins", weighed.filter((r) => r.status === 200).length === 1, weighed.map((r) => r.status).join(","));
+  check("ops: charged once", (await balance()) === wallet - up.charge);
+  await expect("ops: the booking follows the weight", call("GET", `/bookings/${b.id}`, null, O), 200,
+    (j) => j.amount === b.amount + up.charge && /10 kg/.test(j.subtitle) && j.lines.some(([k]) => k === "Weight checked"));
+  const down = await expect("ops: lighter again", preview(b.id, "2"), 200, (j) => j.refund === up.charge && j.charge === 0);
+  wallet = await balance();
+  await expect("ops: lighter is refunded", staff(b.id, "weight", { ...down, senderAgreed: false }), 200, (j) => j.weightBand === "2" && j.amount === b.amount);
+  check("ops: refunded once", (await balance()) === wallet + down.refund);
+  check("ops: each weighing is audited", (await audited(b.id, "parcel.weight")) === 2);
+  await expect("ops: the wallet shows both", call("GET", `/admin/bookings/${b.id}`, null, T), 200, (j) => JSON.stringify(j).split("Weight checked ·").length >= 3);
+
+  // Cancelling while it's being weighed never refunds more than was paid
+  const start = await balance();
+  const r = await book({ weightBand: "10" });
+  const lighter = (await preview(r.id, "2")).json;
+  await Promise.all([staff(r.id, "weight", { ...lighter, senderAgreed: false }), call("POST", `/bookings/${r.id}/cancel`, {}, O)]);
+  if ((await call("GET", `/bookings/${r.id}`, null, O)).json.status !== "cancelled") await call("POST", `/bookings/${r.id}/cancel`, {}, O);
+  check("ops: weighing and cancelling at once gives back exactly what was paid", (await balance()) === start, `${await balance()} vs ${start}`);
+
+  const upi = await book({}, { payment: "upi" });
+  const more = (await preview(upi.id, "5")).json;
+  await expect("ops: UPI can't be charged more", staff(upi.id, "weight", { ...more, senderAgreed: true }), 409);
+  await leg(upi.id, 0, { to: "active" });
+  await expect("ops: weighed at the counter too", preview(upi.id, "5"), 200);
+  await leg(upi.id, 1, { to: "active" });
+  await expect("ops: not weighed on the bus", preview(upi.id, "5"), 409);
+  await expect("ops: not moved on the bus", staff(upi.id, "buses"), 409);
+
+  const poor = await book();
+  const jump = (await preview(poor.id, "20")).json;
+  const spare = await balance();
+  await expect("ops: empty the wallet", call("POST", `/admin/customers/${userId}/wallet`, { amount: -spare, reason: "Smoke: empty wallet" }, T), 200);
+  await expect("ops: a short wallet isn't charged", staff(poor.id, "weight", { ...jump, senderAgreed: true }), 409);
+  await expect("ops: and the parcel is unchanged", call("GET", `/bookings/${poor.id}`, null, O), 200, (j) => j.amount === poor.amount);
+  check("ops: the wallet never goes negative", (await balance()) === 0);
+
+  const city = (await call("GET", "/config")).json.places;
+  const quick = await call("POST", "/quotes", { service: "parcel", mode: "city", pickupId: city[0].id, dropId: city[1].id, category: "documents", weightBand: "2", size: "backpack", declaredValue: 100 });
+  const qb = await call("POST", "/bookings", { service: "parcel", title: "x", subtitle: "x", payment: "upi", lines: [], quoteId: quick.json.id,
+    receiver: { name: "Ops Receiver", phone: "9000000002" }, contents: "Operations test note", declaration: options.declaration.version }, O);
+  await expect("ops: a Quick parcel isn't weighed", preview(qb.json.id, "5"), 409);
+
+  // Back to the sender
+  const lost = await book({}, { payment: "upi" });
+  for (const [seq, state] of [[0, "active"], [1, "active"], [1, "done"], [2, "active"]]) await leg(lost.id, seq, { to: state });
+  check("ops: the test ends the hold", endHold(lost.id));
+  await expect("ops: unclaimed", leg(lost.id, 2, { to: "failed" }), 200, (j) => j.state === "unclaimed");
+  const stats = (await call("GET", "/admin/stats?days=1", null, T)).json.queues;
+  const count = async (query) => (await call("GET", `/admin/parcels?${query}`, null, T)).json.total;
+  check("ops: dashboard unclaimed = the queue", stats.parcelsUnclaimed === (await count("state=unclaimed")) && stats.parcelsUnclaimed >= 1, JSON.stringify(stats));
+  check("ops: dashboard on the bus = the queue", stats.parcelsOnBus === (await count("state=on_bus")), JSON.stringify(stats));
+  check("ops: dashboard ready = the queue", stats.parcelsReady === (await count("state=ready")), JSON.stringify(stats));
+  check("ops: dashboard today = the queue", stats.parcelsToday === (await count(`state=all&date=${dayOffset(0)}`)), JSON.stringify(stats));
+
+  await expect("ops: a return needs a real LR", staff(lost.id, "return", { lr: "QFP-CBE-MAA-ZZZZZZZZ" }), 400);
+  await expect("ops: the same route isn't a return", staff(lost.id, "return", { lr: upi.parcel.lr }), 400);
+  const backBus = (await call("GET", "/parcels/options?from=Coimbatore&to=Chennai")).json.departures.at(-1);
+  const back = await book({ from: "Coimbatore", to: "Chennai", busId: backBus.busId, departAt: backBus.departAt }, { payment: "upi" });
+  await expect("ops: content staff can't return", staff(lost.id, "return", { lr: back.parcel.lr }, contentStaff), 403);
+  const S2 = (await call("POST", "/auth/verify", { phone: newPhone(), otp: OTP })).json.token;
+  const theirs = await call("POST", "/quotes", { ...base, from: "Coimbatore", to: "Chennai", busId: backBus.busId, departAt: backBus.departAt });
+  const other = await call("POST", "/bookings", { service: "parcel", title: "x", subtitle: "x", payment: "upi", lines: [], quoteId: theirs.json.id,
+    receiver: { name: "Ops Receiver", phone: "9000000002" }, contents: "Someone else's box", declaration: options.declaration.version }, S2);
+  const otherLr = (await call("GET", `/bookings/${other.json.id}/parcel`, null, S2)).json.lr;
+  await expect("ops: someone else's parcel isn't a return", staff(lost.id, "return", { lr: otherLr }), 400);
+  await expect("ops: returned as the parcel the sender booked", staff(lost.id, "return", { lr: back.parcel.lr.toLowerCase() }), 200, (j) => j.state === "returned" && j.bookingStatus === "completed");
+  await expect("ops: returned once", staff(lost.id, "return", { lr: back.parcel.lr }), 409);
+  await expect("ops: the sender sees it going back", call("GET", `/bookings/${lost.id}/parcel`, null, O), 200,
+    (j) => j.state === "returned" && j.collectOtp === null && j.events.at(-1).note.includes(back.parcel.lr));
+  await expect("ops: a return earns no credits", call("GET", "/me/credits", null, O), 200, (j) => !j.items.some((x) => x.bookingId === lost.id && x.kind === "earned"));
+  check("ops: a return is audited", (await audited(lost.id, "parcel.move")) >= 6);
+
+  const csv = await (await fetch(`${BASE}/admin/bookings/export.csv?service=parcel`, { headers: { Authorization: `Bearer ${T}` } })).text();
+  const rows = csv.trim().split(/\r?\n/);
+  check("ops: the export has the parcel columns", rows[0].endsWith("parcel_lr,parcel_mode,parcel_state,parcel_max_kg"), rows[0]);
+  check("ops: with LR, mode and state", rows.some((l) => l.includes(`${lost.parcel.lr},intercity,returned,2`)));
+  check("ops: and no receiver, contents", !/Ops Receiver|Operations test box/.test(csv));
+  check("ops: the cap is still the owner's", before.parcelMaxKg >= 2);
+}
+
 /** Quick parcel (city): one captain's leg, the two codes, the ride cancellation rules, cash on pickup. */
 async function quickParcelChecks({ before, places, options, newPhone, priced, contentStaff }) {
   const senderPhone = newPhone(), receiverPhone = newPhone();
@@ -1282,6 +1415,8 @@ if (LOCAL) {
     await expect("unclaimed clears the code", call("GET", `/bookings/${u.id}/parcel`, null, S), 200, (j) => j.state === "unclaimed" && j.collectOtp === null);
     await expect("unclaimed stays in the open queue", queue(`?state=open&q=${u.id}`), 200, (j) => j.total === 1 && j.items[0].state === "unclaimed");
     await expect("unclaimed can't be handed over", move(u.id, 2, { to: "done", otp: "123456" }), 409);
+
+    await parcelOpsChecks({ before, options, base, newPhone, contentStaff });
 
     await expect("a counter needs a real operator", call("POST", "/admin/catalog/parcelCounter", { data: { operatorId: "nope", city: "Chennai", name: "X", address: "Y", hours: "9-5", phone: "1800 123 4567" } }, T), 400);
     await expect("a counter needs a listed city", call("POST", "/admin/catalog/parcelCounter", { data: { operatorId: "bo1", city: "Salem", name: "X", address: "Y", hours: "9-5", phone: "1800 123 4567" } }, T), 400);

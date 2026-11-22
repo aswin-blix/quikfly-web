@@ -29,22 +29,30 @@ function bookingFilter(f: BookingFilters): { filter: string; params: unknown[] }
 }
 
 /** Up to ADMIN_RULES.exportMaxRows bookings matching the filters, newest first, for the CSV export. */
-export async function exportBookings(db: D1Database, f: BookingFilters): Promise<AdminBooking[]> {
+export async function exportBookings(db: D1Database, f: BookingFilters): Promise<ExportRow[]> {
   const { filter, params } = bookingFilter(f);
-  const { results } = await db.prepare(`${SELECT} ${filter} ORDER BY b.created_at DESC LIMIT ?`).bind(...params, ADMIN_RULES.exportMaxRows).all<AdminBookingRow>();
-  return results.map(toAdminBooking);
+  // The parcel columns carry nothing of the receiver, the contents or the code: content staff can export too.
+  const { results } = await db.prepare(
+    `SELECT x.*, p.lr AS parcel_lr, p.mode AS parcel_mode, p.weight_band AS parcel_weight_band
+     FROM (${SELECT} ${filter} ORDER BY b.created_at DESC LIMIT ?) x LEFT JOIN parcels p ON p.booking_id = x.id ORDER BY x.created_at DESC`,
+  ).bind(...params, ADMIN_RULES.exportMaxRows).all<AdminBookingRow & { parcel_lr: string | null; parcel_mode: string | null; parcel_weight_band: string | null }>();
+  return results.map((r) => ({ ...toAdminBooking(r), parcelLr: r.parcel_lr, parcelMode: r.parcel_mode, parcelWeightKg: r.parcel_weight_band }));
 }
 
+type ExportRow = AdminBooking & { parcelLr: string | null; parcelMode: string | null; parcelWeightKg: string | null };
+
 /** One CSV line per booking; a header first. Fields with commas, quotes or line breaks are quoted. */
-export function bookingsCsv(rows: AdminBooking[]): string {
+export function bookingsCsv(rows: ExportRow[]): string {
   const cell = (v: unknown) => {
     const s = v === null || v === undefined ? "" : String(v);
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, "\"\"")}"` : s;
   };
-  const header = ["booking_id", "created_at", "service", "status", "title", "subtitle", "customer_name", "customer_phone", "payment", "amount_inr", "discount_inr", "credits_used_inr", "deposit_inr", "refund_inr", "cancel_fee_inr", "cancel_reason", "starts_at", "trip_id"];
+  const header = ["booking_id", "created_at", "service", "status", "title", "subtitle", "customer_name", "customer_phone", "payment", "amount_inr", "discount_inr", "credits_used_inr", "deposit_inr", "refund_inr", "cancel_fee_inr", "cancel_reason", "starts_at", "trip_id",
+    "parcel_lr", "parcel_mode", "parcel_state", "parcel_max_kg"];
   const lines = rows.map((b) => [
     b.id, b.createdAt, b.service, b.status, b.title, b.subtitle, b.customer.name, b.customer.phone, b.payment, b.amount, b.discount, b.creditsUsed,
     b.deposit, b.refundAmount ?? "", b.cancelFee, b.cancelReason ?? "", b.startsAt ?? "", b.tripId ?? "",
+    b.parcelLr ?? "", b.parcelMode ?? "", b.parcelState ?? "", b.parcelWeightKg ?? "",
   ].map(cell).join(","));
   return [header.join(","), ...lines].join("\r\n") + "\r\n";
 }

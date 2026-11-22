@@ -2,7 +2,7 @@
 // hand-offs, the sender playing the captain (demo: there is no driver app). An operator's API
 // would be one more carrier in this file; all of them end in advanceLegs().
 import {
-  PARCEL_EARNS, PARCEL_RULES, parseTerms, planLegMove, simulatedMove, withTerms,
+  PARCEL_EARNS, PARCEL_RULES, PARCEL_WEIGHT_BANDS, parseTerms, planLegMove, planReturn, simulatedMove, withTerms,
   type AdminParcel, type LegMove, type Parcel, type ParcelLegState, type Settings,
 } from "@quikfly/shared";
 import { PARCEL_SIM_BATCH } from "../../config";
@@ -90,6 +90,33 @@ export async function staffMove(
   if (move.needsReason && !input.note) throw badRequest("Say why: the sender sees it.");
   if (move.needsOtp) await checkCollectOtp(db, adminId, id, input.otp);
   await commitMove(db, settings, parcel, move, { actor: "staff", adminId, note: input.note });
+  return staffParcel(db, id);
+}
+
+/**
+ * An unclaimed parcel goes back as another bus parcel: one the same sender booked and paid for, on
+ * the route reversed, for at least the same weight. This one then closes as returned.
+ */
+export async function staffReturn(db: D1Database, adminId: string, id: string, lr: string): Promise<AdminParcel> {
+  const [parcel] = await loadParcels(db, "p.booking_id = ?", id);
+  if (!parcel) throw notFound("Parcel not found.");
+  const { row, legs } = parcel;
+  if (row.state !== "unclaimed") throw conflict("Only an unclaimed parcel can be sent back.");
+  const [back] = await loadParcels(db, "p.lr = ?", lr);
+  if (!back || back.row.user_id !== row.user_id) throw badRequest("The sender has no parcel with that LR number.");
+  const b = back.row;
+  if (b.mode !== "intercity" || b.from_city !== row.to_city || b.to_city !== row.from_city) {
+    throw badRequest(`The return has to be a bus parcel from ${row.to_city} to ${row.from_city}.`);
+  }
+  if (b.state !== "booked" && b.state !== "at_counter") throw badRequest("That parcel has already left, or is finished.");
+  if (PARCEL_WEIGHT_BANDS.indexOf(b.weight_band) < PARCEL_WEIGHT_BANDS.indexOf(row.weight_band)) {
+    throw badRequest(`The return is booked up to ${b.weight_band} kg and this parcel is up to ${row.weight_band} kg.`);
+  }
+  const used = await db.prepare("SELECT 1 FROM parcel_legs WHERE leg_booking_id = ?").bind(b.booking_id).first();
+  if (used) throw conflict("That parcel is already the return of another one.");
+  const move = planReturn(legs, b.booking_id);
+  if ("error" in move) throw conflict(move.error);
+  await commitMove(db, await getSettings(db), parcel, move, { actor: "staff", adminId, note: `Coming back to you as ${b.lr}` });
   return staffParcel(db, id);
 }
 
