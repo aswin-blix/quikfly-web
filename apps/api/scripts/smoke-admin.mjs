@@ -3,6 +3,7 @@
 //   node scripts/smoke-admin.mjs <baseUrl> <email> <password>   any API, with an existing owner account
 // Lockout and role checks run only in local mode, so a real owner account is never locked.
 import { spawnSync } from "node:child_process";
+import { readFileSync, readdirSync } from "node:fs";
 
 const BASE = (process.argv[2] || "http://localhost:8787/v1").replace(/\/$/, "");
 const LOCAL = !process.argv[3];
@@ -60,6 +61,119 @@ async function eventually(name, make, test) {
     await new Promise((res) => setTimeout(res, 3000));
   } while (Date.now() < until);
   check(name, false, `${r.status} ${JSON.stringify(r.json)?.slice(0, 200)}`);
+}
+
+/**
+ * Every admin route as the source declares it. A counter login must be refused on all but its few, so a route
+ * added later is covered without listing it here.
+ */
+function adminRoutes() {
+  const dir = new URL("../src/routes/admin/", import.meta.url);
+  const source = Object.fromEntries(readdirSync(dir).filter((f) => f.endsWith(".ts")).map((f) => [f, readFileSync(new URL(f, dir), "utf8")]));
+  const bases = Object.fromEntries([...source["index.ts"].matchAll(/\.route\("([^"]+)",\s*(\w+)\)/g)].map((m) => [m[2], m[1]]));
+  const routes = [];
+  for (const text of Object.values(source)) {
+    // Each router is `export const name = new Hono...` followed by its routes.
+    for (const part of text.split(/export const /).slice(1)) {
+      const name = /^(\w+)/.exec(part)[1];
+      if (name !== "admin" && !(name in bases)) continue;
+      for (const m of part.matchAll(/\.(get|post|put|patch|delete)\(\s*"([^"]+)"/g)) {
+        routes.push({ method: m[1].toUpperCase(), path: `/admin${name === "admin" ? "" : bases[name]}${m[2] === "/" ? "" : m[2]}` });
+      }
+    }
+  }
+  return routes;
+}
+
+/** A counter login: one operator, one city, its own end's moves, and nothing else in the panel. */
+async function counterChecks({ options, base, newPhone }) {
+  const make = async (city) => {
+    const email = `counter-${city.toLowerCase()}-${Date.now()}@quikfly.test`;
+    const made = await expect(`counter: an account for ${city}`, call("POST", "/admin/team",
+      { email, name: "Smoke Counter", role: "counter", counter: { operatorId: "bo1", city: city.toLowerCase() } }, T), 201,
+    (j) => j.member.role === "counter" && j.member.counter.city === city && j.member.counter.operatorId === "bo1");
+    return { id: made.member.id, email, password: made.password, token: (await login({ email, password: made.password })).json.token };
+  };
+  const account = { email: `counter-bad-${Date.now()}@quikfly.test`, name: "Smoke Counter", role: "counter" };
+  await expect("counter: needs a counter", call("POST", "/admin/team", account, T), 400);
+  await expect("counter: needs a real one", call("POST", "/admin/team", { ...account, counter: { operatorId: "bo1", city: "Salem" } }, T), 400);
+  await expect("counter: needs a real operator", call("POST", "/admin/team", { ...account, counter: { operatorId: "nope", city: "Chennai" } }, T), 400);
+  await expect("counter: other roles take none", call("POST", "/admin/team", { ...account, role: "operations", counter: { operatorId: "bo1", city: "Chennai" } }, T), 400);
+
+  const from = await make("Chennai"), to = await make("Coimbatore"), elsewhere = await make("Madurai");
+  await expect("counter: it knows where it works", call("GET", "/admin/auth/me", null, from.token), 200, (j) => j.role === "counter" && j.counter.city === "Chennai");
+
+  const sender = (await call("POST", "/auth/verify", { phone: newPhone(), otp: OTP })).json.token;
+  const book = async (patch = {}) => {
+    const q = (await call("POST", "/quotes", { ...base, ...patch })).json;
+    const b = await call("POST", "/bookings", { service: "parcel", title: "x", subtitle: "x", payment: "upi", lines: [], quoteId: q.id,
+      receiver: { name: "Counter Receiver", phone: "9000000002" }, contents: "Counter test box", declaration: options.declaration.version }, sender);
+    return b.json;
+  };
+  const b = await book();
+  const places = (await call("GET", "/config")).json.places;
+  const quickQuote = (await call("POST", "/quotes", { service: "parcel", mode: "city", pickupId: places[0].id, dropId: places[1].id, category: "documents", weightBand: "2", size: "backpack", declaredValue: 100 })).json;
+  const quick = (await call("POST", "/bookings", { service: "parcel", title: "x", subtitle: "x", payment: "upi", lines: [], quoteId: quickQuote.id,
+    receiver: { name: "Counter Receiver", phone: "9000000002" }, contents: "Counter test note", declaration: options.declaration.version }, sender)).json;
+
+  // The sweep
+  const allowed = new Set(["POST /admin/auth/login", "POST /admin/auth/logout", "GET /admin/auth/me", "GET /admin/parcels", "GET /admin/parcels/:id", "POST /admin/parcels/:id/legs/:seq"]);
+  const routes = adminRoutes().filter((r) => !allowed.has(`${r.method} ${r.path}`));
+  check("counter: the sweep found the admin routes", routes.length >= 50, routes.length);
+  const open = [];
+  for (const r of routes) {
+    const path = r.path.replace(":kind", "parcelCounter").replace(":id", b.id).replace(/:\w+/g, "x");
+    const res = await call(r.method, path, r.method === "GET" ? undefined : {}, from.token);
+    if (res.status !== 403) open.push(`${r.method} ${r.path} ${res.status}`);
+  }
+  check(`counter: refused on all ${routes.length} other admin routes`, !open.length, open.join(", "));
+  for (const kind of ["offer", "driver", "parcelRate"]) await expect(`counter: no ${kind} catalog`, call("GET", `/admin/catalog/${kind}`, null, from.token), 403);
+
+  // What it sees
+  const seen = (token, query = "") => call("GET", `/admin/parcels?state=all&${query}`, null, token);
+  await expect("counter: the sending city lists it", seen(from.token, `q=${b.id}`), 200, (j) => j.total === 1);
+  await expect("counter: the collecting city lists it", seen(to.token, `q=${b.id}`), 200, (j) => j.total === 1);
+  await expect("counter: another city doesn't", seen(elsewhere.token, `q=${b.id}`), 200, (j) => j.total === 0);
+  await expect("counter: a city filter can't widen it", seen(elsewhere.token, "city=Coimbatore"), 200,
+    (j) => j.items.every((x) => x.from === "Madurai" || x.to === "Madurai"));
+  await expect("counter: a phone search can't widen it", seen(elsewhere.token, "q=9000000002"), 200, (j) => j.items.every((x) => x.from === "Madurai" || x.to === "Madurai"));
+  await expect("counter: no Quick parcels", seen(from.token, `q=${quick.id}`), 200, (j) => j.total === 0);
+  await expect("counter: a Quick parcel is 404", call("GET", `/admin/parcels/${quick.id}`, null, from.token), 404);
+  await expect("counter: another city's parcel is 404", call("GET", `/admin/parcels/${b.id}`, null, elsewhere.token), 404);
+  await expect("counter: its parcel, without a refund preview or a code", call("GET", `/admin/parcels/${b.id}`, null, from.token), 200,
+    (j) => j.refundIfCancelled === null && j.collectOtp === null && j.receiver.name === "Counter Receiver");
+
+  // What it does
+  const move = (token, seq, body, id = b.id) => call("POST", `/admin/parcels/${id}/legs/${seq}`, body, token);
+  await expect("counter: another city can't move it", move(elsewhere.token, 0, { to: "active" }), 404);
+  await expect("counter: can't move a Quick parcel", move(from.token, 0, { to: "active" }, quick.id), 404);
+  await expect("counter: the collecting end can't receive", move(to.token, 0, { to: "active" }), 403);
+  await expect("counter: the collecting end can't refuse", move(to.token, 0, { to: "failed", note: "Not its call" }), 403);
+  await expect("counter: receive", move(from.token, 0, { to: "active" }), 200, (j) => j.state === "at_counter" && j.refundIfCancelled === null);
+  await expect("counter: the collecting end can't load", move(to.token, 1, { to: "active" }), 403);
+  await expect("counter: load", move(from.token, 1, { to: "active" }), 200, (j) => j.state === "on_bus");
+  await expect("counter: the sending end can't mark it reached", move(from.token, 1, { to: "done" }), 403);
+  await expect("counter: reached", move(to.token, 1, { to: "done" }), 200);
+  await expect("counter: the sending end can't shelve it", move(from.token, 2, { to: "active" }), 403);
+  await expect("counter: ready", move(to.token, 2, { to: "active" }), 200, (j) => j.state === "ready" && j.collectOtp === null);
+  const code = (await call("GET", `/bookings/${b.id}/parcel`, null, sender)).json.collectOtp;
+  for (let i = 0; i < 6; i++) await move(from.token, 2, { to: "done", otp: code === "111111" ? "222222" : "111111" });
+  await expect("counter: the other end can't even use up the code's tries", move(to.token, 2, { to: "done", otp: code }), 200, (j) => j.state === "collected");
+  await expect("counter: audited as that person", call("GET", `/admin/audit?entity=booking&entityId=${b.id}`, null, T), 200,
+    (j) => j.items.filter((a) => a.action === "parcel.move").length === 5);
+
+  const refused = await book();
+  await expect("counter: the sending end refuses on sight", move(from.token, 0, { to: "failed", note: "Contains a gas cylinder" }, refused.id), 200, (j) => j.state === "cancelled");
+
+  // Changing the account
+  await expect("counter: moved to another city", call("PATCH", `/admin/team/${from.id}`, { counter: { operatorId: "bo1", city: "Trichy" } }, T), 200, (j) => j.counter.city === "Trichy");
+  await expect("counter: which ends its session", call("GET", "/admin/auth/me", null, from.token), 401);
+  const again = (await login(from)).json.token;
+  await expect("counter: and its old city's parcels are gone", call("GET", `/admin/parcels/${b.id}`, null, again), 404);
+  await expect("counter: to operations needs no counter", call("PATCH", `/admin/team/${to.id}`, { role: "operations" }, T), 200, (j) => j.role === "operations" && !j.counter);
+  await expect("counter: and back needs one", call("PATCH", `/admin/team/${to.id}`, { role: "counter" }, T), 400);
+  for (const a of [from, to, elsewhere]) await call("PATCH", `/admin/team/${a.id}`, { disabled: true }, T);
+  await expect("counter: disabled can't sign in", login(elsewhere), 403);
 }
 
 /** Operations: another bus, the weight at the counter, returns, the dashboard and the export. */
@@ -1417,6 +1531,7 @@ if (LOCAL) {
     await expect("unclaimed can't be handed over", move(u.id, 2, { to: "done", otp: "123456" }), 409);
 
     await parcelOpsChecks({ before, options, base, newPhone, contentStaff });
+    await counterChecks({ options, base, newPhone });
 
     await expect("a counter needs a real operator", call("POST", "/admin/catalog/parcelCounter", { data: { operatorId: "nope", city: "Chennai", name: "X", address: "Y", hours: "9-5", phone: "1800 123 4567" } }, T), 400);
     await expect("a counter needs a listed city", call("POST", "/admin/catalog/parcelCounter", { data: { operatorId: "bo1", city: "Salem", name: "X", address: "Y", hours: "9-5", phone: "1800 123 4567" } }, T), 400);

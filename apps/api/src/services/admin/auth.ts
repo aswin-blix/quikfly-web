@@ -1,6 +1,6 @@
 // Staff sign-in: email + password, lockout after repeated failures, bearer sessions
 // (hash stored, like customer sessions). Accounts are created by scripts/create-admin.mjs.
-import { ADMIN_RULES, type AdminLoginResult, type AdminRole, type AdminUser } from "@quikfly/shared";
+import { ADMIN_RULES, type AdminLoginResult, type AdminRole, type AdminUser, type CounterScope } from "@quikfly/shared";
 import { forbidden, tooMany, unauthorized } from "../../lib/errors";
 import { hashPassword, verifyPassword } from "../../lib/password";
 import { randomToken, sha256 } from "../../lib/random";
@@ -10,10 +10,24 @@ export interface AdminRow {
   failed_logins: number; locked_until: number | null; last_login_at: string | null; created_at: string;
   /** Set when an owner disabled the account (admin → Team). */
   disabled_at?: string | null;
+  /** JSON CounterScope, for role "counter" (migration 0030). */
+  scope?: string | null;
+}
+
+/** A counter account's scope. Anything else, or anything unreadable, is null: it then sees nothing. */
+export function counterScope(role: AdminRole, json: string | null | undefined): CounterScope | null {
+  if (role !== "counter" || !json) return null;
+  try {
+    const s = JSON.parse(json) as Partial<CounterScope> | null;
+    return s?.operatorId && s.city ? { operatorId: String(s.operatorId), city: String(s.city) } : null;
+  } catch {
+    return null;
+  }
 }
 
 export const toAdmin = (r: AdminRow): AdminUser => ({
   id: r.id, email: r.email, name: r.name, role: r.role, lastLoginAt: r.last_login_at, createdAt: r.created_at,
+  counter: counterScope(r.role, r.scope),
 });
 
 const BAD_LOGIN = "Email or password is incorrect.";

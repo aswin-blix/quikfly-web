@@ -541,6 +541,27 @@ export function staffMoves(legs: ParcelLeg[], holdUntil: string | null, now = Da
   return [...moves.filter((m) => !m.refuses), ...moves.filter((m) => m.refuses)];
 }
 
+/** A counter login works for one operator in one city. */
+export interface CounterScope {
+  operatorId: string;
+  city: string;
+}
+
+/**
+ * Whether that counter makes this move: the sending counter receives, refuses and loads; the
+ * collecting one takes it off the bus, shelves it, hands it over and marks it unclaimed. No
+ * counter touches a captain's leg.
+ */
+export function counterMakesMove(scope: CounterScope, p: { from: string; to: string; legs: ParcelLeg[] }, seq: number, to: ParcelLegState): boolean {
+  const index = p.legs.findIndex((l) => l.seq === seq);
+  const bus = p.legs.findIndex((l) => l.kind === "bus");
+  if (index < 0 || bus < 0) return false;
+  const leg = p.legs[index];
+  if (leg.kind === "bike" || leg.operatorId !== scope.operatorId) return false;
+  const sending = index < bus || (index === bus && to === "active");
+  return (sending ? p.from : p.to).toLowerCase() === scope.city.toLowerCase();
+}
+
 /** The states a parcel passes through when nothing goes wrong, for timelines. */
 export const PARCEL_JOURNEY: readonly ParcelState[] = ["booked", "at_counter", "on_bus", "reached", "ready", "collected"];
 export const PARCEL_CITY_JOURNEY: readonly ParcelState[] = ["booked", "in_transit", "delivered"];
