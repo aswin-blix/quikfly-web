@@ -16,7 +16,7 @@ import { useLoad } from "@/lib/useLoad";
 
 const HISTORY_LABEL: Record<string, string> = {
   "booking.cancel": "Cancelled", "booking.complete": "Marked completed", "rental.settle": "Deposit settled",
-  "parcel.move": "Moved the parcel", "parcel.refuse": "Refused the parcel", "parcel.code_wrong": "Wrong receiver's code",
+  "parcel.move": "Moved the parcel", "parcel.bus": "Changed the parcel's bus", "parcel.weight": "Corrected the parcel's weight", "parcel.refuse": "Refused the parcel", "parcel.code_wrong": "Wrong receiver's code",
 };
 const KIND_LABEL: Record<string, string> = { payment: "Paid from wallet", refund: "Refunded to wallet", welcome: "Welcome credit", referral: "Referral", opening: "Opening balance", adjustment: "Adjusted by staff" };
 

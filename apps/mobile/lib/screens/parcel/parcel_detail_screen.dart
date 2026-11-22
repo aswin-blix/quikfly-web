@@ -138,11 +138,11 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> with Po
         const SizedBox(height: 12),
       ],
       if (p.state == 'returned') ...[
-        const ErrorBox("The captain couldn't deliver it and brought it back to you. The fare isn't refunded."),
+        const ErrorBox("It's coming back to you. What you paid to send it isn't refunded."),
         const SizedBox(height: 12),
       ],
       if (p.state == 'unclaimed') ...[
-        const ErrorBox("Nobody collected it within the hold period. Use Get help and we'll agree how it comes back to you."),
+        ErrorBox('Nobody collected it within the hold period. To get it back, book a bus parcel from ${p.to} to ${p.from} with yourself as the receiver, then send its LR number through Get help.'),
         const SizedBox(height: 12),
       ],
       Panel(child: ParcelTimeline(city: p.city, state: p.state, events: p.events, departAt: p.departAt, readyAt: p.readyAt)),

@@ -68,14 +68,16 @@ export function ParcelScreen() {
 
   const initialBus = initial?.request.mode === "intercity" ? initial.request : null;
   const initialCity = initial?.request.mode === "city" ? initial.request : null;
-  const wantsCity = useQuery().get("mode") === "city";
+  const query = useQuery();
+  const wantsCity = query.get("mode") === "city";
   const [mode, setMode] = useState<ParcelMode>(initial?.request.mode ?? (wantsCity ? "city" : "intercity"));
   const inCity = mode === "city";
   const [pickup, setPickup] = useState<Place | null>(null);
   const [drop, setDrop] = useState<Place | null>(null);
   const [saved, setSaved] = useState<SavedPlace[]>([]);
-  const [from, setFrom] = useState(initialBus?.from ?? "Chennai");
-  const [to, setTo] = useState(initialBus?.to ?? "Coimbatore");
+  // ?from=&to=: a return, booked from an unclaimed parcel.
+  const [from, setFrom] = useState(initialBus?.from ?? query.get("from") ?? "Chennai");
+  const [to, setTo] = useState(initialBus?.to ?? query.get("to") ?? "Coimbatore");
   const [options, setOptions] = useState<ParcelOptions | null>(null);
   const [optionsError, setOptionsError] = useState("");
   const [attempt, setAttempt] = useState(0);

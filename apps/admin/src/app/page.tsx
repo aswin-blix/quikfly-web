@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, IdCard, KeyRound, Siren, UserMinus } from "lucide-react";
+import { ArrowRight, IdCard, KeyRound, Package, PackageCheck, PackageX, Siren, Truck, UserMinus } from "lucide-react";
 import type { AdminStats } from "@quikfly/shared";
 import { BarList, ColumnChart } from "@/components/charts";
 import { Badge, Empty, ErrorBox, PageHeader, Segmented } from "@/components/ui";
@@ -33,13 +33,13 @@ function StatSkeleton() {
   return <div className="card p-4"><div className="skeleton h-4 w-24" /><div className="skeleton h-7 w-28 mt-2" /></div>;
 }
 
-function Queue({ icon: Icon, label, count, href }: { icon: typeof IdCard; label: string; count: number; href?: string }) {
+function Queue({ icon: Icon, label, count, href, note }: { icon: typeof IdCard; label: string; count: number; href?: string; note?: string }) {
   const body = (
     <>
       <span className={cx("size-9 grid place-items-center rounded-full", count ? "bg-warning/10 text-warning" : "bg-raised text-subtle")}><Icon size={18} /></span>
       <span className="flex-1 min-w-0">
         <span className="block text-sm text-fg">{label}</span>
-        <span className="block text-xs text-subtle">{count ? "Waiting for action" : "Nothing waiting"}</span>
+        <span className="block text-xs text-subtle">{note ?? (count ? "Waiting for action" : "Nothing waiting")}</span>
       </span>
       <span className="text-xl font-semibold text-strong tabular-nums">{count}</span>
       {href && <ArrowRight size={16} className="text-subtle" />}
@@ -49,6 +49,9 @@ function Queue({ icon: Icon, label, count, href }: { icon: typeof IdCard; label:
     ? <Link href={href} className="card p-4 flex items-center gap-3 hover:border-line-strong transition-colors">{body}</Link>
     : <div className="card p-4 flex items-center gap-3">{body}</div>;
 }
+
+/** Today in India, as the parcels queue's date filter takes it. */
+const indiaToday = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
 
 function Dashboard({ s }: { s: AdminStats }) {
   const [metric, setMetric] = useState<"revenue" | "bookings">("revenue");
@@ -102,6 +105,18 @@ function Dashboard({ s }: { s: AdminStats }) {
           <p className="text-xs text-subtle mt-1">Money QuikFly owes customers right now</p>
         </div>
       </div>
+
+      {can("parcels.manage") && s.queues.parcelsToday !== undefined && (
+        <section className="mt-3" aria-label="Parcels">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <Queue icon={Package} label="Parcels today" note="By bus date, or booking date for Quick" count={s.queues.parcelsToday}
+              href={`/parcels?state=all&date=${indiaToday()}`} />
+            <Queue icon={Truck} label="Parcels on the bus" note="On the way" count={s.queues.parcelsOnBus ?? 0} href="/parcels?state=on_bus" />
+            <Queue icon={PackageCheck} label="Ready for collection" note="At the counter" count={s.queues.parcelsReady ?? 0} href="/parcels?state=ready" />
+            <Queue icon={PackageX} label="Unclaimed parcels" count={s.queues.parcelsUnclaimed ?? 0} href="/parcels?state=unclaimed" />
+          </div>
+        </section>
+      )}
 
       <section className="card mt-3" aria-labelledby="recent-title">
         <div className="flex items-center justify-between px-5 pt-5 pb-3">

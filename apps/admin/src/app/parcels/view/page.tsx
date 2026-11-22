@@ -4,7 +4,8 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, RefreshCw, XCircle } from "lucide-react";
-import { PARCEL_STATE_LABEL, parcelBandLabel, type AdminParcel, type StaffMove } from "@quikfly/shared";
+import { PARCEL_STATE_LABEL, canReweigh, parcelBandLabel, type AdminParcel, type StaffMove } from "@quikfly/shared";
+import { BusDialog, ReturnDialog, WeightDialog } from "@/components/ParcelChangeDialogs";
 import { ParcelMoveDialog } from "@/components/ParcelMoveDialog";
 import { ReasonDialog } from "@/components/ReasonDialog";
 import { Badge, Button, ErrorBox, PageHeader } from "@/components/ui";
@@ -33,6 +34,7 @@ function Detail({ id }: { id: string }) {
   const { data, setData, error, loading, reload } = useLoad(() => adminApi.parcels.get(id), [id]);
   const [move, setMove] = useState<StaffMove | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [change, setChange] = useState<"bus" | "weight" | "return" | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [notice, setNotice] = useState("");
@@ -41,7 +43,7 @@ function Detail({ id }: { id: string }) {
     setBusy(true); setActionError(""); setNotice("");
     try {
       const next = await change();
-      setData(next); setMove(null); setCancelling(false); setNotice(done(next));
+      setData(next); setMove(null); setCancelling(false); setChange(null); setNotice(done(next));
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Couldn't update the parcel.");
       // Someone else or the simulation may have moved it: show where it is now.
@@ -51,7 +53,8 @@ function Detail({ id }: { id: string }) {
     }
   };
   const open = (m: StaffMove) => { setActionError(""); setNotice(""); setMove(m); };
-  const close = () => { setMove(null); setCancelling(false); setActionError(""); };
+  const close = () => { setMove(null); setCancelling(false); setChange(null); setActionError(""); };
+  const openChange = (c: "bus" | "weight" | "return") => { setActionError(""); setNotice(""); setChange(c); };
 
   if (!data) return error ? <ErrorBox message={error} onRetry={reload} /> : <div className="card p-6 grid gap-3">{[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-10" />)}</div>;
   const p = data;
@@ -92,9 +95,18 @@ function Detail({ id }: { id: string }) {
               </div>
             ) : (
               <p className="text-sm text-muted mt-3">
-                {p.state === "unclaimed" ? "Nobody collected it. Agree the return with the sender by phone: return bookings aren't built yet." : "Nothing left to do."}
+                {p.state === "unclaimed"
+                  ? `Nobody collected it. Ask the sender to book a bus parcel from ${p.to} to ${p.from}, then send this one back as that LR.`
+                  : "Nothing left to do."}
               </p>
             )}
+            {active && canReweigh(p) && (
+              <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-line">
+                <Button onClick={() => openChange("bus")}>Change the bus</Button>
+                <Button onClick={() => openChange("weight")}>Correct the weight</Button>
+              </div>
+            )}
+            {active && p.state === "unclaimed" && <Button variant="primary" className="mt-3" onClick={() => openChange("return")}>Send back to the sender</Button>}
             {active && p.state === "ready" && p.holdUntil && Date.parse(p.holdUntil) > Date.now() && (
               <p className="text-xs text-subtle mt-3">It can be marked unclaimed from {dateTime(p.holdUntil)}.</p>
             )}
@@ -152,6 +164,18 @@ function Detail({ id }: { id: string }) {
         <ParcelMoveDialog key={`${move.seq}-${move.to}`} move={move} busy={busy} error={actionError} onCancel={close}
           onConfirm={(input) => run(() => adminApi.parcels.move(p.bookingId, move.seq, { to: move.to, ...input }),
             (next) => (move.refuses ? "Refused. The sender gets a full refund." : `Done: ${PARCEL_STATE_LABEL[next.state].toLowerCase()}.`))} />
+      )}
+      {change === "bus" && (
+        <BusDialog parcel={p} busy={busy} error={actionError} onCancel={close}
+          onConfirm={(body) => run(() => adminApi.parcels.changeBus(p.bookingId, body), () => "Moved to the other bus. The sender is told.")} />
+      )}
+      {change === "weight" && (
+        <WeightDialog parcel={p} busy={busy} error={actionError} onCancel={close}
+          onConfirm={(body) => run(() => adminApi.parcels.changeWeight(p.bookingId, body), () => "Weight corrected. The sender is told.")} />
+      )}
+      {change === "return" && (
+        <ReturnDialog parcel={p} busy={busy} error={actionError} onCancel={close}
+          onConfirm={(lr) => run(() => adminApi.parcels.sendBack(p.bookingId, lr), () => "Closed as returned. It travels as the sender's return parcel.")} />
       )}
       <ReasonDialog open={cancelling} title="Cancel this parcel?" confirmLabel="Cancel parcel" busy={busy} error={actionError}
         label="Reason (the sender sees it; kept in the audit log)" placeholder="e.g. The sender asked by phone"
