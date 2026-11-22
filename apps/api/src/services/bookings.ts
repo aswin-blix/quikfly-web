@@ -1,4 +1,4 @@
-import { type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
+import { PARCEL_NOT_CANCELLABLE, type ParcelState, type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visibleById } from "./catalog";
@@ -9,6 +9,8 @@ import { getSettings } from "./settings";
 import { notify } from "./notifications";
 import { creditExpiry, earnStatement, earnedNotice, spendPlan } from "./credits";
 import { settlementStatements } from "./partner-trips";
+import { CANCELLABLE_SQL, cancelParcelStatements } from "./parcels/legs";
+import { newParcel, parcelStates } from "./parcels/parcels";
 
 export interface BookingRow {
   id: string; user_id: string; service: ServiceKey; title: string; subtitle: string; amount: number;
@@ -20,13 +22,13 @@ export interface BookingRow {
   rescheduled_at: string | null; ticket_token: string | null; terms: string | null;
 }
 /** `seats`: the bus seats it holds (bookingSeats); left empty where a caller doesn't need them. */
-export const toBooking = (r: BookingRow, seats: BookingSeat[] = [], rentalState: RentalState | null = null): Booking => ({
+export const toBooking = (r: BookingRow, seats: BookingSeat[] = [], rentalState: RentalState | null = null, parcelState: ParcelState | null = null): Booking => ({
   id: r.id, service: r.service, title: r.title, subtitle: r.subtitle, amount: r.amount,
   status: r.status, payment: r.payment, createdAt: r.created_at, lines: JSON.parse(r.lines),
   startsAt: r.starts_at ?? null, refundAmount: r.refund_amount ?? null, deposit: r.deposit ?? 0,
   cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0, rideId: r.ride_id ?? null, tripId: r.trip_id ?? null,
   creditsUsed: r.credits_used ?? 0, discount: r.discount ?? 0, seats,
-  ticketToken: r.ticket_token ?? null, rescheduledAt: r.rescheduled_at ?? null, rentalState, terms: parseTerms(r.terms),
+  ticketToken: r.ticket_token ?? null, rescheduledAt: r.rescheduled_at ?? null, rentalState, parcelState, terms: parseTerms(r.terms),
 });
 
 /** Where a rental is, from its row (packages/shared/src/rental.ts). */
@@ -65,14 +67,16 @@ export async function listBookings(db: D1Database, userId: string) {
     .bind(userId).all<BookingRow>();
   const seats = await bookingSeats(db, results.filter((r) => r.service === "bus" && r.status !== "cancelled").map((r) => r.id));
   const rentals = await rentalStates(db, results.filter((r) => r.service === "rent").map((r) => r.id));
-  return results.map((r) => toBooking(r, seats.get(r.id), rentals.get(r.id) ?? null));
+  const parcels = await parcelStates(db, results.filter((r) => r.service === "parcel").map((r) => r.id));
+  return results.map((r) => toBooking(r, seats.get(r.id), rentals.get(r.id) ?? null, parcels.get(r.id) ?? null));
 }
 
 export async function getBooking(db: D1Database, userId: string, id: string): Promise<Booking> {
   const row = await db.prepare("SELECT * FROM bookings WHERE id = ? AND user_id = ?").bind(id, userId).first<BookingRow>();
   if (!row) throw notFound("Booking not found.");
   const rental = row.service === "rent" ? (await rentalStates(db, [id])).get(id) ?? null : null;
-  return toBooking(row, (await bookingSeats(db, [id])).get(id), rental);
+  const parcel = row.service === "parcel" ? (await parcelStates(db, [id])).get(id) ?? null : null;
+  return toBooking(row, (await bookingSeats(db, [id])).get(id), rental, parcel);
 }
 
 /** What a booking costs before any coupon (the ride's fare, or the quote's total) and when it starts. */
@@ -83,7 +87,7 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
     // A ride's fare is held like a quote: an unbooked ride can't be booked later at an old (e.g. off-peak) fare.
     if (Date.now() - Date.parse(createdAt) > QUOTE_TTL_MINUTES * 60_000) throw conflict(`Fares are held for ${QUOTE_TTL_MINUTES} minutes and this one has expired. Please check the fare again.`);
     if (ride.quote.option.service !== input.service) throw badRequest("That ride is for a different service.");
-    return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: ride.scheduledFor ?? null, deposit: 0, seatHolds: null, departure: null, rental: null };
+    return { gross: ride.quote.fare, quoteId: null, rideId: ride.id, startsAt: ride.scheduledFor ?? null, deposit: 0, seatHolds: null, departure: null, rental: null, parcel: null };
   }
   if (!input.quoteId) throw badRequest('"quoteId" is required. Get a price from POST /quotes first.');
   const q = await usableQuote(db, input.quoteId, input.service);
@@ -108,7 +112,8 @@ async function grossPrice(db: D1Database, userId: string, input: NewBooking) {
       damageExcess: rentExcess(settings, req.protection),
     };
   }
-  return { gross: q.total, quoteId: q.id, rideId: null, startsAt: q.starts_at, deposit, seatHolds, departure, rental };
+  const parcel = req.service === "parcel" ? await newParcel(db, userId, req, input) : null;
+  return { gross: q.total, quoteId: q.id, rideId: null, startsAt: q.starts_at, deposit, seatHolds, departure, rental, parcel };
 }
 
 /**
@@ -121,7 +126,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   const settings = await getSettings(db);
   const off = switchError(settings, { service: input.service, tripOf: input.tripOf });
   if (off) throw conflict(off);
-  const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit, seatHolds, departure, rental } = await grossPrice(db, userId, input);
+  const { gross, quoteId, rideId, startsAt, deposit: quotedDeposit, seatHolds, departure, rental, parcel } = await grossPrice(db, userId, input);
   // Joining a trip: the other booking must be the customer's own and not cancelled.
   let tripId: string | null = null;
   if (input.tripOf) {
@@ -157,13 +162,13 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
       .bind(rideId).first<{ vendor_vehicle_id: string | null; vendor_driver_id: string | null; vendor_id: string | null }>()
     : null;
   const lines: [string, string][] = [
-    ...input.lines.filter(([k]) => k !== COUPON_LINE && k !== CREDITS_LINE),
+    ...(parcel?.lines ?? input.lines).filter(([k]) => k !== COUPON_LINE && k !== CREDITS_LINE),
     ...(coupon ? [[COUPON_LINE, `${coupon.code} (−₹${coupon.discount.toLocaleString("en-IN")})`] as [string, string]] : []),
     ...(creditsUsed ? [[CREDITS_LINE, `−₹${creditsUsed.toLocaleString("en-IN")}`] as [string, string]] : []),
   ];
-  const booking: Booking = { id, service: input.service, title: input.title, subtitle: input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0, rideId, tripId, creditsUsed,
+  const booking: Booking = { id, service: input.service, title: parcel?.title ?? input.title, subtitle: parcel?.subtitle ?? input.subtitle, amount, status: "confirmed", payment: input.payment, lines, createdAt, startsAt, refundAmount: null, deposit, cancelReason: null, cancelFee: 0, rideId, tripId, creditsUsed,
     discount: coupon?.discount ?? 0, seats: seatHolds?.seats.map((x) => ({ id: x.seat, price: x.price, gender: x.gender })) ?? [],
-    ticketToken: seatHolds ? ticketToken() : null, rescheduledAt: null, rentalState: rental ? "booked" : null, terms };
+    ticketToken: seatHolds ? ticketToken() : null, rescheduledAt: null, rentalState: rental ? "booked" : null, parcelState: parcel ? "booked" : null, terms };
   const wallet = input.payment === "wallet";
 
   const conditions: string[] = [];
@@ -229,6 +234,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
        SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?)`,
     ).bind(id, rental.start, rental.end, rental.kmPlan, rental.hourlyRate, rental.protectionPerDay, rental.damageExcess, createdAt, id));
   }
+  if (parcel) statements.push(...parcel.statements(id, createdAt));
   // The booking the trip started from joins it too (only if this booking went in).
   if (input.tripOf) {
     statements.push(db.prepare("UPDATE bookings SET trip_id = COALESCE(trip_id, id) WHERE id = ? AND user_id = ? AND EXISTS (SELECT 1 FROM bookings WHERE id = ?)")
@@ -266,9 +272,10 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
 
 /** Explains why an active-only update matched nothing. */
 async function notActive(db: D1Database, userId: string, id: string): Promise<never> {
-  const row = await db.prepare("SELECT status FROM bookings WHERE id = ? AND user_id = ?").bind(id, userId)
-    .first<{ status: BookingStatus }>();
+  const row = await db.prepare("SELECT service, status FROM bookings WHERE id = ? AND user_id = ?").bind(id, userId)
+    .first<{ service: ServiceKey; status: BookingStatus }>();
   if (!row) throw notFound("Booking not found.");
+  if (row.service === "parcel" && row.status === "ongoing") throw conflict(PARCEL_NOT_CANCELLABLE);
   throw conflict(`This booking is already ${row.status}.`);
 }
 
@@ -303,42 +310,48 @@ export async function refundFor(
  * Cancels an active booking and, in the same transaction, refunds a wallet payment: the
  * part the cancellation policy allows for the notice given (all of it when there is no
  * policy or no start time). `userId` null = any customer's booking (admin); the refund
- * goes to the booking's owner. Returns null when the booking isn't active (or isn't theirs).
+ * goes to the booking's owner. Returns null when the booking isn't active (or isn't theirs), or
+ * is a parcel already on its way. `refusal`: staff refused a parcel on sight, so all of it comes back.
  */
-export async function cancelBookingRow(db: D1Database, userId: string | null, id: string, refundNote = "Refund", reason: string | null = null): Promise<BookingRow | null> {
+export async function cancelBookingRow(db: D1Database, userId: string | null, id: string, refundNote = "Refund", reason: string | null = null, refusal?: { adminId: string; note: string }): Promise<BookingRow | null> {
   // ?1 = booking id, ?2 = owner, or null for staff (any customer's booking)
   const owner = "AND (?2 IS NULL OR user_id = ?2)";
   const ids = [id, userId];
-  const row = await db.prepare(`SELECT * FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE}`).bind(...ids).first<BookingRow>();
+  // Still cancellable: active and, for a parcel, not on the bus.
+  const open = `status IN ${ACTIVE} AND ${CANCELLABLE_SQL}`;
+  const row = await db.prepare(`SELECT * FROM bookings WHERE id = ?1 ${owner} AND ${open}`).bind(...ids).first<BookingRow>();
   if (!row) return null;
   // A customer cancelling a ride may owe the cancellation fee; staff never charge one.
-  const refund = await refundFor(db, row, userId === null ? undefined : { reason });
+  const refund = refusal ? { percent: 100, amount: row.amount, fee: 0 } : await refundFor(db, row, userId === null ? undefined : { reason });
   const credit = row.payment === "wallet" ? refund.amount : 0;
   const detail = refund.fee ? ` (less ₹${refund.fee} cancellation fee)` : refund.percent < 100 ? ` (${refund.percent}%${row.deposit ? ", deposit in full" : ""})` : "";
   const note = `${refundNote}${detail} · ${row.title}`;
   // Credits paid come back in the same share as the refund, with a fresh expiry.
   const creditsBack = creditsReturned(row.credits_used ?? 0, refund.percent);
   const creditsExpire = creditExpiry(await getSettings(db));
+  const parcelClose = row.service === "parcel" ? cancelParcelStatements(db, id, refusal) : [];
   // Every statement re-checks that the booking is still active, so a race can't pay twice.
   const results = await db.batch([
     db.prepare(
       `UPDATE users SET wallet_balance = wallet_balance + ?3
-       WHERE id = ?4 AND ?3 > 0 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE})`,
+       WHERE id = ?4 AND ?3 > 0 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND ${open})`,
     ).bind(...ids, credit, row.user_id),
     db.prepare(
       `INSERT INTO wallet_transactions (id, user_id, kind, amount, note, booking_id, created_at)
-       SELECT ?3, ?4, 'refund', ?5, ?6, ?1, ?7 WHERE ?5 > 0 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE})`,
+       SELECT ?3, ?4, 'refund', ?5, ?6, ?1, ?7 WHERE ?5 > 0 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND ${open})`,
     ).bind(...ids, uid("WT"), row.user_id, credit, note, new Date().toISOString()),
     db.prepare(
       `INSERT INTO credits (id, user_id, kind, amount, remaining, expires_at, booking_id, note, created_at)
-       SELECT ?3, ?4, 'returned', ?5, ?5, ?6, ?1, ?7, ?8 WHERE ?5 > 0 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE})`,
+       SELECT ?3, ?4, 'returned', ?5, ?5, ?6, ?1, ?7, ?8 WHERE ?5 > 0 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND ${open})`,
     ).bind(...ids, uid("CR"), row.user_id, creditsBack, creditsExpire, `Returned · ${row.title}`, new Date().toISOString()),
     // Release any bus seats so they can be sold again.
-    db.prepare(`DELETE FROM bus_seat_holds WHERE booking_id = ?1 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND status IN ${ACTIVE})`).bind(...ids),
-    db.prepare(`UPDATE bookings SET status = 'cancelled', refund_amount = ?3, cancel_reason = ?4, cancel_fee = ?5 WHERE id = ?1 ${owner} AND status IN ${ACTIVE} RETURNING *`)
+    db.prepare(`DELETE FROM bus_seat_holds WHERE booking_id = ?1 AND EXISTS (SELECT 1 FROM bookings WHERE id = ?1 ${owner} AND ${open})`).bind(...ids),
+    db.prepare(`UPDATE bookings SET status = 'cancelled', refund_amount = ?3, cancel_reason = ?4, cancel_fee = ?5 WHERE id = ?1 ${owner} AND ${open} RETURNING *`)
       .bind(...ids, refund.amount, reason, refund.fee),
+    // After the booking's update: a parcel is closed only if the booking was.
+    ...parcelClose,
   ]);
-  return (results[results.length - 1].results as BookingRow[])[0] ?? null;
+  return (results[results.length - 1 - parcelClose.length].results as BookingRow[])[0] ?? null;
 }
 
 export async function cancelBooking(db: D1Database, userId: string, id: string, reason: string | null = null): Promise<Booking> {
@@ -347,7 +360,7 @@ export async function cancelBooking(db: D1Database, userId: string, id: string, 
   const row = await cancelBookingRow(db, userId, id, "Refund", reason);
   if (!row) return notActive(db, userId, id);
   await notify(db, userId, { kind: "booking.cancelled", ref: id, bookingId: id, title: `Cancelled · ${row.title}`, body: refundText(row) });
-  return toBooking(row);
+  return toBooking(row, [], null, row.service === "parcel" ? "cancelled" : null);
 }
 
 /**
@@ -392,7 +405,8 @@ export async function completeBookingRow(
   settle?: { depositBack: number; note: string; statements: (stillActive: string) => D1PreparedStatement[] },
 ): Promise<BookingRow | null> {
   const row = await db.prepare(`SELECT * FROM bookings WHERE id = ?1 AND status IN ${ACTIVE}`).bind(id).first<BookingRow>();
-  if (!row) return null;
+  // A parcel is completed only by its hand-over (parcels/carriers.ts), never around the collection code.
+  if (!row || row.service === "parcel") return null;
   const deposit = settle ? Math.min(settle.depositBack, row.deposit ?? 0) : row.deposit ?? 0;
   const credit = row.payment === "wallet" ? deposit : 0;
   const stillActive = `EXISTS (SELECT 1 FROM bookings WHERE id = ?1 AND status IN ${ACTIVE})`;

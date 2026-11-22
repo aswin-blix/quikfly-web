@@ -2,9 +2,10 @@
 // to quote and to charge. The website's offline demo (mock API) runs the same code so demo
 // prices match. Inputs are catalog items and Settings; nothing here reads a database or clock
 // except through its arguments.
+import { PARCEL_RULES, parcelBandLabel, parseBandExtras, type ParcelCounter, type ParcelDeparture, type ParcelRate, type ParcelWeightBand } from "./parcel";
 import { effectiveSurge, gstRate, inHourRanges, parseSurgeHours, type Settings } from "./settings";
 import type {
-  Bus, BusRoute, FareDate, FareLine, FareQuote, Gender, GroupTrip, Offer, Place, RentalCar, RideOption, Seat, SeatHold, ServiceKey, SurgeRule, TourPackage, TravelVehicle,
+  Bus, BusOperator, BusRoute, FareDate, FareLine, FareQuote, Gender, GroupTrip, Offer, Place, RentalCar, RideOption, Seat, SeatHold, ServiceKey, SurgeRule, TourPackage, TravelVehicle,
 } from "./types";
 
 /** Ride simulation: map distance → km, speeds, number plates. */
@@ -180,6 +181,80 @@ export function rideQuotes(
 export function rideDiscountRoom(settings: Settings, service: ServiceKey, fare: number) {
   if (service !== "bike" && service !== "car") return Infinity;
   return Math.floor((fare * settings.rideMaxDiscountPercent) / 100);
+}
+
+/* ───────────── Parcels ───────────── */
+
+/** An operator's tariff for a route, either direction, or null (the per-kg setting applies). */
+export function parcelRateFor(rates: ParcelRate[], operatorId: string, from: string, to: string): ParcelRate | null {
+  const a = from.trim().toLowerCase(), b = to.trim().toLowerCase();
+  return rates.find((r) => {
+    const f = r.from.trim().toLowerCase(), t = r.to.trim().toLowerCase();
+    return r.operatorId === operatorId && ((f === a && t === b) || (f === b && t === a));
+  }) ?? null;
+}
+
+const parcelGst = (subtotal: number, settings: Settings): FareLine => {
+  const pct = gstRate(settings, "parcel");
+  return { label: `GST (${pct}%)`, amount: Math.round((subtotal * pct) / 100) };
+};
+
+/** Bus parcel: the route's slab (or per kg on the band's weight), at least the minimum, then handling and GST. */
+export function priceParcelIntercity(rate: ParcelRate | null, band: ParcelWeightBand, settings: Settings): FareLine[] {
+  const slab = rate ? rate[`price${band}`] : settings.parcelIntercityPerKg * Number(band);
+  const freight = Math.max(settings.parcelIntercityMinCharge, slab);
+  const lines: FareLine[] = [{ label: `Bus parcel, ${parcelBandLabel(band)}`, amount: freight }];
+  if (settings.parcelHandlingFee) lines.push({ label: "Handling", amount: settings.parcelHandlingFee });
+  return [...lines, parcelGst(sumLines(lines), settings)];
+}
+
+/** Quick parcel: the bike's fare (rideQuotes, so surge, night and airport charges as for rides), the band's extra, GST. */
+export function priceParcelCity(fare: FareQuote, band: ParcelWeightBand, settings: Settings): FareLine[] {
+  const extra = parseBandExtras(settings.parcelCityBandExtra)?.[band] ?? 0;
+  const lines: FareLine[] = [{ label: `Quick parcel, ${fare.distanceKm} km${fare.surge > 1 ? ` (${fare.surge}× surge)` : ""}`, amount: fare.fare }];
+  if (extra) lines.push({ label: `Weight, ${parcelBandLabel(band)}`, amount: extra });
+  return [...lines, parcelGst(sumLines(lines), settings)];
+}
+
+/**
+ * Buses a parcel can still catch, soonest first: an operator's buses on the generated timetable,
+ * where that operator has a counter in both cities and the hand-in cut-off hasn't passed.
+ * `from` and `to` are city names as the catalog spells them (the timetable is seeded by them).
+ */
+export function parcelDepartures(
+  catalog: { operators: BusOperator[]; counters: ParcelCounter[]; rates: ParcelRate[] },
+  settings: Settings, from: string, to: string, now = Date.now(),
+): ParcelDeparture[] {
+  const { operators, counters, rates } = catalog;
+  const counterIn = (operatorId: string, city: string) =>
+    counters.find((c) => c.operatorId === operatorId && c.city.trim().toLowerCase() === city.toLowerCase());
+  const carriers = operators.flatMap((operator) => {
+    const fromCounter = counterIn(operator.id, from), toCounter = counterIn(operator.id, to);
+    return fromCounter && toCounter ? [{ operator, fromCounter, toCounter, rate: parcelRateFor(rates, operator.id, from, to) }] : [];
+  });
+  if (!carriers.length) return [];
+  const names = operators.map((o) => o.name);
+  const out: ParcelDeparture[] = [];
+  for (let day = 0; day < PARCEL_RULES.bookingDays; day++) {
+    const date = new Date(now + 330 * 60_000 + day * 86_400_000).toISOString().slice(0, 10);
+    for (const bus of generateBuses(names, settings, from, to, date)) {
+      const carrier = carriers.find((c) => c.operator.name === bus.operator);
+      if (!carrier) continue;
+      const departs = Date.parse(`${date}T${bus.depart}:00+05:30`);
+      const cutoff = departs - (carrier.rate?.cutoffMinutes ?? settings.parcelCutoffMinutes) * 60_000;
+      if (cutoff <= now) continue;
+      // "9h 30m": the bus's own journey time, unless the route's tariff sets one.
+      const [h, m] = bus.duration.match(/\d+/g)!.map(Number);
+      const transitHours = carrier.rate?.transitHours ?? h + (m ?? 0) / 60;
+      out.push({
+        busId: bus.id, date, from, to, operatorId: carrier.operator.id, operator: carrier.operator.name,
+        departAt: new Date(departs).toISOString(), cutoffAt: new Date(cutoff).toISOString(),
+        readyAt: new Date(departs + transitHours * 3_600_000).toISOString(),
+        fromCounter: carrier.fromCounter, toCounter: carrier.toCounter,
+      });
+    }
+  }
+  return out;
 }
 
 /* ───────────── Peak and festival dates ───────────── */

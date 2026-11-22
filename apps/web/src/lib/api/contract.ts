@@ -3,7 +3,7 @@ import type {
   ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
   WalletTransaction, AppNotification, CreditSummary, DataExport,
 } from "@quikfly/shared";
-import type { CallbackTime, FareLine, PublicTicket, Rental, RentalPhotoSide, RentalStage, RideCancelReason, SosReceipt, SosRequest, SupportTicket, SupportTopic, VendorApplication, VendorDocument, VendorSection } from "@quikfly/shared";
+import type { CallbackTime, FareLine, Parcel, ParcelOptions, PublicTracking, PublicTicket, Rental, RentalPhotoSide, RentalStage, RideCancelReason, SosReceipt, SosRequest, SupportTicket, SupportTopic, VendorApplication, VendorDocument, VendorSection } from "@quikfly/shared";
 
 /**
  * The single contract between the UI and the backend.
@@ -122,7 +122,7 @@ export interface QuikflyApi {
     travelVehicles(): Promise<TravelVehicle[]>;
   };
   quotes: {
-    /** POST /quotes: the API's price for a bus, holiday, self-drive or group booking. */
+    /** POST /quotes: the API's price for a bus, holiday, self-drive, group or parcel booking. */
     create(req: QuoteRequest): Promise<PriceQuote>;
   };
   offers: {
@@ -153,6 +153,15 @@ export interface QuikflyApi {
     cancelSeats(id: string, seatIds: string[]): Promise<Booking>;
     /** POST /bookings/:id/reschedule: bus tickets move once to a new bus quote on the same route; the difference is settled. */
     reschedule(id: string, change: { quoteId: string; subtitle: string; lines: [string, string][] }): Promise<{ booking: Booking; charged: number; refunded: number }>;
+  };
+  /** Parcels (packages/shared/src/parcel.ts): priced by quotes.create, booked by bookings.create. */
+  parcels: {
+    /** GET /parcels/options?from=&to=: buses still taking parcels, and the declaration to accept. */
+    options(from: string, to: string): Promise<ParcelOptions>;
+    /** GET /bookings/:id/parcel: the sender's parcel, with the collection code while it's ready. */
+    get(bookingId: string): Promise<Parcel>;
+    /** GET /track/:lr (public): the timeline, with first names only. */
+    track(lr: string): Promise<PublicTracking>;
   };
   tickets: {
     /** GET /tickets/:token (public): what a bus m-ticket's QR code shows. */

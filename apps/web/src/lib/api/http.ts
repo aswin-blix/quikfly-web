@@ -145,6 +145,11 @@ export const httpApi: QuikflyApi = {
     cancelSeats: (id, seatIds) => req("POST", `/bookings/${id}/cancel-seats`, { seatIds }),
     reschedule: (id, change) => req("POST", `/bookings/${id}/reschedule`, change),
   },
+  parcels: {
+    options: (from, to) => req("GET", `/parcels/options${qs({ from, to })}`),
+    get: (id) => req("GET", `/bookings/${encodeURIComponent(id)}/parcel`),
+    track: (lr) => req("GET", `/track/${encodeURIComponent(lr)}`),
+  },
   tickets: {
     get: (t) => req("GET", `/tickets/${encodeURIComponent(t)}`),
   },

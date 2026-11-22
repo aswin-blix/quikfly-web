@@ -28,7 +28,7 @@ export function timeAgo(iso: string) {
 }
 
 export const SERVICE_LABEL: Record<ServiceKey, string> = {
-  bike: "Bike taxi", car: "Cab", bus: "Bus", tours: "Holidays", rent: "Self-drive", rentals: "Group travel",
+  bike: "Bike taxi", car: "Cab", bus: "Bus", tours: "Holidays", rent: "Self-drive", rentals: "Group travel", parcel: "Parcel",
 };
 
 export const STATUS_STYLE: Record<BookingStatus, { label: string; cls: string }> = {

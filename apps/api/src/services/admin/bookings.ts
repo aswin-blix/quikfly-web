@@ -1,6 +1,6 @@
 // Bookings for staff: search across all customers, detail with wallet entries, and
 // cancel (with wallet refund) or complete. Each action is audited.
-import { ADMIN_RULES, TOLL_LINE, TOLLS_MAX, TOLLS_SETTLED_LINE, tollSettlement, type AdminBooking, type AdminBookingDetail, type BookingFilters, type BookingNote, type FareLine, type Page, type WalletTransaction } from "@quikfly/shared";
+import { ADMIN_RULES, PARCEL_CANCELLABLE, PARCEL_NOT_CANCELLABLE, TOLL_LINE, TOLLS_MAX, TOLLS_SETTLED_LINE, tollSettlement, type AdminBooking, type AdminBookingDetail, type BookingFilters, type BookingNote, type FareLine, type Page, type WalletTransaction } from "@quikfly/shared";
 import { uid } from "../../lib/random";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { cancelBookingRow, completeBookingRow, refundFor, refundText } from "../bookings";
@@ -8,7 +8,7 @@ import { notify } from "../notifications";
 import { audit, auditStatement, listAudit } from "./audit";
 import { LOCAL_DATE, toAdminBooking, type AdminBookingRow } from "./stats";
 
-const SELECT = "SELECT b.*, u.name AS customer_name, u.phone AS customer_phone, (SELECT CASE WHEN settlement IS NOT NULL THEN 'settled' WHEN return_at IS NOT NULL THEN 'returned' WHEN pickup_at IS NOT NULL THEN 'on_trip' ELSE 'booked' END FROM rentals WHERE booking_id = b.id) AS rental_state FROM bookings b JOIN users u ON u.id = b.user_id";
+const SELECT = "SELECT b.*, u.name AS customer_name, u.phone AS customer_phone, (SELECT CASE WHEN settlement IS NOT NULL THEN 'settled' WHEN return_at IS NOT NULL THEN 'returned' WHEN pickup_at IS NOT NULL THEN 'on_trip' ELSE 'booked' END FROM rentals WHERE booking_id = b.id) AS rental_state, (SELECT state FROM parcels WHERE booking_id = b.id) AS parcel_state FROM bookings b JOIN users u ON u.id = b.user_id";
 
 /** The WHERE clause and its parameters for a booking search (shared by the list and the CSV export). */
 function bookingFilter(f: BookingFilters): { filter: string; params: unknown[] } {
@@ -93,6 +93,7 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
   const row = await db.prepare(`${SELECT} WHERE b.id = ?`).bind(id).first<AdminBookingRow & { coupon_code: string | null; discount: number; vendor_id: string | null; vendor_vehicle_id: string | null; vendor_driver_id: string | null; quote_id: string | null }>();
   if (!row) throw notFound("Booking not found.");
   const active = row.status === "confirmed" || row.status === "ongoing";
+  const cancellable = active && (row.service !== "parcel" || (!!row.parcel_state && PARCEL_CANCELLABLE.includes(row.parcel_state)));
   const tollEstimate = active && row.service === "rentals" ? await quotedTolls(db, row.quote_id) : null;
   const [{ results: txns }, history, partner, notes] = await Promise.all([
     db.prepare("SELECT * FROM wallet_transactions WHERE booking_id = ? ORDER BY created_at").bind(id).all<TxnRow>(),
@@ -108,7 +109,7 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
     booking: toAdminBooking(row),
     wallet: txns.map((t) => ({ id: t.id, kind: t.kind, amount: t.amount, note: t.note, bookingId: t.booking_id, createdAt: t.created_at })),
     coupon: row.coupon_code ? { code: row.coupon_code, discount: row.discount } : null,
-    refundIfCancelled: active ? await refundFor(db, row) : null,
+    refundIfCancelled: cancellable ? await refundFor(db, row) : null,
     history: history.items,
     partner: partner && row.vendor_id && row.vendor_vehicle_id
       ? { vendorId: row.vendor_id, vendorName: partner.vendor_name, vehicleId: row.vendor_vehicle_id, regNumber: partner.reg_number, driverName: partner.driver_name }
@@ -136,7 +137,10 @@ async function assertActive(db: D1Database, id: string) {
 export async function adminCancel(db: D1Database, adminId: string, id: string, reason: string) {
   await assertActive(db, id);
   const row = await cancelBookingRow(db, null, id, "Refund by QuikFly");
-  if (!row) await assertActive(db, id); // lost a race: explain the new status
+  if (!row) {
+    await assertActive(db, id); // lost a race: explain the new status
+    throw conflict(PARCEL_NOT_CANCELLABLE); // still active, so it's a parcel on its way
+  }
   await audit(db, { adminId, action: "booking.cancel", entity: "booking", entityId: id, detail: { reason, amount: row!.amount, payment: row!.payment, refund: row!.refund_amount, refundedToWallet: row!.payment === "wallet" && (row!.refund_amount ?? 0) > 0 } });
   await notify(db, row!.user_id, { kind: "booking.cancelled_by_staff", ref: id, bookingId: id, title: `QuikFly cancelled · ${row!.title}`, body: `${reason} ${refundText(row!)}` });
   return bookingDetail(db, id);
@@ -153,6 +157,7 @@ export async function adminComplete(db: D1Database, adminId: string, id: string,
   if (returned) throw conflict("The customer has returned this car. Settle the deposit from the Rental section instead.");
   const current = await db.prepare("SELECT service, status, quote_id, payment, lines, user_id, title FROM bookings WHERE id = ?").bind(id)
     .first<{ service: string; status: string; quote_id: string | null; payment: string; lines: string; user_id: string; title: string }>();
+  if (current?.service === "parcel") throw conflict("A parcel completes when it's handed over with the receiver's collection code.");
   const estimate = current && current.service === "rentals" && (current.status === "confirmed" || current.status === "ongoing") ? await quotedTolls(db, current.quote_id) : null;
   if (estimate === null && tollsActual !== undefined) throw badRequest("This booking has no toll estimate to settle.");
   if (estimate !== null && tollsActual === undefined) throw badRequest(`Enter the actual tolls for this trip (₹${estimate.toLocaleString("en-IN")} was quoted).`);

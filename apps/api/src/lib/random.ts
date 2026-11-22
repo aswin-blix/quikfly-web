@@ -23,6 +23,16 @@ export function randomToken(bytes = 32) {
   return hex(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
+/** A code of `n` digits, evenly spread. */
+export function randomDigits(n: number) {
+  let out = "";
+  while (out.length < n) {
+    const byte = crypto.getRandomValues(new Uint8Array(1))[0];
+    if (byte < 250) out += byte % 10; // 250-255 would favour 0-5
+  }
+  return out;
+}
+
 export async function sha256(text: string) {
   return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))));
 }

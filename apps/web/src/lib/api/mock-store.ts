@@ -22,6 +22,7 @@ export const KEYS = {
   credits: "quikfly.mockCredits",
   rides: "quikfly.mockRides",
   bookings: "quikfly.bookings",
+  parcels: "quikfly.mockParcels",
 } as const;
 
 export function load<T>(key: string, fallback: T): T {
@@ -98,5 +99,5 @@ export type MockRide = { ride: Ride; startedAt: string; cancelled: boolean };
 
 /** Starts a fresh account: clears everything the previous one stored in this browser. */
 export function resetAccount() {
-  for (const k of [KEYS.deletedAt, KEYS.places, KEYS.travellers, KEYS.contacts, KEYS.wallet, KEYS.rides, KEYS.bookings]) drop(k);
+  for (const k of [KEYS.deletedAt, KEYS.places, KEYS.travellers, KEYS.contacts, KEYS.wallet, KEYS.rides, KEYS.bookings, KEYS.parcels]) drop(k);
 }

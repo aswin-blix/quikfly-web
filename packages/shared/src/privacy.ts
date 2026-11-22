@@ -8,9 +8,9 @@ import type { Settings } from "./settings";
 
 export const PRIVACY_NOTICE = {
   /** Stored with each consent. Change it (a new date) when the notice's meaning changes. */
-  version: "2026-11-21",
+  version: "2026-11-22",
   /** Shown as "Last updated". */
-  updated: "2026-11-21",
+  updated: "2026-11-22",
 } as const;
 
 /** Inactive accounts are told this long before erasure at the latest (the Rules ask for 48 hours). */
@@ -95,6 +95,7 @@ export function privacyNotice(s: Settings): PrivacyNotice {
           "Partners: city, bank account, your photo, vehicle documents (RC, insurance) and your drivers' licences.",
           "Support: your requests, callbacks and messages to us, and the notes our staff add to a booking while helping you.",
           "Safety: if you press SOS, the time, the ride it was about and the location your phone shared, so our team can act on it.",
+          "Parcels: what you say you're sending, its value, and the receiver's name and number. If someone sends you a parcel, we hold your name and number as they gave them, to deliver it.",
           "Your phone: a notification token, so we can send trip updates.",
         ],
       },
@@ -112,6 +113,7 @@ export function privacyNotice(s: Settings): PrivacyNotice {
         title: "Who sees it",
         points: [
           "The driver, bus operator, holiday or rental partner for your booking: only what that booking needs.",
+          "Parcels: the counter staff and the operator carrying it. Anyone with the tracking number sees the route, progress and the first names of sender and receiver, never phone numbers or contents.",
           "Your emergency contacts, when you or your settings share a trip with them.",
           "Companies that run our systems for us: Cloudflare (servers and database) and Google Firebase (notifications). They may not use it for anything else.",
           "Police or a government body, only when the law requires it.",
@@ -123,6 +125,7 @@ export function privacyNotice(s: Settings): PrivacyNotice {
           "Your account data stays while you use QuikFly.",
           `When you delete your account it is hidden at once and erased after ${DELETION_GRACE_DAYS} days. Signing in before then keeps it.`,
           inactive,
+          "When a parcel's sender or receiver erases their account, we remove the receiver's name and number and the contents from that parcel.",
           "Invoices and payment records are kept for as long as tax and accounting laws require (up to 8 years), with your name and number removed from your account.",
         ],
       },

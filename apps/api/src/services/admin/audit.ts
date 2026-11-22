@@ -18,6 +18,15 @@ export function auditStatement(db: D1Database, e: AuditEvent) {
     .bind(uid("AU"), e.adminId, e.action, e.entity, e.entityId ?? null, JSON.stringify(e.detail ?? {}), new Date().toISOString());
 }
 
+/**
+ * An audit row written only when `condition` (trusted SQL with `?` placeholders) holds, for a change
+ * in the same batch that can lose a race and write nothing.
+ */
+export function auditIfStatement(db: D1Database, e: AuditEvent, condition: string, ...params: unknown[]) {
+  return db.prepare(`INSERT INTO audit_log (id, admin_id, action, entity, entity_id, detail, created_at) SELECT ?, ?, ?, ?, ?, ?, ? WHERE ${condition}`)
+    .bind(uid("AU"), e.adminId, e.action, e.entity, e.entityId ?? null, JSON.stringify(e.detail ?? {}), new Date().toISOString(), ...params);
+}
+
 export const audit = (db: D1Database, e: AuditEvent) => auditStatement(db, e).run();
 
 interface AuditRow {

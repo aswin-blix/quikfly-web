@@ -23,7 +23,7 @@ export const BUSINESS_TZ_OFFSET = "+05:30";
 
 /** What the countdown runs to, per service, for policy text. */
 export const CANCEL_EVENT: Record<ServiceKey, string> = {
-  bike: "pickup", car: "pickup", bus: "departure", tours: "travel", rent: "pickup", rentals: "the trip",
+  bike: "pickup", car: "pickup", bus: "departure", tours: "travel", rent: "pickup", rentals: "the trip", parcel: "departure",
 };
 
 /** "15d:100, 7d:50" → tiers sorted with the longest notice first. Garbage parses to no tiers. */
@@ -55,6 +55,7 @@ export function cancelPolicyFor(settings: Settings, service: ServiceKey): Cancel
     case "tours": return parseCancelPolicy(settings.cancelPolicyTours);
     case "rent": return parseCancelPolicy(settings.cancelPolicyRent);
     case "rentals": return parseCancelPolicy(settings.cancelPolicyGroup);
+    case "parcel": return parseCancelPolicy(settings.cancelPolicyParcel);
     default: return [];
   }
 }
@@ -136,13 +137,15 @@ export const minutesUntilStart = (scheduledFor: string, windowMinutes: number, n
 /**
  * When a quoted booking starts, as an ISO time, so the refund can be worked out later.
  * Buses need the departure time ("22:30") from the generated bus; dates alone count from
- * midnight India time.
+ * midnight India time. A Quick parcel has no start: like a ride it follows the ride
+ * cancellation rules, and tiers counted to "now" would refund nothing at once.
  */
-export function quoteStartsAt(req: QuoteRequest, busDepart = "00:00"): string {
+export function quoteStartsAt(req: QuoteRequest, busDepart = "00:00"): string | null {
   switch (req.service) {
     case "bus": return `${req.date}T${busDepart}:00${BUSINESS_TZ_OFFSET}`;
     case "tours": return `${req.start}T00:00:00${BUSINESS_TZ_OFFSET}`;
     case "rent": return `${req.start}:00${BUSINESS_TZ_OFFSET}`;
     case "rentals": return `${req.start}T00:00:00${BUSINESS_TZ_OFFSET}`;
+    case "parcel": return req.mode === "intercity" ? req.departAt : null;
   }
 }

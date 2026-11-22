@@ -1,12 +1,12 @@
 // Dashboard numbers. Days are counted in India time (BUSINESS_UTC_OFFSET_MIN), like fares.
-import { parseTerms, type AdminBooking, type AdminStats, type RentalState, type ServiceKey } from "@quikfly/shared";
+import { parseTerms, type AdminBooking, type AdminStats, type ParcelState, type RentalState, type ServiceKey } from "@quikfly/shared";
 import { BUSINESS_UTC_OFFSET_MIN } from "../../config";
 
 export interface AdminBookingRow {
   id: string; service: ServiceKey; title: string; subtitle: string; amount: number; status: AdminBooking["status"];
   payment: AdminBooking["payment"]; lines: string; created_at: string;
   starts_at: string | null; refund_amount: number | null; deposit: number; cancel_reason: string | null; cancel_fee: number; ride_id: string | null; trip_id: string | null; credits_used: number;
-  discount?: number; rescheduled_at?: string | null; ticket_token?: string | null; rental_state?: RentalState | null; terms?: string | null;
+  discount?: number; rescheduled_at?: string | null; ticket_token?: string | null; rental_state?: RentalState | null; parcel_state?: ParcelState | null; terms?: string | null;
   user_id: string; customer_name: string; customer_phone: string;
 }
 
@@ -16,7 +16,7 @@ export const toAdminBooking = (r: AdminBookingRow): AdminBooking => ({
   startsAt: r.starts_at ?? null, refundAmount: r.refund_amount ?? null, deposit: r.deposit ?? 0,
   cancelReason: r.cancel_reason ?? null, cancelFee: r.cancel_fee ?? 0, rideId: r.ride_id ?? null, tripId: r.trip_id ?? null,
   creditsUsed: r.credits_used ?? 0, discount: r.discount ?? 0, seats: [],
-  ticketToken: r.ticket_token ?? null, rescheduledAt: r.rescheduled_at ?? null, rentalState: r.rental_state ?? null, terms: parseTerms(r.terms),
+  ticketToken: r.ticket_token ?? null, rescheduledAt: r.rescheduled_at ?? null, rentalState: r.rental_state ?? null, parcelState: r.parcel_state ?? null, terms: parseTerms(r.terms),
   customer: { id: r.user_id, name: r.customer_name, phone: r.customer_phone },
 });
 

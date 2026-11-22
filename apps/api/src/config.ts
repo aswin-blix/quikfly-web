@@ -17,7 +17,7 @@ export const businessHour = (now = Date.now()) => new Date(now + BUSINESS_UTC_OF
 /** Today's date in India, YYYY-MM-DD. */
 export const businessDate = (now = Date.now()) => new Date(now + BUSINESS_UTC_OFFSET_MIN * 60_000).toISOString().slice(0, 10);
 
-export const SERVICE_KEYS = ["bike", "car", "bus", "tours", "rent", "rentals"] as const;
+export const SERVICE_KEYS = ["bike", "car", "bus", "tours", "rent", "rentals", "parcel"] as const;
 export const MAX_BOOKING_LINES = 30;
 
 /** Notification inbox: how many recent notifications GET /me/notifications returns. */
@@ -30,6 +30,9 @@ export const PUSH_MAX_AGE_MINUTES = 60;
 export const PUSH_BATCH = 40;
 /** Firebase Cloud Messaging endpoints for the service-account sign-in. */
 export const FCM = { tokenUrl: "https://oauth2.googleapis.com/token", scope: "https://www.googleapis.com/auth/firebase.messaging" };
+
+/** Parcels the simulated carrier moves per cron run. Set-based, so this doesn't change the query count. */
+export const PARCEL_SIM_BATCH = 20;
 
 /** Accounts past their deletion grace erased per cron run (each run also has the free plan's 50-query cap). */
 export const ERASE_BATCH = 20;

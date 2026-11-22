@@ -99,8 +99,18 @@ function guardPricing(kind: CatalogKind, before: Record<string, unknown> | null,
   if (fields.length) throw forbidden(`Only owners and operations staff can ${before ? "change" : "set"} prices (${fields.join(", ")}).${before ? "" : ` Ask them to add this ${CATALOG_DEFS[kind].singular}.`}`);
 }
 
-/** A departure must belong to a holiday package that exists (shown or hidden). */
+/**
+ * A departure must belong to a holiday package that exists (shown or hidden); parcel counters and
+ * rates to an operator and cities that exist, or they would silently never be offered.
+ */
 async function assertRefs(db: D1Database, kind: CatalogKind, data: Record<string, unknown>) {
+  if (kind === "parcelCounter" || kind === "parcelRate") {
+    const { results } = await db.prepare("SELECT kind, id, data FROM catalog_items WHERE kind IN ('busOperator', 'city')").all<{ kind: string; id: string; data: string }>();
+    if (!results.some((r) => r.kind === "busOperator" && r.id === data.operatorId)) throw badRequest(`No bus operator has the id "${data.operatorId}". Copy the id from Bus operators.`);
+    for (const city of kind === "parcelCounter" ? [data.city] : [data.from, data.to]) {
+      if (!results.some((r) => r.kind === "city" && String(JSON.parse(r.data).name).toLowerCase() === String(city).toLowerCase())) throw badRequest(`"${city}" isn't in Catalog → Cities.`);
+    }
+  }
   if (kind !== "departure") return;
   const tour = await db.prepare("SELECT 1 FROM catalog_items WHERE kind = 'tour' AND id = ?").bind(String(data.tourId)).first();
   if (!tour) throw badRequest(`No holiday package has the id "${data.tourId}". Copy the id from Holiday packages.`);

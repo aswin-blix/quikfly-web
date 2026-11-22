@@ -3,6 +3,7 @@
 // and the app. To add one: a key + default here, a rule in SETTING_RULES, a row in
 // apps/admin/src/lib/settings-fields.ts. The API validates against SETTING_RULES.
 import { CANCEL_POLICY_HINT, CANCEL_POLICY_PATTERN, checkCancelPolicy } from "./cancellation";
+import { BAND_EXTRAS_HINT, PARCEL_RULES, parseBandExtras } from "./parcel";
 import type { ServiceKey } from "./types";
 
 export interface Settings {
@@ -16,6 +17,8 @@ export interface Settings {
   serviceTours: boolean;
   serviceRent: boolean;
   serviceGroup: boolean;
+  /** Parcels. Off until the website, admin and app can all show one (docs/parcel-service-plan.md). */
+  serviceParcel: boolean;
   /** What customers see where a paused service would be. */
   servicePausedMessage: string;
   /** Features that can be switched off without pausing a whole service. */
@@ -86,12 +89,32 @@ export interface Settings {
   /** The generated timetable adds up to this much per bus so fares vary (₹). 0 = every bus of a type costs the same. */
   busRandomExtraMax: number;
 
+  /** Parcels: the heaviest accepted (kg), in either mode. */
+  parcelMaxKg: number;
+  /** Quick parcel: ₹ added per weight band, "2:0, 5:10, 10:25, 20:50". */
+  parcelCityBandExtra: string;
+  /** Bus parcel: the least a parcel costs, and the rate for routes without a tariff in the catalog. */
+  parcelIntercityMinCharge: number;
+  parcelIntercityPerKg: number;
+  parcelHandlingFee: number;
+  parcelMaxDeclaredValue: number;
+  /** QuikFly pays at most the lower of this and the declared value. Not insurance. */
+  parcelLiabilityCap: number;
+  /** Days a parcel waits at the destination counter before it is unclaimed. */
+  parcelCounterHoldDays: number;
+  /** Hand in this many minutes before the bus leaves. */
+  parcelCutoffMinutes: number;
+  /** Demo: the cron moves parcels by their timetable, and screens say so. */
+  parcelSimulateTransit: boolean;
+
   /** GST rates (%) per service: added to bus and holiday prices, and shown on invoices. */
   gstRides: number;
   gstBus: number;
   gstTours: number;
   gstRent: number;
   gstGroup: number;
+  /** Added on top of parcel prices. 18 (courier) until the accountant confirms (5 = goods transport agency). */
+  gstParcel: number;
 
   /** Bus bookings can move to another bus or date once, until this many hours before departure, for this fee (₹) plus any fare difference. */
   busRescheduleHours: number;
@@ -146,6 +169,8 @@ export interface Settings {
   cancelPolicyTours: string;
   cancelPolicyRent: string;
   cancelPolicyGroup: string;
+  /** Bus parcels, counted to the departure. Nothing can be cancelled once it is on the bus. */
+  cancelPolicyParcel: string;
 
   /** QuikFly Credits earned back on completed trips, % of the amount paid per service (0 = none). */
   creditsRides: number;
@@ -153,6 +178,7 @@ export interface Settings {
   creditsTours: number;
   creditsRent: number;
   creditsGroup: number;
+  creditsParcel: number;
   /** Most credits one booking can earn (₹). */
   creditsCap: number;
   /** Credits expire this many days after they are earned (or returned). */
@@ -196,6 +222,7 @@ export const DEFAULT_SETTINGS: Settings = {
   serviceTours: true,
   serviceRent: true,
   serviceGroup: true,
+  serviceParcel: false,
   servicePausedMessage: "This service is paused for now. Please check back soon.",
   featureRideScheduling: true,
   featureMultiStop: true,
@@ -239,6 +266,17 @@ export const DEFAULT_SETTINGS: Settings = {
   gstTours: 5,
   gstRent: 18,
   gstGroup: 5,
+  gstParcel: 18,
+  parcelMaxKg: 20,
+  parcelCityBandExtra: "2:0, 5:10, 10:25, 20:50",
+  parcelIntercityMinCharge: 60,
+  parcelIntercityPerKg: 12,
+  parcelHandlingFee: 10,
+  parcelMaxDeclaredValue: 10000,
+  parcelLiabilityCap: 5000,
+  parcelCounterHoldDays: 7,
+  parcelCutoffMinutes: 60,
+  parcelSimulateTransit: true,
   tourChildPercent: 60,
   rentUnlimitedKmExtraPercent: 25,
   rentProtectionStandardPerDay: 199,
@@ -264,11 +302,13 @@ export const DEFAULT_SETTINGS: Settings = {
   cancelPolicyTours: "15d:100, 7d:50",
   cancelPolicyRent: "24h:100",
   cancelPolicyGroup: "48h:100",
+  cancelPolicyParcel: "3h:100, 1h:50",
   creditsRides: 5,
   creditsBus: 2,
   creditsTours: 3,
   creditsRent: 3,
   creditsGroup: 3,
+  creditsParcel: 2,
   creditsCap: 150,
   creditsExpiryDays: 60,
   creditsMaxRedeemPercent: 50,
@@ -314,6 +354,7 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   serviceTours: { type: "boolean" },
   serviceRent: { type: "boolean" },
   serviceGroup: { type: "boolean" },
+  serviceParcel: { type: "boolean" },
   servicePausedMessage: { type: "text", min: 5, max: 160 },
   featureRideScheduling: { type: "boolean" },
   featureMultiStop: { type: "boolean" },
@@ -357,6 +398,17 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   gstTours: percent,
   gstRent: percent,
   gstGroup: percent,
+  gstParcel: percent,
+  parcelMaxKg: { type: "number", min: 2, max: 20, integer: true },
+  parcelCityBandExtra: { type: "text", max: 80, hint: BAND_EXTRAS_HINT },
+  parcelIntercityMinCharge: money(5000),
+  parcelIntercityPerKg: money(500),
+  parcelHandlingFee: money(1000),
+  parcelMaxDeclaredValue: { type: "number", min: 100, max: PARCEL_RULES.declaredValueCeiling, integer: true },
+  parcelLiabilityCap: money(PARCEL_RULES.declaredValueCeiling),
+  parcelCounterHoldDays: { type: "number", min: 1, max: 30, integer: true },
+  parcelCutoffMinutes: { type: "number", min: 0, max: 720, integer: true },
+  parcelSimulateTransit: { type: "boolean" },
   tourChildPercent: percent,
   rentUnlimitedKmExtraPercent: { type: "number", min: 0, max: 200, integer: true },
   rentProtectionStandardPerDay: money(5000),
@@ -382,11 +434,13 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   cancelPolicyTours: cancelPolicy,
   cancelPolicyRent: cancelPolicy,
   cancelPolicyGroup: cancelPolicy,
+  cancelPolicyParcel: cancelPolicy,
   creditsRides: { type: "number", min: 0, max: 50, integer: true },
   creditsBus: { type: "number", min: 0, max: 50, integer: true },
   creditsTours: { type: "number", min: 0, max: 50, integer: true },
   creditsRent: { type: "number", min: 0, max: 50, integer: true },
   creditsGroup: { type: "number", min: 0, max: 50, integer: true },
+  creditsParcel: { type: "number", min: 0, max: 50, integer: true },
   creditsCap: money(5000),
   creditsExpiryDays: { type: "number", min: 1, max: 365, integer: true },
   creditsMaxRedeemPercent: percent,
@@ -427,6 +481,7 @@ export function checkSetting(key: string, value: unknown): string | null {
   if (rule.pattern && !rule.pattern.test(value)) return rule.hint ?? `"${key}" isn't in the right format.`;
   if (key === "surgeHours" && hourRangesError(value)) return "Surge hours must be 0–23 with the start before the end.";
   if (key === "rideNightHours" && hourRangesError(value)) return 'Night hours must be 0–23 with the start before the end; split a window over midnight, like "22-23, 0-5".';
+  if (key === "parcelCityBandExtra" && !parseBandExtras(value)) return BAND_EXTRAS_HINT;
   if (key.startsWith("cancelPolicy")) return checkCancelPolicy(value);
   return null;
 }
@@ -481,5 +536,6 @@ export function gstRate(settings: Settings, service: ServiceKey) {
     case "tours": return settings.gstTours;
     case "rent": return settings.gstRent;
     case "rentals": return settings.gstGroup;
+    case "parcel": return settings.gstParcel;
   }
 }

@@ -2,8 +2,9 @@
 // mobile app consume them, so change them here only.
 import type { RentalState } from "./rental";
 import type { BookingTerms } from "./terms";
+import type { ParcelCategory, ParcelDeparture, ParcelHandover, ParcelQuoteInfo, ParcelSize, ParcelState, ParcelWeightBand } from "./parcel";
 
-export type ServiceKey = "bike" | "car" | "bus" | "tours" | "rent" | "rentals";
+export type ServiceKey = "bike" | "car" | "bus" | "tours" | "rent" | "rentals" | "parcel";
 /** How a booking is paid. Only "wallet" moves money inside QuikFly; the rest go to a gateway later. */
 export const PAYMENT_METHODS = ["upi", "card", "netbanking", "wallet", "cash"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
@@ -157,6 +158,7 @@ export interface CreditSummary {
 export const NOTIFICATION_KINDS = [
   "booking.confirmed", "booking.cancelled", "booking.cancelled_by_staff", "booking.deposit_returned",
   "licence.approved", "licence.rejected", "ride.reminder", "credits.earned", "booking.changed", "support.reply",
+  "parcel.moved", "parcel.ready", "parcel.collected", "parcel.unclaimed",
   "vendor.changes", "vendor.approved", "vendor.rejected", "vendor.active", "vendor.fleet", "vendor.document", "vendor.trip", "vendor.payout",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
@@ -497,6 +499,8 @@ export interface Booking {
   rescheduledAt: string | null;
   /** Self-drive bookings: where the rental is (GET /bookings/:id/rental has the details); null for everything else. */
   rentalState: RentalState | null;
+  /** Parcels: where the parcel is (GET /bookings/:id/parcel has the details); null for everything else. */
+  parcelState: ParcelState | null;
   /**
    * The settings this booking was sold under (cancellation policy, ride fee, GST rate, self-drive
    * rates; see terms.ts). Refunds, settlements and invoices use them. Null for bookings made before
@@ -576,6 +580,8 @@ export interface PriceQuote {
   lines: FareLine[];
   total: number;
   expiresAt: string;
+  /** Parcel quotes: the liability cap and, for a bus parcel, its departure. */
+  parcel?: ParcelQuoteInfo;
 }
 
 export const RENT_KM_PLANS = ["limited", "unlimited"] as const;
@@ -594,7 +600,25 @@ export type QuoteRequest =
       start: string; end: string;
       kmPlan: (typeof RENT_KM_PLANS)[number]; protection: (typeof RENT_PROTECTION)[number]; doorstep: boolean;
     }
-  | { service: "rentals"; vehicleId: string; trip: GroupTrip; destinationId?: string; days: number; start: string };
+  | { service: "rentals"; vehicleId: string; trip: GroupTrip; destinationId?: string; days: number; start: string }
+  | (ParcelDetails & { service: "parcel"; mode: "city"; pickupId: string; dropId: string })
+  | (ParcelDetails & {
+      service: "parcel"; mode: "intercity"; from: string; to: string;
+      /** A departure from GET /parcels/options. */
+      busId: string; departAt: string;
+      pickup: ParcelHandover; delivery: ParcelHandover;
+      /** Set by the API when it prices the quote, never read from a client. */
+      plan?: { departure: ParcelDeparture; liability: number };
+    });
+
+/** What is being sent. */
+export interface ParcelDetails {
+  category: ParcelCategory;
+  weightBand: ParcelWeightBand;
+  size: ParcelSize;
+  /** ₹, up to Settings.parcelMaxDeclaredValue. */
+  declaredValue: number;
+}
 
 /** Result of checking a coupon against a quote. */
 export interface CouponCheck {
@@ -628,7 +652,7 @@ export interface NewBooking {
   subtitle: string;
   payment: PaymentMethod;
   lines: [string, string][];
-  /** For bus, tours, rent and rentals. */
+  /** For bus, tours, rent, rentals and parcels. */
   quoteId?: string;
   /** For bike and car rides (the ride carries its fare). */
   rideId?: string;
@@ -637,6 +661,13 @@ export interface NewBooking {
   tripOf?: string;
   /** Pay part of it with QuikFly Credits (the API decides how much: creditsUsable). */
   useCredits?: boolean;
+  /**
+   * Parcels need all three. `declaration` is the version shown to the sender (GET /parcels/options).
+   * The API writes a parcel booking's title, subtitle and lines itself, so personal data stays out of them.
+   */
+  receiver?: { name: string; phone: string };
+  contents?: string;
+  declaration?: string;
 }
 
 /** What the generic /checkout page needs; created by any service page. */

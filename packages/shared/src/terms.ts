@@ -16,6 +16,7 @@ export const TERM_KEYS = {
   tours: ["gstTours", "cancelPolicyTours"],
   rent: ["gstRent", "cancelPolicyRent", "rentLimitedKmPerDay", "rentExtraKmRate", "rentLateGraceMinutes", "rentLateFeePercent", "rentFuelChargePerEighth"],
   rentals: ["gstGroup", "cancelPolicyGroup"],
+  parcel: ["gstParcel", "cancelPolicyParcel", "parcelLiabilityCap", "parcelCounterHoldDays"],
 } as const satisfies Record<ServiceKey, readonly (keyof Settings)[]>;
 
 export type TermKey = (typeof TERM_KEYS)[ServiceKey][number];
@@ -58,7 +59,7 @@ const rupees = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 export function termLines(terms: BookingTerms, service: ServiceKey): [string, string][] {
   const t = terms;
   const out: [string, string][] = [];
-  const policy = { bus: t.cancelPolicyBus, tours: t.cancelPolicyTours, rent: t.cancelPolicyRent, rentals: t.cancelPolicyGroup }[service as "bus"];
+  const policy = { bus: t.cancelPolicyBus, tours: t.cancelPolicyTours, rent: t.cancelPolicyRent, rentals: t.cancelPolicyGroup, parcel: t.cancelPolicyParcel }[service as "bus"];
   if (policy !== undefined) out.push(["Cancellation", describeCancelPolicy(parseCancelPolicy(policy), CANCEL_EVENT[service])]);
   if (t.rideCancelFeePercent !== undefined && t.rideCancelFeeCap !== undefined) out.push(["Rider cancellation fee", `${t.rideCancelFeePercent}% of the fare, up to ${rupees(t.rideCancelFeeCap)}`]);
   if (t.rideCancelFreeMinutes !== undefined) out.push(["Free cancellation", `within ${t.rideCancelFreeMinutes} min of booking`]);
@@ -67,7 +68,9 @@ export function termLines(terms: BookingTerms, service: ServiceKey): [string, st
   if (t.rentLimitedKmPerDay !== undefined && t.rentExtraKmRate !== undefined) out.push(["Limited km plan", `${t.rentLimitedKmPerDay} km a day, ${rupees(t.rentExtraKmRate)}/km beyond`]);
   if (t.rentLateFeePercent !== undefined && t.rentLateGraceMinutes !== undefined) out.push(["Late return", `${t.rentLateFeePercent}% of the hourly rate per started hour, after ${t.rentLateGraceMinutes} min`]);
   if (t.rentFuelChargePerEighth !== undefined) out.push(["Fuel", `${rupees(t.rentFuelChargePerEighth)} per 1/8 tank short`]);
-  const gst = { bike: t.gstRides, car: t.gstRides, bus: t.gstBus, tours: t.gstTours, rent: t.gstRent, rentals: t.gstGroup }[service];
+  if (t.parcelLiabilityCap !== undefined) out.push(["Liability", `the declared value, up to ${rupees(t.parcelLiabilityCap)}; not insured`]);
+  if (t.parcelCounterHoldDays !== undefined) out.push(["Held for collection", `${t.parcelCounterHoldDays} days`]);
+  const gst = { bike: t.gstRides, car: t.gstRides, bus: t.gstBus, tours: t.gstTours, rent: t.gstRent, rentals: t.gstGroup, parcel: t.gstParcel }[service];
   if (gst !== undefined) out.push(["GST", `${gst}%`]);
   return out;
 }

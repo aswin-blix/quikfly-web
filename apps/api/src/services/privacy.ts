@@ -49,6 +49,15 @@ export async function exportData(db: D1Database, userId: string): Promise<DataEx
     byUser("rides"),
     ["rentals", "SELECT * FROM rentals WHERE booking_id IN (SELECT id FROM bookings WHERE user_id = ?1)"],
     ["rental_extensions", "SELECT * FROM rental_extensions WHERE booking_id IN (SELECT id FROM bookings WHERE user_id = ?1)"],
+    // Parcels: columns listed by hand, so the collection code never gets out. The other person's number is masked.
+    ["parcels_sent", `SELECT booking_id, lr, mode, state, from_city, to_city, depart_at, ready_at, category, weight_band, size, declared_value, liability_cap,
+       contents, receiver_name, CASE WHEN receiver_phone <> '' THEN '******' || substr(receiver_phone, -4) ELSE '' END AS receiver_phone,
+       declaration_version, hold_until, created_at
+     FROM parcels WHERE user_id = ?1`],
+    ["parcel_events", "SELECT booking_id, state, note, at FROM parcel_events WHERE booking_id IN (SELECT booking_id FROM parcels WHERE user_id = ?1)"],
+    ["parcels_received", `SELECT p.lr, p.state, p.from_city, p.to_city, p.created_at, p.receiver_name, p.receiver_phone,
+       '******' || substr(u.phone, -4) AS sender_phone
+     FROM parcels p JOIN users u ON u.id = p.user_id WHERE p.receiver_user_id = ?1`],
     byUser("wallet_transactions"),
     byUser("credits"),
     byUser("ride_passes"),
@@ -93,6 +102,14 @@ export async function eraseAccounts(db: D1Database, bucket: R2Bucket | undefined
   const now = new Date().toISOString();
   const forUsers = (sql: string) => db.prepare(sql).bind(list);
   await db.batch([
+    // Parcels, before the numbers are anonymised below: as sender or as receiver (by account, or by
+    // number for someone who signed up after a parcel was sent to them). The row stays for the invoice.
+    forUsers(`UPDATE parcel_events SET note = NULL WHERE booking_id IN (SELECT booking_id FROM parcels WHERE user_id IN ${IN_USERS})`),
+    forUsers(
+      `UPDATE parcels SET receiver_name = '', receiver_phone = '', receiver_user_id = NULL, contents = ''
+       WHERE user_id IN ${IN_USERS} OR receiver_user_id IN ${IN_USERS}
+         OR receiver_phone IN (SELECT phone FROM users WHERE id IN ${IN_USERS})`,
+    ),
     ...["sessions", "saved_places", "travellers", "emergency_contacts", "push_devices", "notifications", "ride_shares", "support_tickets", "sos_alerts"]
       .map((t) => forUsers(`DELETE FROM ${t} WHERE user_id IN ${IN_USERS}`)),
     forUsers(`DELETE FROM booking_notes WHERE booking_id IN (SELECT id FROM bookings WHERE user_id IN ${IN_USERS})`),
@@ -113,7 +130,7 @@ export async function eraseAccounts(db: D1Database, bucket: R2Bucket | undefined
  * Every cron run (cheap: both reads use partial indexes and usually find nothing):
  * 1. Accounts unused for Settings.inactivityEraseDays are told and closed, starting the normal
  *    deletion grace (signing in restores them). Skipped: money in the wallet, a confirmed
- *    booking, or a partner application past draft; staff handle those.
+ *    booking, a parcel on its way, or a partner application past draft; staff handle those.
  * 2. Accounts closed more than DELETION_GRACE_DAYS ago are erased, ERASE_BATCH at a time.
  */
 export async function privacySweep(db: D1Database, bucket: R2Bucket | undefined) {
@@ -123,7 +140,7 @@ export async function privacySweep(db: D1Database, bucket: R2Bucket | undefined)
     const cutoff = new Date(now.getTime() - days * 86_400_000).toISOString();
     const eligible = `deleted_at IS NULL AND last_active_at < ?1
       AND wallet_balance <= 0
-      AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.user_id = users.id AND b.status = 'confirmed')
+      AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.user_id = users.id AND (b.status = 'confirmed' OR (b.service = 'parcel' AND b.status = 'ongoing')))
       AND NOT EXISTS (SELECT 1 FROM vendors v WHERE v.user_id = users.id AND v.status <> 'draft')`;
     const eraseOn = new Date(now.getTime() + DELETION_GRACE_DAYS * 86_400_000).toISOString().slice(0, 10);
     const stamp = now.toISOString();

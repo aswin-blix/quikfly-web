@@ -13,6 +13,7 @@ import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } 
 import { mockVendor } from "./mock-vendor";
 import { mockSupport } from "./mock-support";
 import { mockRentalFor, mockRental } from "./mock-rental";
+import { checkMockParcelCancel, closeMockParcel, mockNewParcel, mockParcel, mockParcelOptions, mockParcelPrice, mockTrack, syncMockParcels } from "./mock-parcels";
 import { KEYS, creditBalance, creditEntry, currentUser, fail, load, save, signedInUser, uid, wait, walletEntry, type MockRide } from "./mock-store";
 
 const creditExpiry = () => new Date(Date.now() + settings.creditsExpiryDays * 86_400_000).toISOString();
@@ -47,8 +48,18 @@ function withDeps(t: TourPackage): TourPackage {
 }
 const todayIso = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
 
-const bookingsStore = () => load<Booking[]>(KEYS.bookings, []).map((b): Booking => ({ ...b, discount: b.discount ?? 0, seats: b.seats ?? [], ticketToken: b.ticketToken ?? null, rescheduledAt: b.rescheduledAt ?? null, rentalState: b.rentalState ?? null, terms: b.terms ?? null }));
+const bookingsStore = () => load<Booking[]>(KEYS.bookings, []).map((b): Booking => ({ ...b, parcelState: b.parcelState ?? null, discount: b.discount ?? 0, seats: b.seats ?? [], ticketToken: b.ticketToken ?? null, rescheduledAt: b.rescheduledAt ?? null, rentalState: b.rentalState ?? null, terms: b.terms ?? null }));
 const saveBookings = (list: Booking[]) => save(KEYS.bookings, list);
+/** Brings demo parcels up to the clock and their bookings with them, like the API's cron. */
+function syncParcels() {
+  const states = syncMockParcels(settings, mockNotify);
+  if (!states.size) return;
+  saveBookings(bookingsStore().map((b) => {
+    const state = states.get(b.id);
+    if (!state || (b.status !== "confirmed" && b.status !== "ongoing")) return b;
+    return { ...b, parcelState: state, status: state === "booked" ? "confirmed" : "ongoing" };
+  }));
+}
 const ridesStore = () => load<Record<string, MockRide>>(KEYS.rides, {});
 type StoredQuote = PriceQuote & { used?: boolean; startsAt?: string; request?: QuoteRequest };
 const quotesStore = () => load<Record<string, StoredQuote>>(QUOTES_KEY, {});
@@ -72,7 +83,7 @@ const byId = <T extends { id: string }>(list: T[], id: string, what: string) => 
 const busFor = (from: string, to: string, date: string, id: string) =>
   generateBuses(BUS_OPERATORS.map((o) => o.name), settings, from, to, date, busPricing).find((b) => b.id === id) ?? fail("That bus isn't running on this route and date.");
 
-function priceLines(r: QuoteRequest): FareLine[] {
+function priceLines(r: Exclude<QuoteRequest, { service: "parcel" }>): FareLine[] {
   switch (r.service) {
     case "bus": {
       const seats = generateSeats(busFor(r.from, r.to, r.date, r.busId), r.date, settings, holdsFor(r.busId, r.date));
@@ -265,6 +276,12 @@ export const mockApi: QuikflyApi = {
   quotes: {
     async create(r) {
       await wait(350);
+      if (r.service === "parcel") {
+        const { lines, request, info } = mockParcelPrice(settings, r);
+        const q: PriceQuote = { id: uid("QT"), service: r.service, lines, total: sumLines(lines), expiresAt: new Date(Date.now() + QUOTE_TTL_MINUTES * 60_000).toISOString(), parcel: info };
+        save(QUOTES_KEY, { ...quotesStore(), [q.id]: { ...q, startsAt: quoteStartsAt(request) ?? undefined, request } });
+        return q;
+      }
       const lines = priceLines(r);
       const q: PriceQuote = { id: uid("QT"), service: r.service, lines, total: sumLines(lines), expiresAt: new Date(Date.now() + QUOTE_TTL_MINUTES * 60_000).toISOString() };
       const startsAt = quoteStartsAt(r, r.service === "bus" ? busFor(r.from, r.to, r.date, r.busId).depart : undefined);
@@ -272,7 +289,7 @@ export const mockApi: QuikflyApi = {
       const seatPrices = r.service === "bus"
         ? r.seatIds.map((id) => generateSeats(busFor(r.from, r.to, r.date, r.busId), r.date, settings, holdsFor(r.busId, r.date)).find((s) => s.id === id)?.price ?? 0)
         : undefined;
-      save(QUOTES_KEY, { ...quotesStore(), [q.id]: { ...q, startsAt, request: r.service === "bus" ? { ...r, seatPrices } : r } });
+      save(QUOTES_KEY, { ...quotesStore(), [q.id]: { ...q, startsAt: startsAt ?? undefined, request: r.service === "bus" ? { ...r, seatPrices } : r } });
       return q;
     },
   },
@@ -306,8 +323,8 @@ export const mockApi: QuikflyApi = {
   },
 
   bookings: {
-    async list() { await wait(200); return bookingsStore(); },
-    async get(id) { await wait(200); return bookingsStore().find((b) => b.id === id) ?? fail("Booking not found."); },
+    async list() { await wait(200); syncParcels(); return bookingsStore(); },
+    async get(id) { await wait(200); syncParcels(); return bookingsStore().find((b) => b.id === id) ?? fail("Booking not found."); },
     async create(input) {
       await wait(900);
       const total = gross(input);
@@ -323,30 +340,34 @@ export const mockApi: QuikflyApi = {
       const quoted = input.quoteId ? quotesStore()[input.quoteId] : undefined;
       const quotedDeposit = quoted?.lines.find((l) => l.label === DEPOSIT_LINE)?.amount ?? 0;
       const busReq = quoted?.request?.service === "bus" ? quoted.request : null;
+      if (input.service === "parcel" && quoted?.request?.service !== "parcel") fail("That price isn't valid. Please check the price again.");
+      const parcel = quoted?.request?.service === "parcel" ? mockNewParcel(settings, quoted.request, input) : null;
+      const title = parcel?.title ?? input.title;
       const room = rideDiscountRoom(settings, input.service, total) - (c?.discount ?? 0);
       const creditsUsed = input.useCredits ? creditsUsable(settings, creditBalance(), afterCoupon, Math.min(quotedDeposit, afterCoupon), room) : 0;
       const amount = afterCoupon - creditsUsed;
       const deposit = Math.min(quotedDeposit, amount);
       const lines: [string, string][] = [
-        ...input.lines.filter(([k]) => k !== "Coupon" && k !== CREDITS_LINE),
+        ...(parcel?.lines ?? input.lines).filter(([k]) => k !== "Coupon" && k !== CREDITS_LINE),
         ...(c ? [["Coupon", `${c.code} (−₹${c.discount.toLocaleString("en-IN")})`] as [string, string]] : []),
         ...(creditsUsed ? [[CREDITS_LINE, `−₹${creditsUsed.toLocaleString("en-IN")}`] as [string, string]] : []),
       ];
       const b: Booking = {
-        id: uid("QF"), service: input.service, title: input.title, subtitle: input.subtitle, payment: input.payment,
+        id: uid("QF"), service: input.service, title, subtitle: parcel?.subtitle ?? input.subtitle, payment: input.payment,
         amount, lines, status: "confirmed", createdAt: new Date().toISOString(),
         startsAt: quoted?.startsAt || (input.rideId ? ridesStore()[input.rideId]?.ride.scheduledFor : null) || null, refundAmount: null, deposit, cancelReason: null, cancelFee: 0,
         rideId: input.rideId ?? null, tripId, creditsUsed, discount: c?.discount ?? 0,
         seats: busReq ? busReq.seatIds.map((id, i) => ({ id, price: busReq.seatPrices?.[i] ?? 0, gender: busReq.genders?.[i] ?? "other" })) : [],
         ticketToken: input.service === "bus" ? uid("TK").toLowerCase() : null, rescheduledAt: null, rentalState: null,
+        parcelState: parcel ? "booked" : null,
         terms: bookingTerms(settings, input.service),
       };
       if (quoted?.request) b.rentalState = mockRentalFor(b.id, quoted.request, deposit);
       if (input.payment === "wallet") {
         if (currentUser().walletBalance < amount) fail("Not enough wallet balance. Choose another payment method.");
-        walletEntry("payment", -amount, `Paid · ${input.title}`, b.id);
+        walletEntry("payment", -amount, `Paid · ${title}`, b.id);
       }
-      if (creditsUsed) creditEntry("spent", -creditsUsed, `Used · ${input.title}`, b.id);
+      if (creditsUsed) creditEntry("spent", -creditsUsed, `Used · ${title}`, b.id);
       if (input.quoteId) {
         const qs = quotesStore();
         qs[input.quoteId] = { ...qs[input.quoteId], used: true };
@@ -358,19 +379,23 @@ export const mockApi: QuikflyApi = {
         save(HOLDS_KEY, [...holdsStore(), ...req.seatIds.map((seatId, i) => ({ seatId, gender: req.genders?.[i] ?? "other" as const, busId: req.busId, date: req.date, bookingId: b.id }))]);
       }
       saveBookings([b, ...bookingsStore().map((x) => (x.id === input.tripOf && !x.tripId ? { ...x, tripId } : x))]);
+      parcel?.save(b.id, b.createdAt);
       if (!b.rideId || b.startsAt) mockNotify({ kind: "booking.confirmed", title: `Booking confirmed · ${b.title}`, body: `${b.subtitle}. ₹${amount.toLocaleString("en-IN")}.`, bookingId: b.id });
       return b;
     },
     // Refunds what the service's cancellation policy allows for the notice given, like the API.
     async cancel(id, reason) {
       await wait(500);
+      syncParcels();
+      checkMockParcelCancel(id);
       const current = bookingsStore().find((x) => x.id === id) ?? fail("Booking not found.");
       const ride = current.service === "bike" || current.service === "car";
       const sold = withTerms(settings, current.terms);
       const fee = ride ? rideCancelFee(sold, current.amount, reason, current.createdAt, Date.now(), current.startsAt) : 0;
       const percent = ride ? 100 : refundPercent(cancelPolicyFor(sold, current.service), current.startsAt);
       const refund = ride ? current.amount - fee : refundAmount(current.amount, percent, current.deposit ?? 0);
-      const b = finishBooking(id, "cancelled", { refundAmount: refund, cancelReason: reason ?? null, cancelFee: fee, seats: [] });
+      const b = finishBooking(id, "cancelled", { refundAmount: refund, cancelReason: reason ?? null, cancelFee: fee, seats: [], ...(current.service === "parcel" ? { parcelState: "cancelled" as const } : {}) });
+      closeMockParcel(id);
       save(HOLDS_KEY, holdsStore().filter((h) => h.bookingId !== id));
       mockNotify({ kind: "booking.cancelled", title: `Cancelled · ${b.title}`, bookingId: b.id,
         body: refund ? (b.payment === "wallet" ? `₹${refund.toLocaleString("en-IN")} is back in your QuikFly wallet.` : `Refund due: ₹${refund.toLocaleString("en-IN")}.`) : "No refund under the cancellation policy." });
@@ -453,6 +478,11 @@ export const mockApi: QuikflyApi = {
   support: mockSupport,
   rental: mockRental,
 
+  parcels: {
+    async options(from, to) { await wait(300); return mockParcelOptions(settings, from, to); },
+    async get(id) { await wait(200); syncParcels(); return mockParcel(id); },
+    async track(lr) { await wait(300); syncParcels(); return mockTrack(lr); },
+  },
   tickets: {
     async get(token) {
       await wait(250);
