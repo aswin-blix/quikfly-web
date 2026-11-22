@@ -732,6 +732,30 @@ await expect("remove a push device", call("DELETE", "/me/push-devices/smoke-toke
   }
 }
 
+// Parcels. Off by default (and on production until the app can show one): then the API must refuse.
+// The full journey needs staff, so it is in smoke-admin.mjs, which switches parcels on locally.
+await expect("GET /track/:lr unknown is 404", call("GET", "/track/QFP-MAA-CBE-ZZZZZZZZ", null, false), 404);
+await expect("GET /track/:lr refuses anything that isn't an LR", call("GET", "/track/nope", null, false), 404);
+await expect("GET /bookings/:id/parcel needs sign-in", call("GET", "/bookings/QFNOPE/parcel", null, false), 401);
+await expect("GET /bookings/:id/parcel unknown is 404", call("GET", "/bookings/QFNOPE/parcel"), 404);
+const parcelBody = { service: "parcel", mode: "intercity", from: "Chennai", to: "Coimbatore", category: "clothes", weightBand: "5", size: "box", declaredValue: 1500, pickup: "counter", delivery: "counter" };
+if (cfg.settings.serviceParcel) {
+  const options = await expect("GET /parcels/options", call("GET", "/parcels/options?from=Chennai&to=Coimbatore", null, false), 200,
+    (j) => j.departures.length > 0 && j.departures.every((d) => Date.parse(d.cutoffAt) > Date.now()) && j.declaration.prohibited.length > 5);
+  const bus = options.departures.at(-1);
+  const quote = await expect("POST /quotes (bus parcel)", call("POST", "/quotes", { ...parcelBody, busId: bus.busId, departAt: bus.departAt }, false), 201,
+    (j) => j.total === j.lines.reduce((n, l) => n + l.amount, 0) && j.parcel.liability === Math.min(1500, cfg.settings.parcelLiabilityCap));
+  const sent = await expect("POST /bookings (parcel)", call("POST", "/bookings", { service: "parcel", title: "x", subtitle: "x", payment: "upi", lines: [], quoteId: quote.id,
+    receiver: { name: "Smoke Receiver", phone: "9000000002" }, contents: "Smoke test shirts", declaration: options.declaration.version }), 201, (j) => j.parcelState === "booked" && j.amount === quote.total);
+  const own = await expect("GET /bookings/:id/parcel", call("GET", `/bookings/${sent.id}/parcel`), 200, (j) => j.legs.length === 3 && j.collectOtp === null);
+  await expect("GET /track/:lr shows no numbers or contents", call("GET", `/track/${own.lr}`, null, false), 200,
+    (j) => j.state === "booked" && !/9000000002|Smoke test shirts/.test(JSON.stringify(j)));
+  await expect("cancelling a parcel days ahead refunds it", call("POST", `/bookings/${sent.id}/cancel`), 200, (j) => j.parcelState === "cancelled" && j.refundAmount === quote.total);
+} else {
+  await expect("parcels off: no departures", call("GET", "/parcels/options?from=Chennai&to=Coimbatore", null, false), 409);
+  await expect("parcels off: no quote", call("POST", "/quotes", { ...parcelBody, busId: "x", departAt: `${TRAVEL}T12:00:00.000Z` }, false), 409);
+}
+
 // Privacy (DPDP): the public notice, consent to its version, and the data export
 const notice = await expect("GET /privacy", call("GET", "/privacy", null, false), 200,
   (j) => /^\d{4}-\d{2}-\d{2}$/.test(j.version) && j.summary.length > 0 && j.sections.length > 3 && j.contact.role === "Grievance Officer" && !!j.contact.email);
