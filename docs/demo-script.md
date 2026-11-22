@@ -69,6 +69,15 @@ Optional, support (1 min): on the website **Help** page → **Request a callback
 ### 9. Getting the app (1 min)
 Website home → **Download for Android**: the signed APK from GitHub Releases. *"Not on Google Play yet; that comes after sign-off. Updates install over the old version and keep the customer signed in."*
 
+### Optional: a bus parcel (3 min; only where parcels are switched on)
+
+Not on production until an app release shows parcels: until then run it on a local API, or leave it out.
+1. Website → **Parcels** → Chennai → Coimbatore → a departure → weight, value, receiver, declaration → **Continue** → wallet → **Pay**.
+2. **My Trips** → the parcel → **Share tracking link**, or scan the QR on a phone: the timeline shows first names only.
+3. Admin → **Parcels** → the parcel → **Receive at counter → Load on bus → Mark reached → Ready for collection**. No need to wait for the bus.
+4. The code appears on the sender's My Trips (reload). *"The sender passes it on; SMS comes after sign-off."*
+5. Admin → **Hand over** → type the code → **Collected**; the sender earns credits.
+
 ## What's simulated, and what to say
 
 | Area | In the demo | Say |
@@ -77,6 +86,7 @@ Website home → **Download for Android**: the signed APK from GitHub Releases. 
 | Payments | Card / UPI / net banking succeed without a gateway; the **wallet is real** within the demo (debits and refunds) | "Payment gateway after sign-off." |
 | Rides and map | Driver assigned automatically, drawn map, trip runs in about 20 s | "Live tracking and maps after sign-off." |
 | Bus timetable | Generated from routes (same search gives the same buses) | "Operator inventory connects later." |
+| Parcels | Transit follows the timetable (labelled), no SMS to the receiver | "Counters and SMS after sign-off." |
 | Alerts to emergency contacts | Labelled "demo: no SMS sent" | — |
 
 ## Things to avoid during the demo

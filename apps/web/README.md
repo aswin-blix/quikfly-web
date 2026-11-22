@@ -17,6 +17,9 @@ The customer website for all six QuikFly services. All data and every price come
 | `/rent-a-car` | City and dates, self-drive or chauffeur, filters (category, transmission, fuel, seats), hourly pricing | Zoomcar |
 | `/rent-a-car/[id]` | Car details, specs, price breakdown, licence check | Zoomcar |
 | `/travel-rentals` | Tempo traveller → 45-seat coach, local or outstation fare estimate, side-by-side compare | Savaari / group-travel operators |
+| `/parcels` | Bus parcel, counter to counter (only while `serviceParcel` is on): route, departures with hand-in cut-offs, category, weight, size, value, receiver, the prohibited list and declaration, the API's price; then checkout. Also a box to track by LR | KPN / bus parcel offices |
+| `/parcels/track?lr=` | Public parcel tracking (kept out of search; works while the service is off): timeline, collection counter, first names only, never the code | Courier trackers |
+| `/bookings` (parcels) | `components/parcel/ParcelPanel.tsx`: state, timeline, counters, share and QR, and the collection code while it's ready (the only place it appears). Cancel until it's on the bus. `?open=<id>` opens a booking (parcel notifications use it) | — |
 | `/checkout` | Shared checkout for every service: traveller and contact details with validation, coupons, payment methods, fare breakdown | redBus / MakeMyTrip |
 | `/booking-confirmed` | Animated confirmation and booking summary | — |
 | `/trip?id=` | Trip summary: the bookings of one trip on a timeline, each with its own invoice, and the trip total (printable) | — |
@@ -69,7 +72,7 @@ The header has a sun/moon toggle. The first visit follows the device setting; on
 
 ## Languages (English, Tamil, Hindi)
 
-Strings live in `packages/shared/i18n/app_<lang>.arb`, shared with the apps (English is the template; Turbopack imports `.arb` as JSON, see `next.config.ts`). Screens call `t("key", { name })` from `useT()` (`components/LanguageProvider.tsx`, wrapped inside `AppProvider` in `shell.tsx`); a key missing in Tamil or Hindi shows English. `LanguageMenu` (header and footer) saves the choice in this browser (`quikfly.lang`) and sets `<html lang>`. Everything stays English and the menu is hidden while the owner's `featureLanguages` setting is off. Fonts: Noto Sans Tamil and Noto Sans Devanagari (loaded only when those letters appear). Translated so far: the shell, login, account list and privacy screens; the rest follows at the feature freeze (docs/roadmap.md).
+Strings live in `packages/shared/i18n/app_<lang>.arb`, shared with the apps (English is the template; Turbopack and webpack, which `build:demo` uses, import `.arb` as JSON, see `next.config.ts`). Screens call `t("key", { name })` from `useT()` (`components/LanguageProvider.tsx`, wrapped inside `AppProvider` in `shell.tsx`); a key missing in Tamil or Hindi shows English. `LanguageMenu` (header and footer) saves the choice in this browser (`quikfly.lang`) and sets `<html lang>`. Everything stays English and the menu is hidden while the owner's `featureLanguages` setting is off. Fonts: Noto Sans Tamil and Noto Sans Devanagari (loaded only when those letters appear). Translated so far: the shell, login, account list and privacy screens; the rest follows at the feature freeze (docs/roadmap.md).
 
 ## Run
 
@@ -102,7 +105,7 @@ src/
     api/
       contract.ts QuikflyApi interface: the only thing screens depend on
       mock.ts     demo implementation (seeded data, simulated latency, localStorage)
-      mock-parcels.ts parcels in the demo (transit follows the clock). No Parcels page until step 2 of docs/parcel-service-plan.md
+      mock-parcels.ts parcels in the demo (transit follows the clock). Shown only when built with NEXT_PUBLIC_DEMO_PARCELS=1
       http.ts     real REST implementation (Bearer token, JSON)
       index.ts    mock or http, based on NEXT_PUBLIC_API_URL
   components/ConfigProvider.tsx  loads GET /config once: useConfig() (places, ride types, cities, bus operators,
@@ -125,7 +128,7 @@ Set `NEXT_PUBLIC_API_URL` (see `.env.example`) to switch to the real API in `app
 ## Before production
 
 - **Images:** the service photos are cropped from the client's small banner (about 120×80 px each) and look soft at large sizes. Get high-resolution originals of the vehicles, plus real photos for holiday packages (currently illustrated SVG scenes).
-- **Service photos:** `public/assets/services/<service>.webp` (1200 px WebP, about 70–110 KB). `SERVICES` in `src/lib/services.ts` holds each path in full (the single-file demo build inlines images by exact path), and other screens reuse them through `serviceByKey(key).image`. The app ships the same files in `apps/mobile/assets/images/services/`; replace both together.
+- **Service photos:** `public/assets/services/<service>.webp` (1200 px WebP, about 70–110 KB). `SERVICES` in `src/lib/services.ts` holds each path in full (the single-file demo build inlines images by exact path), and other screens reuse them through `serviceByKey(key).image`. The app ships the same files in `apps/mobile/assets/images/services/`; replace both together (`parcel.webp`, a drawn illustration, is website only until the app has parcels).
 - **Logo:** `public/assets/logo.svg`, a copy of `brand/quikfly-logo.svg` made by `node scripts/logo.mjs` (never edit the copy). Transparent with dark outlines, so it works in light and dark without a background.
 - **Maps:** replace the illustrated map in `CityMap.tsx` with Google Maps, Mapbox or Ola Maps; the props stay the same.
 - **Live tracking:** WebSockets (e.g. Laravel Reverb or Socket.IO) instead of the simulated vehicle animation.
