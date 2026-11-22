@@ -268,7 +268,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-/// Four boxes over one hidden field, so paste and SMS autofill work.
+/// Four boxes over one invisible field, so paste and SMS autofill work. Screen readers get the
+/// field and not the boxes (test/login_otp_test.dart).
 class _OtpBoxes extends StatelessWidget {
   const _OtpBoxes({required this.controller, required this.onChanged, required this.onDone});
   final TextEditingController controller;
@@ -280,39 +281,46 @@ class _OtpBoxes extends StatelessWidget {
     final c = context.qf;
     final v = controller.text;
     return Stack(children: [
-      Row(children: [
-        for (var i = 0; i < 4; i++) ...[
-          if (i > 0) const SizedBox(width: 12),
-          Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              height: 58,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: c.field,
-                borderRadius: BorderRadius.circular(Brand.radiusField),
-                border: Border.all(color: v.length == i ? c.accent : c.border, width: v.length == i ? 1.6 : 1),
+      ExcludeSemantics(
+        child: Row(children: [
+          for (var i = 0; i < 4; i++) ...[
+            if (i > 0) const SizedBox(width: 12),
+            Expanded(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                height: 58,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: c.field,
+                  borderRadius: BorderRadius.circular(Brand.radiusField),
+                  border: Border.all(color: v.length == i ? c.accent : c.border, width: v.length == i ? 1.6 : 1),
+                ),
+                child: Text(i < v.length ? v[i] : '', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: c.fgStrong)),
               ),
-              child: Text(i < v.length ? v[i] : '', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: c.fgStrong)),
             ),
-          ),
-        ],
-      ]),
+          ],
+        ]),
+      ),
       Positioned.fill(
-        child: Opacity(
-          opacity: 0,
-          child: TextField(
-            controller: controller,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            autofillHints: const [AutofillHints.oneTimeCode],
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
-            showCursor: false,
-            decoration: const InputDecoration(border: InputBorder.none, filled: false, counterText: ''),
-            onChanged: (s) {
-              onChanged();
-              if (s.length == 4) onDone();
-            },
+        child: Semantics(
+          label: '4-digit OTP',
+          child: Opacity(
+            opacity: 0,
+            // An invisible widget is otherwise dropped from what screen readers get.
+            alwaysIncludeSemantics: true,
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              autofillHints: const [AutofillHints.oneTimeCode],
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4)],
+              showCursor: false,
+              decoration: const InputDecoration(border: InputBorder.none, filled: false, counterText: ''),
+              onChanged: (s) {
+                onChanged();
+                if (s.length == 4) onDone();
+              },
+            ),
           ),
         ),
       ),
