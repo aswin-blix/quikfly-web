@@ -11,8 +11,12 @@ export function ConfirmDialog({
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
+    if (open) cancelRef.current?.focus();
+  }, [open]);
+  useEffect(() => {
+    // Apart from the focus above: callers pass a new onCancel on each render, which would pull
+    // the focus out of the field being typed in.
     if (!open) return;
-    cancelRef.current?.focus();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && !busy && onCancel();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
