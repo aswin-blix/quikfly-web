@@ -357,6 +357,32 @@ void main() {
     final cancelled = await api.cancelBooking(b.id);
     expect(cancelled.parcelState, 'cancelled');
     expect(cancelled.refundAmount, q.total);
+
+    // Quick parcel: one captain, two codes.
+    final places = await api.places('');
+    final qq = await api.quote({
+      'service': 'parcel', 'mode': 'city', 'pickupId': places[0].id, 'dropId': places[1].id,
+      'category': parcelCategories.keys.first, 'weightBand': parcelWeightBands.first, 'size': parcelSizes.keys.first, 'declaredValue': 500,
+    });
+    expect(qq.liability, 500);
+    final quick = await api.createBooking(
+      service: ServiceKey.parcel, title: 'x', subtitle: 'x', payment: PaymentMethod.upi, lines: const [], quoteId: qq.id,
+      receiver: (name: 'Contract Receiver', phone: '9000000002'), contents: 'Contract test papers', declaration: options.declaration.version,
+    );
+    expect(quick.startsAt, isNull, reason: 'that is how the app knows a Quick parcel');
+    var qp = await api.parcel(quick.id);
+    expect(qp.city, isTrue);
+    expect(qp.courier!.pickup, places[0].name);
+    expect(qp.pickupOtp, hasLength(4));
+    if (qp.simulated) {
+      qp = await api.parcelHandover(quick.id, qp.pickupOtp!);
+      expect(qp.state, 'in_transit');
+      expect(qp.collectOtp, hasLength(ParcelRules.collectOtpDigits));
+      expect((await api.trackParcel(qp.lr)).city, isTrue);
+      expect((await api.parcelDeliver(quick.id, qp.collectOtp!)).state, 'delivered');
+    } else {
+      expect((await api.cancelBooking(quick.id)).parcelState, 'cancelled');
+    }
   });
 
   test('credits summary parses', () async {

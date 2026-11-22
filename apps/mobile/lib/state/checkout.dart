@@ -9,6 +9,7 @@ import '../api/models.dart';
 /// What a parcel booking needs besides its quote. Never in `summary` or booking lines.
 class ParcelDraft {
   const ParcelDraft({
+    this.city = false,
     required this.receiverName,
     required this.receiverPhone,
     required this.contents,
@@ -17,6 +18,9 @@ class ParcelDraft {
   });
   final String receiverName, receiverPhone, contents, declaration;
   final int declaredValue;
+
+  /// A Quick parcel: cash on pickup is allowed and the wording differs.
+  final bool city;
 }
 
 class CheckoutDraft {

@@ -146,7 +146,9 @@ class _BookingCardState extends ConsumerState<BookingCard> {
     final b = widget.booking;
     final (percent, refund) = refundPreview(ref.read(configProvider).value?.settings ?? const Settings({}), b);
     final String message;
-    if (b.deposit > 0) {
+    if (b.service == ServiceKey.parcel && b.payment == 'cash') {
+      message = 'Nothing has been paid, so nothing is refunded.';
+    } else if (b.deposit > 0) {
       // Self-drive: the deposit always comes back in full; the policy applies to the rental fare only.
       final rental = refund - (b.deposit < b.amount ? b.deposit : b.amount);
       final to = b.payment == 'wallet' ? 'to your wallet' : 'to you';
@@ -169,7 +171,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
       await ref.read(sessionProvider.notifier).refresh();
       final back = done.refundAmount ?? 0;
       if (mounted) {
-        toast(context, back == 0 ? 'Cancelled. No refund under the cancellation policy.' : b.payment != 'wallet' ? 'Cancelled. Refund due: ${inr(back)}.' : 'Cancelled. ${inr(back)} refunded to your wallet.');
+        toast(context, back == 0 && b.service == ServiceKey.parcel && b.payment == 'cash' ? 'Cancelled. Nothing had been paid.' : back == 0 ? 'Cancelled. No refund under the cancellation policy.' : b.payment != 'wallet' ? 'Cancelled. Refund due: ${inr(back)}.' : 'Cancelled. ${inr(back)} refunded to your wallet.');
       }
     } catch (e) {
       // The request may have failed before or after the API acted (e.g. a network blip after the
@@ -318,7 +320,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                         : '${inr(b.deposit)} (back after return)'),
               if (b.status == BookingStatus.cancelled && b.cancelFee > 0)
                 KeyValue('Cancellation fee', '${inr(b.cancelFee)}${b.payment == 'wallet' ? ' (kept)' : ' (demo: not collected)'}'),
-              if (b.status == BookingStatus.cancelled && b.refundAmount != null)
+              if (b.status == BookingStatus.cancelled && b.refundAmount != null && !(b.service == ServiceKey.parcel && b.payment == 'cash'))
                 KeyValue(b.payment == 'wallet' ? 'Refunded to wallet' : 'Refund due', b.refundAmount! > 0 ? inr(b.refundAmount!) : 'Nothing (cancelled too late)'),
               // Bookings usually carry their own "Paid via" / "Payment" line; add one only when they don't.
               if (!b.lines.any((l) => _paymentLines.contains(l.$1))) KeyValue('Paid by', paymentLabel(b.payment)),
@@ -335,7 +337,7 @@ class _BookingCardState extends ConsumerState<BookingCard> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: GoldButton(
-                    label: parcel == 'ready' ? 'Show collection code' : 'Track parcel',
+                    label: parcel == 'ready' ? 'Show collection code' : parcel == 'in_transit' ? 'Show delivery code' : 'Track parcel',
                     icon: Icons.inventory_2_outlined,
                     onPressed: () => context.push('/parcel/${b.id}'),
                   ),

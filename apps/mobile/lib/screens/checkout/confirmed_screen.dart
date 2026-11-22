@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/models.dart';
+import '../../core/cancellation.dart';
 import '../../core/format.dart';
 import '../../core/services.dart';
 import '../../core/trips.dart';
@@ -46,7 +47,9 @@ class ConfirmedScreen extends ConsumerWidget {
               Text('Booking confirmed!', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 6),
               Text(
-                b.service == ServiceKey.parcel
+                isQuickParcel(b)
+                    ? 'A captain is assigned. Open Track parcel for the pickup code. The delivery code appears there once the captain has it: pass it to the receiver (demo: no SMS is sent).'
+                    : b.service == ServiceKey.parcel
                     ? "Hand it in before the cut-off below. When it's ready, the collection code appears in My Trips: pass it to the receiver (demo: no SMS is sent)."
                     : "We've saved the details in My Trips. Have a great trip!",
                 textAlign: TextAlign.center,
@@ -82,7 +85,7 @@ class ConfirmedScreen extends ConsumerWidget {
                       KeyValue('Booking ID', b.id, valueColor: c.accent),
                       for (final (k, v) in b.lines) KeyValue(k, v),
                       Divider(color: c.border),
-                      KeyValue('Amount paid', inr(b.amount), bold: true, valueColor: c.accent),
+                      KeyValue(b.payment == 'cash' ? 'To pay at pickup' : 'Amount paid', inr(b.amount), bold: true, valueColor: c.accent),
                     ]),
                   ),
                 ]),

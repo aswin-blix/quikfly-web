@@ -26,7 +26,7 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> with Poll
   bool _loading = false;
 
   @override
-  bool get keepPolling => _lr.isNotEmpty && !const {'collected', 'cancelled', 'unclaimed'}.contains(_found?.state);
+  bool get keepPolling => _lr.isNotEmpty && !parcelSettled.contains(_found?.state);
 
   @override
   void initState() {
@@ -80,7 +80,7 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> with Poll
   Widget build(BuildContext context) {
     final c = context.qf;
     final t = _found;
-    final over = t != null && const {'collected', 'cancelled', 'unclaimed'}.contains(t.state);
+    final over = t != null && parcelSettled.contains(t.state);
     return Scaffold(
       appBar: AppBar(title: const Text('Track a parcel')),
       body: ScreenList(children: [
@@ -100,12 +100,12 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> with Poll
         if (t != null) ...[
           Panel(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text('${t.from} → ${t.to}', style: Theme.of(context).textTheme.titleLarge),
+              Text(t.city ? 'Quick parcel in ${t.to}' : '${t.from} → ${t.to}', style: Theme.of(context).textTheme.titleLarge),
               Text(t.lr, style: TextStyle(color: c.fgMuted)),
               const SizedBox(height: 8),
               Align(alignment: Alignment.centerLeft, child: Pill(parcelStateLabel(t.state), color: parcelStateColor(c, t.state))),
               const SizedBox(height: 16),
-              ParcelTimeline(state: t.state, events: t.events, departAt: t.departAt, readyAt: t.readyAt),
+              ParcelTimeline(city: t.city, state: t.state, events: t.events, departAt: t.departAt, readyAt: t.readyAt),
             ]),
           ),
           const SizedBox(height: 12),
@@ -123,12 +123,16 @@ class _TrackParcelScreenState extends ConsumerState<TrackParcelScreen> with Poll
               ],
               if (!over) ...[
                 const SizedBox(height: 8),
-                Text('To collect it you need a code. The sender gets it when the parcel is ready and passes it to you (demo: no SMS is sent).',
-                    style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
+                Text(
+                  t.city
+                      ? 'The captain hands it over for a code. The sender gets it when the captain picks the parcel up and passes it to you (demo: no SMS is sent).'
+                      : 'To collect it you need a code. The sender gets it when the parcel is ready and passes it to you (demo: no SMS is sent).',
+                  style: TextStyle(color: c.fgMuted, fontSize: 12.5),
+                ),
               ],
             ]),
           ),
-          if (!over && t.simulated) ...[const SizedBox(height: 12), const SimulatedNote()],
+          if (!over && t.simulated) ...[const SizedBox(height: 12), SimulatedNote(city: t.city)],
         ],
       ]),
     );

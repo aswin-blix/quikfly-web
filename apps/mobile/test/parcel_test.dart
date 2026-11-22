@@ -30,6 +30,7 @@ import 'package:quikfly/theme/theme.dart';
 import 'package:quikfly/widgets/service_gate.dart';
 
 const _code = '482913';
+const _pickup = '7315';
 const _lr = 'QFP-MAA-CBE-ABCDEFGH';
 const _terms = {'cancelPolicyParcel': '3h:100, 1h:50', 'gstParcel': 18, 'parcelLiabilityCap': 5000, 'parcelCounterHoldDays': 7};
 
@@ -84,6 +85,22 @@ class _FakeApi extends QuikFlyApi {
   _FakeApi() : super(baseUrl: 'http://test.invalid/v1');
 
   String state = 'ready';
+  bool city = false;
+
+  @override
+  Future<Parcel> parcelHandover(String bookingId, String otp) async {
+    if (otp != _pickup) throw const ApiException("That pickup code isn't right.");
+    state = 'in_transit';
+    return parcel(bookingId);
+  }
+
+  @override
+  Future<Parcel> parcelDeliver(String bookingId, String otp) async {
+    if (otp != _code) throw const ApiException("That code isn't right.");
+    state = 'delivered';
+    return parcel(bookingId);
+  }
+
   final quoted = <Map<String, Object?>>[];
   Map<String, Object?>? booked;
 
@@ -152,8 +169,19 @@ class _FakeApi extends QuikFlyApi {
           {'state': 'booked', 'at': '2026-11-27T05:00:00.000Z', 'note': null},
           {'state': state, 'at': '2026-11-28T16:00:00.000Z', 'note': 'On the shelf by the door'},
         ],
-        'collectOtp': state == 'ready' ? _code : null,
+        'collectOtp': state == 'ready' || state == 'in_transit' ? _code : null,
         'simulated': true,
+        if (city) ...{
+          'mode': 'city',
+          'fromCounter': null,
+          'toCounter': null,
+          'pickupOtp': state == 'booked' ? _pickup : null,
+          'courier': {
+            'captain': {'name': 'Karthik R', 'vehicle': 'Honda Activa', 'plate': 'TN 09 AB 1234'},
+            'pickup': {'name': 'Chennai Central'},
+            'drop': {'name': 'Phoenix MarketCity'},
+          },
+        },
       });
 
   @override
@@ -214,13 +242,16 @@ Future<_FakeApi> _pump(
   bool configLoads = true,
   bool signedIn = true,
   String state = 'ready',
+  bool city = false,
 }) async {
   t.view.physicalSize = size;
   t.view.devicePixelRatio = 1;
   t.platformDispatcher.textScaleFactorTestValue = textScale;
   addTearDown(t.view.reset);
   addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
-  final api = _FakeApi()..state = state;
+  final api = _FakeApi()
+    ..state = state
+    ..city = city;
   final router = GoRouter(
     routes: [
       GoRoute(path: '/', builder: (_, _) => home),
@@ -264,6 +295,9 @@ void main() {
       final ts = shared('parcel.ts');
       expect(parcelJourney, quoted(ts, 'PARCEL_JOURNEY'));
       expect(parcelCancellable, quoted(ts, 'PARCEL_CANCELLABLE').toSet());
+      expect(parcelCityJourney, quoted(ts, 'PARCEL_CITY_JOURNEY'));
+      expect(parcelSettled, quoted(ts, 'PARCEL_SETTLED').toSet());
+      expect(ts, contains('export const QUICK_PARCEL_CITY = "$quickParcelCity"'));
       expect(parcelStateLabels.keys, quoted(ts, 'PARCEL_STATES'));
       for (final e in parcelStateLabels.entries) {
         expect(ts, contains('${e.key}: "${e.value}"'));
@@ -326,6 +360,35 @@ void main() {
     test('credits and the policy text', () {
       expect(creditsEarned(s, ServiceKey.parcel, 153), 3);
       expect(cancelPolicyText(s, ServiceKey.parcel), contains('departure'));
+    });
+
+    Booking quick({String payment = 'wallet', int minutesAgo = 10}) => Booking.fromJson({
+          ..._bookingJson(),
+          'payment': payment,
+          'startsAt': null,
+          'terms': {'gstParcel': 18, 'rideCancelFeePercent': 10, 'rideCancelFeeCap': 100, 'rideCancelFreeMinutes': 2},
+          'createdAt': DateTime.now().toUtc().subtract(Duration(minutes: minutesAgo)).toIso8601String(),
+        });
+
+    test('a Quick parcel refunds by the ride rules, not the bus tiers', () {
+      expect(isQuickParcel(quick()), isTrue);
+      expect(isQuickParcel(Booking.fromJson(_bookingJson())), isFalse);
+      expect(refundPreview(s, quick(minutesAgo: 1)), (100, 153));
+      expect(refundPreview(s, quick()), (100, 138));
+    });
+
+    test('cash on pickup is never shown as a refund', () {
+      expect(refundPreview(s, quick(payment: 'cash')).$2, 0);
+    });
+
+    test('the Quick parcel policy is worded like the website', () {
+      final ts = File('../../packages/shared/src/cancellation.ts').readAsStringSync();
+      final text = quickParcelPolicyText(const Settings({}));
+      expect(text, contains('2 minutes'));
+      for (final part in ['Free to cancel for ', "It can't be cancelled once the captain has it."]) {
+        expect(text, contains(part));
+        expect(ts, contains(part));
+      }
     });
 
     test('parcels are off until the API says on', () {
@@ -464,6 +527,62 @@ void main() {
       expect(find.text('Sign in to see your parcel'), findsOneWidget);
       await _close(t);
     });
+
+    testWidgets('a Quick parcel: pickup code, then the delivery code, then delivered', (t) async {
+      final api = await _pump(t, const ParcelDetailScreen(id: 'QFP1'), state: 'booked', city: true);
+      expect(find.text(_pickup), findsOneWidget);
+      expect(find.text(_code), findsNothing);
+      expect(find.text('Karthik R'), findsOneWidget);
+      expect(find.text('HAND IN AT'), findsNothing);
+
+      await _tap(t, find.text('The captain has it (demo)'));
+      expect(api.state, 'in_transit');
+      // The list is lazy and the code is at its top.
+      await t.drag(find.byType(Scrollable).first, const Offset(0, 1500));
+      await t.pump(const Duration(milliseconds: 500));
+      expect(find.text(_pickup), findsNothing);
+      expect(find.text('DELIVERY CODE'), findsOneWidget);
+      expect(find.text(_code), findsOneWidget);
+
+      await t.ensureVisible(find.byType(TextField));
+      await t.enterText(find.byType(TextField), '000000');
+      await t.pump();
+      await _tap(t, find.text('Mark delivered'));
+      expect(find.text("That code isn't right."), findsOneWidget);
+
+      await t.enterText(find.byType(TextField), _code);
+      // Let the field finish scrolling itself into view, or it moves the button from under the tap.
+      await t.pump(const Duration(milliseconds: 500));
+      FocusManager.instance.primaryFocus?.unfocus();
+      await t.pump(const Duration(milliseconds: 500));
+      await _tap(t, find.text('Mark delivered'));
+      expect(api.state, 'delivered');
+      expect(find.text(_code), findsNothing);
+      await _close(t);
+    });
+
+    testWidgets('a Quick parcel form asks for both places', (t) async {
+      final api = await _pump(t, const ParcelScreen());
+      await _tap(t, find.text('Quick parcel'));
+      expect(find.text('Pickup and drop'), findsOneWidget);
+      expect(find.text('Route and bus'), findsNothing);
+      await _tap(t, find.text('Continue'));
+      expect(find.text('Choose where the captain picks it up.'), findsOneWidget);
+      expect(find.text("Choose where it's going."), findsOneWidget);
+      expect(api.quoted, isEmpty);
+      await _close(t);
+    });
+
+    for (final (size, scale) in [(const Size(320, 640), 1.0), (const Size(360, 780), 1.6), (const Size(844, 390), 1.0)]) {
+      testWidgets('a Quick parcel fits $size at ${scale}x', (t) async {
+        await _pump(t, const ParcelDetailScreen(id: 'QFP1'), state: 'booked', city: true, size: size, textScale: scale, brightness: Brightness.dark);
+        expect(t.takeException(), isNull);
+        await _pump(t, const ParcelScreen(), size: size, textScale: scale);
+        await _tap(t, find.text('Quick parcel'));
+        expect(t.takeException(), isNull);
+        await _close(t);
+      });
+    }
 
     testWidgets('tracking shows first names and no code', (t) async {
       await _pump(t, const TrackParcelScreen(lr: _lr), signedIn: false);

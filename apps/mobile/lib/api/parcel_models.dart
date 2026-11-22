@@ -8,7 +8,16 @@ const parcelLrLine = 'LR number';
 /// A parcel's states in the order it passes through when nothing goes wrong (PARCEL_JOURNEY).
 const parcelJourney = ['booked', 'at_counter', 'on_bus', 'reached', 'ready', 'collected'];
 
-/// States a booking can still be cancelled from: not yet on the bus (PARCEL_CANCELLABLE).
+/// A Quick parcel's (PARCEL_CITY_JOURNEY).
+const parcelCityJourney = ['booked', 'in_transit', 'delivered'];
+
+/// Screens stop following these (PARCEL_SETTLED).
+const parcelSettled = {'collected', 'delivered', 'returned', 'cancelled', 'unclaimed'};
+
+/// Quick parcels run where rides do (QUICK_PARCEL_CITY).
+const quickParcelCity = 'Chennai';
+
+/// States a booking can still be cancelled from: not yet on the bus or with a captain (PARCEL_CANCELLABLE).
 const parcelCancellable = {'booked', 'at_counter'};
 
 const parcelStateLabels = {
@@ -20,6 +29,9 @@ const parcelStateLabels = {
   'collected': 'Collected',
   'unclaimed': 'Unclaimed',
   'cancelled': 'Cancelled',
+  'in_transit': 'With the captain',
+  'delivered': 'Delivered',
+  'returned': 'Returned to the sender',
 };
 String parcelStateLabel(String state) => parcelStateLabels[state] ?? state.replaceAll('_', ' ');
 
@@ -131,10 +143,29 @@ class ParcelEvent {
 
 List<ParcelEvent> _events(Object? v) => [for (final e in (v as List?) ?? const []) ParcelEvent.fromJson(e as Json)];
 
-/// GET /bookings/:id/parcel: the sender's parcel, with the collection code while it's ready.
+/// A Quick parcel's captain and route.
+class ParcelCourier {
+  const ParcelCourier({required this.captain, required this.vehicle, required this.plate, required this.pickup, required this.drop});
+  final String captain, vehicle, plate, pickup, drop;
+  factory ParcelCourier.fromJson(Json j) {
+    final c = Map<String, dynamic>.from(j['captain'] as Map);
+    return ParcelCourier(
+      captain: '${c['name']}',
+      vehicle: '${c['vehicle'] ?? ''}',
+      plate: '${c['plate'] ?? ''}',
+      pickup: '${(j['pickup'] as Map?)?['name'] ?? ''}',
+      drop: '${(j['drop'] as Map?)?['name'] ?? ''}',
+    );
+  }
+}
+
+/// GET /bookings/:id/parcel: the sender's parcel, with the receiver's code while it's ready or with a captain.
 class Parcel {
   const Parcel({
     required this.bookingId,
+    required this.mode,
+    required this.courier,
+    required this.pickupOtp,
     required this.lr,
     required this.state,
     required this.from,
@@ -158,7 +189,15 @@ class Parcel {
   final int liability;
   final List<ParcelEvent> events;
 
-  /// Only here, and only while ready: never in booking lines, notifications or shared text.
+  /// 'city' (Quick parcel) or 'intercity' (bus parcel).
+  final String mode;
+  bool get city => mode == 'city';
+  final ParcelCourier? courier;
+
+  /// The sender's code for the captain, until they have the parcel.
+  final String? pickupOtp;
+
+  /// Only here, and only while ready or with a captain: never in booking lines, notifications or shared text.
   final String? collectOtp;
 
   /// The demo moves parcels by the timetable: say so.
@@ -166,6 +205,9 @@ class Parcel {
 
   factory Parcel.fromJson(Json j) => Parcel(
         bookingId: '${j['bookingId']}',
+        mode: '${j['mode'] ?? 'intercity'}',
+        courier: j['courier'] is Map ? ParcelCourier.fromJson(Map<String, dynamic>.from(j['courier'] as Map)) : null,
+        pickupOtp: j['pickupOtp'] as String?,
         lr: '${j['lr']}',
         state: '${j['state']}',
         from: '${j['from']}',
@@ -189,6 +231,7 @@ class Parcel {
 class ParcelTracking {
   const ParcelTracking({
     required this.lr,
+    required this.mode,
     required this.state,
     required this.from,
     required this.to,
@@ -204,6 +247,9 @@ class ParcelTracking {
   final String lr, state, from, to;
   final DateTime? departAt, readyAt, holdUntil;
 
+  final String mode;
+  bool get city => mode == 'city';
+
   /// First names; null once that person's data was erased.
   final String? sender, receiver;
   final ParcelCounter? collectAt;
@@ -212,6 +258,7 @@ class ParcelTracking {
 
   factory ParcelTracking.fromJson(Json j) => ParcelTracking(
         lr: '${j['lr']}',
+        mode: '${j['mode'] ?? 'intercity'}',
         state: '${j['state']}',
         from: '${j['from']}',
         to: '${j['to']}',

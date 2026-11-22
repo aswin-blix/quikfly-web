@@ -35,7 +35,7 @@ const services = <ServiceMeta>[
       blurb: 'Tempo travellers, Urbanias and coaches for family and group trips.', image: 'assets/images/services/travel-rentals.webp', icon: Icons.airport_shuttle),
   // Listed only while `serviceParcel` is on (openServices).
   ServiceMeta(key: ServiceKey.parcel, title: 'Parcel', action: 'Send a Parcel', route: '/parcels', tagline: 'Send it by bus',
-      blurb: 'Parcels between cities on the bus, counter to counter.', image: 'assets/images/services/parcel.webp', icon: Icons.inventory_2_outlined),
+      blurb: 'Across Chennai with a captain, or between cities on the bus.', image: 'assets/images/services/parcel.webp', icon: Icons.inventory_2_outlined),
 ];
 
 ServiceMeta serviceOf(ServiceKey k) => services.firstWhere((s) => s.key == k);

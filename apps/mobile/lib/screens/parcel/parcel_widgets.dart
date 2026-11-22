@@ -8,14 +8,15 @@ import '../../widgets/ui.dart';
 
 Color parcelStateColor(QfColors c, String state) => switch (state) {
       'booked' || 'at_counter' => c.success,
-      'collected' => c.fgMuted,
-      'unclaimed' || 'cancelled' => c.danger,
+      'collected' || 'delivered' => c.fgMuted,
+      'unclaimed' || 'cancelled' || 'returned' => c.danger,
       _ => c.accent,
     };
 
 /// What has happened, then (until it ends) what comes next with planned times.
 class ParcelTimeline extends StatelessWidget {
-  const ParcelTimeline({super.key, required this.state, required this.events, this.departAt, this.readyAt});
+  const ParcelTimeline({super.key, required this.state, required this.events, this.city = false, this.departAt, this.readyAt});
+  final bool city;
   final String state;
   final List<ParcelEvent> events;
   final DateTime? departAt, readyAt;
@@ -23,10 +24,11 @@ class ParcelTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.qf;
-    final at = parcelJourney.indexOf(state);
-    // -1: cancelled or unclaimed, so nothing comes next.
-    final next = at < 0 ? const <String>[] : parcelJourney.sublist(at + 1);
-    final planned = {'on_bus': departAt, 'ready': readyAt};
+    final journey = city ? parcelCityJourney : parcelJourney;
+    final at = journey.indexOf(state);
+    // -1: cancelled, unclaimed or returned, so nothing comes next.
+    final next = at < 0 ? const <String>[] : journey.sublist(at + 1);
+    final planned = {'on_bus': departAt, 'ready': readyAt, 'delivered': readyAt};
     final total = events.length + next.length;
 
     Widget step(int i, {required String label, required bool done, String? when, String? note, bool bad = false}) {
@@ -72,7 +74,7 @@ class ParcelTimeline extends StatelessWidget {
             done: true,
             when: parcelTime(e.at),
             note: e.note,
-            bad: e.state == 'cancelled' || e.state == 'unclaimed'),
+            bad: e.state == 'cancelled' || e.state == 'unclaimed' || e.state == 'returned'),
       for (final (i, s) in next.indexed)
         step(events.length + i, label: parcelStateLabel(s), done: false, when: planned[s] == null ? null : 'Planned ${parcelTime(planned[s]!)}'),
     ]);
@@ -110,7 +112,8 @@ class CounterBlock extends StatelessWidget {
 }
 
 class SimulatedNote extends StatelessWidget {
-  const SimulatedNote({super.key});
+  const SimulatedNote({super.key, this.city = false});
+  final bool city;
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +121,12 @@ class SimulatedNote extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(border: Border.all(color: c.border), borderRadius: BorderRadius.circular(Brand.radiusField)),
-      child: Text('Demo: simulated transit. The parcel moves by the bus timetable, not a real bus.', style: TextStyle(color: c.fgMuted, fontSize: 12)),
+      child: Text(
+        city
+            ? 'Demo: the captain is simulated. The sender confirms the pickup and the delivery on their screen.'
+            : 'Demo: simulated transit. The parcel moves by the bus timetable, not a real bus.',
+        style: TextStyle(color: c.fgMuted, fontSize: 12),
+      ),
     );
   }
 }
