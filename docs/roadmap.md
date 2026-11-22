@@ -392,9 +392,9 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 - [x] 1. Foundation: shared rules, migration 0029, quotes, booking, tracking, staff and simulated carriers, privacy, mock, smoke
 - [x] 2. Bus parcel in admin (queue, counter buttons, Settings tab) and on the website (page, tracking at `/parcels/track?lr=`, trip card)
 - [x] 3. Quick parcel (city), with the ride cancellation rules (built on `feat/parcel-quick`, **not merged**)
-- [ ] 4. Door pickup and delivery as trips
+- [ ] 4. Door pickup and delivery as trips (**waits for the owner**: two questions in the [plan](parcel-service-plan.md), section 11)
 - [x] 5. Customer app, and the guard that keeps parcels from older installs (merged and deployed, **app not released**; `serviceParcel` stays off until the release and the owner's word)
-- [ ] 6. Operations polish: return to sender, re-weighing, moving to another bus, dashboard, CSV
+- [x] 6. Operations polish: return to sender, re-weighing, moving to another bus, dashboard, CSV (built on `feat/parcel-ops`, stacked on step 3, **not merged**)
 - [ ] 7. Counter role and operators as partners
 
 ### Step 5 notes
@@ -407,6 +407,11 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 
 - 2026-11-23 (branch `feat/parcel-quick`, no migration): Quick parcel in the API, website, admin and app: one captain's leg, pickup and delivery codes, returned with a reason, ride cancellation rules, cash on pickup.
 - Verified: typecheck, both smoke suites twice, the app's suite with parcels off and on and against the API now live, app 0.1.16's own code against the new API, 106 browser checks at 390/820/1366 px in both themes. **Not checked:** a phone, hosted D1.
+
+### Step 6 notes
+
+- 2026-11-23 (branch `feat/parcel-ops`, no migration): bus change, weight check, return against the sender's LR, dashboard tiles equal to their queue filters, export columns. Cancelling refunds only from the amount it read.
+- Verified: typecheck, both smoke suites twice, the app's suite, app 0.1.16 against the new API, the new screens in a browser plus both earlier parcel browser suites. **Not checked:** a phone, hosted D1.
 
 ### Phase 7 work log
 

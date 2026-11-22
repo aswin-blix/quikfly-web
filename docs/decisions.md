@@ -4,6 +4,9 @@ Why the project is built the way it is. Add an entry when you make a trade-off, 
 
 | Date | Decision | Why | Revisit when |
 |---|---|---|---|
+| 2026-11-23 | **A heavier parcel is charged only to the wallet that paid, after staff record the sender's agreement; otherwise it's refused with a full refund. A lighter one is always refunded** (the plan said "charged or refunded") | Staff can't take a UPI or card payment, and an uncollected charge would later be refunded as if paid | Counters can take payments |
+| 2026-11-23 | **An unclaimed parcel goes back as a bus parcel the sender books and pays for; staff close the old one against that LR** | The plan's "new booking, paid by the sender", with the sender's consent and no automatic charge | Returns need to be free or automatic |
+| 2026-11-23 | **A bus change keeps LR and price, and refund tiers count to the later departure** | QuikFly's change mustn't cost the sender their refund | — |
 | 2026-11-23 | **A Quick parcel is one captain's leg and follows the ride cancellation rules; it has no start time, which is how every client tells it apart** | Tiers counted to "now" would refund nothing at booking. No new column or migration | Quick parcels can be booked ahead |
 | 2026-11-23 | **In the demo the sender plays the captain at both hand-offs, with the codes, and only while simulation is on** (the plan's endpoints) | There is no driver app; the cron never hands a parcel over | A driver app exists |
 | 2026-11-23 | **Quick parcels take cash on pickup under the cash-for-rides switch; cancelling one refunds nothing and says nothing was paid** | The plan's payment list. It can only be cancelled before pickup, so no cash was taken | Captains carry real cash |
