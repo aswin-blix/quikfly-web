@@ -34,9 +34,9 @@ npm run deploy -w @quikfly/admin
 
 **First admin account** (once, after the 0004 migration): `node apps/api/scripts/create-admin.mjs --remote <email> "<name>" owner`. It prints a generated password once. Re-run it to reset a forgotten password; there is no email-based reset.
 
-Order matters: **migration → API → website**. The new website may call endpoints that only the new API has, and the new API may read columns only the migration adds.
+Order matters: **migration → API → website**. The new website may call endpoints that only the new API has, and the new API may read columns only the migration adds. When the privacy notice version changes, deploy the website straight after the API: it bundles the version, so nobody can agree to the notice while the two differ. Run the smoke test after both.
 
-The smoke test reuses one test user (+91 90000 00001) and leaves cancelled or completed bookings on it. That's expected. Run the production smoke test **once per deploy**: every run adds bookings, tickets and callbacks to production.
+The smoke test reuses one test user (+91 90000 00001) and leaves cancelled or completed bookings on it. That's expected. Run the production smoke test **once per deploy**: every run adds bookings, tickets and callbacks to production. It also leaves one SOS alert open per run, and an account can hold three: staff close them in admin → SOS, or the fourth run fails.
 
 After a deploy, record it (migration, version ids, smoke result) in `docs/roadmap.md` with a small docs PR.
 
