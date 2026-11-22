@@ -39,6 +39,13 @@ async function expect(name, promise, status, test = () => true) {
 const login = (a) => call("POST", "/admin/auth/login", a);
 const TRAVEL = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10);
 
+/** Local D1 only: moves a parcel's hold into the past, the one state a test can't wait a day for. */
+function endHold(id) {
+  if (!LOCAL || !/^[A-Z0-9]+$/i.test(id)) throw new Error("endHold is for local test parcels only");
+  const sql = `UPDATE parcels SET hold_until = '${new Date(Date.now() - 60_000).toISOString()}' WHERE booking_id = '${id}'`;
+  return spawnSync(`npx wrangler d1 execute quikfly-db --local --command "${sql}"`, { shell: true, stdio: "ignore", cwd: new URL("..", import.meta.url) }).status === 0;
+}
+
 /** Retries for up to 35 s: other Worker isolates may serve cached catalog/settings for 30 s. */
 async function eventually(name, make, test) {
   const until = Date.now() + 35_000;
@@ -1003,6 +1010,32 @@ if (LOCAL) {
     await expect("the receiver's account gets no access", call("GET", `/bookings/${b.id}/parcel`, null, R), 404);
 
     const contentStaff = (await login(CONTENT)).json.token;
+    const queue = (query = "", as = T) => call("GET", `/admin/parcels${query}`, null, as);
+    const listed = (j) => j.items.some((x) => x.bookingId === b.id);
+    const busDate = new Date(Date.parse(bus.departAt) + 330 * 60_000).toISOString().slice(0, 10);
+    await expect("content staff can't read the queue", queue("", contentStaff), 403);
+    await expect("content staff can't read a parcel", queue(`/${b.id}`, contentStaff), 403);
+    await expect("a customer token can't read the queue", queue("", S), 401);
+    await expect("no token, no queue", queue("", ""), 401);
+    await expect("an unknown parcel is 404", queue("/QFNOPE"), 404);
+    await expect("the queue refuses an unknown status", queue("?state=lost"), 400);
+    await expect("the queue refuses a malformed date", queue("?date=22-11-2026"), 400);
+    await expect("search by LR", queue(`?q=${p.lr.toLowerCase()}`), 200,
+      (j) => j.total === 1 && listed(j) && j.items[0].receiver.name === "Ravi Receiver" && j.items[0].legs.length === 3);
+    await expect("search by booking id", queue(`?q=${b.id}`), 200, listed);
+    await expect("search by the sender's number", queue(`?q=${senderPhone}`), 200, listed);
+    await expect("search by the receiver's number, spaced", queue(`?q=${encodeURIComponent(`+91 ${receiverPhone.slice(0, 5)} ${receiverPhone.slice(5)}`)}`), 200, listed);
+    await expect("search is not a wildcard", queue("?q=QFP-%25%25%25%25%25ZZZZZZZZZ"), 200, (j) => j.total === 0);
+    await expect("filter by the sending counter", queue(`?city=chennai&q=${p.lr}`), 200, listed);
+    await expect("filter by the collecting counter", queue(`?city=Coimbatore&q=${p.lr}`), 200, listed);
+    await expect("another city's counter doesn't list it", queue(`?city=Madurai&q=${p.lr}`), 200, (j) => j.total === 0);
+    await expect("filter by the bus's India date", queue(`?date=${busDate}&q=${p.lr}`), 200, listed);
+    await expect("another date doesn't list it", queue(`?date=2031-01-01&q=${p.lr}`), 200, (j) => j.total === 0);
+    await expect("filter by status", queue(`?state=booked&q=${p.lr}`), 200, listed);
+    await expect("open parcels come soonest bus first", queue("?state=open"), 200,
+      (j) => j.pageSize > 0 && j.items.every((x) => !["collected", "cancelled"].includes(x.state)) && j.items.every((x, i) => i === 0 || j.items[i - 1].departAt <= x.departAt));
+    await expect("one parcel for staff", queue(`/${b.id}`), 200,
+      (j) => j.sender.phone.replace(/\D/g, "").endsWith(senderPhone) && j.refundIfCancelled?.amount === priced.total && j.payment === "wallet" && j.collectOtp === null && j.events[0].by === null);
     await expect("content staff can't move parcels", move(b.id, 0, { to: "active" }, contentStaff), 403);
     await expect("a customer token can't move parcels", move(b.id, 0, { to: "active" }, S), 401);
     await expect("can't load before hand-in", move(b.id, 1, { to: "active" }), 409);
@@ -1020,6 +1053,9 @@ if (LOCAL) {
     const ready = await expect("the sender sees the code", call("GET", `/bookings/${b.id}/parcel`, null, S), 200, (j) => /^\d{6}$/.test(j.collectOtp));
     const code = ready.collectOtp;
     await expect("the code is in no notification", call("GET", "/me/notifications", null, S), 200, (j) => j.items.some((n) => n.kind === "parcel.ready") && !JSON.stringify(j).includes(code));
+    await expect("the code isn't in the queue", queue(`?q=${p.lr}`), 200, (j) => j.items[0].state === "ready" && !JSON.stringify(j).includes(code));
+    await expect("staff read who moved it, never the code", queue(`/${b.id}`), 200,
+      (j) => !JSON.stringify(j).includes(code) && j.collectOtp === null && j.refundIfCancelled === null && j.events.filter((e) => e.by).length === 4);
     await expect("the receiver's inbox has nothing about it", call("GET", "/me/notifications", null, R), 200, (j) => !j.items.some((n) => n.kind.startsWith("parcel.")));
     await expect("the tracking page is public and private", call("GET", `/track/${p.lr.toLowerCase()}`), 200,
       (j) => j.state === "ready" && j.receiver === "Ravi" && ![receiverPhone, senderPhone, contents, code, "8000"].some((v) => JSON.stringify({ ...j, events: j.events.map((e) => e.state) }).includes(v)));
@@ -1033,6 +1069,8 @@ if (LOCAL) {
     await expect("hand-over needs the code", move(b.id, 2, { to: "done" }), 400);
     await expect("a wrong code is refused", move(b.id, 2, { to: "done", otp: code === "111111" ? "222222" : "111111" }), 400);
     await expect("hand over with the code", move(b.id, 2, { to: "done", otp: code }), 200, (j) => j.state === "collected");
+    await expect("collected leaves the open queue", queue(`?state=open&q=${p.lr}`), 200, (j) => j.total === 0);
+    await expect("but a search still finds it", queue(`?q=${p.lr}`), 200, listed);
     await expect("collected completes the booking", call("GET", `/bookings/${b.id}`, null, S), 200, (j) => j.status === "completed" && j.parcelState === "collected");
     await expect("collection earns credits once", call("GET", "/me/credits", null, S), 200,
       (j) => j.items.filter((x) => x.bookingId === b.id && x.kind === "earned").length === (Math.floor((priced.total * before.creditsParcel) / 100) ? 1 : 0));
@@ -1052,6 +1090,27 @@ if (LOCAL) {
     await expect("refused on sight", move(r.id, 0, { to: "failed", note: "Contains a gas cylinder" }), 200, (j) => j.state === "cancelled" && j.legs.every((l) => l.state === "failed"));
     check("a refusal refunds all of it", (await balance()) === paid);
     await expect("a refusal is audited with its reason", call("GET", `/admin/audit?entity=booking&entityId=${r.id}`, null, T), 200, (j) => j.items.some((a) => a.action === "parcel.refuse" && /cylinder/.test(a.detail.reason)));
+
+    // UPI for these, so the sender's wallet stays out of it.
+    const g = await expect("a parcel with no GST profile gets no GST line", call("POST", "/bookings",
+      bodyFor((await quoteOf()).id, { payment: "upi", lines: [["GSTIN", "29AAAAA0000A1Z5 · Not Theirs"]] }), S), 201, (j) => !j.lines.some(([k]) => k === "GSTIN"));
+    await expect("save a GST profile", call("PATCH", "/me", { gst: { gstin: "33ABCDE1234F1Z5", name: "Smoke Traders" } }, S), 200);
+    const gst = await expect("a GST parcel invoice uses the profile, not the request", call("POST", "/bookings",
+      bodyFor((await quoteOf()).id, { payment: "upi", lines: [["GSTIN", "29AAAAA0000A1Z5 · Not Theirs"], ["Receiver", receiverPhone]] }), S), 201,
+      (j) => j.lines.filter(([k]) => k === "GSTIN").length === 1 && j.lines.some(([, v]) => v === "33ABCDE1234F1Z5 · Smoke Traders") && !JSON.stringify(j.lines).includes(receiverPhone));
+    await expect("no GST line unless asked", call("POST", "/bookings", bodyFor((await quoteOf()).id, { payment: "upi", lines: [] }), S), 201,
+      (j) => !j.lines.some(([k]) => k === "GSTIN"));
+
+    await move(g.id, 0, { to: "active" }); // at the counter: the sender may still cancel
+    await expect("the sender can cancel at the counter", call("POST", `/bookings/${g.id}/cancel`, {}, S), 200, (j) => j.parcelState === "cancelled");
+
+    const u = gst;
+    for (const [seq, to] of [[0, "active"], [1, "active"], [1, "done"], [2, "active"]]) await move(u.id, seq, { to });
+    check("the test ends the hold", endHold(u.id));
+    await expect("unclaimed after the hold", move(u.id, 2, { to: "failed" }), 200, (j) => j.state === "unclaimed" && j.bookingStatus === "ongoing" && j.collectOtp === null);
+    await expect("unclaimed clears the code", call("GET", `/bookings/${u.id}/parcel`, null, S), 200, (j) => j.state === "unclaimed" && j.collectOtp === null);
+    await expect("unclaimed stays in the open queue", queue(`?state=open&q=${u.id}`), 200, (j) => j.total === 1 && j.items[0].state === "unclaimed");
+    await expect("unclaimed can't be handed over", move(u.id, 2, { to: "done", otp: "123456" }), 409);
 
     await expect("a counter needs a real operator", call("POST", "/admin/catalog/parcelCounter", { data: { operatorId: "nope", city: "Chennai", name: "X", address: "Y", hours: "9-5", phone: "1800 123 4567" } }, T), 400);
     await expect("a counter needs a listed city", call("POST", "/admin/catalog/parcelCounter", { data: { operatorId: "bo1", city: "Salem", name: "X", address: "Y", hours: "9-5", phone: "1800 123 4567" } }, T), 400);
