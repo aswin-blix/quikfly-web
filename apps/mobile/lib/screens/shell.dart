@@ -53,18 +53,23 @@ void showServicesSheet(BuildContext context) {
     builder: (ctx) {
       final c = ctx.qf;
       return SafeArea(
-        child: Padding(
+        // Scrolls: seven services don't fit a short screen (landscape, big text).
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(Brand.gutter, 0, Brand.gutter, 16),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('All services', style: Theme.of(ctx).textTheme.titleLarge),
             const SizedBox(height: 12),
-            GridView.count(
+            GridView(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: MediaQuery.sizeOf(ctx).width > 600 ? 3 : 2,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 1.9,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: MediaQuery.sizeOf(ctx).width > 600 ? 3 : 2,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                // Icon and padding, plus two lines that grow with the phone's text size
+                // (a fixed ratio cut them off on narrow phones and with big text).
+                mainAxisExtent: 56 + MediaQuery.textScalerOf(ctx).scale(38),
+              ),
               children: [
                 for (final s in openServices(ProviderScope.containerOf(context).read(configProvider).value?.settings ?? const Settings({})))
                   Material(

@@ -9,7 +9,7 @@ Read this file first. Then read:
 - [docs/demo-script.md](docs/demo-script.md): the client demo, step by step (Phase 4).
 - [docs/privacy.md](docs/privacy.md): DPDP privacy: notice, consent, export, erasure, and the data-breach plan.
 - [docs/prompts/](docs/prompts/): ready-to-paste prompts for planned work (e.g. the admin settings and pricing audit).
-- [docs/parcel-service-plan.md](docs/parcel-service-plan.md): the parcel service (KPN-style bus parcels + bike courier): research, the owner's decisions, design and steps. Steps 1 (foundation) and 2 (Bus parcel on the website and in admin) are built, off behind `serviceParcel`; steps 3–7 wait for the owner.
+- [docs/parcel-service-plan.md](docs/parcel-service-plan.md): the parcel service (KPN-style bus parcels + bike courier): research, the owner's decisions, design and steps. Steps 1 (foundation), 2 (Bus parcel on the website and in admin) and 5 (the customer app; not released yet) are built, off behind `serviceParcel`; steps 3, 4, 6 and 7 wait for the owner.
 - [docs/family-profiles-plan.md](docs/family-profiles-plan.md): Phase 5 #12 (family payer with a monthly limit and shared rides, monthly GST statements) and the chauffeur toll follow-up: settled design, not started.
 - [apps/api/README.md](apps/api/README.md): endpoint list. [apps/web/README.md](apps/web/README.md): pages, theming, navigation. [apps/admin/README.md](apps/admin/README.md): admin panel structure and rules.
 
@@ -44,7 +44,7 @@ packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation
                   catalog.ts (SEED data only) + catalog-kinds.ts (18 kinds, fields, validation), settings.ts
                   (runtime Settings, defaults, rules), pricing.ts (all price maths + bus/ride simulation),
                   cancellation.ts (refund tiers per service: the API applies them, the apps preview them),
-                  admin.ts (roles, PERMISSIONS, admin shapes), support.ts (support topics, callback times, limits, whatsappLink), parcel.ts (parcel legs, the transition table, declaration), rental.ts (self-drive checklist, extensions, deposit settlement),
+                  admin.ts (roles, PERMISSIONS, admin shapes), support.ts (support topics, callback times, limits, whatsappLink), parcel.ts (parcel legs, the transition table, declaration), clients.ts (which services a client declares it can show), rental.ts (self-drive checklist, extensions, deposit settlement),
                   privacy.ts (the privacy notice text + version; bump the version to ask everyone to agree again)
 ```
 
@@ -92,7 +92,8 @@ cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://1
 - React lists derived from API data with `useMemo` must list that data in the dependencies, or they stay empty after it loads.
 - A plain `next build` of the website talks to the **production** API (`.env.production`). Building to test locally? Pass `NEXT_PUBLIC_API_URL` for the local API, or test submissions would hit production.
 - New `Settings` fields can be missing for a minute after a deploy (old API, new website). Code reading them must not crash on `undefined`.
-- Parcels: move one only through `planLegMove` + `advanceLegs` (never `UPDATE parcels SET state`), and never put a receiver's name, number, contents or the collection code in booking lines, notifications or audit rows. Don't turn `serviceParcel` on in production before an app release knows the service: 0.1.16 shows unknown services as cab rides.
+- Parcels: move one only through `planLegMove` + `advanceLegs` (never `UPDATE parcels SET state`), and never put a receiver's name, number, contents or the collection code in booking lines, notifications or audit rows. Don't turn `serviceParcel` on in production before the app with parcels is published and the owner says so.
+- A service added after the six launch ones reaches only clients that declare it in `Accept: application/json; services=parcel` (`packages/shared/src/clients.ts`, copied in the app's `models.dart`): released apps read an unknown service as a cab, with a cab's refund and GST. A new service joins both lists in the change that can show it everywhere. A script or curl without that `Accept` sees no parcel bookings.
 - The catalog seed runs once per database. A new kind or seed row reaches production only through a migration (`INSERT OR IGNORE`, see 0012 and 0029).
 - Run the production smoke test once per deploy; every run leaves bookings, tickets and callbacks on production.
 - Languages (see docs/roadmap.md): until the feature freeze, UI text may stay hard-coded; text already in `packages/shared/i18n` is changed there (all three files). After editing the `.arb` files run `flutter gen-l10n` in apps/mobile (`test/l10n_test.dart` fails otherwise). `npm run typecheck` warns about untranslated strings; `npm run i18n:strict` must pass before `featureLanguages` is turned on.

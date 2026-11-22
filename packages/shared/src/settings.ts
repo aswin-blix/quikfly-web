@@ -17,7 +17,7 @@ export interface Settings {
   serviceTours: boolean;
   serviceRent: boolean;
   serviceGroup: boolean;
-  /** Parcels. Off until the website, admin and app can all show one (docs/parcel-service-plan.md). */
+  /** Parcels. Off until the owner launches them (docs/parcel-service-plan.md); clients that can't show one don't get one (clients.ts). */
   serviceParcel: boolean;
   /** What customers see where a paused service would be. */
   servicePausedMessage: string;

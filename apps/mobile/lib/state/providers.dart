@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api.dart';
 import '../api/models.dart';
+import 'checkout.dart';
 
 final apiProvider = Provider<QuikFlyApi>((ref) => QuikFlyApi());
 
@@ -57,6 +58,8 @@ class SessionNotifier extends AsyncNotifier<User?> {
       everywhere ? await _api.logoutEverywhere() : await _api.logout();
     } on ApiException catch (_) {/* signing out locally is what matters */}
     await _forget();
+    // A parcel draft holds someone else's name and number.
+    if (ref.read(checkoutProvider)?.parcel != null) ref.read(checkoutProvider.notifier).set(null);
   }
 
   Future<void> _forget() async {

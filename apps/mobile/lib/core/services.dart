@@ -1,4 +1,4 @@
-// The six QuikFly services: names, icons, images and where each one opens.
+// The QuikFly services: names, icons, images and where each one opens.
 // Mirrors apps/web/src/lib/services.ts.
 import 'package:flutter/material.dart';
 import '../api/models.dart';
@@ -33,6 +33,9 @@ const services = <ServiceMeta>[
       blurb: 'Self-drive or chauffeur cars by the hour, day or week.', image: 'assets/images/services/rent-a-car.webp', icon: Icons.key),
   ServiceMeta(key: ServiceKey.rentals, title: 'Rental Trip', action: 'Travel Rentals', route: '/group', tagline: 'Travel together',
       blurb: 'Tempo travellers, Urbanias and coaches for family and group trips.', image: 'assets/images/services/travel-rentals.webp', icon: Icons.airport_shuttle),
+  // Listed only while `serviceParcel` is on (openServices).
+  ServiceMeta(key: ServiceKey.parcel, title: 'Parcel', action: 'Send a Parcel', route: '/parcels', tagline: 'Send it by bus',
+      blurb: 'Parcels between cities on the bus, counter to counter.', image: 'assets/images/services/parcel.webp', icon: Icons.inventory_2_outlined),
 ];
 
 ServiceMeta serviceOf(ServiceKey k) => services.firstWhere((s) => s.key == k);

@@ -71,12 +71,13 @@ Website home → **Download for Android**: the signed APK from GitHub Releases. 
 
 ### Optional: a bus parcel (3 min; only where parcels are switched on)
 
-Not on production until an app release shows parcels: until then run it on a local API, or leave it out.
+Not on production until the app with parcels is published and the owner switches them on: until then run it on a local API, or leave it out.
 1. Website → **Parcels** → Chennai → Coimbatore → a departure → weight, value, receiver, declaration → **Continue** → wallet → **Pay**.
 2. **My Trips** → the parcel → **Share tracking link**, or scan the QR on a phone: the timeline shows first names only.
 3. Admin → **Parcels** → the parcel → **Receive at counter → Load on bus → Mark reached → Ready for collection**. No need to wait for the bus.
 4. The code appears on the sender's My Trips (reload). *"The sender passes it on; SMS comes after sign-off."*
 5. Admin → **Hand over** → type the code → **Collected**; the sender earns credits.
+On a phone with the app that has parcels, steps 1, 2 and 4 work in the app too: **Send a Parcel** → … → **My Trips** → **Show collection code**. App 0.1.16 and older show no parcels, so don't demo them on one.
 
 ## What's simulated, and what to say
 

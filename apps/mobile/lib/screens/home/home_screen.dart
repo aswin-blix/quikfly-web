@@ -1,4 +1,4 @@
-// Home: greeting, the six services, offers, popular bus routes, trending holidays,
+// Home: greeting, the open services, offers, popular bus routes, trending holidays,
 // safety and FAQs. Every list comes from the API (GET /config, GET /tours).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

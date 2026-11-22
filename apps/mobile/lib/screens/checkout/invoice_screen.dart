@@ -3,10 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../api/models.dart';
+import '../../api/parcel_models.dart';
 import '../../core/format.dart';
 import '../../core/invoice.dart';
+import '../../core/parcels.dart';
 import '../../core/services.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
@@ -88,6 +91,7 @@ class InvoiceScreen extends ConsumerWidget {
 
   Widget _paper(Booking b, Settings s, User u) {
     final inv = invoiceFor(b, s);
+    final lr = b.service == ServiceKey.parcel ? b.line(parcelLrLine) : null;
     const muted = TextStyle(fontFamily: Brand.bodyFont, color: Paper.muted, fontSize: 13);
     const body = TextStyle(fontFamily: Brand.bodyFont, color: Paper.fg, fontSize: 13.5);
     Widget row(String k, String v, {bool bold = false}) => Padding(
@@ -123,6 +127,11 @@ class InvoiceScreen extends ConsumerWidget {
           Text('${serviceOf(b.service).action}: ${b.title}', style: body.copyWith(fontWeight: FontWeight.w700)),
           Text(b.subtitle, style: muted),
           if (inv.details.isNotEmpty) ...[line, for (final (k, v) in inv.details) row(k, v)],
+          if (lr != null) ...[
+            line,
+            QrImageView(data: parcelTrackUrl(lr), size: 112, backgroundColor: Paper.bg, semanticsLabel: 'QR code to track parcel $lr'),
+            Text("Scan to track parcel $lr. Collection needs the sender's code, which is never printed here.", style: muted),
+          ],
           line,
           row('Taxable value', inr2(inv.taxable)),
           row('CGST @ ${inv.rate / 2}%', inr2(inv.cgst)),

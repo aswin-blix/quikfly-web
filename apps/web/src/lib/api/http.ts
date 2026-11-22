@@ -1,7 +1,7 @@
 // Real backend implementation of the API contract.
 // Activated by setting NEXT_PUBLIC_API_URL. Endpoints mirror the comments in contract.ts,
 // so the same REST API serves both this website and the mobile app.
-import type { AuthResult } from "@quikfly/shared";
+import { CLIENT_ACCEPT, type AuthResult } from "@quikfly/shared";
 import type { QuikflyApi } from "./contract";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
@@ -22,7 +22,8 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
     method,
     headers: {
       "Content-Type": "application/json",
-      Accept: "application/json",
+      // Also says which newer services this site can show (packages/shared/src/clients.ts).
+      Accept: CLIENT_ACCEPT,
       ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -43,7 +44,7 @@ const qs = (o: Record<string, string>) => "?" + new URLSearchParams(o).toString(
 async function upload<T>(path: string, image: Blob): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "PUT",
-    headers: { "Content-Type": image.type || "application/octet-stream", Accept: "application/json", ...(token() ? { Authorization: `Bearer ${token()}` } : {}) },
+    headers: { "Content-Type": image.type || "application/octet-stream", Accept: CLIENT_ACCEPT, ...(token() ? { Authorization: `Bearer ${token()}` } : {}) },
     body: image,
   });
   const json = await res.json().catch(() => ({}));

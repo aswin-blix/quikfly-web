@@ -1,6 +1,6 @@
 # Parcel service: research and implementation plan
 
-How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then the owner's decisions (10) and what changed while building (11). **Steps 1 and 2 are built (2026-11-22), off behind `serviceParcel`; where sections 1–9 differ from section 11, section 11 wins.**
+How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then the owner's decisions (10) and what changed while building (11). **Steps 1, 2 and 5 are built (2026-11-22; step 5 not released), off behind `serviceParcel`; where sections 1–9 differ from section 11, section 11 wins.**
 
 - **Date:** 2026-11-20. **Code:** `main` at `021b718` (after PR #112). No app code was changed.
 - **Read first:** [AGENTS.md](../AGENTS.md), [roadmap.md](roadmap.md), [decisions.md](decisions.md). The plan keeps every recorded decision; where a step leans on one it names it.
@@ -353,7 +353,7 @@ The questions as they were asked:
 | Cancel "by policy" and refusal "full refund", one action | Cancel by policy; refusing is its own leg move | They refund differently |
 | Admin Complete and Cancel work as for other bookings | Complete refuses parcels; Cancel refuses once on the bus | They would have bypassed the code and the state rules |
 | A choice of evening buses | One QuikFly departure a day per route, about 4–6 PM | Only QuikFly Travels carries parcels and the timetable gives it one bus |
-| Switch on when the owner likes after step 2 | Not in production before step 5's app release | App 0.1.16 reads an unknown service as a cab ride |
+| Switch on when the owner likes after step 2 | Not in production before step 5's app release | App 0.1.16 reads an unknown service as a cab ride. A release alone doesn't fix installed apps: see step 5 |
 | `/track/[lr]` on the website | `/parcels/track?lr=` | `/track` is taken, and static export has no dynamic routes |
 
 ### Step 2
@@ -367,6 +367,15 @@ The questions as they were asked:
 | Receive: confirm weight, re-price | A check in the dialog, or refuse | Re-weighing is step 6 |
 | The mock shows parcels in the single-file demo | Only when built with `NEXT_PUBLIC_DEMO_PARCELS=1` | Steps ship switched off |
 | Queue search by LR or phone | Also by booking id; a search looks beyond open parcels | Staff search for finished ones too |
+
+### Step 5
+
+| Plan said | Built | Why |
+|---|---|---|
+| The app release makes it safe to switch on | The API also keeps parcels from clients that don't declare them (`Accept`) | Installed 0.1.16 apps have no update check and would keep showing parcels as cabs |
+| A free contact picker plugin | Android's picker through a small channel in `MainActivity.kt` | No contacts permission |
+| Chooser, forms, tracking | No chooser: Bus parcel only | Quick parcel is step 3 |
+| Released as the next app version | Built and tested; the release is its own step | The owner builds and publishes |
 
 Left to their steps: bike legs and their transitions (3), door legs (4), return to sender, re-weighing and moving a parcel to another bus (6).
 

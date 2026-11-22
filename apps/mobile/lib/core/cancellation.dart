@@ -84,6 +84,7 @@ const cancelEvent = {
   ServiceKey.tours: 'travel',
   ServiceKey.rent: 'pickup',
   ServiceKey.rentals: 'the trip',
+  ServiceKey.parcel: 'departure',
 };
 
 /// The customer wording of a service's current policy.

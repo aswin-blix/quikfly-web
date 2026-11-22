@@ -9,12 +9,16 @@ let token = "";
 const TRAVEL = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10);
 let failed = 0;
 
+// These tests act as a client that can show parcels (CLIENT_ACCEPT in packages/shared/src/clients.ts);
+// OLD_CLIENT is what app 0.1.16 and any other client from before that rule sends.
+const SHOWS_PARCELS = "application/json; services=parcel";
+const OLD_CLIENT = "application/json";
 /** `auth`: true = the main test user's token, false = none, or a specific token string. */
-async function call(method, path, body, auth = true) {
+async function call(method, path, body, auth = true, accept = SHOWS_PARCELS) {
   const bearer = typeof auth === "string" ? auth : auth ? token : "";
   const res = await fetch(BASE + path, {
     method,
-    headers: { "Content-Type": "application/json", ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) },
+    headers: { "Content-Type": "application/json", Accept: accept, ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   return { status: res.status, json: await res.json().catch(() => null) };
@@ -736,6 +740,8 @@ await expect("remove a push device", call("DELETE", "/me/push-devices/smoke-toke
 // The full journey needs staff, so it is in smoke-admin.mjs, which switches parcels on locally.
 await expect("GET /track/:lr unknown is 404", call("GET", "/track/QFP-MAA-CBE-ZZZZZZZZ", null, false), 404);
 await expect("GET /track/:lr refuses anything that isn't an LR", call("GET", "/track/nope", null, false), 404);
+await expect("GET /bookings works for a client from before parcels", call("GET", "/bookings", null, true, OLD_CLIENT), 200, (j) => Array.isArray(j) && j.length > 0 && !j.some((b) => b.service === "parcel"));
+await expect("GET /me/notifications works for a client from before parcels", call("GET", "/me/notifications", null, true, OLD_CLIENT), 200, (j) => Array.isArray(j.items) && !j.items.some((n) => n.kind.startsWith("parcel.")));
 await expect("GET /bookings/:id/parcel needs sign-in", call("GET", "/bookings/QFNOPE/parcel", null, false), 401);
 await expect("GET /bookings/:id/parcel unknown is 404", call("GET", "/bookings/QFNOPE/parcel"), 404);
 const parcelBody = { service: "parcel", mode: "intercity", from: "Chennai", to: "Coimbatore", category: "clothes", weightBand: "5", size: "box", declaredValue: 1500, pickup: "counter", delivery: "counter" };

@@ -22,6 +22,9 @@ import 'screens/help/support_screens.dart';
 import 'screens/holidays/holiday_screens.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/offers/offers_screen.dart';
+import 'screens/parcel/parcel_detail_screen.dart';
+import 'screens/parcel/parcel_screen.dart';
+import 'screens/parcel/track_parcel_screen.dart';
 import 'screens/rent/group_screen.dart';
 import 'screens/rent/rent_screens.dart';
 import 'screens/ride/ride_screen.dart';
@@ -84,6 +87,18 @@ final router = GoRouter(
     ),
     GoRoute(path: '/holidays', parentNavigatorKey: _rootKey, builder: (_, _) => const ServiceGate(service: ServiceKey.tours, child: HolidaysScreen())),
     GoRoute(path: '/holidays/:slug', parentNavigatorKey: _rootKey, builder: (_, s) => ServiceGate(service: ServiceKey.tours, child: HolidayDetailScreen(slug: s.pathParameters['slug']!))),
+    GoRoute(path: '/parcels', parentNavigatorKey: _rootKey, builder: (_, _) => const ServiceGate(service: ServiceKey.parcel, child: ParcelScreen())),
+    // Not gated: a parcel already sent can be followed, and collected, while the service is off.
+    GoRoute(
+      path: '/parcels/track',
+      parentNavigatorKey: _rootKey,
+      builder: (_, s) => TrackParcelScreen(key: ValueKey(s.uri.query), lr: s.uri.queryParameters['lr']),
+    ),
+    GoRoute(
+      path: '/parcel/:id',
+      parentNavigatorKey: _rootKey,
+      builder: (_, s) => ParcelDetailScreen(key: ValueKey(s.pathParameters['id']), id: s.pathParameters['id']!),
+    ),
     GoRoute(path: '/checkout', parentNavigatorKey: _rootKey, builder: (_, _) => const CheckoutScreen()),
     GoRoute(
       path: '/confirmed/:id',

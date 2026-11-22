@@ -1,4 +1,4 @@
-import { PARCEL_NOT_CANCELLABLE, type ParcelState, type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
+import { PARCEL_NOT_CANCELLABLE, UPDATE_TO_SEE, type ParcelState, type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visibleById } from "./catalog";
@@ -62,13 +62,21 @@ export const ticketToken = () => [...crypto.getRandomValues(new Uint8Array(12))]
 export const ACTIVE = "('confirmed', 'ongoing')";
 
 
-export async function listBookings(db: D1Database, userId: string) {
-  const { results } = await db.prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC")
-    .bind(userId).all<BookingRow>();
+/** `hidden`: services the asking client can't show (hiddenServices in packages/shared). */
+export async function listBookings(db: D1Database, userId: string, hidden: ServiceKey[]) {
+  const { results } = await db.prepare("SELECT * FROM bookings WHERE user_id = ?1 AND service NOT IN (SELECT value FROM json_each(?2)) ORDER BY created_at DESC")
+    .bind(userId, JSON.stringify(hidden)).all<BookingRow>();
   const seats = await bookingSeats(db, results.filter((r) => r.service === "bus" && r.status !== "cancelled").map((r) => r.id));
   const rentals = await rentalStates(db, results.filter((r) => r.service === "rent").map((r) => r.id));
   const parcels = await parcelStates(db, results.filter((r) => r.service === "parcel").map((r) => r.id));
   return results.map((r) => toBooking(r, seats.get(r.id), rentals.get(r.id) ?? null, parcels.get(r.id) ?? null));
+}
+
+/** Refuses a booking, and everything under it, to a client that can't show its service. */
+export async function assertShown(db: D1Database, userId: string, id: string, hidden: ServiceKey[]) {
+  if (!hidden.length) return;
+  const row = await db.prepare("SELECT service FROM bookings WHERE id = ? AND user_id = ?").bind(id, userId).first<{ service: ServiceKey }>();
+  if (row && hidden.includes(row.service)) throw notFound(UPDATE_TO_SEE);
 }
 
 export async function getBooking(db: D1Database, userId: string, id: string): Promise<Booking> {

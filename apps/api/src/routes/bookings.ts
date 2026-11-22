@@ -1,13 +1,13 @@
 import { Hono } from "hono";
-import { FUEL_EIGHTHS, LIMITS, PARCEL_RULES, PATTERNS, PAYMENT_METHODS, RENTAL_PHOTO_SIDES, RENTAL_RULES, RENTAL_STAGES, RIDE_CANCEL_REASON_KEYS } from "@quikfly/shared";
+import { FUEL_EIGHTHS, LIMITS, UPDATE_TO_SEE, hiddenServices, PARCEL_RULES, PATTERNS, PAYMENT_METHODS, RENTAL_PHOTO_SIDES, RENTAL_RULES, RENTAL_STAGES, RIDE_CANCEL_REASON_KEYS } from "@quikfly/shared";
 import { MAX_BOOKING_LINES, SERVICE_KEYS } from "../config";
 import type { AppEnv } from "../env";
-import { badRequest } from "../lib/errors";
+import { badRequest, conflict } from "../lib/errors";
 import { int, jsonBody, matches, oneOf, optStr, str, text } from "../lib/validate";
 import { requireUser } from "../middleware/auth";
 import { normalisePhone } from "../services/auth";
 import { myParcel } from "../services/parcels/parcels";
-import { cancelBooking, completeBooking, createBooking, getBooking, listBookings } from "../services/bookings";
+import { assertShown, cancelBooking, completeBooking, createBooking, getBooking, listBookings } from "../services/bookings";
 import { cancelSeats, rescheduleBooking } from "../services/bus-changes";
 import { extendRental, extensionQuote, myRental, rentalPhoto, returnRental, startRental, uploadRentalPhoto } from "../services/rentals";
 
@@ -51,12 +51,19 @@ function parcelFields(body: Record<string, unknown>) {
 
 export const bookings = new Hono<AppEnv>()
   .use(requireUser)
-  .get("/", async (c) => c.json(await listBookings(c.env.DB, c.var.user.id)))
+  // A client that can't show a service gets none of its bookings (packages/shared/src/clients.ts).
+  .use("/:id/*", async (c, next) => {
+    await assertShown(c.env.DB, c.var.user.id, c.req.param("id"), hiddenServices(c.req.header("Accept")));
+    await next();
+  })
+  .get("/", async (c) => c.json(await listBookings(c.env.DB, c.var.user.id, hiddenServices(c.req.header("Accept")))))
   // The price comes from `quoteId` (POST /quotes) or `rideId` (POST /rides); any "amount" sent is ignored.
   .post("/", async (c) => {
     const body = await jsonBody(c);
+    const service = oneOf(body, "service", SERVICE_KEYS);
+    if (hiddenServices(c.req.header("Accept")).includes(service)) throw conflict(UPDATE_TO_SEE);
     const booking = await createBooking(c.env.DB, c.var.user.id, {
-      service: oneOf(body, "service", SERVICE_KEYS),
+      service,
       title: str(body, "title"),
       subtitle: str(body, "subtitle", 300),
       payment: oneOf(body, "payment", PAYMENT_METHODS),

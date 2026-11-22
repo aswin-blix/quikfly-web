@@ -4,6 +4,9 @@ Why the project is built the way it is. Add an entry when you make a trade-off, 
 
 | Date | Decision | Why | Revisit when |
 |---|---|---|---|
+| 2026-11-22 | **Clients declare the newer services they can show in `Accept` (`services=parcel`); the API hides those services from the rest** | App 0.1.16 has no update check and reads a parcel as a cab: wrong refund promise, wrong GST. Naming services needs no version table, and `Accept`, unlike a new header, passes CORS on an older API (deploy gap, rollback) | Apps get a forced update |
+| 2026-11-22 | **An old install sees nothing of a parcel except its wallet, credits and support entries** | Missing is safer than mislabelled, and money stays visible. The cost: a parcel sent on the website, and its code, can't be seen in an old app until it updates | Apps get a forced update |
+| 2026-11-22 | **The receiver is picked with Android's own contact picker through our small channel, not a plugin** (the plan said a plugin) | `ACTION_PICK` hands over one number with no contacts permission, so nothing new is asked of the user or declared under DPDP | iOS is built |
 | 2026-11-22 | **A parcel's GST-invoice line comes from the sender's profile**, never from the request | The API writes a parcel's booking lines so no receiver data lands in them; the GSTIN is the one thing the sender may add | — |
 | 2026-11-22 | **The parcels queue, reads included, needs `parcels.manage`, and its search stays out of the panel's address** | It shows a third party's number; a search is often that number | A counter role exists (step 7) |
 | 2026-11-22 | **The offline demo build shows parcels only with `NEXT_PUBLIC_DEMO_PARCELS=1`** | It has no admin to switch them on, and every step ships switched off | `serviceParcel` is on in production |

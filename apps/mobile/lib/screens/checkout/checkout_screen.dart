@@ -1,4 +1,4 @@
-// Shared checkout for bus, holidays and rentals: travellers and contact → payment.
+// Shared checkout for bus, holidays, rentals and parcels: details (travellers, or the parcel) → payment.
 // Shows the API's quote, checks coupons with the API (signs in first) and books with
 // quoteId + couponCode; the API sets the amount. Mirrors the website's CheckoutScreen.
 import 'package:flutter/material.dart';
@@ -111,6 +111,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Future<void> _next(CheckoutDraft d) async {
+    if (d.parcel != null) {
+      // A parcel's details were checked on its form, and it has no travellers.
+      if (await ensureSignedIn(context, ref) && mounted) setState(() => _step = 2);
+      return;
+    }
     final user = ref.read(userProvider);
     _fillContact(user);
     final e = <String, String>{};
@@ -144,6 +149,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() => _paying = true);
     try {
       await Future<void>.delayed(_paymentDelay);
+      final parcel = d.parcel;
+      final gstLines = [if (_gstInvoice && user?.gst != null) (gstinLine, '${user!.gst!.gstin} · ${user.gst!.name}')];
       final b = await ref.read(apiProvider).createBooking(
             service: d.service,
             title: d.title,
@@ -152,12 +159,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             quoteId: d.quote.id,
             couponCode: _coupon?.code,
             useCredits: _creditsOff > 0,
-            lines: [
-              ...d.summary,
-              ('Traveller names', _names.map((c) => c.text.trim()).join(', ')),
-              ('Paid via', paymentLabel(_method.name)),
-              if (_gstInvoice && user?.gst != null) (gstinLine, '${user!.gst!.gstin} · ${user.gst!.name}'),
-            ],
+            receiver: parcel == null ? null : (name: parcel.receiverName, phone: parcel.receiverPhone),
+            contents: parcel?.contents,
+            declaration: parcel?.declaration,
+            // The API writes a parcel's lines itself; a GST invoice is the only one to ask for.
+            lines: parcel != null
+                ? gstLines
+                : [
+                    ...d.summary,
+                    ('Traveller names', _names.map((c) => c.text.trim()).join(', ')),
+                    ('Paid via', paymentLabel(_method.name)),
+                    ...gstLines,
+                  ],
           );
       ref.invalidate(bookingsProvider);
       await ref.read(sessionProvider.notifier).refresh();
@@ -212,7 +225,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         appBar: AppBar(title: const Text('Review & pay')),
         body: LayoutBuilder(builder: (context, box) {
           final progress = Row(children: [
-            for (final (i, l) in [(1, 'Traveller details'), (2, 'Payment')]) ...[
+            for (final (i, l) in [(1, d.parcel == null ? 'Traveller details' : 'Parcel details'), (2, 'Payment')]) ...[
               if (i > 1) const SizedBox(width: 10),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -299,7 +312,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   child: Row(children: [
                     Icon(Icons.toll_outlined, size: 15, color: c.accent),
                     const SizedBox(width: 6),
-                    Expanded(child: Text('Earn ${inr(earns)} QuikFly Credits when this trip is completed.', style: TextStyle(color: c.fgMuted, fontSize: 12))),
+                    Expanded(child: Text('Earn ${inr(earns)} QuikFly Credits when ${d.parcel == null ? 'this trip is completed' : 'the parcel is collected'}.', style: TextStyle(color: c.fgMuted, fontSize: 12))),
                   ]),
                 ),
             ]),
@@ -391,7 +404,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget _details(CheckoutDraft d, User? user) {
     final c = context.qf;
     final saved = ref.watch(travellersProvider).value ?? const <Traveller>[];
+    final parcel = d.parcel;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (parcel != null) _parcelDetails(parcel) else ...[
       Panel(
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const Text('Traveller details', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -443,6 +458,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ),
         ]),
       ),
+      ],
       if (d.needsLicence) ...[
         const SizedBox(height: 12),
         LicencePanel(showForm: false, error: _errors['licence'], onSaved: () => setState(() => _errors.remove('licence'))),
@@ -463,7 +479,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         TextButton(
           style: TextButton.styleFrom(alignment: Alignment.centerLeft),
           onPressed: () => context.push('/account/business'),
-          child: const Text('Travelling for work? Add GST details for a GST invoice'),
+          child: Text('${parcel == null ? 'Travelling' : 'Sending'} for work? Add GST details for a GST invoice'),
         ),
       const SizedBox(height: 8),
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -474,6 +490,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       const SizedBox(height: 16),
       GoldButton(label: 'Continue to payment', onPressed: () => _next(d)),
     ]);
+  }
+
+  Widget _parcelDetails(ParcelDraft p) {
+    final c = context.qf;
+    return Panel(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Expanded(child: Text('Parcel details', style: TextStyle(fontWeight: FontWeight.w700))),
+          TextButton(onPressed: () => context.pop(), child: const Text('Edit')),
+        ]),
+        KeyValue('Receiver', p.receiverName),
+        KeyValue('Mobile', phoneDisplay(p.receiverPhone)),
+        KeyValue('Contents', p.contents),
+        KeyValue('Declared value', inr(p.declaredValue)),
+        const SizedBox(height: 6),
+        Text('The collection code appears only on your screen, in My Trips. You pass it to the receiver (demo: no SMS is sent).',
+            style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
+      ]),
+    );
   }
 
   Widget _payment(CheckoutDraft d, User? user, int total) {
