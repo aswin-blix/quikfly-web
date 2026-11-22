@@ -4,6 +4,11 @@ Why the project is built the way it is. Add an entry when you make a trade-off, 
 
 | Date | Decision | Why | Revisit when |
 |---|---|---|---|
+| 2026-11-23 | **A Quick parcel is one captain's leg and follows the ride cancellation rules; it has no start time, which is how every client tells it apart** | Tiers counted to "now" would refund nothing at booking. No new column or migration | Quick parcels can be booked ahead |
+| 2026-11-23 | **In the demo the sender plays the captain at both hand-offs, with the codes, and only while simulation is on** (the plan's endpoints) | There is no driver app; the cron never hands a parcel over | A driver app exists |
+| 2026-11-23 | **Quick parcels take cash on pickup under the cash-for-rides switch; cancelling one refunds nothing and says nothing was paid** | The plan's payment list. It can only be cancelled before pickup, so no cash was taken | Captains carry real cash |
+| 2026-11-23 | **A parcel brought back keeps the fare and earns no credits** | The plan's "same fare": the trip was made | — |
+| 2026-11-23 | **Quick parcel captains come from the simulated roster, never partner drivers, and their public tracking shows the city, not the places** | Partners haven't agreed to carry parcels (step 7); the places can be someone's home | Step 7 |
 | 2026-11-22 | **Clients declare the newer services they can show in `Accept` (`services=parcel`); the API hides those services from the rest** | App 0.1.16 has no update check and reads a parcel as a cab: wrong refund promise, wrong GST. Naming services needs no version table, and `Accept`, unlike a new header, passes CORS on an older API (deploy gap, rollback) | Apps get a forced update |
 | 2026-11-22 | **An old install sees nothing of a parcel except its wallet, credits and support entries** | Missing is safer than mislabelled, and money stays visible. The cost: a parcel sent on the website, and its code, can't be seen in an old app until it updates | Apps get a forced update |
 | 2026-11-22 | **The receiver is picked with Android's own contact picker through our small channel, not a plugin** (the plan said a plugin) | `ACTION_PICK` hands over one number with no contacts permission, so nothing new is asked of the user or declared under DPDP | iOS is built |

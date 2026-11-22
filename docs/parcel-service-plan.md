@@ -1,6 +1,6 @@
 # Parcel service: research and implementation plan
 
-How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then the owner's decisions (10) and what changed while building (11). **Steps 1, 2 and 5 are built (2026-11-22; step 5 not released), off behind `serviceParcel`; where sections 1–9 differ from section 11, section 11 wins.**
+How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then the owner's decisions (10) and what changed while building (11). **Steps 1, 2, 3 and 5 are built (2026-11-23; the app is not released), off behind `serviceParcel`; where sections 1–9 differ from section 11, section 11 wins.**
 
 - **Date:** 2026-11-20. **Code:** `main` at `021b718` (after PR #112). No app code was changed.
 - **Read first:** [AGENTS.md](../AGENTS.md), [roadmap.md](roadmap.md), [decisions.md](decisions.md). The plan keeps every recorded decision; where a step leans on one it names it.
@@ -368,6 +368,16 @@ The questions as they were asked:
 | The mock shows parcels in the single-file demo | Only when built with `NEXT_PUBLIC_DEMO_PARCELS=1` | Steps ship switched off |
 | Queue search by LR or phone | Also by booking id; a search looks beyond open parcels | Staff search for finished ones too |
 
+### Step 3
+
+| Plan said | Built | Why |
+|---|---|---|
+| States: booked → pickup → in_transit → delivered | `booked` (captain assigned) → `in_transit` → `delivered`, or `returned` | A leg has one pending state; the captain is assigned at booking |
+| Create the ride like `POST /rides`, store `rideId` | A rides row with status `parcel`, linked from the leg, not from the booking | A booking's `rideId` makes clients treat it as a ride to start or settle |
+| Delivery OTP in the receiver's inbox | The sender's screen only | Decision 10.7 |
+| A bike or auto | Bikes | 20 kg is the cap, and the bike fare is the plan's price |
+| Website form and tracker | Also the app and admin | The app is released with it, and staff must be able to act |
+
 ### Step 5
 
 | Plan said | Built | Why |
@@ -377,7 +387,7 @@ The questions as they were asked:
 | Chooser, forms, tracking | No chooser: Bus parcel only | Quick parcel is step 3 |
 | Released as the next app version | Built and tested; the release is its own step | The owner builds and publishes |
 
-Left to their steps: bike legs and their transitions (3), door legs (4), return to sender, re-weighing and moving a parcel to another bus (6).
+Left to their steps: door legs (4), return to sender, re-weighing and moving a parcel to another bus (6).
 
 ---
 

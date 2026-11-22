@@ -9,7 +9,7 @@ Read this file first. Then read:
 - [docs/demo-script.md](docs/demo-script.md): the client demo, step by step (Phase 4).
 - [docs/privacy.md](docs/privacy.md): DPDP privacy: notice, consent, export, erasure, and the data-breach plan.
 - [docs/prompts/](docs/prompts/): ready-to-paste prompts for planned work (e.g. the admin settings and pricing audit).
-- [docs/parcel-service-plan.md](docs/parcel-service-plan.md): the parcel service (KPN-style bus parcels + bike courier): research, the owner's decisions, design and steps. Steps 1 (foundation), 2 (Bus parcel on the website and in admin) and 5 (the customer app; not released yet) are built, off behind `serviceParcel`; steps 3, 4, 6 and 7 wait for the owner.
+- [docs/parcel-service-plan.md](docs/parcel-service-plan.md): the parcel service (KPN-style bus parcels + bike courier): research, the owner's decisions, design and steps. Steps 1 (foundation), 2 (Bus parcel on the website and in admin), 3 (Quick parcel, in every client) and 5 (the customer app; not released yet) are built, off behind `serviceParcel`; steps 4, 6 and 7 follow.
 - [docs/family-profiles-plan.md](docs/family-profiles-plan.md): Phase 5 #12 (family payer with a monthly limit and shared rides, monthly GST statements) and the chauffeur toll follow-up: settled design, not started.
 - [apps/api/README.md](apps/api/README.md): endpoint list. [apps/web/README.md](apps/web/README.md): pages, theming, navigation. [apps/admin/README.md](apps/admin/README.md): admin panel structure and rules.
 
@@ -93,6 +93,7 @@ cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://1
 - A plain `next build` of the website talks to the **production** API (`.env.production`). Building to test locally? Pass `NEXT_PUBLIC_API_URL` for the local API, or test submissions would hit production.
 - New `Settings` fields can be missing for a minute after a deploy (old API, new website). Code reading them must not crash on `undefined`.
 - Parcels: move one only through `planLegMove` + `advanceLegs` (never `UPDATE parcels SET state`), and never put a receiver's name, number, contents or the collection code in booking lines, notifications or audit rows. Don't turn `serviceParcel` on in production before the app with parcels is published and the owner says so.
+- A parcel booking with no start time is a Quick parcel (`isQuickParcel`): it follows the ride cancellation rules, and cash on pickup is never shown or paid as a refund. Never give a Quick parcel a `startsAt` or a booking `ride_id` (its captain's card is a rides row with status `parcel`, linked from the leg).
 - A service added after the six launch ones reaches only clients that declare it in `Accept: application/json; services=parcel` (`packages/shared/src/clients.ts`, copied in the app's `models.dart`): released apps read an unknown service as a cab, with a cab's refund and GST. A new service joins both lists in the change that can show it everywhere. A script or curl without that `Accept` sees no parcel bookings.
 - The catalog seed runs once per database. A new kind or seed row reaches production only through a migration (`INSERT OR IGNORE`, see 0012 and 0029).
 - Run the production smoke test once per deploy; every run leaves bookings, tickets and callbacks on production.

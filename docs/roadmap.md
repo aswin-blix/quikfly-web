@@ -391,7 +391,7 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 - [x] 0. Owner's decisions (2026-11-22, section 10 of the [plan](parcel-service-plan.md)); the accountant's GST answer is still open
 - [x] 1. Foundation: shared rules, migration 0029, quotes, booking, tracking, staff and simulated carriers, privacy, mock, smoke
 - [x] 2. Bus parcel in admin (queue, counter buttons, Settings tab) and on the website (page, tracking at `/parcels/track?lr=`, trip card)
-- [ ] 3. Quick parcel (city), with the ride cancellation rules
+- [x] 3. Quick parcel (city), with the ride cancellation rules (built on `feat/parcel-quick`, **not merged**)
 - [ ] 4. Door pickup and delivery as trips
 - [x] 5. Customer app, and the guard that keeps parcels from older installs (merged and deployed, **app not released**; `serviceParcel` stays off until the release and the owner's word)
 - [ ] 6. Operations polish: return to sender, re-weighing, moving to another bus, dashboard, CSV
@@ -402,6 +402,11 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 - 2026-11-22 (branch `feat/parcel-app`, no migration): the `Accept` guard; app form, checkout, confirmation, parcel screen with the code, tracking, My Trips, invoice QR, notifications, contact picker. Fixed on the way: the inbox now reloads when opened (both apps showed the list from launch), pills wrap, the services sheet scrolls.
 - Verified: typecheck, both smoke suites, the app's tests with parcels off and on, app 0.1.16's own code against the new API (gets no parcel), the new app and website against the API now live, and the app's web build through the whole journey at 390/820/1366 px, both themes. **Not checked:** a phone, the contact picker on Android, TalkBack, hosted D1.
 - 2026-11-22 **Deployed** (`main` `218e627`, tree `1b5ae10c`): the merged tree was rehearsed first (smoke's production path three times, 316 checks). API → website → admin, then production smoke once (318). Checked live, signed out: 43 website and 19 admin pages serve the build, offers load cross-origin, the parcels page says it's off. Not checked: the guard with a real parcel on production (parcels are off), the admin warning signed in.
+
+### Step 3 notes
+
+- 2026-11-23 (branch `feat/parcel-quick`, no migration): Quick parcel in the API, website, admin and app: one captain's leg, pickup and delivery codes, returned with a reason, ride cancellation rules, cash on pickup.
+- Verified: typecheck, both smoke suites twice, the app's suite with parcels off and on and against the API now live, app 0.1.16's own code against the new API, 106 browser checks at 390/820/1366 px in both themes. **Not checked:** a phone, hosted D1.
 
 ### Phase 7 work log
 

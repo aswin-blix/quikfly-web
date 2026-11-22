@@ -55,7 +55,7 @@ export function CourierSteps({ parcel: p, onChange }: { parcel: Parcel; onChange
       )}
       {p.state === "in_transit" && p.simulated && (
         <form className="rounded-xl border border-dashed border-line p-4 space-y-2" onSubmit={(e) => { e.preventDefault(); void act(() => api.parcels.deliver(p.bookingId, code)); }}>
-          <label className="label" htmlFor={`deliver-${p.bookingId}`}>Demo: you play the captain. Type the receiver&apos;s code to deliver.</label>
+          <label className="block text-xs text-muted" htmlFor={`deliver-${p.bookingId}`}>Demo: you play the captain. Type the receiver&apos;s code to deliver.</label>
           <div className="flex flex-wrap gap-2">
             <input id={`deliver-${p.bookingId}`} className="field !w-40 font-mono" inputMode="numeric" autoComplete="off" value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, PARCEL_RULES.collectOtpDigits))} />

@@ -17,9 +17,9 @@ The customer website for all six QuikFly services. All data and every price come
 | `/rent-a-car` | City and dates, self-drive or chauffeur, filters (category, transmission, fuel, seats), hourly pricing | Zoomcar |
 | `/rent-a-car/[id]` | Car details, specs, price breakdown, licence check | Zoomcar |
 | `/travel-rentals` | Tempo traveller → 45-seat coach, local or outstation fare estimate, side-by-side compare | Savaari / group-travel operators |
-| `/parcels` | Bus parcel, counter to counter (only while `serviceParcel` is on): route, departures with hand-in cut-offs, category, weight, size, value, receiver, the prohibited list and declaration, the API's price; then checkout. Also a box to track by LR | KPN / bus parcel offices |
+| `/parcels` | Bus parcel or Quick parcel (`?mode=city`: two places from `components/PlacePicker.tsx`, the ride policy, cash on pickup), only while `serviceParcel` is on. The bus parcel, counter to counter: route, departures with hand-in cut-offs, category, weight, size, value, receiver, the prohibited list and declaration, the API's price; then checkout. Also a box to track by LR | KPN / bus parcel offices |
 | `/parcels/track?lr=` | Public parcel tracking (kept out of search; works while the service is off): timeline, collection counter, first names only, never the code | Courier trackers |
-| `/bookings` (parcels) | `components/parcel/ParcelPanel.tsx`: state, timeline, counters, share and QR, and the collection code while it's ready (the only place it appears). Cancel until it's on the bus. `?open=<id>` opens a booking (parcel notifications use it) | — |
+| `/bookings` (parcels) | `components/parcel/ParcelPanel.tsx` (with `CourierSteps.tsx` for a Quick parcel: captain, pickup code and the demo's two hand-offs): state, timeline, counters, share and QR, and the collection code while it's ready (the only place it appears). Cancel until it's on the bus. `?open=<id>` opens a booking (parcel notifications use it) | — |
 | `/checkout` | Shared checkout for every service: traveller and contact details with validation, coupons, payment methods, fare breakdown | redBus / MakeMyTrip |
 | `/booking-confirmed` | Animated confirmation and booking summary | — |
 | `/trip?id=` | Trip summary: the bookings of one trip on a timeline, each with its own invoice, and the trip total (printable) | — |
