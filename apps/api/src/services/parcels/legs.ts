@@ -2,7 +2,7 @@
 // carrier alike. It writes set-based statements (json_each), so moving 20 parcels costs the same
 // few queries as moving one: the cron shares the free plan's 50 queries with its other jobs.
 import {
-  PARCEL_CANCELLABLE, PARCEL_RULES, parcelNotice,
+  PARCEL_CANCELLABLE, PARCEL_COMPLETES, PARCEL_RULES, parcelNotice,
   type BookingStatus, type LegMove, type ParcelActor, type ParcelCategory, type ParcelLeg, type ParcelSize, type ParcelState, type ParcelWeightBand,
 } from "@quikfly/shared";
 import { randomDigits, randomToken } from "../../lib/random";
@@ -10,7 +10,7 @@ import { auditIfStatement } from "../admin/audit";
 
 const ACTIVE = "('confirmed', 'ongoing')";
 
-/** SQL, true for a bookings row that may be cancelled: not a parcel, or one not yet on the bus. */
+/** SQL, true for a bookings row that may be cancelled: not a parcel, or one not yet on the bus or with a captain. */
 export const CANCELLABLE_SQL = `(bookings.service <> 'parcel' OR EXISTS (
   SELECT 1 FROM parcels cp WHERE cp.booking_id = bookings.id AND cp.state IN (${PARCEL_CANCELLABLE.map((s) => `'${s}'`).join(", ")})))`;
 
@@ -70,9 +70,9 @@ export async function advanceLegs(
       changed: move.legs.filter((l, i) => l.state !== legs[i].state).map((l) => ({ ...l, id: row.booking_id, token })),
       data: {
         id: row.booking_id, prev: row.move_id, token, from: row.state, state: move.state,
-        status: move.state === "collected" ? "completed" : "ongoing",
+        status: PARCEL_COMPLETES.includes(move.state) ? "completed" : "ongoing",
         holdUntil: move.holdUntil, nextAt: move.nextAt,
-        otp: move.state === "ready" ? randomDigits(PARCEL_RULES.collectOtpDigits) : null,
+        otp: move.issuesCode ? randomDigits(PARCEL_RULES.collectOtpDigits) : null,
         kind: notice?.kind ?? null, title: notice?.title ?? null, body: notice?.body ?? null,
       },
     };

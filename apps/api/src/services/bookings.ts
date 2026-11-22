@@ -1,4 +1,4 @@
-import { PARCEL_NOT_CANCELLABLE, UPDATE_TO_SEE, type ParcelState, type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
+import { PARCEL_NOT_CANCELLABLE, UPDATE_TO_SEE, isQuickParcel, type ParcelState, type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visibleById } from "./catalog";
@@ -163,7 +163,7 @@ export async function createBooking(db: D1Database, userId: string, input: NewBo
   const id = uid("QF");
   const createdAt = new Date().toISOString();
   // The cancellation policy, fees, GST rate and rental rates it's sold under (terms.ts).
-  const terms = bookingTerms(settings, input.service);
+  const terms = bookingTerms(settings, input.service, parcel?.mode);
   // A ride on a partner's vehicle carries that partner (and earns them money on completion).
   const partner = rideId
     ? await db.prepare("SELECT r.vendor_vehicle_id, r.vendor_driver_id, vv.vendor_id FROM rides r LEFT JOIN vendor_vehicles vv ON vv.id = r.vendor_vehicle_id WHERE r.id = ?")
@@ -288,9 +288,10 @@ async function notActive(db: D1Database, userId: string, id: string): Promise<ne
 }
 
 /** One line about what a cancellation gave back (for notifications). */
-export function refundText(row: Pick<BookingRow, "payment" | "refund_amount" | "cancel_fee">): string {
+export function refundText(row: Pick<BookingRow, "service" | "payment" | "refund_amount" | "cancel_fee">): string {
   const back = row.refund_amount ?? 0;
   const fee = row.cancel_fee ? ` (cancellation fee ₹${row.cancel_fee.toLocaleString("en-IN")})` : "";
+  if (row.service === "parcel" && row.payment === "cash") return `Nothing was paid, so there's nothing to refund${fee}.`;
   if (!back) return `No refund under the cancellation policy${fee}.`;
   return row.payment === "wallet" ? `₹${back.toLocaleString("en-IN")} is back in your QuikFly wallet${fee}.` : `Refund due: ₹${back.toLocaleString("en-IN")}${fee}.`;
 }
@@ -302,13 +303,15 @@ export function refundText(row: Pick<BookingRow, "payment" | "refund_amount" | "
  * cancellation fee (`rider` set). Staff cancels never charge a fee.
  */
 export async function refundFor(
-  db: D1Database, row: Pick<BookingRow, "service" | "starts_at" | "amount" | "deposit" | "created_at"> & { terms?: string | null },
+  db: D1Database, row: Pick<BookingRow, "service" | "payment" | "starts_at" | "amount" | "deposit" | "created_at"> & { terms?: string | null },
   rider?: { reason: string | null },
 ) {
   const settings = withTerms(await getSettings(db), parseTerms(row.terms));
-  if (row.service === "bike" || row.service === "car") {
+  const quick = isQuickParcel({ service: row.service, startsAt: row.starts_at });
+  if (quick || row.service === "bike" || row.service === "car") {
     const fee = rider ? rideCancelFee(settings, row.amount, rider.reason, row.created_at, Date.now(), row.starts_at) : 0;
-    return { percent: 100, amount: row.amount - fee, fee };
+    // Cash for a parcel is paid at pickup, and it can only be cancelled before that.
+    return { percent: 100, amount: quick && row.payment === "cash" ? 0 : row.amount - fee, fee };
   }
   const percent = refundPercent(cancelPolicyFor(settings, row.service), row.starts_at);
   return { percent, amount: refundAmount(row.amount, percent, row.deposit ?? 0), fee: 0 };
@@ -330,7 +333,9 @@ export async function cancelBookingRow(db: D1Database, userId: string | null, id
   const row = await db.prepare(`SELECT * FROM bookings WHERE id = ?1 ${owner} AND ${open}`).bind(...ids).first<BookingRow>();
   if (!row) return null;
   // A customer cancelling a ride may owe the cancellation fee; staff never charge one.
-  const refund = refusal ? { percent: 100, amount: row.amount, fee: 0 } : await refundFor(db, row, userId === null ? undefined : { reason });
+  const refund = refusal
+    ? { percent: 100, amount: row.service === "parcel" && row.payment === "cash" ? 0 : row.amount, fee: 0 }
+    : await refundFor(db, row, userId === null ? undefined : { reason });
   const credit = row.payment === "wallet" ? refund.amount : 0;
   const detail = refund.fee ? ` (less ₹${refund.fee} cancellation fee)` : refund.percent < 100 ? ` (${refund.percent}%${row.deposit ? ", deposit in full" : ""})` : "";
   const note = `${refundNote}${detail} · ${row.title}`;

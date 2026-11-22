@@ -130,6 +130,7 @@ export async function ownRideWithTime(db: D1Database, userId: string, rideId: st
   const row = await db.prepare("SELECT data, status, created_at FROM rides WHERE id = ? AND user_id = ?").bind(rideId, userId).first<{ data: string; status: string; created_at: string }>();
   if (!row) throw notFound("Ride not found.");
   if (row.status === "cancelled") throw badRequest("This ride was cancelled.");
+  if (row.status === "parcel") throw badRequest("That ride is carrying a parcel.");
   return { ride: { scheduledFor: null, stops: [], ...JSON.parse(row.data) } as Ride, createdAt: row.created_at };
 }
 

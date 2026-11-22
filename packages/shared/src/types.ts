@@ -2,7 +2,7 @@
 // mobile app consume them, so change them here only.
 import type { RentalState } from "./rental";
 import type { BookingTerms } from "./terms";
-import type { ParcelCategory, ParcelDeparture, ParcelHandover, ParcelQuoteInfo, ParcelSize, ParcelState, ParcelWeightBand } from "./parcel";
+import type { QuickParcelPlan, ParcelCategory, ParcelDeparture, ParcelHandover, ParcelQuoteInfo, ParcelSize, ParcelState, ParcelWeightBand } from "./parcel";
 
 export type ServiceKey = "bike" | "car" | "bus" | "tours" | "rent" | "rentals" | "parcel";
 /** How a booking is paid. Only "wallet" moves money inside QuikFly; the rest go to a gateway later. */
@@ -601,7 +601,11 @@ export type QuoteRequest =
       kmPlan: (typeof RENT_KM_PLANS)[number]; protection: (typeof RENT_PROTECTION)[number]; doorstep: boolean;
     }
   | { service: "rentals"; vehicleId: string; trip: GroupTrip; destinationId?: string; days: number; start: string }
-  | (ParcelDetails & { service: "parcel"; mode: "city"; pickupId: string; dropId: string })
+  | (ParcelDetails & {
+      service: "parcel"; mode: "city"; pickupId: string; dropId: string;
+      /** Set by the API when it prices the quote, never read from a client. */
+      plan?: QuickParcelPlan;
+    })
   | (ParcelDetails & {
       service: "parcel"; mode: "intercity"; from: string; to: string;
       /** A departure from GET /parcels/options. */
