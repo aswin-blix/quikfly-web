@@ -475,7 +475,7 @@ class _HolidayDetailScreenState extends ConsumerState<HolidayDetailScreen> {
                       else if (_live.quote != null)
                         Text(inr(_live.quote!.total), style: t2.headlineSmall),
                     ]),
-                    if (_live.error != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(_live.error!, style: TextStyle(color: c.danger))),
+                    if (_live.error != null) Padding(padding: const EdgeInsets.only(top: 6), child: LiveError(child: Text(_live.error!, style: TextStyle(color: c.danger)))),
                     const SizedBox(height: 12),
                     GoldButton(label: 'Book now', loading: _booking, onPressed: _live.loading || (t.departures.isNotEmpty && _dep(t) == null) ? null : () => _book(t)),
                     const SizedBox(height: 6),

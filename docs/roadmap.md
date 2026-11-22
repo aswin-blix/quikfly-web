@@ -413,7 +413,9 @@ PR #6, deployed 2026-11-16. Sign-up step; `/account` with profile, change number
 ## Backlog (agreed ideas, not scheduled)
 
 - **Fixed on `fix/otp-screen-reader` (2026-11-22), reaches phones with the next app build:** the OTP field was dropped from what screen readers get (`Opacity(0)`), so they had no field to type the code into (both apps; `test/login_otp_test.dart`). **Try it with TalkBack in that release's phone check.**
-- The app's form errors (`FormError`, e.g. a wrong OTP) aren't live regions, so a screen reader doesn't read them out when they appear; the user has to swipe to them (found while fixing the OTP field)
+- **Fixed on `fix/error-announce` (2026-11-22), reaches phones with the next app build:** the apps' errors are live regions, so screen readers read them when they appear (`test/error_announce_test.dart`). **Try a wrong OTP, twice, with TalkBack in that release's phone check.** Left: the same message twice without clearing in between (pressing Send OTP again on the same bad number) is read once
+- **Bug, sign-up (app):** a refused referral code shows "Something went wrong. Please try again." instead of the reason and "You can try another code or continue without one": `login_screen.dart` rethrows a plain `Exception`, which `errorText()` hides (reproduced 2026-11-22)
+- The website's login errors (`LoginModal.tsx`) have no `role="alert"`, unlike its account, parcel and rental errors, so a screen reader doesn't read a wrong OTP there (seen in the code 2026-11-22)
 - **Before any custom domain:** set `workers_dev: true` beside the routes (installed apps use workers.dev; adding routes turns it off), and stop `smoke.mjs` and the app's contract test recognising production by "workers.dev" (on another host they would write test data to production)
 - The app's notification bell keeps the count from launch until the inbox is opened (found during parcels step 5)
 - The home page's phone mock-up gets the parcel tile when an app with parcels is released
