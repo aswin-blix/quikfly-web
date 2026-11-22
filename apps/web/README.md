@@ -78,7 +78,7 @@ Install once from the repo root (`npm install`), which links the shared package.
 ```bash
 npm run dev          # http://localhost:3000
 npm run build        # multi-page static export to ./out (deploy to any static host)
-npm run build:demo   # single self-contained quikfly-demo.html for sharing (in-memory router)
+npm run build:demo   # single self-contained quikfly-demo.html: offline, mock API, in-memory router (needs Python 3)
 npm run typecheck
 ```
 

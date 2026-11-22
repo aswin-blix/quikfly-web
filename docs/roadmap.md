@@ -77,7 +77,7 @@ What's there now: smoke tests ran against production, leaving test accounts **+9
 ### D4 fallbacks to prepare
 
 - Slow or no network on the phone: switch Wi-Fi ↔ mobile data; the website on the laptop shows the same flows.
-- Last resort without the API: the single-file offline demo (`npm run build:demo`, mock API) opened from the laptop.
+- Last resort without the API: the single-file offline demo (`npm run build:demo`, mock API; repaired 2026-11-22, so rebuild any older copy) opened from the laptop.
 - APK already installed on the demo phone (don't rely on downloading during the demo); a second phone with 0.1.1 if available.
 - Admin session: sign in before the demo (sessions last 12 hours).
 - Check on a phone over mobile data that `/config` and quotes respond quickly (Workers don't sleep; D1 free-plan limits are per request).
@@ -112,6 +112,7 @@ What's there now: smoke tests ran against production, leaving test accounts **+9
 - 2026-11-17 **App 0.1.2 prepared** (branch `release/app-0.1.2`, `version: 0.1.2+3`, arm64 version code 2003: Flutter adds 1000 × ABI to the build number, so arm64 is 2000 + 3): ships the D5 trip-card fixes (no duplicate "Paid by", no Invoice button on cancelled bookings). Owner builds; Claude verifies and installs; GitHub Release `app-v0.1.2` after the owner's yes. **Built and verified:** arm64 22.1 MB (2003), armeabi-v7a 19.7 MB (1003), x86_64 23.7 MB (4003), all signed `CN=QuikFly`; installed over 0.1.1 on the OnePlus in place (first-install time kept). The first `adb install` returned nothing and changed nothing (likely the phone's install prompt); the retry succeeded.
 
 - 2026-11-18 **Home page: duplicate services section removed** (owner spotted it on production; branch `fix/home-duplicate-services`): the "Six ways to move. Zero app switching." carousel showed the same six services, photos and links as the "Where do you want to go today?" grid right above it. Kept the grid (all six visible at once, closest to the booking widget) and deleted `ServiceShowcase` from `HomeScreen.tsx`. Also deletes the unused `public/assets/logo.jpg` (old banner; nothing referenced it since the switch to `logo.png`). Typecheck passes; browser-checked on desktop (dark) and 390 px (light): grid flows into the stats, no horizontal scroll. Reaches users after merge + website deploy.
+- 2026-11-22 **Two live bugs fixed** (branch `fix/admin-dialog-focus`, not deployed until merged; admin deploy only). (1) The admin's ConfirmDialog took focus back on every render: typed tolls of ₹450 were saved as ₹4 (₹596 refunded instead of ₹150), payout references and SOS notes lost the dialog at a space, and driver approval jumped to Cancel after a tick. All four reproduced on main and pass with the fix at 1366 and 390 px. Settlements made by typing since 2026-11-20 need a look in the audit log (`booking.complete`, `tollsActual`). (2) `npm run build:demo` didn't build on Windows (env syntax, `python3`, code page, no `.arb` rule for webpack) and, where it did, the "offline" file called the production API; now `scripts/build-demo.mjs`, checked from cmd, PowerShell and Git Bash and opened from disk with the network blocked.
 
 ### After Phase 4
 
