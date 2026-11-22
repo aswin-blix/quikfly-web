@@ -1026,6 +1026,10 @@ if (LOCAL) {
     await expect("search by the sender's number", queue(`?q=${senderPhone}`), 200, listed);
     await expect("search by the receiver's number, spaced", queue(`?q=${encodeURIComponent(`+91 ${receiverPhone.slice(0, 5)} ${receiverPhone.slice(5)}`)}`), 200, listed);
     await expect("search is not a wildcard", queue("?q=QFP-%25%25%25%25%25ZZZZZZZZZ"), 200, (j) => j.total === 0);
+    await expect("search by a number with a leading 0", queue(`?q=0${senderPhone}`), 200, listed);
+    await expect("only wildcards find nothing", queue("?q=%25%25%25"), 200, (j) => j.total === 0);
+    await expect("a 60-character search doesn't break", queue(`?q=${"A".repeat(60)}`), 200, (j) => j.total === 0);
+    await expect("a 55-digit search doesn't break", queue(`?q=${"9".repeat(55)}`), 200);
     await expect("filter by the sending counter", queue(`?city=chennai&q=${p.lr}`), 200, listed);
     await expect("filter by the collecting counter", queue(`?city=Coimbatore&q=${p.lr}`), 200, listed);
     await expect("another city's counter doesn't list it", queue(`?city=Madurai&q=${p.lr}`), 200, (j) => j.total === 0);

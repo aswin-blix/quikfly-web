@@ -17,8 +17,17 @@ import { useNav } from "@/lib/nav";
 import { CATEGORY_LABEL, PARCEL_QUOTE_DEBOUNCE_MS, PARCEL_QUOTE_MARGIN_MS, SIZE_LABEL, parcelTrackPath } from "@/lib/parcels";
 
 type BusParcelRequest = Extract<QuoteRequest, { service: "parcel"; mode: "intercity" }>;
+/** Enough to show a value is over the limit, instead of cutting it down to one under. */
+const VALUE_DIGITS_MAX = 7;
 /** One departure: two operators' buses can leave at the same time, and bus ids repeat across days. */
 const busKey = (d: { busId: string; departAt: string }) => `${d.busId}@${d.departAt}`;
+/** A typed or pasted number as 10 digits. A digit too many is never allowed to shift the others along. */
+function mobileDigits(input: string) {
+  let d = input.replace(/\D/g, "");
+  if (d.length === 12 && d.startsWith("91")) d = d.slice(2);
+  else if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
+  return d.slice(0, 10);
+}
 type Field = "departure" | "value" | "name" | "phone" | "contents" | "declaration";
 
 function TrackForm() {
@@ -220,8 +229,8 @@ export function ParcelScreen() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className="label" htmlFor="parcel-value">What it&apos;s worth (₹)</label>
-                <input id="parcel-value" className={cx("field mt-1.5", errors.value && "!border-danger/60")} inputMode="numeric" maxLength={5} value={value}
-                  onChange={(e) => { setValue(e.target.value.replace(/\D/g, "")); clear("value"); }} aria-describedby="value-hint err-value" />
+                <input id="parcel-value" className={cx("field mt-1.5", errors.value && "!border-danger/60")} inputMode="numeric" value={value}
+                  onChange={(e) => { setValue(e.target.value.replace(/\D/g, "").slice(0, VALUE_DIGITS_MAX)); clear("value"); }} aria-describedby="value-hint err-value" />
                 <p id="value-hint" className={cx("text-xs mt-1", value && !valueOk ? "text-danger" : "text-subtle")}>Up to {inr(settings.parcelMaxDeclaredValue)}.</p>
                 <FieldError id="value" text={errors.value} />
               </div>
@@ -246,7 +255,7 @@ export function ParcelScreen() {
               <div>
                 <label className="label" htmlFor="parcel-phone">Receiver&apos;s mobile</label>
                 <input id="parcel-phone" autoComplete="off" className={cx("field mt-1.5", errors.phone && "!border-danger/60")} inputMode="numeric" value={phone}
-                  onChange={(e) => { setPhone(e.target.value.replace(/\D/g, "").slice(-10)); clear("phone"); }} aria-describedby="err-phone" />
+                  onChange={(e) => { setPhone(mobileDigits(e.target.value)); clear("phone"); }} aria-describedby="err-phone" />
                 <FieldError id="phone" text={errors.phone} />
               </div>
             </div>
@@ -286,7 +295,10 @@ export function ParcelScreen() {
                 <p className="text-xs text-muted">If it&apos;s lost or damaged QuikFly pays up to {inr(quote.parcel?.liability ?? 0)}. Parcels aren&apos;t insured.</p>
               </>
             ) : priceError ? (
-              <p className="text-sm text-danger">{priceError}</p>
+              <p className="text-sm text-danger">
+                {/* Reloads the buses too: the usual cause is a hand-in time that has just passed. */}
+                {priceError} <button type="button" className="text-gold underline" onClick={() => setAttempt((n) => n + 1)}>Try again</button>
+              </p>
             ) : key ? (
               <p className="text-sm text-muted flex items-center gap-2"><Spinner size={14} />Getting the price…</p>
             ) : (

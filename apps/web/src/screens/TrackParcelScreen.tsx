@@ -52,7 +52,7 @@ export function TrackParcelScreen() {
                 <span className={cx("text-xs font-semibold px-2.5 py-1 rounded-full", PARCEL_CHIP[t.state])}>{PARCEL_STATE_LABEL[t.state]}</span>
               </div>
               <ParcelTimeline state={t.state} events={t.events} departAt={t.departAt} readyAt={t.readyAt} />
-              {t.simulated && !["collected", "cancelled"].includes(t.state) && <SimulatedNote />}
+              {t.simulated && !["collected", "cancelled", "unclaimed"].includes(t.state) && <SimulatedNote />}
             </section>
             <aside className="panel p-5 h-fit space-y-4 text-sm min-w-0">
               {(t.sender || t.receiver) && (

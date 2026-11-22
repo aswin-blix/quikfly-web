@@ -100,7 +100,7 @@ export function ParcelPanel({ booking }: { booking: Booking }) {
           </div>
         </div>
       </div>
-      {live && p.simulated && <SimulatedNote />}
+      {live && p.simulated && p.state !== "unclaimed" && <SimulatedNote />}
     </div>
   );
 }

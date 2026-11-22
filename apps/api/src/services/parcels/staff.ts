@@ -14,6 +14,9 @@ import { toParcel } from "./parcels";
 /** A search that is only a number looks at phones; an LR number has digits in it too. */
 const PHONE_SEARCH = /^[\d\s+()-]+$/;
 const PHONE_SEARCH_MIN_DIGITS = 4;
+const PHONE_DIGITS = 10;
+/** D1 refuses LIKE patterns over 50 bytes. LR numbers and booking ids are shorter, in letters, digits and "-". */
+const SEARCH_CHARS_MAX = 48;
 
 function queueFilter(f: ParcelFilters): { filter: string; params: unknown[] } {
   const where: string[] = [];
@@ -28,11 +31,17 @@ function queueFilter(f: ParcelFilters): { filter: string; params: unknown[] } {
     const digits = f.q.replace(/\D/g, "");
     if (digits.length >= PHONE_SEARCH_MIN_DIGITS && PHONE_SEARCH.test(f.q)) {
       where.push("(REPLACE(u.phone, ' ', '') LIKE ? OR REPLACE(p.receiver_phone, ' ', '') LIKE ?)");
-      params.push(`%${digits}%`, `%${digits}%`);
-    } else {
-      const like = `%${f.q.replace(/[%_]/g, "")}%`;
-      where.push("(p.lr LIKE ? OR p.booking_id LIKE ?)");
+      // The last ten, so "+91 …" and "0…" find the number too.
+      const like = `%${digits.slice(-PHONE_DIGITS)}%`;
       params.push(like, like);
+    } else {
+      const term = f.q.replace(/[^A-Za-z0-9-]/g, "").slice(0, SEARCH_CHARS_MAX);
+      // Nothing left to look for finds nothing, rather than everything.
+      if (!term) where.push("0 = 1");
+      else {
+        where.push("(p.lr LIKE ? OR p.booking_id LIKE ?)");
+        params.push(`%${term}%`, `%${term}%`);
+      }
     }
   }
   return { filter: where.length ? `WHERE ${where.join(" AND ")}` : "", params };
