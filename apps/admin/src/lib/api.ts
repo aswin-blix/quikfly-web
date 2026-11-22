@@ -1,7 +1,7 @@
 // The admin panel's only door to the backend. Screens call `adminApi`, never fetch().
 // Endpoints are listed in apps/api/README.md (Admin section).
 import type {
-  AdminCustomer, AdminCustomerDetail, AdminRental, AdminRole, AdminSupportTicket, BookingNote, CustomerFilters, RentalPhotoSide, RentalSettlement, RentalStage,
+  AdminCustomer, AdminCustomerDetail, AdminParcel, AdminParcelRow, AdminRental, ParcelFilters, ParcelLegState, AdminRole, AdminSupportTicket, BookingNote, CustomerFilters, RentalPhotoSide, RentalSettlement, RentalStage,
   SosAlert, SosStatus, SupportStatus, TeamMember,
 } from "@quikfly/shared";
 import type {
@@ -76,6 +76,13 @@ export const adminApi = {
     unsuspend: (id: string, reason: string) => req<AdminCustomerDetail>("POST", `/admin/customers/${encodeURIComponent(id)}/unsuspend`, { reason }),
     signOut: (id: string, reason: string) => req<AdminCustomerDetail>("POST", `/admin/customers/${encodeURIComponent(id)}/sign-out`, { reason }),
     cancelDeletion: (id: string, reason: string) => req<AdminCustomerDetail>("POST", `/admin/customers/${encodeURIComponent(id)}/cancel-deletion`, { reason }),
+  },
+  parcels: {
+    list: (f: ParcelFilters) => req<Page<AdminParcelRow>>("GET", `/admin/parcels${qs({ ...f })}`),
+    get: (id: string) => req<AdminParcel>("GET", `/admin/parcels/${encodeURIComponent(id)}`),
+    /** One move from staffMoves(); `otp` to hand over, `note` is shown to the sender. */
+    move: (id: string, seq: number, body: { to: ParcelLegState; note?: string; otp?: string }) =>
+      req<AdminParcel>("POST", `/admin/parcels/${encodeURIComponent(id)}/legs/${seq}`, body),
   },
   sos: {
     list: (status: SosStatus) => req<SosAlert[]>("GET", `/admin/sos${qs({ status })}`),

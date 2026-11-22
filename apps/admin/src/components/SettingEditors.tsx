@@ -57,7 +57,7 @@ const formatTiers = (rows: TierRow[]) => rows
   .sort((x, y) => y.hours - x.hours)
   .map((r) => `${r.n}${r.unit}:${r.pct}`).join(", ");
 
-export const POLICY_SERVICE: Record<string, ServiceKey> = { cancelPolicyBus: "bus", cancelPolicyTours: "tours", cancelPolicyRent: "rent", cancelPolicyGroup: "rentals" };
+export const POLICY_SERVICE: Record<string, ServiceKey> = { cancelPolicyBus: "bus", cancelPolicyTours: "tours", cancelPolicyRent: "rent", cancelPolicyGroup: "rentals", cancelPolicyParcel: "parcel" };
 
 export function CancelTiersEditor({ id, value, onChange, disabled, service }: { id: string; value: string; onChange: (v: string) => void; disabled: boolean; service: ServiceKey }) {
   const { rows, update } = useRows(value, parseTiers, formatTiers);

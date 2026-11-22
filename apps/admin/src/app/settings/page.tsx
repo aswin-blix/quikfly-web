@@ -257,6 +257,7 @@ function SettingsForm() {
               <p className="font-medium text-fg">{fieldLabel(k)}</p>
               <p className="mt-0.5 break-words"><span className="text-muted line-through">{showValue(fieldOf(k), data[k])}</span> → <span className="text-strong font-medium">{showValue(fieldOf(k), draft[k])}</span></p>
               {isTermKey(k) && <p className="text-xs text-subtle mt-0.5">Applies to new bookings only.</p>}
+              {draft[k] === true && fieldOf(k)?.warnOn && <p className="text-xs text-warning mt-1" role="alert">{fieldOf(k)?.warnOn}</p>}
             </li>
           ))}
         </ul>

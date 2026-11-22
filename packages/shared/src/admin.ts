@@ -1,6 +1,7 @@
 // Admin panel: roles, permissions and the shapes the /admin API returns.
 // The API enforces permissions; the admin app uses the same map to hide what a role can't do.
-import type { Booking, ServiceKey, WalletTransaction, LicenceStatus } from "./types";
+import { PARCEL_STATES, type Parcel, type ParcelEvent, type ParcelLeg, type ParcelState, type ParcelWeightBand } from "./parcel";
+import type { Booking, BookingStatus, PaymentMethod, ServiceKey, WalletTransaction, LicenceStatus } from "./types";
 
 export const ADMIN_ROLES = ["owner", "operations", "content"] as const;
 export type AdminRole = (typeof ADMIN_ROLES)[number];
@@ -29,7 +30,7 @@ export const PERMISSIONS = {
   "customers.view": ["owner", "operations"],
   /** Wallet adjustments, suspend / lift, sign out everywhere, cancel a scheduled deletion. */
   "customers.manage": ["owner", "operations"],
-  /** Parcels: counter actions (hand in, load, hand over, refuse). */
+  /** The Parcels screen: the queue with both people's details, and counter actions (hand in, load, hand over, refuse). */
   "parcels.manage": ["owner", "operations"],
   /** SOS alerts: acknowledge and close. */
   "sos.manage": ["owner", "operations"],
@@ -249,4 +250,50 @@ export interface TeamMember extends AdminUser {
   disabledAt: string | null;
   /** Locked out after too many wrong passwords until this time (ms since epoch), when set. */
   lockedUntil: number | null;
+}
+
+/* ───────────── Parcels ───────────── */
+
+/** "open" is everything staff may still have to act on: neither collected nor cancelled. */
+export const PARCEL_QUEUE_STATES = ["open", ...PARCEL_STATES, "all"] as const;
+export type ParcelQueueState = (typeof PARCEL_QUEUE_STATES)[number];
+
+export interface ParcelFilters {
+  /** A counter city: parcels handed in or collected there. */
+  city?: string;
+  /** Default "open". */
+  state?: ParcelQueueState;
+  /** The bus's departure date in India, YYYY-MM-DD. */
+  date?: string;
+  /** An LR number, a booking id, or part of either person's number. */
+  q?: string;
+  page?: number;
+}
+
+/** A row of the parcels queue. */
+export interface AdminParcelRow {
+  bookingId: string;
+  bookingStatus: BookingStatus;
+  lr: string;
+  state: ParcelState;
+  from: string;
+  to: string;
+  departAt: string | null;
+  weightBand: ParcelWeightBand;
+  holdUntil: string | null;
+  legs: ParcelLeg[];
+  sender: CustomerRef;
+  receiver: { name: string; phone: string };
+}
+
+/** One parcel for staff. `collectOtp` is always null here. */
+export interface AdminParcel extends Parcel {
+  bookingStatus: BookingStatus;
+  sender: CustomerRef;
+  amount: number;
+  payment: PaymentMethod;
+  /** Under the policy it was sold with; null once it can't be cancelled. */
+  refundIfCancelled: { amount: number; percent: number } | null;
+  /** `by`: the staff member; null for the customer or the simulated carrier. */
+  events: (ParcelEvent & { by: string | null })[];
 }

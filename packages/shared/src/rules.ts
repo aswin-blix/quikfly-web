@@ -87,3 +87,6 @@ export function isNightHour(hour: number) {
   const [from, to] = NIGHT_HOURS;
   return from > to ? hour >= from || hour < to : hour >= from && hour < to;
 }
+
+/** Booking line with the customer's GST details when they asked for a GST invoice. */
+export const GSTIN_LINE = "GSTIN";

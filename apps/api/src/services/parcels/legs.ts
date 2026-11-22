@@ -25,19 +25,22 @@ export interface ParcelRow {
 }
 export interface LoadedParcel { row: ParcelRow; legs: ParcelLeg[] }
 
+/** SQL: a parcel's legs (`p`) as a JSON list. */
+export const LEGS_JSON = `(SELECT json_group_array(json_object('seq', l.seq, 'kind', l.kind, 'state', l.state, 'operatorId', l.operator_id, 'counterId', l.counter_id,
+    'busId', l.bus_id, 'busDate', l.bus_date, 'departAt', l.depart_at, 'plannedAt', l.planned_at, 'startedAt', l.started_at, 'endedAt', l.ended_at))
+  FROM parcel_legs l WHERE l.booking_id = p.booking_id)`;
+export const parseLegs = (json: string) => (JSON.parse(json) as ParcelLeg[]).sort((a, b) => a.seq - b.seq);
+
 /**
  * Parcels with their legs, in one query. `where` is trusted SQL over `p` (parcels) and `b`
  * (bookings); values go in `params`.
  */
 export async function loadParcels(db: D1Database, where: string, ...params: unknown[]): Promise<LoadedParcel[]> {
   const { results } = await db.prepare(
-    `SELECT p.*, b.title, b.amount, b.deposit, b.terms, b.status AS booking_status,
-       (SELECT json_group_array(json_object('seq', l.seq, 'kind', l.kind, 'state', l.state, 'operatorId', l.operator_id, 'counterId', l.counter_id,
-          'busId', l.bus_id, 'busDate', l.bus_date, 'departAt', l.depart_at, 'plannedAt', l.planned_at, 'startedAt', l.started_at, 'endedAt', l.ended_at))
-        FROM parcel_legs l WHERE l.booking_id = p.booking_id) AS legs_json
+    `SELECT p.*, b.title, b.amount, b.deposit, b.terms, b.status AS booking_status, ${LEGS_JSON} AS legs_json
      FROM parcels p JOIN bookings b ON b.id = p.booking_id WHERE ${where}`,
   ).bind(...params).all<ParcelRow & { legs_json: string }>();
-  return results.map(({ legs_json, ...row }) => ({ row, legs: (JSON.parse(legs_json) as ParcelLeg[]).sort((a, b) => a.seq - b.seq) }));
+  return results.map(({ legs_json, ...row }) => ({ row, legs: parseLegs(legs_json) }));
 }
 
 /** The move's columns, read from one element `m` of a json_each() list. */
