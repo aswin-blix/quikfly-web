@@ -1,5 +1,5 @@
 // The notification inbox (the website's /notifications). Each app shows its own kinds
-// (NotificationScope); opening it marks those read.
+// (NotificationScope); opening it reads the inbox again and marks those read.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -39,6 +39,18 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _marked = false;
+  bool _current = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // The bell loaded the list when the app started; show what has arrived since.
+    Future.microtask(() {
+      if (!mounted) return;
+      if (!ref.read(notificationsProvider).isLoading) ref.invalidate(notificationsProvider);
+      setState(() => _current = true);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +60,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     // Opening the inbox reads what this app shows (unread ones keep their highlight until you
     // leave); the other app's notifications stay unread there.
     inbox.whenData((d) {
-      if (!_marked && d.unread > 0) {
+      if (_current && !inbox.isLoading && !_marked && d.unread > 0) {
         _marked = true;
         final ids = [for (final n in d.items) if (n.readAt == null) n.id];
         ref.read(apiProvider).markNotificationsRead(ids).then((_) => ref.invalidate(unreadProvider)).catchError((_) {});
