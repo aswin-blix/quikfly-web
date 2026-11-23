@@ -69,9 +69,9 @@ Optional, support (1 min): on the website **Help** page → **Request a callback
 ### 9. Getting the app (1 min)
 Website home → **Download for Android**: the signed APK from GitHub Releases. *"Not on Google Play yet; that comes after sign-off. Updates install over the old version and keep the customer signed in."*
 
-### Optional: a bus parcel (3 min; only where parcels are switched on)
+### Optional: a bus parcel (3 min)
 
-Not on production until the app with parcels is published and the owner switches them on: until then run it on a local API, or leave it out.
+Parcels are on in production since 2026-11-23 (demo rates, counters and GST; payments simulated). If they are switched off again, run this on a local API or leave it out.
 1. Website → **Parcels** → Chennai → Coimbatore → a departure → weight, value, receiver, declaration → **Continue** → wallet → **Pay**.
 2. **My Trips** → the parcel → **Share tracking link**, or scan the QR on a phone: the timeline shows first names only.
 3. Admin → **Parcels** → the parcel → **Receive at counter → Load on bus → Mark reached → Ready for collection**. No need to wait for the bus.
