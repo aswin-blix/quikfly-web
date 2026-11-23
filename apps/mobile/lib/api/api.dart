@@ -228,7 +228,9 @@ class QuikFlyApi {
       _post('/me/notifications/read', (d) => ((d as Json)['unread'] as num?)?.round() ?? 0, {'ids': ?ids});
 
   /// Registers this phone's Firebase token for push (used once Firebase is set up).
-  Future<void> registerPushDevice(String token, String platform) => _post('/me/push-devices', _ignore, {'token': token, 'platform': platform});
+  /// [app] = 'customer' or 'partner': the API sends each app only its own kinds (vendor.* to Partner).
+  Future<void> registerPushDevice(String token, String platform, {required String app}) =>
+      _post('/me/push-devices', _ignore, {'token': token, 'platform': platform, 'app': app});
   Future<void> removePushDevice(String token) => _delete('/me/push-devices/${Uri.encodeComponent(token)}', _ignore);
 
   // ── Rides ──

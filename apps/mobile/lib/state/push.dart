@@ -145,7 +145,8 @@ class PushNotifier extends Notifier<PushState> {
       final t = token ?? await FirebaseMessaging.instance.getToken();
       if (t == null) return;
       _token = t;
-      await ref.read(apiProvider).registerPushDevice(t, 'android');
+      // Which app this is, so QuikFly Partner gets only partner updates and QuikFly only the rest.
+      await ref.read(apiProvider).registerPushDevice(t, 'android', app: ref.read(notificationScopeProvider).name);
     } catch (_) {/* tried again at the next start or sign-in */}
   }
 

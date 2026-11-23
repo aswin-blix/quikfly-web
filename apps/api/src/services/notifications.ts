@@ -1,7 +1,7 @@
 // The customer's notification inbox. Events write a row (once per event: user + kind + ref
 // is unique); the every-minute cron (scheduled.ts) pushes new rows to the customer's phones
 // when Firebase is configured. Notifications never carry money: they describe what happened.
-import type { AppNotification, NotificationKind, ServiceKey } from "@quikfly/shared";
+import type { AppNotification, NotificationKind, PushApp, ServiceKey } from "@quikfly/shared";
 import { NOTIFICATIONS_PAGE } from "../config";
 import { uid } from "../lib/random";
 
@@ -64,12 +64,12 @@ export async function markRead(db: D1Database, userId: string, ids: string[] | n
 }
 
 /** Remembers a phone's push token for this customer (moving it from another account if it was signed in there). */
-export async function registerDevice(db: D1Database, userId: string, token: string, platform: string) {
+export async function registerDevice(db: D1Database, userId: string, token: string, platform: string, app: PushApp | null = null) {
   const now = new Date().toISOString();
   await db.prepare(
-    `INSERT INTO push_devices (token, user_id, platform, created_at, last_seen) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(token) DO UPDATE SET user_id = excluded.user_id, platform = excluded.platform, last_seen = excluded.last_seen`,
-  ).bind(token, userId, platform, now, now).run();
+    `INSERT INTO push_devices (token, user_id, platform, app, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(token) DO UPDATE SET user_id = excluded.user_id, platform = excluded.platform, app = excluded.app, last_seen = excluded.last_seen`,
+  ).bind(token, userId, platform, app, now, now).run();
   return { registered: true };
 }
 
