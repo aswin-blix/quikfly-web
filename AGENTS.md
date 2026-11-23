@@ -75,7 +75,7 @@ cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://1
 7. **Free tier only** until the client signs off: no paid SMS, payment gateway, maps, Play Store fee or domain. Simulate instead, and label simulations honestly in the UI (e.g. "demo: no SMS sent").
 8. **Responsive and friendly UI.** Every screen must work at 390 px (phone), tablet and desktop, in light and dark mode. Verify in a browser at phone width before calling UI work done.
 9. **Routing:** screens use only `Link`, `useNav`, `usePath` and `useQuery` from `src/lib/nav.tsx`, never `next/navigation`, so the single-file SPA build keeps working. New pages need a file in `src/app/` **and** an entry in `src/spa/SpaApp.tsx`.
-10. **Git:** branch from `main`, open a PR, never push to `main`. Use merge commits. Commit messages say what changed and why.
+10. **Git:** branch from `main`, open a PR, never push to `main`. Merge with **rebase and merge** (`gh pr merge <n> --rebase`; the owner's rule since 2026-11-23). Commit messages say what changed and why.
 11. **Docs are part of the change.** Update `docs/roadmap.md` (tick items, add new ones), the READMEs, and `docs/decisions.md` for any new trade-off.
 
 ## Gotchas
