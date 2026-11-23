@@ -1,8 +1,8 @@
 import { FEATURE_OFF, type ProfileUpdate, type User } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { checkOtp, getUserRow, normalisePhone, toUser, type UserRow } from "./auth";
+import { uid } from "../lib/random";
 import { getSettings } from "./settings";
-import { txnStatement } from "./wallet";
 
 async function reload(db: D1Database, userId: string): Promise<User> {
   const row = await getUserRow(db, userId);
@@ -78,13 +78,25 @@ export async function applyReferral(db: D1Database, userId: string, code: string
   if (!friend) throw badRequest("That referral code doesn't exist.");
   const REFERRAL_BONUS = settings.referralBonus;
 
-  await db.batch([
-    db.prepare("UPDATE users SET referred_by = ?, wallet_balance = wallet_balance + ? WHERE id = ? AND referred_by IS NULL")
-      .bind(friend.id, REFERRAL_BONUS, userId),
-    txnStatement(db, { userId, kind: "referral", amount: REFERRAL_BONUS, note: `Referral bonus · code ${code}` }),
-    db.prepare("UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?").bind(REFERRAL_BONUS, friend.id),
-    txnStatement(db, { userId: friend.id, kind: "referral", amount: REFERRAL_BONUS, note: `${me.name} joined with your code` }),
+  // The joiner's ledger row is written only while the account has no referrer, and every other
+  // statement only if that row exists, so the batch applies whole or not at all.
+  const claim = uid("WT");
+  const now = new Date().toISOString();
+  const claimed = "EXISTS (SELECT 1 FROM wallet_transactions WHERE id = ?)";
+  const [first] = await db.batch([
+    db.prepare(
+      `INSERT INTO wallet_transactions (id, user_id, kind, amount, note, booking_id, created_at)
+       SELECT ?1, ?2, 'referral', ?3, ?4, NULL, ?5 WHERE EXISTS (SELECT 1 FROM users WHERE id = ?2 AND referred_by IS NULL)`,
+    ).bind(claim, userId, REFERRAL_BONUS, `Referral bonus · code ${code}`, now),
+    db.prepare(`UPDATE users SET referred_by = ?, wallet_balance = wallet_balance + ? WHERE id = ? AND referred_by IS NULL AND ${claimed}`)
+      .bind(friend.id, REFERRAL_BONUS, userId, claim),
+    db.prepare(`UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ? AND ${claimed}`).bind(REFERRAL_BONUS, friend.id, claim),
+    db.prepare(
+      `INSERT INTO wallet_transactions (id, user_id, kind, amount, note, booking_id, created_at)
+       SELECT ?, ?, 'referral', ?, ?, NULL, ? WHERE ${claimed}`,
+    ).bind(uid("WT"), friend.id, REFERRAL_BONUS, `${me.name} joined with your code`, now, claim),
   ]);
+  if (!first.meta.changes) throw conflict("You've already used a referral code.");
   return reload(db, userId);
 }
 
