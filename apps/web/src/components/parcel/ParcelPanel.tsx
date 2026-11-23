@@ -6,7 +6,7 @@ import { PARCEL_RULES, parcelTime, type Booking, type Parcel, type ParcelCounter
 import { useApp } from "@/components/AppProvider";
 import { Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
-import { Link } from "@/lib/nav";
+import { Link, qs } from "@/lib/nav";
 import { PARCEL_POLL_MS, parcelShareText, parcelTrackPath, parcelTrackUrl } from "@/lib/parcels";
 import { CourierSteps } from "./CourierSteps";
 import { ParcelQr } from "./ParcelQr";
@@ -77,8 +77,8 @@ export function ParcelPanel({ booking }: { booking: Booking }) {
         </div>
       )}
       {city && <CourierSteps parcel={p} onChange={setParcel} />}
-      {p.state === "returned" && <p className="text-sm text-danger">The captain couldn&apos;t deliver it and brought it back to you. The fare isn&apos;t refunded.</p>}
-      {p.state === "unclaimed" && <p className="text-sm text-danger">Nobody collected it within the hold period. Use Get help and we&apos;ll agree how it comes back to you.</p>}
+      {p.state === "returned" && <p className="text-sm text-danger">It&apos;s coming back to you. What you paid to send it isn&apos;t refunded.</p>}
+      {p.state === "unclaimed" && <p className="text-sm text-danger">Nobody collected it within the hold period. To get it back, <Link href={`/parcels${qs({ from: p.to, to: p.from })}`} className="underline">book a bus parcel from {p.to} to {p.from}</Link> with yourself as the receiver, then send its LR number through Get help.</p>}
 
       <div className="grid sm:grid-cols-2 gap-5">
         <ParcelTimeline mode={p.mode} state={p.state} events={p.events} departAt={p.departAt} readyAt={p.readyAt} />

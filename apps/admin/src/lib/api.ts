@@ -1,7 +1,7 @@
 // The admin panel's only door to the backend. Screens call `adminApi`, never fetch().
 // Endpoints are listed in apps/api/README.md (Admin section).
 import type {
-  AdminCustomer, AdminCustomerDetail, AdminParcel, AdminParcelRow, AdminRental, ParcelFilters, ParcelLegState, AdminRole, AdminSupportTicket, BookingNote, CustomerFilters, RentalPhotoSide, RentalSettlement, RentalStage,
+  AdminCustomer, AdminCustomerDetail, AdminParcel, AdminParcelRow, AdminRental, ParcelDeparture, ParcelFilters, ParcelWeightBand, WeightChange, ParcelLegState, AdminRole, AdminSupportTicket, BookingNote, CustomerFilters, RentalPhotoSide, RentalSettlement, RentalStage,
   SosAlert, SosStatus, SupportStatus, TeamMember,
 } from "@quikfly/shared";
 import type {
@@ -80,6 +80,15 @@ export const adminApi = {
   parcels: {
     list: (f: ParcelFilters) => req<Page<AdminParcelRow>>("GET", `/admin/parcels${qs({ ...f })}`),
     get: (id: string) => req<AdminParcel>("GET", `/admin/parcels/${encodeURIComponent(id)}`),
+    buses: (id: string) => req<ParcelDeparture[]>("GET", `/admin/parcels/${encodeURIComponent(id)}/buses`),
+    changeBus: (id: string, body: { busId: string; departAt: string; note: string }) =>
+      req<AdminParcel>("POST", `/admin/parcels/${encodeURIComponent(id)}/bus`, body),
+    /** What a weight would charge or give back. */
+    weight: (id: string, band: ParcelWeightBand) => req<WeightChange>("GET", `/admin/parcels/${encodeURIComponent(id)}/weight${qs({ band })}`),
+    changeWeight: (id: string, body: WeightChange & { senderAgreed: boolean }) =>
+      req<AdminParcel>("POST", `/admin/parcels/${encodeURIComponent(id)}/weight`, body),
+    /** An unclaimed parcel goes back as the parcel with this LR, booked by the sender. */
+    sendBack: (id: string, lr: string) => req<AdminParcel>("POST", `/admin/parcels/${encodeURIComponent(id)}/return`, { lr }),
     /** One move from staffMoves(); `otp` to hand over, `note` is shown to the sender. */
     move: (id: string, seq: number, body: { to: ParcelLegState; note?: string; otp?: string }) =>
       req<AdminParcel>("POST", `/admin/parcels/${encodeURIComponent(id)}/legs/${seq}`, body),

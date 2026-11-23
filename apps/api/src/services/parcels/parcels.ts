@@ -29,7 +29,7 @@ async function route(db: D1Database, fromInput: string, toInput: string) {
   return { from, to };
 }
 
-async function departuresBetween(db: D1Database, settings: Settings, fromInput: string, toInput: string) {
+export async function departuresBetween(db: D1Database, settings: Settings, fromInput: string, toInput: string) {
   const { from, to } = await route(db, fromInput, toInput);
   const [operators, counters, rates] = await Promise.all([visible(db, "busOperator"), visible(db, "parcelCounter"), visible(db, "parcelRate")]);
   return { from, to, rates, departures: parcelDepartures({ operators, counters, rates }, settings, from, to) };
@@ -247,7 +247,8 @@ export async function trackParcel(db: D1Database, input: string): Promise<Public
     lr: row.lr, mode: row.mode, state: row.state, from: row.from_city, to: row.to_city, departAt: row.depart_at, readyAt: row.ready_at, holdUntil: row.hold_until,
     sender: firstName(row.sender_name), receiver: firstName(row.receiver_name),
     collectAt: counter ? { name: counter.name, address: counter.address, hours: counter.hours } : null,
-    events: events.map(({ state, at }) => ({ state, at })),
+    // A bus or weight change is an event with the same state, and its note isn't public: show each state once.
+    events: events.filter((e, i) => e.state !== events[i - 1]?.state).map(({ state, at }) => ({ state, at })),
     simulated: settings.parcelSimulateTransit,
   };
 }

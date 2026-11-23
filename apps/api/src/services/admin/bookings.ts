@@ -6,6 +6,7 @@ import { badRequest, conflict, notFound } from "../../lib/errors";
 import { cancelBookingRow, completeBookingRow, refundFor, refundText } from "../bookings";
 import { notify } from "../notifications";
 import { audit, auditStatement, listAudit } from "./audit";
+import { isReturn } from "../parcels/legs";
 import { LOCAL_DATE, toAdminBooking, type AdminBookingRow } from "./stats";
 
 const SELECT = "SELECT b.*, u.name AS customer_name, u.phone AS customer_phone, (SELECT CASE WHEN settlement IS NOT NULL THEN 'settled' WHEN return_at IS NOT NULL THEN 'returned' WHEN pickup_at IS NOT NULL THEN 'on_trip' ELSE 'booked' END FROM rentals WHERE booking_id = b.id) AS rental_state, (SELECT state FROM parcels WHERE booking_id = b.id) AS parcel_state FROM bookings b JOIN users u ON u.id = b.user_id";
@@ -29,22 +30,30 @@ function bookingFilter(f: BookingFilters): { filter: string; params: unknown[] }
 }
 
 /** Up to ADMIN_RULES.exportMaxRows bookings matching the filters, newest first, for the CSV export. */
-export async function exportBookings(db: D1Database, f: BookingFilters): Promise<AdminBooking[]> {
+export async function exportBookings(db: D1Database, f: BookingFilters): Promise<ExportRow[]> {
   const { filter, params } = bookingFilter(f);
-  const { results } = await db.prepare(`${SELECT} ${filter} ORDER BY b.created_at DESC LIMIT ?`).bind(...params, ADMIN_RULES.exportMaxRows).all<AdminBookingRow>();
-  return results.map(toAdminBooking);
+  // The parcel columns carry nothing of the receiver, the contents or the code: content staff can export too.
+  const { results } = await db.prepare(
+    `SELECT x.*, p.lr AS parcel_lr, p.mode AS parcel_mode, p.weight_band AS parcel_weight_band
+     FROM (${SELECT} ${filter} ORDER BY b.created_at DESC LIMIT ?) x LEFT JOIN parcels p ON p.booking_id = x.id ORDER BY x.created_at DESC`,
+  ).bind(...params, ADMIN_RULES.exportMaxRows).all<AdminBookingRow & { parcel_lr: string | null; parcel_mode: string | null; parcel_weight_band: string | null }>();
+  return results.map((r) => ({ ...toAdminBooking(r), parcelLr: r.parcel_lr, parcelMode: r.parcel_mode, parcelWeightKg: r.parcel_weight_band }));
 }
 
+type ExportRow = AdminBooking & { parcelLr: string | null; parcelMode: string | null; parcelWeightKg: string | null };
+
 /** One CSV line per booking; a header first. Fields with commas, quotes or line breaks are quoted. */
-export function bookingsCsv(rows: AdminBooking[]): string {
+export function bookingsCsv(rows: ExportRow[]): string {
   const cell = (v: unknown) => {
     const s = v === null || v === undefined ? "" : String(v);
     return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, "\"\"")}"` : s;
   };
-  const header = ["booking_id", "created_at", "service", "status", "title", "subtitle", "customer_name", "customer_phone", "payment", "amount_inr", "discount_inr", "credits_used_inr", "deposit_inr", "refund_inr", "cancel_fee_inr", "cancel_reason", "starts_at", "trip_id"];
+  const header = ["booking_id", "created_at", "service", "status", "title", "subtitle", "customer_name", "customer_phone", "payment", "amount_inr", "discount_inr", "credits_used_inr", "deposit_inr", "refund_inr", "cancel_fee_inr", "cancel_reason", "starts_at", "trip_id",
+    "parcel_lr", "parcel_mode", "parcel_state", "parcel_max_kg"];
   const lines = rows.map((b) => [
     b.id, b.createdAt, b.service, b.status, b.title, b.subtitle, b.customer.name, b.customer.phone, b.payment, b.amount, b.discount, b.creditsUsed,
     b.deposit, b.refundAmount ?? "", b.cancelFee, b.cancelReason ?? "", b.startsAt ?? "", b.tripId ?? "",
+    b.parcelLr ?? "", b.parcelMode ?? "", b.parcelState ?? "", b.parcelWeightKg ?? "",
   ].map(cell).join(","));
   return [header.join(","), ...lines].join("\r\n") + "\r\n";
 }
@@ -93,7 +102,8 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
   const row = await db.prepare(`${SELECT} WHERE b.id = ?`).bind(id).first<AdminBookingRow & { coupon_code: string | null; discount: number; vendor_id: string | null; vendor_vehicle_id: string | null; vendor_driver_id: string | null; quote_id: string | null }>();
   if (!row) throw notFound("Booking not found.");
   const active = row.status === "confirmed" || row.status === "ongoing";
-  const cancellable = active && (row.service !== "parcel" || (!!row.parcel_state && PARCEL_CANCELLABLE.includes(row.parcel_state)));
+  const cancellable = active
+    && (row.service !== "parcel" || (!!row.parcel_state && PARCEL_CANCELLABLE.includes(row.parcel_state) && !(await isReturn(db, id))));
   const tollEstimate = active && row.service === "rentals" ? await quotedTolls(db, row.quote_id) : null;
   const [{ results: txns }, history, partner, notes] = await Promise.all([
     db.prepare("SELECT * FROM wallet_transactions WHERE booking_id = ? ORDER BY created_at").bind(id).all<TxnRow>(),

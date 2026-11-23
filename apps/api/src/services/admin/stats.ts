@@ -53,8 +53,13 @@ export async function dashboardStats(db: D1Database, days: number): Promise<Admi
     db.prepare(
       `SELECT SUM(licence_status = 'pending' AND deleted_at IS NULL) AS pending_licences, SUM(deleted_at IS NOT NULL) AS pending_deletions,
               (SELECT COUNT(*) FROM rentals WHERE return_at IS NOT NULL AND settlement IS NULL) AS returns_to_settle,
-              (SELECT COUNT(*) FROM sos_alerts WHERE status = 'open') AS open_sos FROM users`,
-    ),
+              (SELECT COUNT(*) FROM sos_alerts WHERE status = 'open') AS open_sos,
+              (SELECT COUNT(*) FROM parcels p WHERE ${LOCAL_DATE("COALESCE(p.depart_at, p.created_at)")} = ?) AS parcels_today,
+              (SELECT COUNT(*) FROM parcels WHERE state = 'on_bus') AS parcels_on_bus,
+              (SELECT COUNT(*) FROM parcels WHERE state = 'ready') AS parcels_ready,
+              (SELECT COUNT(*) FROM parcels WHERE state = 'unclaimed') AS parcels_unclaimed
+       FROM users`,
+    ).bind(new Date(Date.now() + BUSINESS_UTC_OFFSET_MIN * 60_000).toISOString().slice(0, 10)),
     db.prepare(
       `SELECT b.*, u.name AS customer_name, u.phone AS customer_phone, (SELECT CASE WHEN settlement IS NOT NULL THEN 'settled' WHEN return_at IS NOT NULL THEN 'returned' WHEN pickup_at IS NOT NULL THEN 'on_trip' ELSE 'booked' END FROM rentals WHERE booking_id = b.id) AS rental_state FROM bookings b JOIN users u ON u.id = b.user_id
        ORDER BY b.created_at DESC LIMIT 8`,
@@ -63,7 +68,7 @@ export async function dashboardStats(db: D1Database, days: number): Promise<Admi
 
   const t = totals.results[0] as { bookings: number; revenue: number; cancelled: number | null };
   const c = customers.results[0] as { new_customers: number | null; customers: number; wallet: number };
-  const q = queues.results[0] as { pending_licences: number | null; pending_deletions: number | null; returns_to_settle: number | null; open_sos: number | null };
+  const q = queues.results[0] as { pending_licences: number | null; pending_deletions: number | null; returns_to_settle: number | null; open_sos: number | null; parcels_today: number; parcels_on_bus: number; parcels_ready: number; parcels_unclaimed: number };
 
   // Fill in days with no bookings so charts have a bar per day.
   const dayRows = new Map((byDay.results as AdminStats["byDay"]).map((d) => [d.date, d]));
@@ -81,7 +86,8 @@ export async function dashboardStats(db: D1Database, days: number): Promise<Admi
     },
     byService: byService.results as AdminStats["byService"],
     byDay: allDays,
-    queues: { pendingLicences: q.pending_licences ?? 0, pendingDeletions: q.pending_deletions ?? 0, returnsToSettle: q.returns_to_settle ?? 0, openSos: q.open_sos ?? 0 },
+    queues: { pendingLicences: q.pending_licences ?? 0, pendingDeletions: q.pending_deletions ?? 0, returnsToSettle: q.returns_to_settle ?? 0, openSos: q.open_sos ?? 0,
+      parcelsToday: q.parcels_today ?? 0, parcelsOnBus: q.parcels_on_bus ?? 0, parcelsReady: q.parcels_ready ?? 0, parcelsUnclaimed: q.parcels_unclaimed ?? 0 },
     recent: (recent.results as AdminBookingRow[]).map(toAdminBooking),
   };
 }

@@ -54,7 +54,7 @@ export const movesFor = (p: { bookingStatus: BookingStatus; legs: ParcelLeg[]; h
 
 /** The queue's "Next" column. */
 export function nextAction(p: { bookingStatus: BookingStatus; state: ParcelState; legs: ParcelLeg[]; holdUntil: string | null }) {
-  if (p.state === "unclaimed") return "Follow up with the sender";
+  if (p.state === "unclaimed") return "Arrange the return with the sender";
   // Once the hold is over a ready parcel can be handed over or marked unclaimed: handing over comes first.
   const moves = movesFor(p).filter((m) => !m.refuses);
   const move = moves.find((m) => m.needsOtp) ?? moves[0];

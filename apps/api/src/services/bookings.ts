@@ -1,4 +1,4 @@
-import { PARCEL_NOT_CANCELLABLE, UPDATE_TO_SEE, isQuickParcel, type ParcelState, type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
+import { PARCEL_NOT_CANCELLABLE, PARCEL_RETURN_LOCKED, UPDATE_TO_SEE, isQuickParcel, type ParcelState, type BookingSeat, type Gender, COUPON_LINE, CREDITS_LINE, DEPOSIT_LINE, QUOTE_TTL_MINUTES, cancelPolicyFor, creditsReturned, creditsUsable, rentExcess, switchError, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, bookingTerms, parseTerms, withTerms, type Booking, type BookingStatus, type FareLine, type NewBooking, type PaymentMethod, type QuoteRequest, type RentalState, type ServiceKey } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visibleById } from "./catalog";
@@ -9,7 +9,7 @@ import { getSettings } from "./settings";
 import { notify } from "./notifications";
 import { creditExpiry, earnStatement, earnedNotice, spendPlan } from "./credits";
 import { settlementStatements } from "./partner-trips";
-import { CANCELLABLE_SQL, cancelParcelStatements } from "./parcels/legs";
+import { CANCELLABLE_SQL, cancelParcelStatements, isReturn } from "./parcels/legs";
 import { newParcel, parcelStates } from "./parcels/parcels";
 
 export interface BookingRow {
@@ -283,6 +283,7 @@ async function notActive(db: D1Database, userId: string, id: string): Promise<ne
   const row = await db.prepare("SELECT service, status FROM bookings WHERE id = ? AND user_id = ?").bind(id, userId)
     .first<{ service: ServiceKey; status: BookingStatus }>();
   if (!row) throw notFound("Booking not found.");
+  if (row.service === "parcel" && (row.status === "confirmed" || row.status === "ongoing") && (await isReturn(db, id))) throw conflict(PARCEL_RETURN_LOCKED);
   if (row.service === "parcel" && row.status === "ongoing") throw conflict(PARCEL_NOT_CANCELLABLE);
   throw conflict(`This booking is already ${row.status}.`);
 }
@@ -324,14 +325,19 @@ export async function refundFor(
  * goes to the booking's owner. Returns null when the booking isn't active (or isn't theirs), or
  * is a parcel already on its way. `refusal`: staff refused a parcel on sight, so all of it comes back.
  */
-export async function cancelBookingRow(db: D1Database, userId: string | null, id: string, refundNote = "Refund", reason: string | null = null, refusal?: { adminId: string; note: string }): Promise<BookingRow | null> {
+export async function cancelBookingRow(
+  db: D1Database, userId: string | null, id: string, refundNote = "Refund", reason: string | null = null,
+  refusal?: { adminId: string; note: string }, retried = false,
+): Promise<BookingRow | null> {
   // ?1 = booking id, ?2 = owner, or null for staff (any customer's booking)
   const owner = "AND (?2 IS NULL OR user_id = ?2)";
   const ids = [id, userId];
   // Still cancellable: active and, for a parcel, not on the bus.
-  const open = `status IN ${ACTIVE} AND ${CANCELLABLE_SQL}`;
-  const row = await db.prepare(`SELECT * FROM bookings WHERE id = ?1 ${owner} AND ${open}`).bind(...ids).first<BookingRow>();
+  const cancellable = `status IN ${ACTIVE} AND ${CANCELLABLE_SQL}`;
+  const row = await db.prepare(`SELECT * FROM bookings WHERE id = ?1 ${owner} AND ${cancellable}`).bind(...ids).first<BookingRow>();
   if (!row) return null;
+  // The refund below is worked out from this amount, so every statement needs it unchanged.
+  const open = `${cancellable} AND amount = ${Math.trunc(Number(row.amount))}`;
   // A customer cancelling a ride may owe the cancellation fee; staff never charge one.
   const refund = refusal
     ? { percent: 100, amount: row.service === "parcel" && row.payment === "cash" ? 0 : row.amount, fee: 0 }
@@ -364,7 +370,10 @@ export async function cancelBookingRow(db: D1Database, userId: string | null, id
     // After the booking's update: a parcel is closed only if the booking was.
     ...parcelClose,
   ]);
-  return (results[results.length - 1 - parcelClose.length].results as BookingRow[])[0] ?? null;
+  const cancelled = (results[results.length - 1 - parcelClose.length].results as BookingRow[])[0];
+  if (cancelled) return cancelled;
+  // The amount changed meanwhile: once more, from the new one.
+  return retried ? null : cancelBookingRow(db, userId, id, refundNote, reason, refusal, true);
 }
 
 export async function cancelBooking(db: D1Database, userId: string, id: string, reason: string | null = null): Promise<Booking> {

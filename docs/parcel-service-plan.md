@@ -1,6 +1,6 @@
 # Parcel service: research and implementation plan
 
-How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then the owner's decisions (10) and what changed while building (11). **Steps 1, 2, 3 and 5 are built (2026-11-23; the app is not released), off behind `serviceParcel`; where sections 1–9 differ from section 11, section 11 wins.**
+How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then the owner's decisions (10) and what changed while building (11). **Steps 1, 2, 3, 5 and 6 are built (2026-11-23; the app is not released), off behind `serviceParcel`; where sections 1–9 differ from section 11, section 11 wins.**
 
 - **Date:** 2026-11-20. **Code:** `main` at `021b718` (after PR #112). No app code was changed.
 - **Read first:** [AGENTS.md](../AGENTS.md), [roadmap.md](roadmap.md), [decisions.md](decisions.md). The plan keeps every recorded decision; where a step leans on one it names it.
@@ -387,7 +387,20 @@ The questions as they were asked:
 | Chooser, forms, tracking | No chooser: Bus parcel only | Quick parcel is step 3 |
 | Released as the next app version | Built and tested; the release is its own step | The owner builds and publishes |
 
-Left to their steps: door legs (4), return to sender, re-weighing and moving a parcel to another bus (6).
+### Step 6
+
+| Plan said | Built | Why |
+|---|---|---|
+| A different weight charges or refunds the difference | More only from a wallet payment with the sender's agreement; otherwise refuse | No way to take other payments at a counter |
+| Return-to-sender booking | The sender books it; staff link it by LR and the old parcel closes as returned | Consent, and no new pricing path |
+| Cancelled bus: staff move the leg | Also moves the cut-off and arrival; refunds count to the later departure | The sender's terms |
+
+### Step 4: not built, the owner decides
+
+1. **Where.** Pickup and drop places exist only in Chennai, so a door leg is possible only at that end; "three bookings in one trip" can't occur until other cities have places and captains. A counter would also need a place (Chennai's could be `p14`, Koyambedu).
+2. **How.** As decided: linked bookings in a trip, which needs rules for splitting a coupon, credits and refunds, and for cancelling one of them. Or (recommended, but it reverses that decision) one booking whose journey gains a captain's leg at that end: one payment, refund, invoice and timeline, on the legs and transitions that exist.
+
+Left to their steps: door legs (4).
 
 ---
 

@@ -6,6 +6,7 @@ import {
   seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames, withTerms, type Booking, type PublicTicket, type QuoteRequest,
 } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
+import { setLine } from "../lib/lines";
 import { uid } from "../lib/random";
 import { bookingSeats, toBooking, type BookingRow } from "./bookings";
 import { creditExpiry } from "./credits";
@@ -19,11 +20,6 @@ async function ownBusBooking(db: D1Database, userId: string, id: string): Promis
   const row = await db.prepare("SELECT * FROM bookings WHERE id = ? AND user_id = ?").bind(id, userId).first<BookingRow>();
   if (!row) throw notFound("Booking not found.");
   return { row, booking: toBooking(row, (await bookingSeats(db, [id])).get(id)) };
-}
-
-/** Replaces (or adds) one line, keeping the others in place. */
-function setLine(lines: [string, string][], key: string, value: string): [string, string][] {
-  return lines.some(([k]) => k === key) ? lines.map(([k, v]) => (k === key ? [k, value] : [k, v])) : [...lines, [key, value]];
 }
 
 /**
