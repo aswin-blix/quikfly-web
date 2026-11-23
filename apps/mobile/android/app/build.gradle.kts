@@ -6,6 +6,14 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Phone notifications (Firebase): the owner downloads each app's google-services.json from the
+// Firebase console into src/customer/ and src/partner/ (git-ignored: the repo is public). With both
+// present the Google services plugin configures Firebase; without them the apps build as before and
+// push stays off (lib/state/push.dart). See apps/mobile/README.md → Phone notifications.
+if (file("src/customer/google-services.json").exists() && file("src/partner/google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.quikfly.app"
     compileSdk = flutter.compileSdkVersion

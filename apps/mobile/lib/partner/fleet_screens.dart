@@ -14,6 +14,7 @@ import '../theme/tokens.dart';
 import '../widgets/licence_panel.dart' show formatLicence;
 import '../widgets/theme_toggle.dart';
 import '../widgets/ui.dart';
+import '../widgets/push_prompt.dart';
 import 'home_screen.dart' show partnerSettings;
 import 'money_screens.dart';
 import 'partner_app.dart';
@@ -189,6 +190,7 @@ class _HomeTab extends ConsumerWidget {
       ref.invalidate(fleetProvider);
       refreshMoney(ref);
     }, children: [
+      const PushPrompt(title: 'Hear about new trips', message: 'Get a notification for each trip, payout and review, and before a document expires, even when the app is closed.'),
       RevenueSection(fleet: f),
       const SizedBox(height: 16),
       Row(children: [

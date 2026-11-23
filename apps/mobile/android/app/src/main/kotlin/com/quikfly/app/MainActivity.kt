@@ -1,19 +1,34 @@
 package com.quikfly.app
 
 import android.app.Activity
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Intent
+import android.os.Build
+import android.os.Bundle
 import android.provider.ContactsContract
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * Adds one thing to Flutter's activity: the system's contact picker, for a parcel's receiver
- * (lib/core/contact_picker.dart). ACTION_PICK grants read access to the picked number only,
- * so the app asks for no contacts permission.
+ * Adds two things to Flutter's activity: the system's contact picker, for a parcel's receiver
+ * (lib/core/contact_picker.dart; ACTION_PICK grants read access to the picked number only, so the
+ * app asks for no contacts permission), and the notification channel phone pushes arrive on.
  */
 class MainActivity : FlutterActivity() {
     private var pending: MethodChannel.Result? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // One channel for every QuikFly update (the API sends on it: PUSH_ANDROID.channelId). People
+        // can mute it in Android settings without blocking the app.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(PUSH_CHANNEL, "Trip and account updates", NotificationManager.IMPORTANCE_HIGH)
+            channel.description = "Bookings, refunds, ride reminders, parcels and support replies"
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -71,5 +86,6 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "quikfly/contact_picker"
         private const val PICK_CONTACT = 0x5146
+        private const val PUSH_CHANNEL = "quikfly_updates"
     }
 }

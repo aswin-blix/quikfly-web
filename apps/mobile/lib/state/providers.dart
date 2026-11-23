@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api.dart';
 import '../api/models.dart';
 import 'checkout.dart';
+import 'push.dart';
 
 final apiProvider = Provider<QuikFlyApi>((ref) => QuikFlyApi());
 
@@ -54,6 +55,8 @@ class SessionNotifier extends AsyncNotifier<User?> {
   }
 
   Future<void> signOut({bool everywhere = false}) async {
+    // While the session is still valid: this phone stops getting the account's notifications.
+    await ref.read(pushProvider.notifier).forget();
     try {
       everywhere ? await _api.logoutEverywhere() : await _api.logout();
     } on ApiException catch (_) {/* signing out locally is what matters */}
