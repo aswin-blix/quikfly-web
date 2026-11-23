@@ -444,9 +444,13 @@ await expect("returning user: verify says not new", call("POST", "/auth/verify",
 const meA = (await call("GET", "/auth/me")).json;
 await expect("referral: own code is refused", call("POST", "/me/referral", { code: loginB.user.referralCode }, tokenB), 400);
 await expect("referral: unknown code is refused", call("POST", "/me/referral", { code: "QFZZZZZZ9" }, tokenB), 400);
-await expect("referral: friend's code credits the new user", call("POST", "/me/referral", { code: meA.referralCode }, tokenB), 200,
-  (j) => j.referred === true && j.walletBalance === 600);
-check("referral: the friend is credited too", (await balance()) === meA.walletBalance + 100);
+const applied = await Promise.all([1, 2, 3, 4].map(() => call("POST", "/me/referral", { code: meA.referralCode }, tokenB)));
+const accepted = applied.filter((r) => r.status === 200);
+check("referral: sent several times at once, it is applied once", accepted.length === 1 && applied.every((r) => r.status === 200 || r.status === 409),
+  applied.map((r) => r.status).join(","));
+check("referral: friend's code credits the new user", accepted[0]?.json.referred === true && accepted[0]?.json.walletBalance === 600);
+check("referral: the friend is credited too, once", (await balance()) === meA.walletBalance + 100);
+await expect("referral: each side has one ledger row", call("GET", "/me/wallet", null, tokenB), 200, (j) => j.filter((t) => t.kind === "referral").length === 1);
 await expect("referral: only once", call("POST", "/me/referral", { code: meA.referralCode }, tokenB), 409);
 await expect("wallet history shows the referral", call("GET", "/me/wallet"), 200, (j) => j[0].kind === "referral" && j[0].amount === 100);
 
