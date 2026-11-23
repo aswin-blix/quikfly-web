@@ -42,11 +42,22 @@ export const PERMISSIONS = {
   "sos.manage": ["owner", "operations"],
   /** The Team screen: staff accounts, roles, password resets, disabling. */
   "team.manage": ["owner"],
+  /**
+   * Staff alerts (the admin bell): SOS presses, new tickets and callbacks, partner applications and
+   * reviews, payout requests, licences to review, unclaimed parcels; and this browser's push subscription.
+   * Each admin sees the alerts of the permissions its role has (STAFF_ALERT_PERMISSION). Not content
+   * (nothing in that list is theirs to act on) and not counter (alerts have no operator or city scope).
+   */
+  "alerts.view": ["owner", "operations"],
 } as const satisfies Record<string, readonly AdminRole[]>;
 export type Permission = keyof typeof PERMISSIONS;
 
 export const can = (role: AdminRole, permission: Permission) =>
   (PERMISSIONS[permission] as readonly AdminRole[]).includes(role);
+
+/** Every permission a role has. */
+export const permissionsOf = (role: AdminRole): Permission[] =>
+  (Object.keys(PERMISSIONS) as Permission[]).filter((p) => can(role, p));
 
 export const ADMIN_RULES = {
   passwordMin: 10,
@@ -186,6 +197,51 @@ export interface AdminStats {
   /** returnsToSettle: self-drive cars returned by the customer, waiting for staff to settle the deposit. openSos: SOS alerts nobody has acknowledged (missing from older APIs). */
   queues: { pendingLicences: number; pendingDeletions: number; parcelsToday?: number; parcelsOnBus?: number; parcelsReady?: number; parcelsUnclaimed?: number; returnsToSettle: number; openSos?: number };
   recent: AdminBooking[];
+}
+
+/* ───────────── Staff alerts ───────────── */
+
+/** What happened that staff should look at. The admin panel picks an icon and a page per kind. */
+export const STAFF_ALERT_KINDS = [
+  "sos.raised", "support.ticket", "support.reply", "support.callback",
+  "vendor.applied", "vendor.fleet", "vendor.payout", "licence.submitted", "parcel.unclaimed",
+] as const;
+export type StaffAlertKind = (typeof STAFF_ALERT_KINDS)[number];
+
+/** Who an alert is for: the permission that can act on it. An admin sees the kinds its role's permissions cover. */
+export const STAFF_ALERT_PERMISSION: Record<StaffAlertKind, Permission> = {
+  "sos.raised": "sos.manage",
+  "support.ticket": "support.manage",
+  "support.reply": "support.manage",
+  "support.callback": "support.manage",
+  "vendor.applied": "vendors.review",
+  "vendor.fleet": "vendors.review",
+  "vendor.payout": "vendors.review",
+  "licence.submitted": "licences.review",
+  // parcels.change, not parcels.manage: returns are operations' job, and a counter login has no city scope here.
+  "parcel.unclaimed": "parcels.change",
+};
+
+/** One staff alert as the panel shows it. Never carries a customer's name, number or a parcel's receiver or code. */
+export interface StaffAlert {
+  id: string;
+  kind: StaffAlertKind;
+  permission: Permission;
+  title: string;
+  body: string;
+  /** The admin page to open, e.g. "/sos" or "/vendors/view?id=VN…". */
+  link: string;
+  createdAt: string;
+  /** When this admin read it (read marks are per admin). */
+  readAt: string | null;
+}
+
+export interface StaffAlerts {
+  /** Newest first, the ones this admin's role can act on. */
+  items: StaffAlert[];
+  unread: number;
+  /** Browser push for staff: the VAPID public key, or null when push is switched off. */
+  push: { vapidPublicKey: string } | null;
 }
 
 /* ───────────── Phase 6: customers, SOS, team ───────────── */

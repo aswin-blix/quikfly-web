@@ -1,9 +1,10 @@
 // Customer support (packages/shared/src/support.ts): callback requests from anyone, tickets
 // from signed-in customers, and the staff queue that answers both. Staff replies and closes
 // are audited (in the same batch) and notify the customer when the ticket has an account.
-import { SUPPORT_RULES, type AdminSupportTicket, type CallbackTime, type SupportMessage, type SupportTicket, type SupportTopic } from "@quikfly/shared";
+import { CALLBACK_TIME_LABEL, SUPPORT_RULES, SUPPORT_TOPIC_LABEL, type AdminSupportTicket, type CallbackTime, type SupportMessage, type SupportTicket, type SupportTopic } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
+import { staffAlertStatement } from "./admin/alerts";
 import { auditStatement } from "./admin/audit";
 import { notify } from "./notifications";
 
@@ -60,7 +61,10 @@ export async function requestCallback(
   if ((recent?.n ?? 0) >= SUPPORT_RULES.callbacksPerDay) throw conflict("We already have your callback requests for today. Our team will call you soon.");
   const now = new Date().toISOString();
   const id = uid("SP");
-  await db.batch(insertTicket(db, { id, user_id: userId, kind: "callback", topic: input.topic, booking_id: null, ref: input.ref ?? null, name: input.name, phone: input.phone, preferred_time: input.preferredTime }, input.message?.trim() || "Please call me back.", now));
+  await db.batch([
+    ...insertTicket(db, { id, user_id: userId, kind: "callback", topic: input.topic, booking_id: null, ref: input.ref ?? null, name: input.name, phone: input.phone, preferred_time: input.preferredTime }, input.message?.trim() || "Please call me back.", now),
+    staffAlertStatement(db, { kind: "support.callback", ref: id, title: `Callback requested · ${SUPPORT_TOPIC_LABEL[input.topic]}`, body: `Preferred time: ${CALLBACK_TIME_LABEL[input.preferredTime]}.`, link: "/support" }),
+  ]);
   return forCustomer(await ticketById(db, id));
 }
 
@@ -77,7 +81,10 @@ export async function openTicket(
   }
   const now = new Date().toISOString();
   const id = uid("SP");
-  await db.batch(insertTicket(db, { id, user_id: user.id, kind: "ticket", topic: input.topic, booking_id: input.bookingId ?? null, ref: null, name: user.name, phone: user.phone, preferred_time: null }, input.message, now));
+  await db.batch([
+    ...insertTicket(db, { id, user_id: user.id, kind: "ticket", topic: input.topic, booking_id: input.bookingId ?? null, ref: null, name: user.name, phone: user.phone, preferred_time: null }, input.message, now),
+    staffAlertStatement(db, { kind: "support.ticket", ref: id, title: `New support ticket · ${SUPPORT_TOPIC_LABEL[input.topic]}`, body: input.bookingId ? "About one of their bookings. Waiting for a reply." : "Waiting for a reply.", link: "/support" }),
+  ]);
   return forCustomer(await ticketById(db, id));
 }
 
@@ -107,9 +114,11 @@ export async function customerReply(db: D1Database, userId: string, id: string, 
   const t = await ownTicket(db, userId, id);
   if (t.status === "closed") throw conflict("This ticket is closed. Please open a new one.");
   const now = new Date().toISOString();
+  const messageId = uid("SM");
   await db.batch([
-    db.prepare("INSERT INTO support_messages (id, ticket_id, author, admin_id, body, created_at) VALUES (?, ?, 'customer', NULL, ?, ?)").bind(uid("SM"), id, body, now),
+    db.prepare("INSERT INTO support_messages (id, ticket_id, author, admin_id, body, created_at) VALUES (?, ?, 'customer', NULL, ?, ?)").bind(messageId, id, body, now),
     db.prepare("UPDATE support_tickets SET status = 'open', updated_at = ? WHERE id = ?").bind(now, id),
+    staffAlertStatement(db, { kind: "support.reply", ref: messageId, title: `A customer replied · ${SUPPORT_TOPIC_LABEL[t.topic]}`, body: "The ticket is waiting for QuikFly again.", link: "/support" }),
   ]);
   return myTicket(db, userId, id);
 }

@@ -8,9 +8,9 @@ import type { Settings } from "./settings";
 
 export const PRIVACY_NOTICE = {
   /** Stored with each consent. Change it (a new date) when the notice's meaning changes. */
-  version: "2026-11-22",
+  version: "2026-11-23",
   /** Shown as "Last updated". */
-  updated: "2026-11-22",
+  updated: "2026-11-23",
 } as const;
 
 /** Inactive accounts are told this long before erasure at the latest (the Rules ask for 48 hours). */
@@ -96,7 +96,7 @@ export function privacyNotice(s: Settings): PrivacyNotice {
           "Support: your requests, callbacks and messages to us, and the notes our staff add to a booking while helping you.",
           "Safety: if you press SOS, the time, the ride it was about and the location your phone shared, so our team can act on it.",
           "Parcels: what you say you're sending, its value, and the receiver's name and number. If someone sends you a parcel, we hold your name and number as they gave them, to deliver it.",
-          "Your phone: a notification token, so we can send trip updates.",
+          "Your phone or browser, if you turn notifications on: a notification token or subscription, so we can send trip updates. Turn it off any time in Account or in your phone or browser settings.",
         ],
       },
       {
@@ -115,7 +115,7 @@ export function privacyNotice(s: Settings): PrivacyNotice {
           "The driver, bus operator, holiday or rental partner for your booking: only what that booking needs.",
           "Parcels: the counter staff and the operator carrying it. Anyone with the tracking number sees the route, progress and the first names of sender and receiver, never phone numbers or contents.",
           "Your emergency contacts, when you or your settings share a trip with them.",
-          "Companies that run our systems for us: Cloudflare (servers and database) and Google Firebase (notifications). They may not use it for anything else.",
+          "Companies that run our systems for us: Cloudflare (servers and database), Google Firebase (app notifications) and, for browser notifications, your browser's own push service (Google, Mozilla or Apple). They may not use it for anything else.",
           "Police or a government body, only when the law requires it.",
         ],
       },

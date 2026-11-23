@@ -294,6 +294,8 @@ async function parcelOpsChecks({ before, options, base, newPhone, contentStaff }
   for (const [seq, state] of [[0, "active"], [1, "active"], [1, "done"], [2, "active"]]) await leg(lost.id, seq, { to: state });
   check("ops: the test ends the hold", endHold(lost.id));
   await expect("ops: unclaimed", leg(lost.id, 2, { to: "failed" }), 200, (j) => j.state === "unclaimed");
+  await expect("ops: operations are alerted, without the receiver", call("GET", "/admin/alerts", null, T), 200,
+    (j) => j.items.some((a) => a.kind === "parcel.unclaimed" && a.link === `/parcels/view?id=${lost.id}` && a.title.includes(lost.lr ?? "Unclaimed") && !/Receiver|9000000002/.test(a.title + a.body)));
   const stats = (await call("GET", "/admin/stats?days=1", null, T)).json.queues;
   const count = async (query) => (await call("GET", `/admin/parcels?${query}`, null, T)).json.total;
   check("ops: dashboard unclaimed = the queue", stats.parcelsUnclaimed === (await count("state=unclaimed")) && stats.parcelsUnclaimed >= 1, JSON.stringify(stats));
@@ -526,6 +528,7 @@ await expect("PATCH /admin/settings: licence auto-approve off", call("PATCH", "/
 let resub = await call("PUT", "/me/licence", licence, C);
 if (resub.json?.licence?.status !== "pending") { await new Promise((r) => setTimeout(r, 31_000)); resub = await call("PUT", "/me/licence", licence, C); }
 check("licence is pending review while the setting is off", resub.status === 200 && resub.json?.licence?.status === "pending", JSON.stringify(resub.json)?.slice(0, 200));
+await expect("staff are alerted about the licence", call("GET", "/admin/alerts", null, T), 200, (j) => j.items.some((a) => a.kind === "licence.submitted" && a.link === "/licences"));
 await expect("dashboard counts the pending licence", call("GET", "/admin/stats", null, T), 200, (j) => j.queues.pendingLicences >= 1);
 
 // ── Catalog ──
@@ -996,6 +999,7 @@ if (pvUp.status === 409) {
   await upload("/vendor/documents/insurance", JPEG, PV);
   const sent = await expect("partner sends the application", call("POST", "/vendor/submit", null, PV), 200, (j) => j.status === "submitted");
   const vid = sent?.id;
+  await expect("staff are alerted about the application", call("GET", "/admin/alerts", null, T), 200, (j) => j.items.some((a) => a.kind === "vendor.applied" && a.link === `/vendors/view?id=${vid}`));
   await expect("GET /admin/vendors lists it (oldest first)", call("GET", "/admin/vendors", null, T), 200, (j) => j.some((x) => x.id === vid && x.vehicle.regNumber === pvReg && x.open === 6));
   await expect("bad status filter is refused", call("GET", "/admin/vendors?status=nope", null, T), 400);
   await expect("staff see the full bank account", call("GET", `/admin/vendors/${vid}`, null, T), 200, (j) => j.bankAccount === "998877665544" && j.application.bank.accountLast4 === "5544");
@@ -1039,6 +1043,7 @@ if (pvUp.status === 409) {
   await upload(`/vendor/vehicles/${v2}/documents/rc`, JPEG, PV);
   await upload(`/vendor/vehicles/${v2}/documents/insurance`, JPEG, PV);
   await expect("send the vehicle for review", call("POST", `/vendor/vehicles/${v2}/submit`, null, PV), 200, (j) => j.vehicles.find((v) => v.id === v2).status === "submitted");
+  await expect("staff are alerted about the vehicle", call("GET", "/admin/alerts", null, T), 200, (j) => j.items.some((a) => a.kind === "vendor.fleet" && a.body.includes(reg2)));
   await expect("a vehicle under review can't be edited", call("PUT", `/vendor/vehicles/${v2}/details`, { type: "bus", fuel: "petrol_diesel", regNumber: reg2, purchaseDate: dayOffset(-300) }, PV), 409);
   await expect("the fleet queue shows it", call("GET", "/admin/vendors/fleet-queue", null, T), 200, (j) => j.some((x) => x.id === v2 && x.kind === "vehicle" && x.vendorId === vid));
   await expect("sending a vehicle back needs a note", call("POST", `/admin/vendors/${vid}/vehicles/${v2}/review`, { decision: "changes" }, T), 400);
@@ -1067,6 +1072,8 @@ if (pvUp.status === 409) {
     (j) => j.drivers.some((d) => d.name === "Ravi Kumar" && d.phone === "+91 9123456780"));
   const d2 = withRavi.drivers.find((d) => d.name === "Ravi Kumar").id;
   await expect("an unapproved driver can't be assigned", call("POST", `/vendor/drivers/${d1}/assign`, { vehicleId: v2 }, PV), 409);
+  await expect("staff are alerted about the drivers, without names", call("GET", "/admin/alerts", null, T), 200,
+    (j) => j.items.some((a) => a.kind === "vendor.fleet" && a.title === "Driver to review") && !j.items.some((a) => /Ravi|Copy Cat|9123456780/.test(a.title + a.body)));
   await expect("approving needs police verification and training", call("POST", `/admin/vendors/${vid}/drivers/${d1}/review`, { decision: "approve" }, T), 400, (j) => /police/.test(j.message));
   await expect("approving needs the licence photo", call("POST", `/admin/vendors/${vid}/drivers/${d1}/review`, { decision: "approve", policeVerified: true, trainingDone: true }, T), 409);
   await upload(`/vendor/drivers/${d1}/documents/dl`, JPEG, PV);
@@ -1156,6 +1163,7 @@ if (pvUp.status === 409) {
     await call("PATCH", "/admin/settings", { vendorMinPayout: 1 }, T);
     await eventually("the lower minimum reaches the API", () => call("GET", "/config"), (r) => r.json?.settings?.vendorMinPayout === 1);
     const req = await expect("request a payout", call("POST", "/vendor/payouts", null, PV), 201, (j) => j.pendingPayout?.amountPaise === earn1);
+    await expect("staff are alerted about the payout", call("GET", "/admin/alerts", null, T), 200, (j) => j.items.some((a) => a.kind === "vendor.payout" && a.title.startsWith("Payout requested") && a.link === "/vendors"));
     await expect("only one open request", call("POST", "/vendor/payouts", null, PV), 409);
     await expect("staff see it with the bank account", call("GET", "/admin/vendors/payouts", null, T), 200,
       (j) => j.some((x) => x.id === req.pendingPayout.id && x.bank?.account === "998877665544"));
@@ -1214,6 +1222,8 @@ await call("POST", "/me/delete", { otp: OTP }, PV);
   await call("PATCH", "/me", { name: "Smoke Support" }, CS);
   const csMe = (await call("GET", "/auth/me", null, CS)).json;
   const st = await expect("customer opens a ticket", call("POST", "/me/tickets", { topic: "refund", message: "Smoke: where is my refund?" }, CS), 201, (j) => j.status === "open");
+  await expect("staff are alerted about the ticket, without the customer", call("GET", "/admin/alerts", null, T), 200,
+    (j) => j.items.some((a) => a.kind === "support.ticket" && a.title.includes("A refund") && a.link === "/support") && !JSON.stringify(j.items).includes("Smoke Support"));
   await expect("GET /admin/support lists it with the customer", call("GET", "/admin/support", null, T), 200, (j) => j.some((t) => t.id === st.id && t.customerId === csMe.id && t.messages.length === 1));
   await expect("a reply needs some text", call("POST", `/admin/support/${st.id}/reply`, { body: "ok" }, T), 400);
   await expect("staff reply", call("POST", `/admin/support/${st.id}/reply`, { body: "Smoke: your refund is on its way." }, T), 200,
@@ -1221,7 +1231,13 @@ await call("POST", "/me/delete", { otp: OTP }, PV);
   await expect("the customer sees the staff reply", call("GET", `/me/tickets/${st.id}`, null, CS), 200,
     (j) => j.status === "answered" && j.messages[1].staffName && !("customerId" in j));
   await expect("and is notified", call("GET", "/me/notifications", null, CS), 200, (j) => j.items.some((n) => n.kind === "support.reply"));
-  await expect("staff close it with a note", call("POST", `/admin/support/${st.id}/close`, { note: "Smoke: closing." }, T), 200, (j) => j.status === "closed" && j.messages.length === 3);
+  await expect("the customer replies", call("POST", `/me/tickets/${st.id}/messages`, { body: "Smoke: thanks, I'll wait." }, CS), 200, (j) => j.status === "open" && j.messages.length === 3);
+  await expect("staff are alerted about the reply", call("GET", "/admin/alerts", null, T), 200, (j) => j.items.some((a) => a.kind === "support.reply" && a.title.startsWith("A customer replied")));
+  const callerPhone = "7" + String(Date.now()).slice(-9);
+  await expect("anyone asks for a callback", call("POST", "/support/callbacks", { name: "Smoke Caller", phone: callerPhone, topic: "holiday", preferredTime: "evening" }), 201, (j) => j.status === "open");
+  await expect("staff are alerted about the callback, without the number", call("GET", "/admin/alerts", null, T), 200,
+    (j) => j.items.some((a) => a.kind === "support.callback" && /Evening/.test(a.body)) && !JSON.stringify(j.items).includes(callerPhone));
+  await expect("staff close it with a note", call("POST", `/admin/support/${st.id}/close`, { note: "Smoke: closing." }, T), 200, (j) => j.status === "closed" && j.messages.length === 4);
   await expect("closing twice is refused", call("POST", `/admin/support/${st.id}/close`, {}, T), 409);
   await expect("audit records support replies and closes", call("GET", `/admin/audit?entity=support&entityId=${st.id}`, null, T), 200,
     (j) => j.items.some((e) => e.action === "support.reply") && j.items.some((e) => e.action === "support.close"));
@@ -1312,6 +1328,23 @@ if (LOCAL) {
   const custToken = (await call("POST", "/auth/verify", { phone: CUSTOMER_PHONE, otp: OTP })).json.token;
   const sos = await expect("customer: POST /me/sos", call("POST", "/me/sos", { note: "Smoke SOS, ignore" }, custToken), 201, (j) => j.status === "open");
   await expect("GET /admin/sos lists it open", call("GET", "/admin/sos", null, T), 200, (j) => j.some((a) => a.id === sos.id && a.customer.id === customer.id && a.note === "Smoke SOS, ignore"));
+  // Staff alerts: the SOS reaches the bell at once, naming no one; read marks are per admin; a browser can register for push.
+  const alerts = await expect("GET /admin/alerts has the SOS, naming no one", call("GET", "/admin/alerts", null, T), 200,
+    (j) => j.unread >= 1 && "push" in j && j.items.some((a) => a.kind === "sos.raised" && a.link === "/sos" && a.readAt === null)
+      && !JSON.stringify(j.items).includes(customer.name) && !JSON.stringify(j.items).includes(CUSTOMER_PHONE));
+  const sosAlert = alerts.items.find((a) => a.kind === "sos.raised" && a.readAt === null);
+  await expect("POST /admin/alerts/read marks one read", call("POST", "/admin/alerts/read", { ids: [sosAlert.id] }, T), 200, (j) => j.unread === alerts.unread - 1);
+  await expect("it shows as read for this admin", call("GET", "/admin/alerts", null, T), 200, (j) => !!j.items.find((a) => a.id === sosAlert.id)?.readAt);
+  await expect("bad ids are 400", call("POST", "/admin/alerts/read", { ids: "all" }, T), 400);
+  await expect("mark everything read", call("POST", "/admin/alerts/read", {}, T), 200, (j) => j.unread === 0);
+  const sos2 = await expect("pressing SOS again alerts again", call("POST", "/me/sos", { note: "Smoke SOS 2, ignore" }, custToken), 201);
+  await expect("the new alert is unread", call("GET", "/admin/alerts", null, T), 200, (j) => j.unread >= 1 && j.items.some((a) => a.kind === "sos.raised" && a.readAt === null));
+  // Close it, so no smoke run leaves an open SOS for staff (or fills the customer's open-alert limit).
+  if (sos2?.id) await call("POST", `/admin/sos/${sos2.id}/close`, { reason: "Smoke test: second alert, ignore" }, T);
+  const staffSub = JSON.stringify({ endpoint: `https://push.example/staff/${Date.now()}`, expirationTime: null, keys: { p256dh: "x", auth: "y" } });
+  await expect("POST /admin/push-devices", call("POST", "/admin/push-devices", { token: staffSub, platform: "web" }, T), 201, (j) => j.registered === true);
+  await expect("a staff push device needs a known platform", call("POST", "/admin/push-devices", { token: staffSub, platform: "pager" }, T), 400);
+  await expect("DELETE /admin/push-devices/:token", call("DELETE", `/admin/push-devices/${encodeURIComponent(staffSub)}`, null, T), 200, (j) => j.removed === true);
   await expect("closing without a note is 400", call("POST", `/admin/sos/${sos.id}/close`, {}, T), 400);
   await expect("POST /admin/sos/:id/acknowledge", call("POST", `/admin/sos/${sos.id}/acknowledge`, { note: "Calling the customer" }, T), 200, (j) => j.status === "acknowledged" && j.handledBy?.name);
   await expect("acknowledging twice is 409", call("POST", `/admin/sos/${sos.id}/acknowledge`, {}, T), 409);
@@ -1338,6 +1371,7 @@ if (LOCAL) {
     const ct = (await login(CONTENT)).json.token;
     await expect("content role can't list customers", call("GET", "/admin/customers", null, ct), 403);
     await expect("content role can't see SOS", call("GET", "/admin/sos", null, ct), 403);
+    await expect("content role has no staff alerts", call("GET", "/admin/alerts", null, ct), 403);
     await expect("content role can't see the team", call("GET", "/admin/team", null, ct), 403);
 
     // Team (owners only)

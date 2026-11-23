@@ -9,6 +9,7 @@ import {
 } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
+import { staffAlertStatement } from "./admin/alerts";
 import { matches, oneOf, text } from "../lib/validate";
 import { visible } from "./catalog";
 import { getSettings } from "./settings";
@@ -304,7 +305,10 @@ export async function submitApplication(db: D1Database, userId: string): Promise
   const app = toApplication(v, vehicle);
   if (!readyToSubmit(app)) throw badRequest("Fill in every section before sending your application.");
   const now = new Date().toISOString();
-  await db.prepare("UPDATE vendors SET status = 'submitted', submitted_at = ?, updated_at = ?, note = NULL WHERE id = ? AND status = 'draft'").bind(now, now, v.id).run();
+  await db.batch([
+    db.prepare("UPDATE vendors SET status = 'submitted', submitted_at = ?, updated_at = ?, note = NULL WHERE id = ? AND status = 'draft'").bind(now, now, v.id),
+    staffAlertStatement(db, { kind: "vendor.applied", ref: `${v.id}:${now}`, title: "Partner application to review", body: "A vehicle owner sent their application. Review the six sections.", link: `/vendors/view?id=${v.id}` }),
+  ]);
   return (await getApplication(db, userId))!;
 }
 

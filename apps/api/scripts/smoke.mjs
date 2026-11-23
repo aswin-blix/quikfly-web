@@ -691,6 +691,12 @@ await call("POST", "/me/delete", { otp: OTP }, V2);
 await expect("register a push device", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "android" }), 201, (j) => j.registered === true);
 await expect("a push device needs a known platform", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "fridge" }), 400);
 await expect("remove a push device", call("DELETE", "/me/push-devices/smoke-token-123"), 200, (j) => j.removed === true);
+// Browser push: the subscription JSON is the token (platform web); /config says whether browser push is on.
+const webSub = JSON.stringify({ endpoint: "https://push.example/sub/smoke", expirationTime: null, keys: { p256dh: "smoke-p256dh", auth: "smoke-auth" } });
+await expect("register a browser subscription", call("POST", "/me/push-devices", { token: webSub, platform: "web" }), 201, (j) => j.registered === true);
+await expect("a push token has a length limit", call("POST", "/me/push-devices", { token: "x".repeat(1001), platform: "web" }), 400);
+await expect("remove the browser subscription", call("DELETE", `/me/push-devices/${encodeURIComponent(webSub)}`), 200, (j) => j.removed === true);
+await expect("GET /config says whether browser push is on", call("GET", "/config"), 200, (j) => "push" in j && (j.push === null || typeof j.push.vapidPublicKey === "string"));
 
 // Self-drive rental lifecycle: checklist photos, start, extend, return (staff settle in smoke-admin).
 // On production only the read and the photo rule run, then the booking is cancelled, so no

@@ -30,6 +30,14 @@ export const PUSH_MAX_AGE_MINUTES = 60;
 export const PUSH_BATCH = 40;
 /** Firebase Cloud Messaging endpoints for the service-account sign-in. */
 export const FCM = { tokenUrl: "https://oauth2.googleapis.com/token", scope: "https://www.googleapis.com/auth/firebase.messaging" };
+/** Android notifications: the channel the apps create (MainActivity.kt) and the accent (Brand.gold in apps/mobile/lib/theme/tokens.dart). */
+export const PUSH_ANDROID = { channelId: "quikfly_updates", color: "#F2C14E" };
+/** Longest push token: an FCM token is ~160 chars, a browser PushSubscription JSON (platform "web") up to ~600. */
+export const PUSH_TOKEN_MAX = 1000;
+/** Browser push: how long the push service keeps an undelivered message for an offline browser (seconds). */
+export const WEB_PUSH_TTL_SECONDS = 3600;
+/** Staff alerts: how many recent alerts GET /admin/alerts returns. */
+export const STAFF_ALERTS_PAGE = 50;
 
 /** Parcels the simulated carrier moves per cron run. Set-based, so this doesn't change the query count. */
 export const PARCEL_SIM_BATCH = 20;

@@ -2,6 +2,7 @@ import { FEATURE_OFF, type ProfileUpdate, type User } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { checkOtp, getUserRow, normalisePhone, toUser, type UserRow } from "./auth";
 import { uid } from "../lib/random";
+import { staffAlertStatement } from "./admin/alerts";
 import { getSettings } from "./settings";
 
 async function reload(db: D1Database, userId: string): Promise<User> {
@@ -106,9 +107,12 @@ export async function applyReferral(db: D1Database, userId: string, code: string
  */
 export async function submitLicence(db: D1Database, userId: string, number: string, expiry: string, autoApprove: boolean): Promise<User> {
   const now = new Date().toISOString();
-  await db.prepare(
+  const statements = [db.prepare(
     `UPDATE users SET licence_number = ?, licence_expiry = ?, licence_submitted_at = ?, licence_status = ?, licence_note = NULL,
        licence_reviewed_at = ? WHERE id = ?`,
-  ).bind(number, expiry, now, autoApprove ? "verified" : "pending", autoApprove ? now : null, userId).run();
+  ).bind(number, expiry, now, autoApprove ? "verified" : "pending", autoApprove ? now : null, userId)];
+  // Staff only hear about licences they have to look at.
+  if (!autoApprove) statements.push(staffAlertStatement(db, { kind: "licence.submitted", ref: `${userId}:${now}`, title: "Driving licence to review", body: "A customer sent their licence for self-drive rentals.", link: "/licences" }));
+  await db.batch(statements);
   return reload(db, userId);
 }

@@ -5,6 +5,7 @@ import {
   AUTO_SHARE_MODES, GENDERS, LIMITS, PATTERNS, RIDE_PIN, SUPPORT_RULES, SUPPORT_TOPICS, SAVED_PLACE_KINDS, ageFrom, compactCode, hiddenServices, type ProfileUpdate,
 } from "@quikfly/shared";
 import type { AppEnv } from "../env";
+import { PUSH_TOKEN_MAX } from "../config";
 import { badRequest } from "../lib/errors";
 import { bool, has, int, jsonBody, matches, oneOf, optStr, str, text } from "../lib/validate";
 import { requireUser } from "../middleware/auth";
@@ -177,9 +178,9 @@ export const me = new Hono<AppEnv>()
     return c.json(await markRead(c.env.DB, c.var.user.id, (ids as string[] | undefined) ?? null, hiddenServices(c.req.header("Accept"))));
   })
 
-  // Push devices (Firebase tokens from the app)
+  // Push devices: an FCM token from the app (platform android) or a browser PushSubscription JSON (platform web)
   .post("/push-devices", async (c) => {
     const body = await jsonBody(c);
-    return c.json(await registerDevice(c.env.DB, c.var.user.id, str(body, "token", 400), oneOf(body, "platform", ["android", "ios", "web"] as const)), 201);
+    return c.json(await registerDevice(c.env.DB, c.var.user.id, str(body, "token", PUSH_TOKEN_MAX), oneOf(body, "platform", ["android", "ios", "web"] as const)), 201);
   })
   .delete("/push-devices/:token", async (c) => c.json(await removeDevice(c.env.DB, c.var.user.id, c.req.param("token"))));
