@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AdminShell } from "@/components/AdminShell";
+import { AlertsProvider } from "@/lib/alerts";
 import { SessionProvider } from "@/lib/session";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
@@ -25,7 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="font-sans">
         <SessionProvider>
-          <AdminShell>{children}</AdminShell>
+          <AlertsProvider>
+            <AdminShell>{children}</AdminShell>
+          </AlertsProvider>
         </SessionProvider>
       </body>
     </html>

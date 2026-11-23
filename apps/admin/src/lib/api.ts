@@ -2,7 +2,7 @@
 // Endpoints are listed in apps/api/README.md (Admin section).
 import type {
   AdminCustomer, AdminCustomerDetail, AdminParcel, AdminParcelRow, AdminRental, ParcelDeparture, ParcelFilters, ParcelWeightBand, WeightChange, ParcelLegState, AdminRole, CounterScope, AdminSupportTicket, BookingNote, CustomerFilters, RentalPhotoSide, RentalSettlement, RentalStage,
-  SosAlert, SosStatus, SupportStatus, TeamMember,
+  SosAlert, SosStatus, StaffAlerts, SupportStatus, TeamMember,
 } from "@quikfly/shared";
 import type {
   AdminBooking, AdminBookingDetail, AdminLoginResult, AdminStats, AdminUser, AuditEntry, BookingFilters, CatalogItem, CatalogKind, LicenceQueueStatus,
@@ -92,6 +92,16 @@ export const adminApi = {
     /** One move from staffMoves(); `otp` to hand over, `note` is shown to the sender. */
     move: (id: string, seq: number, body: { to: ParcelLegState; note?: string; otp?: string }) =>
       req<AdminParcel>("POST", `/admin/parcels/${encodeURIComponent(id)}/legs/${seq}`, body),
+  },
+  /** Staff alerts (the bell): newest first, with this admin's read marks and the browser-push key. */
+  alerts: {
+    list: () => req<StaffAlerts>("GET", "/admin/alerts"),
+    markRead: (ids?: string[]) => req<{ unread: number }>("POST", "/admin/alerts/read", ids ? { ids } : {}),
+  },
+  /** This browser's push subscription, so alerts arrive when the panel is closed. */
+  pushDevices: {
+    register: (token: string) => req<{ registered: true }>("POST", "/admin/push-devices", { token, platform: "web" }),
+    remove: (token: string) => req<{ removed: true }>("DELETE", `/admin/push-devices/${encodeURIComponent(token)}`),
   },
   sos: {
     list: (status: SosStatus) => req<SosAlert[]>("GET", `/admin/sos${qs({ status })}`),

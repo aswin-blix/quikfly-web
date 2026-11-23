@@ -43,6 +43,8 @@
 
   --success: #0b7a52;
   --danger: #c62828;
+  /* Text on a solid danger fill (alert counts). */
+  --on-danger: #ffffff;
   --warning: #b45309;
   --info: #1d5fa8;
 
@@ -77,6 +79,7 @@
 
   --success: #34d399;
   --danger: #f87171;
+  --on-danger: #1f0606;
   --warning: #fdba74;
   --info: #7cb3f0;
 

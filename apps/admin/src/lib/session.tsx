@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { useRouter } from "next/navigation";
 import { can, type AdminUser, type Permission } from "@quikfly/shared";
 import { ADMIN_UNAUTHORIZED_EVENT, adminApi, getToken } from "./api";
+import { pausePush } from "./push";
 
 interface Session {
   admin: AdminUser | null;
@@ -32,7 +33,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => { setAdmin(await adminApi.auth.login(email, password)); }, []);
-  const logout = useCallback(async () => { await adminApi.auth.logout(); setAdmin(null); }, []);
+  // Browser alerts stop reaching this browser first, while the session can still say so.
+  const logout = useCallback(async () => { await pausePush(); await adminApi.auth.logout(); setAdmin(null); }, []);
   const check = useCallback((p: Permission) => !!admin && can(admin.role, p), [admin]);
 
   return <Ctx.Provider value={{ admin, loading, login, logout, can: check }}>{children}</Ctx.Provider>;
