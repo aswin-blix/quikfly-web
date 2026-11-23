@@ -5,6 +5,7 @@
 // earnings and the invoice. Bookings made before terms were stored (migration 0026) have
 // none and use today's settings.
 import { CANCEL_EVENT, describeCancelPolicy, parseCancelPolicy } from "./cancellation";
+import type { ParcelMode } from "./parcel";
 import type { Settings } from "./settings";
 import type { ServiceKey } from "./types";
 
@@ -16,16 +17,24 @@ export const TERM_KEYS = {
   tours: ["gstTours", "cancelPolicyTours"],
   rent: ["gstRent", "cancelPolicyRent", "rentLimitedKmPerDay", "rentExtraKmRate", "rentLateGraceMinutes", "rentLateFeePercent", "rentFuelChargePerEighth"],
   rentals: ["gstGroup", "cancelPolicyGroup"],
-  parcel: ["gstParcel", "cancelPolicyParcel", "parcelLiabilityCap", "parcelCounterHoldDays"],
+  parcel: ["gstParcel", "cancelPolicyParcel", "parcelLiabilityCap", "parcelCounterHoldDays", "rideCancelFeePercent", "rideCancelFeeCap", "rideCancelFreeMinutes"],
 } as const satisfies Record<ServiceKey, readonly (keyof Settings)[]>;
 
 export type TermKey = (typeof TERM_KEYS)[ServiceKey][number];
 /** What a booking stores: some of the settings, under the same keys. */
 export type BookingTerms = Partial<Pick<Settings, TermKey>>;
 
+/** A bus parcel keeps its tiers and hold, a Quick parcel the ride cancellation rules: never both. */
+const NOT_A_TERM: Record<ParcelMode, ReadonlySet<string>> = {
+  city: new Set(["cancelPolicyParcel", "parcelCounterHoldDays"]),
+  intercity: new Set(["rideCancelFeePercent", "rideCancelFeeCap", "rideCancelFreeMinutes"]),
+};
+
 /** The terms a new booking of `service` is sold under, taken from today's settings. */
-export function bookingTerms(settings: Settings, service: ServiceKey): BookingTerms {
-  return Object.fromEntries(TERM_KEYS[service].map((k) => [k, settings[k]])) as BookingTerms;
+export function bookingTerms(settings: Settings, service: ServiceKey, parcelMode: ParcelMode = "intercity"): BookingTerms {
+  const keys: readonly (keyof Settings)[] = TERM_KEYS[service];
+  const used = service === "parcel" ? keys.filter((k) => !NOT_A_TERM[parcelMode].has(k)) : keys;
+  return Object.fromEntries(used.map((k) => [k, settings[k]])) as BookingTerms;
 }
 
 /**

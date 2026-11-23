@@ -1,22 +1,24 @@
 "use client";
-// /parcels: book a bus parcel, counter to counter. The API prices it (POST /quotes); checkout takes the payment.
+// /parcels: a Quick parcel across town with a captain, or a bus parcel counter to counter. The API prices it (POST /quotes); checkout takes the payment.
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeftRight, Package, Search } from "lucide-react";
 import {
-  LIMITS, PARCEL_CATEGORIES, PARCEL_RULES, PARCEL_SIZES, PARCEL_WEIGHT_BANDS, PATTERNS, cancelPolicyText, parcelBandLabel, parcelTime,
-  type ParcelCategory, type ParcelOptions, type ParcelSize, type ParcelWeightBand, type PriceQuote, type QuoteRequest,
+  LIMITS, PARCEL_CATEGORIES, PARCEL_RULES, PARCEL_SIZES, PARCEL_WEIGHT_BANDS, PATTERNS, QUICK_PARCEL_CITY, cancelPolicyText, parcelBandLabel, parcelTime,
+  quickParcelPolicyText,
+  type ParcelCategory, type ParcelMode, type ParcelOptions, type ParcelSize, type ParcelWeightBand, type Place, type PriceQuote, type QuoteRequest, type SavedPlace,
 } from "@quikfly/shared";
 import { useApp } from "@/components/AppProvider";
 import { Select } from "@/components/BookingWidget";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { SimulatedNote } from "@/components/parcel/ParcelTimeline";
+import { PlacePicker } from "@/components/PlacePicker";
 import { GoldButton, PageHeader, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { cx, inr } from "@/lib/format";
-import { useNav } from "@/lib/nav";
+import { useNav, useQuery } from "@/lib/nav";
 import { CATEGORY_LABEL, PARCEL_QUOTE_DEBOUNCE_MS, PARCEL_QUOTE_MARGIN_MS, SIZE_LABEL, parcelTrackPath } from "@/lib/parcels";
 
-type BusParcelRequest = Extract<QuoteRequest, { service: "parcel"; mode: "intercity" }>;
+type ParcelRequest = Extract<QuoteRequest, { service: "parcel" }>;
 /** Enough to show a value is over the limit, instead of cutting it down to one under. */
 const VALUE_DIGITS_MAX = 7;
 /** One departure: two operators' buses can leave at the same time, and bus ids repeat across days. */
@@ -28,7 +30,7 @@ function mobileDigits(input: string) {
   else if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
   return d.slice(0, 10);
 }
-type Field = "departure" | "value" | "name" | "phone" | "contents" | "declaration";
+type Field = "departure" | "pickup" | "drop" | "value" | "name" | "phone" | "contents" | "declaration";
 
 function TrackForm() {
   const nav = useNav();
@@ -57,19 +59,27 @@ function Choice<T extends string>({ label, options, value, onChange }: { label: 
 }
 
 export function ParcelScreen() {
-  const { draft, setDraft, toast } = useApp();
+  const { draft, setDraft, toast, user } = useApp();
   const settings = useSettings();
   const config = useConfig();
   const nav = useNav();
   // "Edit" at checkout comes back here with everything but the declaration filled in.
   const [initial] = useState(() => draft?.parcel);
 
-  const [from, setFrom] = useState(initial?.request.from ?? "Chennai");
-  const [to, setTo] = useState(initial?.request.to ?? "Coimbatore");
+  const initialBus = initial?.request.mode === "intercity" ? initial.request : null;
+  const initialCity = initial?.request.mode === "city" ? initial.request : null;
+  const wantsCity = useQuery().get("mode") === "city";
+  const [mode, setMode] = useState<ParcelMode>(initial?.request.mode ?? (wantsCity ? "city" : "intercity"));
+  const inCity = mode === "city";
+  const [pickup, setPickup] = useState<Place | null>(null);
+  const [drop, setDrop] = useState<Place | null>(null);
+  const [saved, setSaved] = useState<SavedPlace[]>([]);
+  const [from, setFrom] = useState(initialBus?.from ?? "Chennai");
+  const [to, setTo] = useState(initialBus?.to ?? "Coimbatore");
   const [options, setOptions] = useState<ParcelOptions | null>(null);
   const [optionsError, setOptionsError] = useState("");
   const [attempt, setAttempt] = useState(0);
-  const [bus, setBus] = useState(initial ? busKey(initial.request) : "");
+  const [bus, setBus] = useState(initialBus ? busKey(initialBus) : "");
   const [category, setCategory] = useState<ParcelCategory>(initial?.request.category ?? "documents");
   const [band, setBand] = useState<ParcelWeightBand>(initial?.request.weightBand ?? PARCEL_WEIGHT_BANDS[0]);
   const [size, setSize] = useState<ParcelSize>(initial?.request.size ?? "backpack");
@@ -84,6 +94,17 @@ export function ParcelScreen() {
   const [continuing, setContinuing] = useState(false);
 
   const cities = (config?.cities ?? []).map((c) => c.name);
+  const places = config?.places;
+  useEffect(() => {
+    if (!places || !initialCity) return;
+    setPickup((p) => p ?? places.find((x) => x.id === initialCity.pickupId) ?? null);
+    setDrop((d) => d ?? places.find((x) => x.id === initialCity.dropId) ?? null);
+  }, [places, initialCity]);
+  const signedIn = !!user;
+  useEffect(() => {
+    if (!signedIn) return setSaved([]);
+    api.savedPlaces.list().then(setSaved, () => setSaved([]));
+  }, [signedIn]);
 
   useEffect(() => {
     let live = true;
@@ -103,10 +124,12 @@ export function ParcelScreen() {
   const declaredValue = Number(value);
   const valueOk = value !== "" && declaredValue >= 1 && declaredValue <= settings.parcelMaxDeclaredValue;
 
-  const request = useMemo<BusParcelRequest | null>(() => (departure && valueOk ? {
-    service: "parcel", mode: "intercity", from, to, busId: departure.busId, departAt: departure.departAt,
-    category, weightBand, size, declaredValue, pickup: "counter", delivery: "counter",
-  } : null), [departure, valueOk, from, to, category, weightBand, size, declaredValue]);
+  const request = useMemo<ParcelRequest | null>(() => {
+    if (!valueOk) return null;
+    const details = { service: "parcel", category, weightBand, size, declaredValue } as const;
+    if (mode === "city") return pickup && drop && pickup.id !== drop.id ? { ...details, mode, pickupId: pickup.id, dropId: drop.id } : null;
+    return departure ? { ...details, mode, from, to, busId: departure.busId, departAt: departure.departAt, pickup: "counter", delivery: "counter" } : null;
+  }, [mode, pickup, drop, departure, valueOk, from, to, category, weightBand, size, declaredValue]);
   const key = request ? JSON.stringify(request) : "";
   const quote = priced && priced.key === key ? priced.quote : null;
 
@@ -115,10 +138,10 @@ export function ParcelScreen() {
     if (!key) return;
     let live = true;
     const timer = setTimeout(() => {
-      api.quotes.create(JSON.parse(key) as BusParcelRequest).then((q) => live && setPriced({ key, quote: q }), (e: Error) => live && setPriceError(e.message));
+      api.quotes.create(JSON.parse(key) as ParcelRequest).then((q) => live && setPriced({ key, quote: q }), (e: Error) => live && setPriceError(e.message));
     }, PARCEL_QUOTE_DEBOUNCE_MS);
     return () => { live = false; clearTimeout(timer); };
-  }, [key]);
+  }, [key, attempt]);
 
   const clear = (f: Field) => setErrors(({ [f]: _, ...rest }) => rest);
   function pickFrom(city: string) {
@@ -126,10 +149,16 @@ export function ParcelScreen() {
     setFrom(city);
   }
 
+  const policy = inCity ? quickParcelPolicyText(settings) : `${cancelPolicyText(settings, "parcel")} It can't be cancelled once it's on the bus.`;
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const found: Partial<Record<Field, string>> = {};
-    if (!departure) found.departure = "Pick a bus for this route.";
+    if (inCity) {
+      if (!pickup) found.pickup = "Choose where the captain picks it up.";
+      if (!drop) found.drop = "Choose where it's going.";
+      else if (drop.id === pickup?.id) found.drop = "Pickup and drop must be different places.";
+    } else if (!departure) found.departure = "Pick a bus for this route.";
     if (!valueOk) found.value = `Enter what it's worth, from ₹1 to ${inr(settings.parcelMaxDeclaredValue)}.`;
     if (name.trim().length < LIMITS.nameMin) found.name = "Enter the receiver's name.";
     if (!PATTERNS.phone.test(phone)) found.phone = "Enter the receiver's 10-digit mobile number.";
@@ -138,27 +167,30 @@ export function ParcelScreen() {
     setErrors(found);
     const first = (Object.keys(found) as Field[])[0];
     if (first) return document.getElementById(`parcel-${first}`)?.focus();
-    if (!request || !departure || !options) return;
+    if (!request || !options) return;
 
     setContinuing(true);
     try {
       const fresh = quote && Date.parse(quote.expiresAt) - Date.now() > PARCEL_QUOTE_MARGIN_MS;
       const price = fresh ? quote : await api.quotes.create(request);
+      const liability: [string, string] = ["Liability", `Up to ${inr(price.parcel?.liability ?? 0)}, not insured`];
       setDraft({
         service: "parcel",
-        title: `${from} → ${to}`,
-        subtitle: `Bus parcel · ${parcelBandLabel(weightBand)}`,
+        title: request.mode === "city" ? `${pickup!.name} → ${drop!.name}` : `${from} → ${to}`,
+        subtitle: `${request.mode === "city" ? "Quick parcel" : "Bus parcel"} · ${parcelBandLabel(weightBand)}`,
         // No names, numbers or contents here: the summary is what other services send as booking lines.
-        summary: [
-          ["Hand in by", parcelTime(departure.cutoffAt)],
-          ["At", departure.fromCounter.name],
-          ["Departs", parcelTime(departure.departAt)],
-          ["Collect from", parcelTime(departure.readyAt)],
-          ["Liability", `Up to ${inr(price.parcel?.liability ?? 0)}, not insured`],
-        ],
+        summary: request.mode === "city"
+          ? [["Pickup", pickup!.name], ["Deliver to", drop!.name], liability]
+          : [
+              ["Hand in by", parcelTime(departure!.cutoffAt)],
+              ["At", departure!.fromCounter.name],
+              ["Departs", parcelTime(departure!.departAt)],
+              ["Collect from", parcelTime(departure!.readyAt)],
+              liability,
+            ],
         quote: price,
         travellers: [],
-        policy: `${cancelPolicyText(settings, "parcel")} It can't be cancelled once it's on the bus.`,
+        policy,
         parcel: { request, receiver: { name: name.trim(), phone }, contents: contents.trim(), declaration: options.declaration.version },
       });
       nav.push("/checkout");
@@ -171,12 +203,44 @@ export function ParcelScreen() {
   return (
     <>
       <PageHeader crumbs={[["Home", "/"], ["Parcels"]]} title="Send a parcel" icon={<Package className="text-gold" size={36} />}
-        sub="Hand it in at a QuikFly counter. It goes on the bus, and the receiver collects it with a code.">
+        sub={inCity
+          ? "A captain picks it up and takes it across town. The receiver gets it for a code."
+          : "Hand it in at a QuikFly counter. It goes on the bus, and the receiver collects it with a code."}>
         <TrackForm />
       </PageHeader>
 
       <form noValidate onSubmit={submit} className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
         <div className="min-w-0 space-y-5">
+          <div className="grid grid-cols-2 gap-2" role="group" aria-label="How it travels">
+            {([["intercity", "Bus parcel", "Between cities"], ["city", "Quick parcel", `Across ${QUICK_PARCEL_CITY}`]] as const).map(([m, title, where]) => (
+              <button key={m} type="button" aria-pressed={mode === m} onClick={() => { setMode(m); setErrors({}); }}
+                className={cx("text-left rounded-xl border p-3 transition-colors", mode === m ? "border-gold bg-gold/[0.06]" : "border-line hover:border-gold/50")}>
+                <span className="block text-sm font-semibold text-strong">{title}</span>
+                <span className="block text-xs text-muted mt-1">{where}</span>
+              </button>
+            ))}
+          </div>
+
+          {inCity ? (
+            <section className="panel p-5 space-y-4" aria-labelledby="p-places">
+              <h2 id="p-places" className="font-semibold text-strong">Pickup and drop</h2>
+              <div>
+                <PlacePicker id="parcel-pickup" label="Pickup" placeholder="Pick it up from" icon={<span className="w-2.5 h-2.5 rounded-full bg-success" />}
+                  value={pickup} onChange={(p) => { setPickup(p); clear("pickup"); }} exclude={drop?.id} saved={saved} />
+                <FieldError id="pickup" text={errors.pickup} />
+              </div>
+              <div>
+                <PlacePicker id="parcel-drop" label="Drop" placeholder="Deliver it to" icon={<span className="w-2.5 h-2.5 bg-brand" />}
+                  value={drop} onChange={(p) => { setDrop(p); clear("drop"); }} exclude={pickup?.id} saved={saved} />
+                <FieldError id="drop" text={errors.drop} />
+              </div>
+              {optionsError && (
+                <p className="text-sm text-danger" role="alert">
+                  {optionsError} <button type="button" className="text-gold underline" onClick={() => setAttempt((n) => n + 1)}>Try again</button>
+                </p>
+              )}
+            </section>
+          ) : (
           <section className="panel p-5 space-y-4" aria-labelledby="p-route">
             <h2 id="p-route" className="font-semibold text-strong">Route and bus</h2>
             <div className="grid sm:grid-cols-[1fr_auto_1fr] gap-3 items-end">
@@ -220,6 +284,7 @@ export function ParcelScreen() {
               </div>
             )}
           </section>
+          )}
 
           <section className="panel p-5 space-y-4" aria-labelledby="p-what">
             <h2 id="p-what" className="font-semibold text-strong">What you&apos;re sending</h2>
@@ -244,7 +309,7 @@ export function ParcelScreen() {
           </section>
 
           <section className="panel p-5 space-y-4" aria-labelledby="p-who">
-            <h2 id="p-who" className="font-semibold text-strong">Who collects it</h2>
+            <h2 id="p-who" className="font-semibold text-strong">{inCity ? "Who receives it" : "Who collects it"}</h2>
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className="label" htmlFor="parcel-name">Receiver&apos;s name</label>
@@ -260,8 +325,9 @@ export function ParcelScreen() {
               </div>
             </div>
             <p className="text-xs text-muted">
-              When it&apos;s ready, a collection code appears on your screen in My Trips. You pass it to the receiver: demo, no SMS is sent.
-              It&apos;s held for {settings.parcelCounterHoldDays} days.
+              {inCity
+                ? "When the captain has it, a delivery code appears on your screen in My Trips. You pass it to the receiver: demo, no SMS is sent."
+                : `When it's ready, a collection code appears on your screen in My Trips. You pass it to the receiver: demo, no SMS is sent. It's held for ${settings.parcelCounterHoldDays} days.`}
             </p>
           </section>
 
@@ -302,12 +368,12 @@ export function ParcelScreen() {
             ) : key ? (
               <p className="text-sm text-muted flex items-center gap-2"><Spinner size={14} />Getting the price…</p>
             ) : (
-              <p className="text-sm text-muted">Pick a bus and say what it&apos;s worth to see the price.</p>
+              <p className="text-sm text-muted">{inCity ? "Choose both places and say what it's worth to see the price." : "Pick a bus and say what it's worth to see the price."}</p>
             )}
-            <p className="text-xs text-subtle">{cancelPolicyText(settings, "parcel")} It can&apos;t be cancelled once it&apos;s on the bus.</p>
+            <p className="text-xs text-subtle">{policy}</p>
             <GoldButton type="submit" className="w-full" loading={continuing} disabled={!!priceError}>Continue</GoldButton>
           </div>
-          {settings.parcelSimulateTransit && <SimulatedNote />}
+          {settings.parcelSimulateTransit && <SimulatedNote mode={mode} />}
         </aside>
       </form>
     </>

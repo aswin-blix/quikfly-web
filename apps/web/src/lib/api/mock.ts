@@ -6,14 +6,14 @@ import type { QuikflyApi } from "./contract";
 import {
   BUS_OPERATORS, CATALOG_SEED, CREDITS_LINE, offerLive, DEFAULT_SETTINGS, DEPOSIT_LINE, creditsEarned, creditsReturned, creditsUsable, passCovers, QUOTE_TTL_MINUTES, RIDE_MAX_STOPS, RIDE_SCHEDULE, localToIso, minutesUntilStart, scheduleError, RIDE_SIM, cancelPolicyFor, couponDiscount, generateBuses, generateSeats, pick,
   fareDateFor, priceBus, priceGroup, priceRent, priceTour, quoteStartsAt, refundAmount, refundPercent, rideCancelFee, rideDiscountRoom, rideQuotes, rideTimeAt, seatRuleError, sumLines,
-  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, isWomenOnly, upcomingDepartures, type TourPackage, bookingTerms, withTerms, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
+  BUS_CHANGED_LINE, BUS_TRIP_LINES, SEATS_CANCELLED_LINE, SEATS_LINE, TRAVELLERS_LINE, isWomenOnly, upcomingDepartures, type TourPackage, bookingTerms, PARCEL_COMPLETES, PARCEL_EARNS, isQuickParcel, withTerms, rescheduleAmounts, rescheduleError, seatCancelError, seatCancelRefund, seatsShare, ticketStatus, travellerNames,
   type AppConfig, type AppNotification, type Booking, type SeatHold, type CouponCheck, type FareLine, type NewBooking, type PriceQuote, type QuoteRequest, type ServiceKey,
 } from "@quikfly/shared";
 import { mockAccount, mockAuth, mockContacts, mockSavedPlaces, mockTravellers } from "./mock-account";
 import { mockVendor } from "./mock-vendor";
 import { mockSupport } from "./mock-support";
 import { mockRentalFor, mockRental } from "./mock-rental";
-import { checkMockParcelCancel, closeMockParcel, mockNewParcel, mockParcel, mockParcelOptions, mockParcelPrice, mockTrack, syncMockParcels } from "./mock-parcels";
+import { checkMockParcelCancel, closeMockParcel, mockNewParcel, mockParcel, mockParcelOptions, mockParcelPrice, mockSenderMove, mockTrack, syncMockParcels } from "./mock-parcels";
 import { KEYS, creditBalance, creditEntry, currentUser, fail, load, save, signedInUser, uid, wait, walletEntry, type MockRide } from "./mock-store";
 
 const creditExpiry = () => new Date(Date.now() + settings.creditsExpiryDays * 86_400_000).toISOString();
@@ -58,7 +58,8 @@ function syncParcels() {
   saveBookings(bookingsStore().map((b) => {
     const state = states.get(b.id);
     if (!state || (b.status !== "confirmed" && b.status !== "ongoing")) return b;
-    return { ...b, parcelState: state, status: state === "booked" ? "confirmed" : "ongoing" };
+    if (!PARCEL_COMPLETES.includes(state)) return { ...b, parcelState: state, status: state === "booked" ? "confirmed" : "ongoing" };
+    return { ...b, parcelState: state, status: "completed" };
   }));
 }
 const ridesStore = () => load<Record<string, MockRide>>(KEYS.rides, {});
@@ -361,7 +362,7 @@ export const mockApi: QuikflyApi = {
         seats: busReq ? busReq.seatIds.map((id, i) => ({ id, price: busReq.seatPrices?.[i] ?? 0, gender: busReq.genders?.[i] ?? "other" })) : [],
         ticketToken: input.service === "bus" ? uid("TK").toLowerCase() : null, rescheduledAt: null, rentalState: null,
         parcelState: parcel ? "booked" : null,
-        terms: bookingTerms(settings, input.service),
+        terms: bookingTerms(settings, input.service, parcel?.mode),
       };
       if (quoted?.request) b.rentalState = mockRentalFor(b.id, quoted.request, deposit);
       if (input.payment === "wallet") {
@@ -390,16 +391,16 @@ export const mockApi: QuikflyApi = {
       syncParcels();
       checkMockParcelCancel(id);
       const current = bookingsStore().find((x) => x.id === id) ?? fail("Booking not found.");
-      const ride = current.service === "bike" || current.service === "car";
+      const ride = current.service === "bike" || current.service === "car" || isQuickParcel(current);
       const sold = withTerms(settings, current.terms);
       const fee = ride ? rideCancelFee(sold, current.amount, reason, current.createdAt, Date.now(), current.startsAt) : 0;
       const percent = ride ? 100 : refundPercent(cancelPolicyFor(sold, current.service), current.startsAt);
-      const refund = ride ? current.amount - fee : refundAmount(current.amount, percent, current.deposit ?? 0);
+      const refund = isQuickParcel(current) && current.payment === "cash" ? 0 : ride ? current.amount - fee : refundAmount(current.amount, percent, current.deposit ?? 0);
       const b = finishBooking(id, "cancelled", { refundAmount: refund, cancelReason: reason ?? null, cancelFee: fee, seats: [], ...(current.service === "parcel" ? { parcelState: "cancelled" as const } : {}) });
       closeMockParcel(id);
       save(HOLDS_KEY, holdsStore().filter((h) => h.bookingId !== id));
       mockNotify({ kind: "booking.cancelled", title: `Cancelled · ${b.title}`, bookingId: b.id,
-        body: refund ? (b.payment === "wallet" ? `₹${refund.toLocaleString("en-IN")} is back in your QuikFly wallet.` : `Refund due: ₹${refund.toLocaleString("en-IN")}.`) : "No refund under the cancellation policy." });
+        body: b.service === "parcel" && b.payment === "cash" ? "Nothing was paid, so there's nothing to refund." : refund ? (b.payment === "wallet" ? `₹${refund.toLocaleString("en-IN")} is back in your QuikFly wallet.` : `Refund due: ₹${refund.toLocaleString("en-IN")}.`) : "No refund under the cancellation policy." });
       if (b.payment === "wallet" && refund > 0) walletEntry("refund", refund, `Refund${percent < 100 ? ` (${percent}%)` : ""} · ${b.title}`, b.id);
       const creditsBack = creditsReturned(b.creditsUsed ?? 0, percent);
       if (creditsBack) creditEntry("returned", creditsBack, `Returned · ${b.title}`, b.id, creditExpiry());
@@ -482,6 +483,16 @@ export const mockApi: QuikflyApi = {
   parcels: {
     async options(from, to) { await wait(300); return mockParcelOptions(settings, from, to); },
     async get(id) { await wait(200); syncParcels(); return mockParcel(id); },
+    async handover(id, otp) { await wait(300); const p = mockSenderMove(id, "active", otp, mockNotify); syncParcels(); return p; },
+    async deliver(id, otp) {
+      await wait(300);
+      const p = mockSenderMove(id, "done", otp, mockNotify);
+      syncParcels();
+      const b = bookingsStore().find((x) => x.id === id);
+      const earn = b && PARCEL_EARNS.includes(p.state) ? creditsEarned(settings, "parcel", b.amount, 0) : 0;
+      if (b && earn) creditEntry("earned", earn, `Earned · ${b.title}`, id, creditExpiry());
+      return p;
+    },
     async track(lr) { await wait(300); syncParcels(); return mockTrack(lr); },
   },
   tickets: {

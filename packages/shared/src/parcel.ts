@@ -3,6 +3,7 @@
 // state is derived from them. The API (staff and the simulated carrier alike), the admin panel
 // and the demo mock all move parcels through planLegMove(), so no screen can offer a move the
 // API refuses. Prices and departures are in pricing.ts.
+import type { Driver, FareQuote, Place } from "./types";
 
 export const PARCEL_MODES = ["city", "intercity"] as const;
 export type ParcelMode = (typeof PARCEL_MODES)[number];
@@ -30,6 +31,8 @@ export const PARCEL_RULES = {
   /** Goods worth ₹50,000 or more need a GST e-way bill, so the declared-value setting stays below that. */
   declaredValueCeiling: 49_999,
   collectOtpDigits: 6,
+  /** Quick parcel: the sender's code for the captain, like a ride's OTP. */
+  pickupOtpDigits: 4,
   /** Wrong collection codes in a row before the code locks for `otpLockMinutes`. */
   otpMaxTries: 5,
   otpLockMinutes: 15,
@@ -62,6 +65,9 @@ export const PARCEL_DECLARATION = {
     "Maps with incorrect boundaries of India",
   ],
 } as const;
+
+/** Quick parcels run where rides do: every place in the catalog is in this city. */
+export const QUICK_PARCEL_CITY = "Chennai";
 
 /** The most QuikFly pays for a lost or damaged parcel: the lower of its value and the cap. */
 export const parcelLiability = (declaredValue: number, cap: number) => Math.min(declaredValue, cap);
@@ -154,6 +160,23 @@ export interface ParcelQuoteInfo {
   departure: ParcelDeparture | null;
 }
 
+/** What the API keeps on a Quick parcel's quote, to book it at the price it showed. */
+export interface QuickParcelPlan {
+  fare: FareQuote;
+  pickup: Place;
+  drop: Place;
+  liability: number;
+}
+
+/** The sender's view of a Quick parcel's captain and route. */
+export interface ParcelCourier {
+  captain: Driver;
+  pickup: Pick<Place, "id" | "name" | "area">;
+  drop: Pick<Place, "id" | "name" | "area">;
+  distanceKm: number;
+  durationMin: number;
+}
+
 export type ParcelLegKind = "bike" | "bus" | "counter";
 export type ParcelLegState = "pending" | "active" | "done" | "failed";
 
@@ -172,7 +195,10 @@ export interface ParcelLeg {
   endedAt: string | null;
 }
 
-export const PARCEL_STATES = ["booked", "at_counter", "on_bus", "reached", "ready", "collected", "unclaimed", "cancelled"] as const;
+export const PARCEL_STATES = [
+  "booked", "at_counter", "on_bus", "reached", "ready", "collected", "unclaimed", "cancelled",
+  "in_transit", "delivered", "returned",
+] as const;
 export type ParcelState = (typeof PARCEL_STATES)[number];
 export const PARCEL_STATE_LABEL: Record<ParcelState, string> = {
   booked: "Booked",
@@ -183,9 +209,21 @@ export const PARCEL_STATE_LABEL: Record<ParcelState, string> = {
   collected: "Collected",
   unclaimed: "Unclaimed",
   cancelled: "Cancelled",
+  in_transit: "With the captain",
+  delivered: "Delivered",
+  returned: "Returned to the sender",
 };
 
-/** States a booking can still be cancelled from: not yet on the bus. */
+/** The booking is completed in these: handed to the receiver, or brought back (the same fare). */
+export const PARCEL_COMPLETES: readonly ParcelState[] = ["collected", "delivered", "returned"];
+/** The receiver has it, so the sender earns credits. */
+export const PARCEL_EARNS: readonly ParcelState[] = ["collected", "delivered"];
+/** Nothing is left to move. Queues and timelines treat these as finished. */
+export const PARCEL_FINISHED: readonly ParcelState[] = ["collected", "delivered", "returned", "cancelled"];
+/** Screens stop following these (an unclaimed parcel is support's from here). */
+export const PARCEL_SETTLED: readonly ParcelState[] = ["collected", "delivered", "returned", "cancelled", "unclaimed"];
+
+/** States a booking can still be cancelled from: not yet on the bus or with a captain. */
 export const PARCEL_CANCELLABLE: readonly ParcelState[] = ["booked", "at_counter"];
 export const PARCEL_NOT_CANCELLABLE = "This parcel is already on its way, so it can't be cancelled. Contact support if something is wrong.";
 
@@ -219,10 +257,15 @@ export interface Parcel {
   legs: ParcelLeg[];
   events: ParcelEvent[];
   /**
-   * The collection code, for the sender only, while the parcel is ready: they pass it to the
-   * receiver (demo: no SMS sent). Never sent to the receiver's inbox, staff or the tracking page.
+   * The code that releases the parcel, for the sender only, while it's ready at the counter or on
+   * its way with a captain: they pass it to the receiver (demo: no SMS sent). Never sent to the
+   * receiver's inbox, staff or the tracking page.
    */
   collectOtp: string | null;
+  /** Quick parcels; null for a bus parcel. */
+  courier: ParcelCourier | null;
+  /** For the sender only, until the captain has the parcel. */
+  pickupOtp: string | null;
   /** True while the demo moves parcels by itself: say "demo: simulated transit". */
   simulated: boolean;
 }
@@ -230,6 +273,7 @@ export interface Parcel {
 /** GET /track/:lr: no phone numbers, contents, value or staff notes. */
 export interface PublicTracking {
   lr: string;
+  mode: ParcelMode;
   state: ParcelState;
   from: string;
   to: string;
@@ -269,10 +313,33 @@ export function parcelBookingText(d: ParcelDeparture, band: ParcelWeightBand, lr
   };
 }
 
+/** A Quick parcel booking's title, subtitle and lines. No name, number or contents, as for bus parcels. */
+export function quickParcelText(pickup: Pick<Place, "name">, drop: Pick<Place, "name">, band: ParcelWeightBand, lr: string, liability: number): { title: string; subtitle: string; lines: [string, string][] } {
+  return {
+    title: `${pickup.name} → ${drop.name}`,
+    subtitle: `Quick parcel · ${parcelBandLabel(band)}`,
+    lines: [
+      [PARCEL_LR_LINE, lr],
+      ["Pickup", pickup.name],
+      ["Deliver to", drop.name],
+      ["Liability", `Up to ₹${liability.toLocaleString("en-IN")}, not insured`],
+    ],
+  };
+}
+
+/**
+ * A Quick parcel booking follows the ride cancellation rules; a bus parcel follows its tiers
+ * counted to the departure, which is the start time only bus parcels have.
+ */
+export const isQuickParcel = (b: { service: string; startsAt: string | null }) => b.service === "parcel" && !b.startsAt;
+
 /* ───────────── The journey ───────────── */
 
-/** Who moves a leg. An operator's API or a driver app would be added here. */
-export type ParcelActor = "staff" | "simulated";
+/**
+ * Who moves a leg. An operator's API or a driver app would be added here. "sender" exists only in
+ * the demo: with no driver app, the sender's screen plays the captain and has to give the codes.
+ */
+export type ParcelActor = "staff" | "simulated" | "sender";
 
 interface Transition {
   kind: ParcelLegKind;
@@ -287,11 +354,14 @@ interface Transition {
   refuses?: true;
   /** Only once the hold period is over. */
   afterHold?: true;
+  /** Needs a reason, which the sender sees. */
+  reason?: true;
 }
 
 /**
  * Every move that exists. Starting a leg also ends the counter leg before it (the hand-off), so a
- * counter in mid-journey has no "done" of its own. Bike legs get theirs with Quick parcel (step 3).
+ * counter in mid-journey has no "done" of its own. A captain's leg is never simulated: both ends
+ * of it take a person and a code.
  */
 export const PARCEL_TRANSITIONS: readonly Transition[] = [
   { kind: "counter", from: "pending", to: "active", by: ["staff", "simulated"] },
@@ -301,7 +371,17 @@ export const PARCEL_TRANSITIONS: readonly Transition[] = [
   { kind: "counter", from: "active", to: "failed", only: "first", by: ["staff"], refuses: true },
   { kind: "bus", from: "pending", to: "active", by: ["staff", "simulated"] },
   { kind: "bus", from: "active", to: "done", by: ["staff", "simulated"] },
+  { kind: "bike", from: "pending", to: "active", by: ["staff", "sender"] },
+  { kind: "bike", from: "active", to: "done", only: "last", by: ["staff", "sender"], otp: true },
+  { kind: "bike", from: "active", to: "failed", only: "last", by: ["staff"], reason: true },
+  { kind: "bike", from: "pending", to: "failed", only: "first", by: ["staff"], refuses: true },
 ];
+
+/** A Quick parcel: one captain, door to door. */
+export const planQuickLegs = (): ParcelLeg[] => [{
+  seq: 0, kind: "bike", state: "pending", operatorId: null, counterId: null, busId: null, busDate: null, departAt: null,
+  plannedAt: null, startedAt: null, endedAt: null,
+}];
 
 /** Counter → bus → counter for a departure. */
 export function planLegs(d: ParcelDeparture): ParcelLeg[] {
@@ -320,10 +400,19 @@ export function planLegs(d: ParcelDeparture): ParcelLeg[] {
 export function parcelState(legs: ParcelLeg[]): ParcelState {
   const last = legs.length - 1;
   const failed = legs.findIndex((l) => l.state === "failed");
-  if (failed >= 0) return failed === last ? "unclaimed" : "cancelled";
-  if (legs.every((l) => l.state === "done")) return "collected";
+  if (failed >= 0) {
+    if (failed !== last) return "cancelled";
+    // A counter's last leg fails by the hold running out, a captain's by bringing it back (or, never picked up, by refusal).
+    if (legs[failed].kind === "counter") return "unclaimed";
+    return legs[failed].startedAt ? "returned" : "cancelled";
+  }
+  if (legs.every((l) => l.state === "done")) return legs[last].kind === "bike" ? "delivered" : "collected";
   const active = legs.findIndex((l) => l.state === "active");
-  if (active >= 0) return legs[active].kind === "bus" ? "on_bus" : active === last ? "ready" : "at_counter";
+  if (active >= 0) {
+    if (legs[active].kind === "bus") return "on_bus";
+    if (legs[active].kind === "bike") return "in_transit";
+    return active === last ? "ready" : "at_counter";
+  }
   return legs.some((l) => l.state === "done") ? "reached" : "booked";
 }
 
@@ -350,7 +439,10 @@ export interface LegMove {
   holdUntil: string | null;
   nextAt: string | null;
   needsOtp: boolean;
+  needsReason: boolean;
   refuses: boolean;
+  /** The last leg has started, so the receiver's code exists from now until the parcel is handed over. */
+  issuesCode: boolean;
 }
 
 /** The one function that moves a leg: the parcel afterwards, or why it can't move. */
@@ -384,7 +476,11 @@ export function planLegMove(
         : l);
   const state = parcelState(next);
   const holdUntil = state === "ready" ? new Date(now + parcel.holdDays * 86_400_000).toISOString() : parcel.holdUntil;
-  return { legs: next, state, holdUntil, nextAt: nextMoveAt(next, holdUntil), needsOtp: !!rule.otp, refuses: !!rule.refuses };
+  return {
+    legs: next, state, holdUntil, nextAt: nextMoveAt(next, holdUntil),
+    needsOtp: !!rule.otp, needsReason: !!rule.reason || !!rule.refuses, refuses: !!rule.refuses,
+    issuesCode: next[last].state === "active",
+  };
 }
 
 export interface StaffMove {
@@ -393,6 +489,7 @@ export interface StaffMove {
   /** The parcel's state afterwards: what the button is called. */
   state: ParcelState;
   needsOtp: boolean;
+  needsReason: boolean;
   refuses: boolean;
 }
 
@@ -401,13 +498,15 @@ export function staffMoves(legs: ParcelLeg[], holdUntil: string | null, now = Da
   const moves = legs.flatMap(({ seq }) => (["active", "done", "failed"] as const).flatMap((to): StaffMove[] => {
     // The hold period only dates the next state, so it doesn't change which moves exist.
     const move = planLegMove({ legs, holdUntil, holdDays: 0 }, seq, to, "staff", now);
-    return "error" in move ? [] : [{ seq, to, state: move.state, needsOtp: move.needsOtp, refuses: move.refuses }];
+    return "error" in move ? [] : [{ seq, to, state: move.state, needsOtp: move.needsOtp, needsReason: move.needsReason, refuses: move.refuses }];
   }));
   return [...moves.filter((m) => !m.refuses), ...moves.filter((m) => m.refuses)];
 }
 
 /** The states a parcel passes through when nothing goes wrong, for timelines. */
 export const PARCEL_JOURNEY: readonly ParcelState[] = ["booked", "at_counter", "on_bus", "reached", "ready", "collected"];
+export const PARCEL_CITY_JOURNEY: readonly ParcelState[] = ["booked", "in_transit", "delivered"];
+export const parcelJourneyFor = (mode: ParcelMode) => (mode === "city" ? PARCEL_CITY_JOURNEY : PARCEL_JOURNEY);
 
 /** What the sender is told after a move; null = nothing (cancelling has its own notification). */
 export function parcelNotice(state: ParcelState, lr: string): { kind: "parcel.moved" | "parcel.ready" | "parcel.collected" | "parcel.unclaimed"; title: string; body: string } | null {
@@ -419,6 +518,9 @@ export function parcelNotice(state: ParcelState, lr: string): { kind: "parcel.mo
     // No code here: notifications are pushed to lock screens.
     case "ready": return { kind: "parcel.ready", title, body: "Open the parcel to see the collection code and give it to the receiver (demo: no SMS sent)." };
     case "collected": return { kind: "parcel.collected", title, body: "The receiver collected your parcel." };
+    case "in_transit": return { kind: "parcel.moved", title, body: "The captain has your parcel. Open it to see the delivery code and give it to the receiver (demo: no SMS sent)." };
+    case "delivered": return { kind: "parcel.collected", title, body: "The receiver has your parcel." };
+    case "returned": return { kind: "parcel.moved", title, body: "The captain couldn't deliver your parcel and brought it back. The fare isn't refunded." };
     case "unclaimed": return { kind: "parcel.unclaimed", title, body: "Nobody collected your parcel within the hold period. Contact support to get it back." };
     default: return null;
   }

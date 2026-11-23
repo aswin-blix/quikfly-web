@@ -6,6 +6,7 @@ import { badRequest, conflict } from "../lib/errors";
 import { int, jsonBody, matches, oneOf, optStr, str, text } from "../lib/validate";
 import { requireUser } from "../middleware/auth";
 import { normalisePhone } from "../services/auth";
+import { senderMove } from "../services/parcels/carriers";
 import { myParcel } from "../services/parcels/parcels";
 import { assertShown, cancelBooking, completeBooking, createBooking, getBooking, listBookings } from "../services/bookings";
 import { cancelSeats, rescheduleBooking } from "../services/bus-changes";
@@ -91,6 +92,15 @@ export const bookings = new Hono<AppEnv>()
   .get("/:id/parcel", async (c) => {
     c.header("Cache-Control", "no-store");
     return c.json(await myParcel(c.env.DB, c.var.user.id, c.req.param("id")));
+  })
+  // Quick parcel, demo: the sender plays the captain. { otp }: the pickup code, then the receiver's code.
+  .post("/:id/parcel/handover", async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json(await senderMove(c.env.DB, c.var.user.id, c.req.param("id"), "active", str(await jsonBody(c), "otp", 12)));
+  })
+  .post("/:id/parcel/deliver", async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json(await senderMove(c.env.DB, c.var.user.id, c.req.param("id"), "done", str(await jsonBody(c), "otp", 12)));
   })
   // Self-drive rentals: the pickup/return checklist, extensions (packages/shared/src/rental.ts).
   .get("/:id/rental", async (c) => c.json(await myRental(c.env.DB, c.var.user.id, c.req.param("id"))))

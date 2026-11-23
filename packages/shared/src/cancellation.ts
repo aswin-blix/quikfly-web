@@ -96,6 +96,10 @@ export function rideCancelFee(
   return Math.min(Math.round((fare * settings.rideCancelFeePercent) / 100), settings.rideCancelFeeCap, fare);
 }
 
+/** A Quick parcel's cancellation, in words. */
+export const quickParcelPolicyText = (s: Settings) =>
+  `Free to cancel for ${s.rideCancelFreeMinutes} minutes. After that the ride cancellation fee applies (${s.rideCancelFeePercent}% of the price, up to ₹${s.rideCancelFeeCap}). It can't be cancelled once the captain has it.`;
+
 /** "15 days", "24 hours", "4 hours". */
 export function noticeLabel(hours: number): string {
   if (hours >= 48 && hours % 24 === 0) return `${hours / 24} days`;

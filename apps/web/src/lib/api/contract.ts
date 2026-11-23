@@ -160,6 +160,10 @@ export interface QuikflyApi {
     options(from: string, to: string): Promise<ParcelOptions>;
     /** GET /bookings/:id/parcel: the sender's parcel, with the collection code while it's ready. */
     get(bookingId: string): Promise<Parcel>;
+    /** POST /bookings/:id/parcel/handover { otp }: demo, the sender confirms the captain has it (pickup code). */
+    handover(bookingId: string, otp: string): Promise<Parcel>;
+    /** POST /bookings/:id/parcel/deliver { otp }: demo, the sender plays the captain with the receiver's code. */
+    deliver(bookingId: string, otp: string): Promise<Parcel>;
     /** GET /track/:lr (public): the timeline, with first names only. */
     track(lr: string): Promise<PublicTracking>;
   };

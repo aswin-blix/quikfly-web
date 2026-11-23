@@ -13,8 +13,9 @@ String parcelTime(DateTime at) {
 String parcelTrackUrl(String lr) => '$webUrl/parcels/track?lr=${Uri.encodeQueryComponent(lr)}';
 
 /// What "Share" sends. Never the collection code, a name or the contents.
-String parcelShareText(String lr, String from, String to) =>
-    "A QuikFly parcel ($lr) is booked from $from to $to. Follow it here; to collect it you'll need the code from the sender. ${parcelTrackUrl(lr)}";
+String parcelShareText(String lr, String from, String to, {bool city = false}) => city
+    ? "A QuikFly parcel ($lr) is on its way in $to. Follow it here; to receive it you'll need the code from the sender. ${parcelTrackUrl(lr)}"
+    : "A QuikFly parcel ($lr) is booked from $from to $to. Follow it here; to collect it you'll need the code from the sender. ${parcelTrackUrl(lr)}";
 
 /// A typed or pasted number as up to 10 digits. A digit too many never shifts the others along,
 /// which would leave a valid-looking number belonging to someone else.

@@ -312,7 +312,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   child: Row(children: [
                     Icon(Icons.toll_outlined, size: 15, color: c.accent),
                     const SizedBox(width: 6),
-                    Expanded(child: Text('Earn ${inr(earns)} QuikFly Credits when ${d.parcel == null ? 'this trip is completed' : 'the parcel is collected'}.', style: TextStyle(color: c.fgMuted, fontSize: 12))),
+                    Expanded(child: Text('Earn ${inr(earns)} QuikFly Credits when ${d.parcel == null ? 'this trip is completed' : d.parcel!.city ? 'the parcel is delivered' : 'the parcel is collected'}.', style: TextStyle(color: c.fgMuted, fontSize: 12))),
                   ]),
                 ),
             ]),
@@ -505,7 +505,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         KeyValue('Contents', p.contents),
         KeyValue('Declared value', inr(p.declaredValue)),
         const SizedBox(height: 6),
-        Text('The collection code appears only on your screen, in My Trips. You pass it to the receiver (demo: no SMS is sent).',
+        Text('The ${p.city ? 'delivery' : 'collection'} code appears only on your screen, in My Trips. You pass it to the receiver (demo: no SMS is sent).',
             style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
       ]),
     );
@@ -520,6 +520,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       (PaymentMethod.netbanking, 'Net banking', Icons.account_balance, 'All major banks'),
       (PaymentMethod.wallet, 'QuikFly wallet', Icons.account_balance_wallet_outlined,
           user == null ? 'Instant refunds' : 'Balance ${inr(user.walletBalance)}${walletShort ? ' · not enough' : ''}'),
+      if ((d.parcel?.city ?? false) && (ref.watch(configProvider).value?.settings ?? const Settings({})).featureCashRides)
+        (PaymentMethod.cash, 'Cash on pickup', Icons.payments_outlined, 'Pay the captain'),
     ];
     if (_method == PaymentMethod.wallet && walletShort) _method = PaymentMethod.upi;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -554,6 +556,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           Text(
             _method == PaymentMethod.wallet
                 ? 'Paid from your QuikFly wallet straight away; refunded to it if you cancel.'
+                : _method == PaymentMethod.cash
+                ? 'Nothing is paid now. You pay the captain at pickup.'
                 : 'Demo: no payment is taken. The live app will open the payment gateway here.',
             style: TextStyle(color: c.accent, fontSize: 12.5),
           ),

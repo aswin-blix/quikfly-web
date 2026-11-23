@@ -12,6 +12,9 @@ export const MOVE_LABEL: Record<ParcelState, string> = {
   collected: "Hand over",
   unclaimed: "Mark unclaimed",
   cancelled: "Refuse on sight",
+  in_transit: "Picked up by the captain",
+  delivered: "Mark delivered",
+  returned: "Brought back to the sender",
 };
 
 /** What staff check before confirming each move. */
@@ -24,6 +27,9 @@ export const MOVE_CHECK: Record<ParcelState, string> = {
   collected: "Ask the receiver for the code the sender gave them. Staff never see the code.",
   unclaimed: "The hold period is over and nobody collected it. The sender is told to contact support. This can't be undone.",
   cancelled: "The booking is cancelled with a full refund, whatever the policy. This can't be undone.",
+  in_transit: "The captain has it. The sender is shown the delivery code, and it can't be cancelled after this.",
+  delivered: "Use the code the receiver gave the captain. Staff never see the code.",
+  returned: "The receiver couldn't be reached and the sender has it back. The fare isn't refunded and this can't be undone.",
 };
 
 export const PARCEL_STATE_STYLE: Record<ParcelState, string> = {
@@ -35,6 +41,9 @@ export const PARCEL_STATE_STYLE: Record<ParcelState, string> = {
   collected: "bg-success/10 text-success",
   unclaimed: "bg-danger/10 text-danger",
   cancelled: "bg-danger/10 text-danger",
+  in_transit: "bg-warning/10 text-warning",
+  delivered: "bg-success/10 text-success",
+  returned: "bg-danger/10 text-danger",
 };
 
 export const QUEUE_STATE_LABEL: Partial<Record<ParcelQueueState, string>> = { open: "Open parcels", all: "All parcels" };

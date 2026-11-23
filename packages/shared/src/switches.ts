@@ -25,6 +25,7 @@ export const FEATURE_OFF = {
   rideScheduling: "Booking rides ahead is turned off for now. You can book a ride now.",
   multiStop: "Extra stops are turned off for now. Book a ride straight to your drop.",
   cashRides: "Cash isn't accepted for rides right now. Please pick another payment method.",
+  cashParcels: "Cash on pickup isn't accepted right now. Please pick another payment method.",
   outstation: "Outstation and one-way trips are turned off for now. Local packages are still available.",
   selfDrive: "Self-drive is turned off for now. You can book a car with a chauffeur.",
   tripOffers: "Adding bookings to a trip is turned off for now.",
@@ -49,7 +50,7 @@ export function switchError(settings: Settings, r: SwitchCheck): string | null {
   if (!serviceOn(settings, r.service)) return settings.servicePausedMessage;
   if (r.scheduledFor && !settings.featureRideScheduling) return FEATURE_OFF.rideScheduling;
   if (r.stopCount && !settings.featureMultiStop) return FEATURE_OFF.multiStop;
-  if (r.payment === "cash" && !settings.featureCashRides) return FEATURE_OFF.cashRides;
+  if (r.payment === "cash" && !settings.featureCashRides) return r.service === "parcel" ? FEATURE_OFF.cashParcels : FEATURE_OFF.cashRides;
   if (r.rentMode === "self" && !settings.featureSelfDrive) return FEATURE_OFF.selfDrive;
   if (r.groupTrip && r.groupTrip !== "local" && !settings.featureOutstation) return FEATURE_OFF.outstation;
   if (r.tripOf && !settings.featureTripOffers) return FEATURE_OFF.tripOffers;

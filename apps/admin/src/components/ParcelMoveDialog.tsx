@@ -1,6 +1,6 @@
 "use client";
-// Confirms one counter action: a note for most moves, the receiver's code to hand over, a reason
-// to refuse. Mount it with a `key` per move, so a code never carries over to the next dialog.
+// Confirms one staff action: a note for most moves, the receiver's code to hand over, a reason
+// to refuse or bring back. Mount it with a `key` per move, so a code never carries over to the next dialog.
 import { useState } from "react";
 import { PARCEL_RULES, type StaffMove } from "@quikfly/shared";
 import { MOVE_CHECK, MOVE_LABEL } from "@/lib/parcels";
@@ -21,19 +21,19 @@ export function ParcelMoveDialog({ move, busy, error, onCancel, onConfirm }: {
       return onConfirm({ otp });
     }
     const text = note.trim();
-    if ((move.refuses || text) && text.length < PARCEL_RULES.noteMin) return setProblem(`Write at least ${PARCEL_RULES.noteMin} characters.`);
+    if ((move.needsReason || text) && text.length < PARCEL_RULES.noteMin) return setProblem(`Write at least ${PARCEL_RULES.noteMin} characters.`);
     setProblem("");
     onConfirm({ note: text || undefined });
   };
 
   return (
     <ConfirmDialog open title={`${MOVE_LABEL[move.state]}?`} confirmLabel={MOVE_LABEL[move.state]}
-      danger={move.refuses || move.state === "unclaimed"} busy={busy} onCancel={onCancel} onConfirm={submit}>
+      danger={move.refuses || move.state === "unclaimed" || move.state === "returned"} busy={busy} onCancel={onCancel} onConfirm={submit}>
       <div className="grid gap-3">
         <p>{MOVE_CHECK[move.state]}</p>
         {move.needsOtp ? (
           <div>
-            <label htmlFor="parcel-code" className="label block mb-1.5">Collection code</label>
+            <label htmlFor="parcel-code" className="label block mb-1.5">Receiver&apos;s code</label>
             <input id="parcel-code" className="field sm:w-48 font-mono tracking-widest" inputMode="numeric" autoComplete="off"
               maxLength={PARCEL_RULES.collectOtpDigits} value={otp}
               onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "")); setProblem(""); }} />
@@ -41,7 +41,7 @@ export function ParcelMoveDialog({ move, busy, error, onCancel, onConfirm }: {
           </div>
         ) : (
           <div>
-            <label htmlFor="parcel-note" className="label block mb-1.5">{move.refuses ? "Why it's refused" : "Note (optional)"}</label>
+            <label htmlFor="parcel-note" className="label block mb-1.5">{move.refuses ? "Why it's refused" : move.needsReason ? "Why it came back" : "Note (optional)"}</label>
             <textarea id="parcel-note" className="field min-h-20 text-sm" maxLength={PARCEL_RULES.noteMax} value={note}
               onChange={(e) => { setNote(e.target.value); setProblem(""); }} />
             <p className="text-xs text-subtle mt-1">The sender sees this and it stays in the audit log, so leave out names, phone numbers and what&apos;s inside.</p>

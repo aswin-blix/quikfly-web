@@ -311,6 +311,14 @@ class QuikFlyApi {
   /// The sender's parcel, with the collection code while it's ready.
   Future<Parcel> parcel(String bookingId) => _get('/bookings/$bookingId/parcel', (d) => Parcel.fromJson(d as Json));
 
+  /// Demo: the sender confirms the captain has it, with the pickup code.
+  Future<Parcel> parcelHandover(String bookingId, String otp) =>
+      _post('/bookings/$bookingId/parcel/handover', (d) => Parcel.fromJson(d as Json), {'otp': otp});
+
+  /// Demo: the sender plays the captain, with the receiver's code.
+  Future<Parcel> parcelDeliver(String bookingId, String otp) =>
+      _post('/bookings/$bookingId/parcel/deliver', (d) => Parcel.fromJson(d as Json), {'otp': otp});
+
   /// Public: no sign-in, first names only.
   Future<ParcelTracking> trackParcel(String lr) => _get('/track/${Uri.encodeComponent(lr)}', (d) => ParcelTracking.fromJson(d as Json));
   /// [reason] is a ride cancel reason key; a valid one waives the ride cancellation fee.

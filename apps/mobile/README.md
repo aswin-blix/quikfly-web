@@ -81,6 +81,7 @@ assets/                fonts (Outfit static weights, Archivo Black), images/ (lo
 
 - Every request declares the services this app shows (`ServiceKey.clientAccept`); without it the API keeps parcels back. Add a service to `ServiceKey.declared` only when every screen that lists bookings can show it. Bookings of a service the app doesn't know are dropped, never shown as a cab.
 - The collection code shows only on `/parcel/:id`. A receiver's details live in the checkout draft (memory only, dropped at sign-out), never in booking lines.
+- Two kinds on one form: Bus parcel and Quick parcel. `isQuickParcel(booking)` (no start time) switches the refund preview and the wording; `courier_steps.dart` shows the captain, the pickup code and the demo's hand-offs.
 - The receiver can be picked from contacts: `MainActivity.kt` opens Android's own picker over the `quikfly/contact_picker` channel. No contacts permission, so don't add a plugin that declares one.
 - Times are shown in India time whatever the phone's zone.
 

@@ -1,5 +1,5 @@
 "use client";
-// One parcel: its journey and the counter buttons.
+// One parcel: its journey and the staff buttons.
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -61,7 +61,8 @@ function Detail({ id }: { id: string }) {
 
   return (
     <>
-      <PageHeader title={`${p.from} → ${p.to}`} sub={<>Bus parcel · <span className="font-mono">{p.lr}</span></>}
+      <PageHeader title={p.courier ? `${p.courier.pickup.name} → ${p.courier.drop.name}` : `${p.from} → ${p.to}`}
+        sub={<>{p.mode === "city" ? "Quick parcel" : "Bus parcel"} · <span className="font-mono">{p.lr}</span></>}
         actions={<Button loading={loading} onClick={reload}><RefreshCw size={16} /> Refresh</Button>} />
       {error && <div className="mb-3"><ErrorBox message={error} onRetry={reload} /></div>}
       {notice && <p className="text-sm text-success mb-3" role="status">{notice}</p>}
@@ -70,16 +71,20 @@ function Detail({ id }: { id: string }) {
         <div className="lg:col-span-2 grid gap-3 content-start">
           <section className="card p-5" aria-labelledby="now">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 id="now" className="font-semibold text-strong">Counter actions</h2>
+              <h2 id="now" className="font-semibold text-strong">{p.mode === "city" ? "Delivery actions" : "Counter actions"}</h2>
               <Badge className={PARCEL_STATE_STYLE[p.state]}>{PARCEL_STATE_LABEL[p.state]}</Badge>
             </div>
             {active && p.simulated && (
-              <p className="text-xs text-muted mt-2">Demo: simulated transit is on, so this parcel also moves by itself at its planned times. Handing over always needs staff and the code.</p>
+              <p className="text-xs text-muted mt-2">
+                {p.mode === "city"
+                  ? "Demo: the sender plays the captain, so they can also confirm the pickup and the delivery, with the codes."
+                  : "Demo: simulated transit is on, so this parcel also moves by itself at its planned times. Handing over always needs staff and the code."}
+              </p>
             )}
             {(moves.length > 0 || refund) ? (
               <div className="flex flex-wrap gap-2 mt-4">
                 {moves.map((m, i) => (
-                  <Button key={`${m.seq}-${m.to}`} variant={m.refuses || m.state === "unclaimed" ? "danger" : i === 0 ? "primary" : "secondary"} onClick={() => open(m)}>
+                  <Button key={`${m.seq}-${m.to}`} variant={m.refuses || m.state === "unclaimed" || m.state === "returned" ? "danger" : i === 0 ? "primary" : "secondary"} onClick={() => open(m)}>
                     {MOVE_LABEL[m.state]}
                   </Button>
                 ))}
@@ -104,6 +109,9 @@ function Detail({ id }: { id: string }) {
               <Row k="Size">{p.size === "backpack" ? "Fits a backpack" : "A box"}</Row>
               <Row k="Declared value">{inr(p.declaredValue)}</Row>
               <Row k="Liability">Up to {inr(p.liability)}, not insured</Row>
+              {p.courier && <Row k="Pick up from">{p.courier.pickup.name}, {p.courier.pickup.area}</Row>}
+              {p.courier && <Row k="Deliver to">{p.courier.drop.name}, {p.courier.drop.area}</Row>}
+              {p.courier && <Row k="Captain (simulated)">{p.courier.captain.name} · {p.courier.captain.plate}</Row>}
               {p.fromCounter && <Row k="Handed in at">{p.fromCounter.name}</Row>}
               {p.departAt && <Row k="Bus leaves">{dateTime(p.departAt)}</Row>}
               {p.toCounter && <Row k="Collected at">{p.toCounter.name}</Row>}
@@ -133,7 +141,7 @@ function Detail({ id }: { id: string }) {
             <h2 className="font-semibold text-strong mb-2">Booking</h2>
             <dl className="grid gap-2 text-sm">
               <Row k="Status"><Badge className={STATUS_STYLE[p.bookingStatus].cls}>{STATUS_STYLE[p.bookingStatus].label}</Badge></Row>
-              <Row k="Paid">{inr(p.amount)} by {p.payment.toUpperCase()}</Row>
+              <Row k={p.payment === "cash" ? "To collect at pickup" : "Paid"}>{inr(p.amount)} by {p.payment.toUpperCase()}</Row>
             </dl>
             <Link href={`/bookings/view?id=${encodeURIComponent(p.bookingId)}`} className="block text-xs text-muted hover:text-fg mt-3">Payment, terms and staff notes →</Link>
           </section>
@@ -147,7 +155,7 @@ function Detail({ id }: { id: string }) {
       )}
       <ReasonDialog open={cancelling} title="Cancel this parcel?" confirmLabel="Cancel parcel" busy={busy} error={actionError}
         label="Reason (the sender sees it; kept in the audit log)" placeholder="e.g. The sender asked by phone"
-        intro={refund ? (
+        intro={refund ? (p.payment === "cash" ? "Nothing has been paid yet, so there's nothing to refund." :
           <>
             Under the policy it was sold with, {inr(refund.amount)} ({refund.percent}%) {p.payment === "wallet" ? "goes back to the sender's wallet" : "is due back, outside QuikFly"}.
             {" "}To turn a parcel away at the counter use Refuse on sight, which refunds it all.

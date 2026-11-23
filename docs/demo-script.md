@@ -77,6 +77,7 @@ Not on production until the app with parcels is published and the owner switches
 3. Admin → **Parcels** → the parcel → **Receive at counter → Load on bus → Mark reached → Ready for collection**. No need to wait for the bus.
 4. The code appears on the sender's My Trips (reload). *"The sender passes it on; SMS comes after sign-off."*
 5. Admin → **Hand over** → type the code → **Collected**; the sender earns credits.
+A Quick parcel takes a minute: **Parcels → Quick parcel** → two places → book → **My Trips** → **The captain has it** → read out the delivery code → type it → **Mark delivered**. *"The captain is simulated; a driver app does this after sign-off."*
 On a phone with the app that has parcels, steps 1, 2 and 4 work in the app too: **Send a Parcel** → … → **My Trips** → **Show collection code**. App 0.1.16 and older show no parcels, so don't demo them on one.
 
 ## What's simulated, and what to say

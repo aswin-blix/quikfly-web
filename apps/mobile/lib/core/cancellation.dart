@@ -91,10 +91,20 @@ const cancelEvent = {
 String cancelPolicyText(Settings settings, ServiceKey service) =>
     describeCancelPolicy(parseCancelPolicy(settings.cancelPolicy(service)), cancelEvent[service]!);
 
+/// A Quick parcel follows the ride rules; only bus parcels have a start time (isQuickParcel).
+bool isQuickParcel(Booking b) => b.service == ServiceKey.parcel && b.startsAt == null;
+
+/// quickParcelPolicyText.
+String quickParcelPolicyText(Settings s) =>
+    "Free to cancel for ${s.rideCancelFreeMinutes} minutes. After that the ride cancellation fee applies (${s.rideCancelFeePercent}% of the price, up to ₹${s.rideCancelFeeCap}). It can't be cancelled once the captain has it.";
+
 /// The refund a booking gets if cancelled now, under the terms it was sold under: (percent, rupees).
 (int, int) refundPreview(Settings current, Booking b) {
   final settings = current.withTerms(b.terms);
-  if (b.service == ServiceKey.bike || b.service == ServiceKey.car) {
+  final quick = isQuickParcel(b);
+  // Cash for a parcel is paid at pickup, and it can only be cancelled before that.
+  if (quick && b.payment == 'cash') return (100, 0);
+  if (quick || b.service == ServiceKey.bike || b.service == ServiceKey.car) {
     // From My Trips there's no reason, so the fee applies after the free minutes.
     return (100, b.amount - rideCancelFee(settings, b.amount, null, b.createdAt, scheduledFor: b.startsAt));
   }

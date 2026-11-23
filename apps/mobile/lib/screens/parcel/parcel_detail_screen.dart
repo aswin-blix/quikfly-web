@@ -12,6 +12,7 @@ import '../../state/providers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/ui.dart';
 import '../auth/login_screen.dart';
+import 'courier_steps.dart';
 import 'parcel_widgets.dart';
 import 'polling.dart';
 
@@ -27,7 +28,7 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> with Po
   String? _error;
 
   @override
-  bool get keepPolling => !const {'collected', 'cancelled', 'unclaimed'}.contains(_parcel?.state);
+  bool get keepPolling => !parcelSettled.contains(_parcel?.state);
 
   @override
   void initState() {
@@ -89,12 +90,13 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> with Po
 
   Widget _body(Parcel p) {
     final c = context.qf;
-    final live = !const {'collected', 'cancelled', 'unclaimed'}.contains(p.state);
+    final live = !parcelSettled.contains(p.state);
+    final codeName = p.city ? 'Delivery code' : 'Collection code';
     return ScreenList(onRefresh: poll, children: [
       if (_error != null) ...[ErrorBox(_error!, onRetry: poll), const SizedBox(height: 12)],
       // The route gets the whole width; the status drops below it when they don't fit on one line.
       Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 6, children: [
-        Text('${p.from} → ${p.to}', style: Theme.of(context).textTheme.titleLarge),
+        Text(p.courier == null ? '${p.from} → ${p.to}' : '${p.courier!.pickup} → ${p.courier!.drop}', style: Theme.of(context).textTheme.titleLarge),
         Pill(parcelStateLabel(p.state), color: parcelStateColor(c, p.state)),
       ]),
       const SizedBox(height: 12),
@@ -102,21 +104,21 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> with Po
         Panel(
           highlighted: true,
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('COLLECTION CODE', style: TextStyle(color: c.accent, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+            Text(codeName.toUpperCase(), style: TextStyle(color: c.accent, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
             const SizedBox(height: 4),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
               child: Text(
                 p.collectOtp!,
-                semanticsLabel: 'Collection code ${p.collectOtp!.split('').join(' ')}',
+                semanticsLabel: '$codeName ${p.collectOtp!.split('').join(' ')}',
                 style: TextStyle(color: c.fgStrong, fontSize: 36, fontWeight: FontWeight.w700, letterSpacing: 7),
               ),
             ),
             const SizedBox(height: 6),
             Text(
               'Give these ${ParcelRules.collectOtpDigits} digits only to ${p.receiverName.isEmpty ? 'the receiver' : p.receiverName}. '
-              'The counter hands the parcel over to whoever has them. Demo: no SMS is sent.'
+              '${p.city ? 'The captain' : 'The counter'} hands the parcel over to whoever has them. Demo: no SMS is sent.'
               "${p.holdUntil == null ? '' : " It's held until ${parcelTime(p.holdUntil!)}."}",
               style: TextStyle(color: c.fgMuted, fontSize: 12.5),
             ),
@@ -124,19 +126,33 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> with Po
         ),
         const SizedBox(height: 12),
       ],
+      if (p.courier != null && p.state != 'cancelled') ...[
+        CourierSteps(
+          key: ValueKey(p.state),
+          parcel: p,
+          onChanged: (next) {
+            setState(() => _parcel = next);
+            ref.invalidate(bookingsProvider);
+          },
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (p.state == 'returned') ...[
+        const ErrorBox("The captain couldn't deliver it and brought it back to you. The fare isn't refunded."),
+        const SizedBox(height: 12),
+      ],
       if (p.state == 'unclaimed') ...[
         const ErrorBox("Nobody collected it within the hold period. Use Get help and we'll agree how it comes back to you."),
         const SizedBox(height: 12),
       ],
-      Panel(child: ParcelTimeline(state: p.state, events: p.events, departAt: p.departAt, readyAt: p.readyAt)),
+      Panel(child: ParcelTimeline(city: p.city, state: p.state, events: p.events, departAt: p.departAt, readyAt: p.readyAt)),
       const SizedBox(height: 12),
       Panel(
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          if (p.fromCounter != null) CounterBlock(title: 'Hand in at', counter: p.fromCounter!),
-          const SizedBox(height: 10),
+          if (p.fromCounter != null) ...[CounterBlock(title: 'Hand in at', counter: p.fromCounter!), const SizedBox(height: 10)],
           if (p.toCounter != null)
             CounterBlock(title: 'Collect at', counter: p.toCounter!, when: p.readyAt == null ? null : 'Expected ${parcelTime(p.readyAt!)}'),
-          Divider(color: c.border, height: 24),
+          if (p.fromCounter != null || p.toCounter != null) Divider(color: c.border, height: 24),
           KeyValue('Receiver', p.receiverName.isEmpty ? 'Erased' : p.receiverName),
           if (p.receiverPhone.isNotEmpty) KeyValue('Mobile', phoneDisplay(p.receiverPhone)),
           if (p.contents.isNotEmpty) KeyValue('Contents', p.contents),
@@ -160,7 +176,7 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> with Po
           GoldButton(
             label: 'Share tracking link',
             icon: Icons.ios_share,
-            onPressed: () => SharePlus.instance.share(ShareParams(subject: 'QuikFly parcel', text: parcelShareText(p.lr, p.from, p.to))),
+            onPressed: () => SharePlus.instance.share(ShareParams(subject: 'QuikFly parcel', text: parcelShareText(p.lr, p.from, p.to, city: p.city))),
           ),
           TextButton.icon(
             onPressed: () => context.push('/support/new?booking=${p.bookingId}'),
@@ -169,7 +185,7 @@ class _ParcelDetailScreenState extends ConsumerState<ParcelDetailScreen> with Po
           ),
         ]),
       ),
-      if (live && p.simulated) ...[const SizedBox(height: 12), const SimulatedNote()],
+      if (live && p.simulated) ...[const SizedBox(height: 12), SimulatedNote(city: p.city)],
     ]);
   }
 }
