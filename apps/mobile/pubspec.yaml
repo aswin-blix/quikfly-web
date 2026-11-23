@@ -1,7 +1,7 @@
 name: quikfly
 description: "QuikFly: bike taxi, cab, bus, holidays and rentals. Android app on the QuikFly API."
 publish_to: 'none'
-version: 0.1.17+20
+version: 0.1.18+21
 
 environment:
   sdk: ^3.13.7
