@@ -329,6 +329,9 @@ class LHi extends L {
   String get sectionSafety => 'सुरक्षा';
 
   @override
+  String get sectionNotificationsHint => 'इस ब्राउज़र में यात्रा की सूचनाएँ';
+
+  @override
   String get sectionSafetyHint => 'आपातकालीन संपर्क, यात्रा शेयर करना';
 
   @override

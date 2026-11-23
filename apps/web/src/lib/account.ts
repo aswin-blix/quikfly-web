@@ -46,6 +46,7 @@ export const ACCOUNT_SECTIONS = [
   { id: "places", label: "sectionPlaces", hint: "sectionPlacesHint" },
   { id: "travellers", label: "sectionTravellers", hint: "sectionTravellersHint" },
   { id: "safety", label: "sectionSafety", hint: "sectionSafetyHint" },
+  { id: "notifications", label: "navNotifications", hint: "sectionNotificationsHint" },
   { id: "licence", label: "sectionLicence", hint: "sectionLicenceHint" },
   { id: "support", label: "sectionSupport", hint: "sectionSupportHint" },
   { id: "business", label: "sectionBusiness", hint: "sectionBusinessHint" },

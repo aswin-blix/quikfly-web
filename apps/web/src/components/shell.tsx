@@ -19,6 +19,7 @@ import { Link, usePath } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
 import { PausedGate, useOpenServices } from "./ServiceGate";
 import { ANDROID_APP, AUTHOR } from "@/lib/site";
+import { useTitleBadge } from "@/lib/title-badge";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePath();
@@ -64,6 +65,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
   const path = usePath();
   const { user, requireAuth, signOut, bookings, toast, unread } = useApp();
   const t = useT();
+  useTitleBadge(user ? unread : 0);
   const [hidden, setHidden] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { scrollY } = useScroll();
@@ -199,9 +201,17 @@ function Toasts() {
       <AnimatePresence>
         {toasts.map((t) => (
           <motion.div key={t.id} layout initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-smoke border border-line shadow-xl text-sm">
-            {t.tone === "ok" ? <CircleCheck size={16} className="text-success" /> : <TriangleAlert size={16} className="text-danger" />}
-            {t.text}
+            className={cx("max-w-[calc(100vw-2rem)] rounded-full bg-smoke border border-line shadow-xl text-sm", t.href && "pointer-events-auto hover:border-gold/60")}>
+            {t.href ? (
+              <Link href={t.href} className="flex items-center gap-2 px-4 py-2.5">
+                <Bell size={16} className="text-gold shrink-0" /><span className="truncate">{t.text}</span><span className="text-gold font-medium shrink-0">View</span>
+              </Link>
+            ) : (
+              <span className="flex items-center gap-2 px-4 py-2.5">
+                {t.tone === "ok" ? <CircleCheck size={16} className="text-success shrink-0" /> : <TriangleAlert size={16} className="text-danger shrink-0" />}
+                {t.text}
+              </span>
+            )}
           </motion.div>
         ))}
       </AnimatePresence>

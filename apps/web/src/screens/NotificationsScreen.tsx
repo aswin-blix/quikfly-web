@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Bell, BadgeCheck, CalendarClock, CircleX, Coins, Handshake, Headphones, IdCard, Package, PackageCheck, RotateCcw, ShieldAlert, Ticket, Wallet } from "lucide-react";
 import type { AppNotification, NotificationKind } from "@quikfly/shared";
 import { useApp } from "@/components/AppProvider";
+import { PushCard } from "@/components/PushCard";
 import { Empty, GoldButton, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { cx, prettyDateTime } from "@/lib/format";
@@ -42,7 +43,7 @@ const target = (n: AppNotification) =>
   n.kind === "credits.earned" ? "/account?tab=wallet" : n.kind === "support.reply" ? "/account?tab=support" : n.bookingId ? (n.kind.startsWith("parcel.") ? `/bookings${qs({ open: n.bookingId })}` : "/bookings") : n.kind.startsWith("licence") ? "/account?tab=licence" : null;
 
 export function NotificationsScreen() {
-  const { user, requireAuth, refreshNotifications } = useApp();
+  const { user, requireAuth, refreshNotifications, unread } = useApp();
   const [items, setItems] = useState<AppNotification[] | null>(null);
   const signedIn = !!user;
 
@@ -55,9 +56,17 @@ export function NotificationsScreen() {
       if (unread) { await api.notifications.markRead(); refreshNotifications(); }
     }, () => live && setItems([]));
     return () => { live = false; };
-  }, [signedIn, refreshNotifications]);
+    // `unread` too: something that arrives while the inbox is open reloads it (the bell's poll sees it first).
+  }, [signedIn, refreshNotifications, unread]);
 
-  const shell = (node: React.ReactNode) => <div className="max-w-2xl mx-auto px-4 pt-10"><h1 className="font-display text-3xl sm:text-4xl mb-6">Notifications</h1>{node}</div>;
+  const shell = (node: React.ReactNode) => (
+    <div className="max-w-2xl mx-auto px-4 pt-10">
+      <h1 className="font-display text-3xl sm:text-4xl mb-6">Notifications</h1>
+      {user && <PushCard context="inbox" className="mb-4" />}
+      {node}
+      {user && <p className="text-xs text-subtle text-center mt-6"><Link href="/account?tab=notifications" className="hover:text-gold">Notification settings</Link></p>}
+    </div>
+  );
   if (!user) return shell(<div className="panel"><Empty icon={<Bell size={40} />} text="Sign in to see your notifications." action={<GoldButton onClick={() => requireAuth(() => undefined)}>Login</GoldButton>} /></div>);
   if (!items) return shell(<div className="py-16 grid place-items-center text-gold"><Spinner size={26} /></div>);
   if (!items.length) return shell(<div className="panel"><Empty icon={<Bell size={40} />} text="Nothing yet. Bookings, refunds and ride reminders show up here." /></div>);

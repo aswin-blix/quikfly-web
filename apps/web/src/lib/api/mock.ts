@@ -28,6 +28,7 @@ const busPricing = { routes: seed.busRoute, calendar: seed.fareCalendar };
 const QUOTES_KEY = "quikfly.mockQuotes";
 const HOLDS_KEY = "quikfly.mockSeatHolds";
 const NOTES_KEY = "quikfly.mockNotifications";
+const PUSH_KEY = "quikfly.mockPushDevices";
 const notesStore = () => load<AppNotification[]>(NOTES_KEY, []);
 /** Like the API's notify(): one notification per event. */
 function mockNotify(n: Omit<AppNotification, "id" | "createdAt" | "readAt">) {
@@ -321,6 +322,20 @@ export const mockApi: QuikflyApi = {
       const items = notesStore().map((n) => (!n.readAt && (!ids || ids.includes(n.id)) ? { ...n, readAt: now } : n));
       save(NOTES_KEY, items);
       return { unread: items.filter((n) => !n.readAt).length };
+    },
+  },
+
+  // Demo: remembered in this browser only; nothing is ever pushed (the screens say so).
+  pushDevices: {
+    async register(token) {
+      await wait(150);
+      save(PUSH_KEY, [...new Set([...load<string[]>(PUSH_KEY, []), token])]);
+      return { registered: true };
+    },
+    async remove(token) {
+      await wait(100);
+      save(PUSH_KEY, load<string[]>(PUSH_KEY, []).filter((t) => t !== token));
+      return { removed: true };
     },
   },
 

@@ -135,6 +135,12 @@ export interface QuikflyApi {
     /** POST /me/notifications/read: these ids, or all when none are given. */
     markRead(ids?: string[]): Promise<{ unread: number }>;
   };
+  pushDevices: {
+    /** POST /me/push-devices: this browser's PushSubscription JSON, so notifications reach it when the site is closed. */
+    register(token: string, platform: "web"): Promise<{ registered: true }>;
+    /** DELETE /me/push-devices/:token: forget it (turned off, or signing out). */
+    remove(token: string): Promise<{ removed: true }>;
+  };
   bookings: {
     /** GET /bookings */
     list(): Promise<Booking[]>;

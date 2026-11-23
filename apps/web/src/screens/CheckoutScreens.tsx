@@ -4,6 +4,7 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { Banknote, ArrowLeft, BadgePercent, Building2, CarTaxiFront, ChevronDown, Coins, CreditCard, FileText, Info, LifeBuoy, Lock, QrCode, RotateCcw, Route, ShieldCheck, Smartphone, Ticket, UserRound, Wallet } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
+import { PushCard } from "@/components/PushCard";
 import { TweenNumber } from "@/components/motion";
 import { Empty, GhostLink, GoldButton, Spinner } from "@/components/ui";
 import { api, DEMO_MODE } from "@/lib/api";
@@ -377,6 +378,8 @@ export function ConfirmedScreen() {
         : b.service === "parcel"
         ? "Hand it in before the cut-off below. When it's ready, the collection code appears in My Trips: pass it to the receiver (demo: no SMS sent)."
         : "We've sent the details to your phone. Have a great trip!"}</motion.p>
+
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4 }}><PushCard context="booking" className="mt-6" /></motion.div>
 
       <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1, type: "spring" }} className="panel gold-border text-left mt-8 overflow-hidden">
         <div className="flex items-center gap-3 p-5 border-b border-dashed border-line">
