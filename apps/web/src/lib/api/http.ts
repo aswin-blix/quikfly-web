@@ -137,6 +137,10 @@ export const httpApi: QuikflyApi = {
     list: () => req("GET", "/me/notifications"),
     markRead: (ids) => req("POST", "/me/notifications/read", ids ? { ids } : {}),
   },
+  pushDevices: {
+    register: (token, platform) => req("POST", "/me/push-devices", { token, platform }),
+    remove: (token) => req("DELETE", `/me/push-devices/${encodeURIComponent(token)}`),
+  },
   bookings: {
     list: () => req("GET", "/bookings"),
     get: (id) => req("GET", `/bookings/${encodeURIComponent(id)}`),

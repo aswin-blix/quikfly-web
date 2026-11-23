@@ -2,9 +2,12 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { Booking, CheckoutDraft, User } from "@quikfly/shared";
 import { api, UNAUTHORIZED_EVENT } from "@/lib/api";
+import { usePath } from "@/lib/nav";
+import { dropPush, pausePush, resumePush } from "@/lib/push";
 import { ConfigProvider } from "./ConfigProvider";
 
-type Toast = { id: number; text: string; tone: "ok" | "err" };
+/** `href`: the toast is a link (e.g. a new notification opens the inbox). */
+type Toast = { id: number; text: string; tone: "ok" | "err"; href?: string };
 
 interface Ctx {
   user: User | null;
@@ -19,10 +22,11 @@ interface Ctx {
   refreshBookings: () => Promise<void>;
   /** Unread notifications (the bell's badge). */
   unread: number;
-  refreshNotifications: () => Promise<void>;
+  /** Re-reads the unread count. `announce`: say so (a toast) when something new arrived. */
+  refreshNotifications: (announce?: boolean) => Promise<void>;
   draft: CheckoutDraft | null;
   setDraft: (d: CheckoutDraft | null) => void;
-  toast: (text: string, tone?: Toast["tone"]) => void;
+  toast: (text: string, tone?: Toast["tone"], href?: string) => void;
   toasts: Toast[];
 }
 
@@ -36,6 +40,9 @@ export const useApp = () => {
 const USER_KEY = "quikfly.user";
 /** How often the bell re-checks for notifications while the page is visible. */
 const NOTIFICATIONS_POLL_MS = 60_000;
+/** How long a toast stays; one with a link stays longer so there's time to tap it. */
+const TOAST_MS = 3200;
+const LINK_TOAST_MS = 6500;
 const DRAFT_KEY = "quikfly.checkout";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -80,12 +87,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     // A parcel draft holds someone else's name and number.
     if (draft?.parcel) setDraft(null);
+    // While the session is still valid: stop this account's notifications reaching this browser.
+    await pausePush();
     await api.auth.signOut();
   }, [setUser, setDraft, draft]);
 
-  // The API rejected the stored session (expired or revoked): sign out here too.
+  // The API rejected the stored session (expired or revoked): sign out here too, and stop its notifications.
   useEffect(() => {
-    const onUnauthorized = () => setUser(null);
+    const onUnauthorized = () => { setUser(null); dropPush(); };
     window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
   }, [setUser]);
@@ -102,15 +111,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [signedIn, setUser]);
   useEffect(() => { refreshBookings(); }, [refreshBookings]);
 
-  const refreshNotifications = useCallback(async () => {
-    if (!signedIn) return setUnread(0);
-    try { setUnread((await api.notifications.list()).unread); } catch { /* keep the last count */ }
+  // The person who turned browser notifications on gets them back when they sign in (src/lib/push.ts).
+  const userId = user?.id;
+  useEffect(() => { if (userId) resumePush(userId); }, [userId]);
+
+  const path = usePath();
+  const pathRef = useRef(path);
+  useEffect(() => { pathRef.current = path; }, [path]);
+  const lastUnread = useRef<number | null>(null);
+  const toastRef = useRef<Ctx["toast"]>(() => undefined);
+  const refreshNotifications = useCallback(async (announce = false) => {
+    if (!signedIn) { lastUnread.current = null; return setUnread(0); }
+    try {
+      const { items, unread: count } = await api.notifications.list();
+      const before = lastUnread.current;
+      lastUnread.current = count;
+      setUnread(count);
+      // Something new arrived while the page was open: say what, with a link (not on the inbox itself,
+      // and not after the person's own booking, which its own screen already confirms).
+      if (announce && before !== null && count > before && pathRef.current !== "/notifications") {
+        const fresh = count - before;
+        const newest = items.find((n) => !n.readAt);
+        toastRef.current(fresh === 1 && newest ? newest.title : `${fresh} new notifications`, "ok", "/notifications");
+      }
+    } catch { /* keep the last count */ }
   }, [signedIn]);
-  // Check on sign-in, after bookings change, and every minute while the tab is visible.
+  // Check on sign-in and after bookings change (quietly), every minute while the tab is visible, and
+  // straight away when the tab comes back into view.
   useEffect(() => { refreshNotifications(); }, [refreshNotifications, bookings]);
   useEffect(() => {
-    const t = setInterval(() => { if (document.visibilityState === "visible") refreshNotifications(); }, NOTIFICATIONS_POLL_MS);
-    return () => clearInterval(t);
+    const t = setInterval(() => { if (document.visibilityState === "visible") refreshNotifications(true); }, NOTIFICATIONS_POLL_MS);
+    const onShow = () => { if (document.visibilityState === "visible") refreshNotifications(true); };
+    document.addEventListener("visibilitychange", onShow);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onShow); };
   }, [refreshNotifications]);
 
   const requireAuth = useCallback((fn: () => void) => {
@@ -126,11 +159,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (signedIn && fn) setTimeout(fn, 50);
   }, []);
 
-  const toast = useCallback((text: string, tone: Toast["tone"] = "ok") => {
+  const toast = useCallback((text: string, tone: Toast["tone"] = "ok", href?: string) => {
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, text, tone }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
+    setToasts((t) => [...t, { id, text, tone, href }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), href ? LINK_TOAST_MS : TOAST_MS);
   }, []);
+  useEffect(() => { toastRef.current = toast; }, [toast]);
 
   return (
     <AppCtx.Provider value={{

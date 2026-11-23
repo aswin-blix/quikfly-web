@@ -3,6 +3,8 @@
 //   admin    apps/admin/public/assets/logo.svg
 //   apps     apps/mobile/assets/images/logo.png  (transparent PNG rendered by headless Chrome;
 //            Flutter's SVG support drops blur filters, so the apps use a sharp raster of it)
+//   browser notifications  apps/{web,admin}/public/assets/notify-icon.png (square, transparent:
+//            browsers don't take SVG notification icons; the logo sits centred, never on a badge)
 // Run from the repo root after replacing the master:  node scripts/logo.mjs
 // Chrome or Edge must be installed; set CHROME=/path/to/chrome if it isn't found.
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -39,12 +41,26 @@ const chrome = [
 if (!chrome) throw new Error("Chrome/Edge not found; set CHROME=/path/to/chrome");
 
 const work = mkdtempSync(join(tmpdir(), "qf-logo-"));
-const page = join(work, "logo.html");
-writeFileSync(page, `<!doctype html><html style="background:transparent"><body style="margin:0;background:transparent">
-<img src="${pathToFileURL(MASTER).href}" style="display:block;width:${APP_PNG_WIDTH}px;height:${height}px"></body></html>`);
-execFileSync(chrome, [
-  "--headless=new", "--disable-gpu", "--hide-scrollbars", "--default-background-color=00000000",
-  `--window-size=${APP_PNG_WIDTH},${height}`, `--screenshot=${APP_PNG}`, pathToFileURL(page).href,
-], { stdio: "ignore" });
-rmSync(work, { recursive: true, force: true });
+/** Renders `html` (a transparent page) to a PNG of the given size with headless Chrome. */
+function render(out, width, h, body) {
+  const page = join(work, "page.html");
+  writeFileSync(page, `<!doctype html><html style="background:transparent"><body style="margin:0;background:transparent">${body}</body></html>`);
+  mkdirSync(dirname(out), { recursive: true });
+  execFileSync(chrome, [
+    "--headless=new", "--disable-gpu", "--hide-scrollbars", "--default-background-color=00000000",
+    `--window-size=${width},${h}`, `--screenshot=${out}`, pathToFileURL(page).href,
+  ], { stdio: "ignore" });
+}
+const logo = (w) => `<img src="${pathToFileURL(MASTER).href}" style="display:block;width:${w}px;height:${Math.round((w * vh) / vw)}px">`;
+
+render(APP_PNG, APP_PNG_WIDTH, height, logo(APP_PNG_WIDTH));
 console.log(`rendered → ${APP_PNG} (${APP_PNG_WIDTH}×${height}, transparent)`);
+
+// Browser notification icon: square, the logo centred with a little room at the sides.
+const NOTIFY_SIZE = 192;
+const NOTIFY_LOGO_WIDTH = 180;
+for (const out of ["apps/web/public/assets/notify-icon.png", "apps/admin/public/assets/notify-icon.png"].map((p) => resolve(p))) {
+  render(out, NOTIFY_SIZE, NOTIFY_SIZE, `<div style="width:${NOTIFY_SIZE}px;height:${NOTIFY_SIZE}px;display:grid;place-items:center">${logo(NOTIFY_LOGO_WIDTH)}</div>`);
+  console.log(`rendered → ${out} (${NOTIFY_SIZE}×${NOTIFY_SIZE}, transparent)`);
+}
+rmSync(work, { recursive: true, force: true });

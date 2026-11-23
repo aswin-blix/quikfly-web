@@ -330,6 +330,9 @@ class LTa extends L {
   String get sectionSafety => 'பாதுகாப்பு';
 
   @override
+  String get sectionNotificationsHint => 'இந்த உலாவியில் பயண அறிவிப்புகள்';
+
+  @override
   String get sectionSafetyHint => 'அவசரத் தொடர்புகள், பயணப் பகிர்வு';
 
   @override

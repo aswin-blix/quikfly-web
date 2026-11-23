@@ -699,6 +699,12 @@ abstract class L {
   /// **'Safety'**
   String get sectionSafety;
 
+  /// No description provided for @sectionNotificationsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Trip updates in this browser'**
+  String get sectionNotificationsHint;
+
   /// No description provided for @sectionSafetyHint.
   ///
   /// In en, this message translates to:

@@ -329,6 +329,9 @@ class LEn extends L {
   String get sectionSafety => 'Safety';
 
   @override
+  String get sectionNotificationsHint => 'Trip updates in this browser';
+
+  @override
   String get sectionSafetyHint => 'Emergency contacts, trip sharing';
 
   @override
