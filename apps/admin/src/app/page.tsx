@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, IdCard, KeyRound, Package, PackageCheck, PackageX, Siren, Truck, UserMinus } from "lucide-react";
 import type { AdminStats } from "@quikfly/shared";
 import { BarList, ColumnChart } from "@/components/charts";
+import { PushCard } from "@/components/PushCard";
 import { Badge, Empty, ErrorBox, PageHeader, Segmented } from "@/components/ui";
 import { adminApi } from "@/lib/api";
 import { SERVICE_LABEL, STATUS_STYLE, compact, cx, dayLabel, inr, inrCompact, pct, timeAgo, weekday } from "@/lib/format";
@@ -151,6 +152,7 @@ function DashboardPage() {
   return (
     <>
       <PageHeader title="Dashboard" sub="How QuikFly is doing. Days are counted in India time." />
+      <PushCard />
       <div className="mb-4"><Segmented label="Date range" options={RANGES} value={days} onChange={setDays} /></div>
       {error && <div className="mb-4"><ErrorBox message={error} onRetry={reload} /></div>}
       {data ? (
