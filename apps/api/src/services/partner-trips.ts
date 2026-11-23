@@ -10,6 +10,7 @@ import {
 } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
+import { staffAlertStatement } from "./admin/alerts";
 import { loadVendor } from "./vendors";
 import { getSettings } from "./settings";
 
@@ -201,8 +202,13 @@ export async function requestPayout(db: D1Database, userId: string) {
   const settings = await getSettings(db);
   const balance = await balanceOf(db, f.v.id);
   if (balance < settings.vendorMinPayout * 100) throw conflict(`You can request a payout once QuikFly owes you at least ₹${settings.vendorMinPayout}.`);
+  const payoutId = uid("VP");
   try {
-    await db.prepare("INSERT INTO vendor_payouts (id, vendor_id, amount_paise, requested_at) VALUES (?, ?, ?, ?)").bind(uid("VP"), f.v.id, balance, new Date().toISOString()).run();
+    // One open request per partner (UNIQUE); the staff alert is in the same batch, so a refused request alerts no one.
+    await db.batch([
+      db.prepare("INSERT INTO vendor_payouts (id, vendor_id, amount_paise, requested_at) VALUES (?, ?, ?, ?)").bind(payoutId, f.v.id, balance, new Date().toISOString()),
+      staffAlertStatement(db, { kind: "vendor.payout", ref: payoutId, title: `Payout requested · ₹${Math.round(balance / 100).toLocaleString("en-IN")}`, body: "A partner asked for their earnings. Pay it and record the bank reference.", link: "/vendors" }),
+    ]);
   } catch (e) {
     if (String(e).includes("UNIQUE")) throw conflict("You already have a payout request waiting.");
     throw e;

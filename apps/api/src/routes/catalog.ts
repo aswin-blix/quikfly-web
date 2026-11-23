@@ -7,6 +7,7 @@ import type { AppEnv } from "../env";
 import { notFound } from "../lib/errors";
 import { visible } from "../services/catalog";
 import { getSettings } from "../services/settings";
+import { vapidKeys } from "../services/webpush";
 
 export const config = new Hono<AppEnv>()
   // Everything the website and the app load once at start-up.
@@ -18,9 +19,12 @@ export const config = new Hono<AppEnv>()
     ]);
     // Only offers within their dates are shown (an expired or not-yet-started code can't be used).
     const today = businessDate();
+    const vapid = vapidKeys(c.env);
     const body: AppConfig = { settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers: offers.filter((o) => offerLive(o, today)), faqs, surgeRules,
       // Only entries that haven't ended, for the website's live estimates.
-      fareCalendar: fareCalendar.filter((e) => e.to >= today) };
+      fareCalendar: fareCalendar.filter((e) => e.to >= today),
+      // Browser push: the key to subscribe with, or null while the VAPID secrets aren't set.
+      push: vapid ? { vapidPublicKey: vapid.publicKey } : null };
     return c.json(body);
   });
 

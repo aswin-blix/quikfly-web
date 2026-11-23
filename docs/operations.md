@@ -42,16 +42,26 @@ After a deploy, record it (migration, version ids, smoke result) in `docs/roadma
 
 **New settings during a deploy:** for about a minute the website can load settings from the old API, without a field the new code reads (this crashed the holiday page once, before `whatsappLink()` accepted a missing number). Code that reads a new `Settings` field must cope with it being missing.
 
-## Push notifications (FCM, free)
+## Push notifications (free)
 
-The in-app inbox works without any setup. Phone push needs a Firebase project, which the owner creates:
+The in-app inboxes (customers' bell, staff alerts in admin) work without any setup. Push to browsers and phones is switched on by secrets the owner sets; until then the API stays silent and nothing else changes.
 
-1. [console.firebase.google.com](https://console.firebase.google.com) → new project (Analytics off is fine) → add an Android app with package `com.quikfly.app` → download `google-services.json` (goes to `apps/mobile/android/app/`; the app-side step is tracked in `docs/roadmap.md`).
-2. Project settings → Service accounts → **Generate new private key** (a JSON file). Keep it out of the repo.
-3. From `apps/api`: `npx wrangler secret put FCM_SERVICE_ACCOUNT` and paste the whole JSON. No redeploy needed; the next cron run (every minute) starts sending.
-4. To turn push off again: `npx wrangler secret delete FCM_SERVICE_ACCOUNT`.
+**Browsers (website and admin): Web Push with VAPID keys, no Firebase.**
 
-The cron (`* * * * *`) is free on Workers (5 triggers per account on the free plan; this uses one). It only sends notifications less than an hour old, so turning push on doesn't flood old ones. Cron runs show in the Cloudflare dashboard → Workers → quikfly-api → Logs.
+1. Once, from `apps/api`: `node scripts/vapid-keys.mjs mailto:<a contact address>`. It prints three `npx wrangler secret put` commands (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`); run them and paste each value. Nothing is written to disk; keep the private key out of chats and the repo.
+2. No redeploy needed: `GET /config` and `GET /admin/alerts` start returning `push: { vapidPublicKey }`, the website's and admin's "Turn on notifications" cards appear, and the next cron run sends.
+3. To turn it off: delete the three secrets. Rotating the keys (a new pair) ends every browser's subscription; people turn notifications on again when they next visit.
+4. Locally: the same three lines in `apps/api/.dev.vars` as `NAME=value` (git-ignored). Start the API with `npx wrangler dev --test-scheduled` and `GET /__scheduled?cron=*+*+*+*+*` runs the cron once.
+
+**Phones (both apps): Firebase Cloud Messaging.** The owner creates the project:
+
+1. [console.firebase.google.com](https://console.firebase.google.com) → new project (Analytics off is fine) → add **two** Android apps: package `com.quikfly.app` (QuikFly) and `com.quikfly.partner` (QuikFly Partner).
+2. For each app, Project settings → Your apps shows the client values (`apiKey`, `appId`, `messagingSenderId`, `projectId`). They go into `apps/mobile/lib/core/push_options.dart` (customer and partner options; they are client configuration, not secrets, and the apps stay silent while the placeholders are empty). The app side ships with app 0.1.18.
+3. Project settings → Service accounts → **Generate new private key** (a JSON file). Keep it out of the repo.
+4. From `apps/api`: `npx wrangler secret put FCM_SERVICE_ACCOUNT` and paste the whole JSON. No redeploy needed; the next cron run starts sending.
+5. To turn phone push off again: `npx wrangler secret delete FCM_SERVICE_ACCOUNT`.
+
+The cron (`* * * * *`) is free on Workers (5 triggers per account on the free plan; this uses one). It only sends notifications and staff alerts less than an hour old, so turning push on doesn't flood old ones. Cron runs show in the Cloudflare dashboard → Workers → quikfly-api → Logs.
 
 ## Partner document storage (R2)
 

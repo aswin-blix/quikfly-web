@@ -5,6 +5,7 @@
 import { SOS_NOTE_MAX, type SosAlert, type SosReceipt, type SosRequest, type SosStatus } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
+import { staffAlertStatement } from "./admin/alerts";
 import { auditStatement } from "./admin/audit";
 
 interface SosRow {
@@ -35,9 +36,17 @@ export async function raiseSos(db: D1Database, userId: string, req: SosRequest):
   if ((open?.n ?? 0) >= MAX_OPEN_PER_USER) throw conflict("Your earlier SOS is already with our team. Call 112 if you are in danger.");
   const id = uid("SOS");
   const now = new Date().toISOString();
-  await db.prepare(
-    "INSERT INTO sos_alerts (id, user_id, ride_id, booking_id, lat, lng, note, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)",
-  ).bind(id, userId, req.rideId ?? null, req.bookingId ?? null, req.lat ?? null, req.lng ?? null, req.note?.trim() || null, now).run();
+  // The staff alert lands with the press (same batch); it names no one: the SOS page has the details.
+  await db.batch([
+    db.prepare(
+      "INSERT INTO sos_alerts (id, user_id, ride_id, booking_id, lat, lng, note, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)",
+    ).bind(id, userId, req.rideId ?? null, req.bookingId ?? null, req.lat ?? null, req.lng ?? null, req.note?.trim() || null, now),
+    staffAlertStatement(db, {
+      kind: "sos.raised", ref: id, title: "SOS pressed",
+      body: req.rideId ? "A customer pressed SOS during a ride. Open the alert and call them now." : "A customer pressed SOS. Open the alert and call them now.",
+      link: "/sos",
+    }),
+  ]);
   return { id, createdAt: now, status: "open" };
 }
 

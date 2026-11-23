@@ -1,12 +1,14 @@
 // Every-minute cron (wrangler.jsonc → triggers.crons): writes scheduled-ride reminders,
 // records expired QuikFly Credits, closes long-unused accounts and erases deleted ones past
-// their grace period (services/privacy.ts), moves demo parcels (services/parcels/carriers.ts), and pushes new notifications to phones when Firebase is
+// their grace period (services/privacy.ts), moves demo parcels (services/parcels/carriers.ts), and pushes new
+// customer notifications and staff alerts to phones (Firebase) and browsers (Web Push) when those are
 // configured. Stays well under the free plan's 50 queries per invocation: a fixed handful of
 // statements, no per-row queries.
-import { RIDE_SCHEDULE } from "@quikfly/shared";
+import { RIDE_SCHEDULE, can, type AdminRole, type Permission } from "@quikfly/shared";
 import { PUSH_BATCH, PUSH_MAX_AGE_MINUTES } from "./config";
 import type { Env } from "./env";
-import { sendPush, serviceAccount } from "./services/push";
+import { sendPush, serviceAccount, type PushResult } from "./services/push";
+import { isWebToken, sendWebPush, vapidKeys, type WebPushMessage } from "./services/webpush";
 import { getSettings } from "./services/settings";
 import { privacySweep } from "./services/privacy";
 import { runSimulatedCarrier } from "./services/parcels/carriers";
@@ -87,10 +89,30 @@ async function documentExpiry(db: D1Database) {
   ]);
 }
 
-/** Pushes recent, not-yet-pushed notifications to each customer's phones; forgets dead tokens. */
-async function pushNew(env: Env) {
+/** The configured push channels: phones through Firebase, browsers through Web Push. Either may be off. */
+function pushChannels(env: Env) {
   const sa = serviceAccount(env.FCM_SERVICE_ACCOUNT);
-  if (!sa) return; // push not configured: the inbox still works
+  const vapid = vapidKeys(env);
+  return sa || vapid ? { sa, vapid } : null;
+}
+type Channels = NonNullable<ReturnType<typeof pushChannels>>;
+
+/** Sends one message to one device over the channel its token belongs to; "failed" when that channel is off. */
+async function deliver(ch: Channels, token: string, msg: WebPushMessage, data: Record<string, string>): Promise<PushResult> {
+  try {
+    if (isWebToken(token)) return ch.vapid ? await sendWebPush(ch.vapid, token, msg) : "failed";
+    return ch.sa ? await sendPush(ch.sa, token, { title: msg.title, body: msg.body, data }) : "failed";
+  } catch {
+    return "failed";
+  }
+}
+
+/**
+ * Pushes recent, not-yet-pushed notifications to each customer's phones and browsers; forgets dead
+ * tokens. A row counts as pushed once any device took it; a failed send is retried next minute until
+ * the row is older than PUSH_MAX_AGE_MINUTES.
+ */
+async function pushNew(env: Env, ch: Channels) {
   const db = env.DB;
   const since = new Date(Date.now() - PUSH_MAX_AGE_MINUTES * 60_000).toISOString();
   const { results: rows } = await db.prepare(
@@ -99,14 +121,14 @@ async function pushNew(env: Env) {
      WHERE n.pushed_at IS NULL AND n.created_at >= ? ORDER BY n.created_at LIMIT ?`,
   ).bind(since, PUSH_BATCH).all<{ id: string; user_id: string; kind: string; title: string; body: string; booking_id: string | null; token: string }>();
   if (!rows.length) {
-    // Nothing deliverable: mark what's left (customers with no phone) so it isn't scanned again.
+    // Nothing deliverable: mark what's left (customers with no device) so it isn't scanned again.
     await db.prepare("UPDATE notifications SET pushed_at = ? WHERE pushed_at IS NULL AND created_at >= ?").bind(new Date().toISOString(), since).run();
     return;
   }
   const gone: string[] = [];
   const done = new Set<string>();
   await Promise.all(rows.map(async (r) => {
-    const result = await sendPush(sa, r.token, { title: r.title, body: r.body, data: { kind: r.kind, bookingId: r.booking_id ?? "" } }).catch(() => "failed" as const);
+    const result = await deliver(ch, r.token, { id: r.id, kind: r.kind, title: r.title, body: r.body, url: "/notifications" }, { id: r.id, kind: r.kind, bookingId: r.booking_id ?? "" });
     if (result === "gone") gone.push(r.token);
     if (result !== "failed") done.add(r.id);
   }));
@@ -117,6 +139,39 @@ async function pushNew(env: Env) {
   ]);
 }
 
+/**
+ * Pushes recent staff alerts to the browsers and phones of the staff whose role covers them (an alert
+ * is addressed to a permission, services/admin/alerts.ts). Same ageing and retry as pushNew.
+ */
+async function pushStaff(env: Env, ch: Channels) {
+  const db = env.DB;
+  const since = new Date(Date.now() - PUSH_MAX_AGE_MINUTES * 60_000).toISOString();
+  const { results: rows } = await db.prepare(
+    `SELECT a.id, a.kind, a.permission, a.title, a.body, a.link, d.token, u.role
+     FROM staff_alerts a JOIN admin_push_devices d JOIN admin_users u ON u.id = d.admin_id AND u.disabled_at IS NULL
+     WHERE a.pushed_at IS NULL AND a.created_at >= ? ORDER BY a.created_at LIMIT ?`,
+  ).bind(since, PUSH_BATCH).all<{ id: string; kind: string; permission: Permission; title: string; body: string; link: string; token: string; role: AdminRole }>();
+  const mine = rows.filter((r) => can(r.role, r.permission));
+  if (!mine.length) {
+    await db.prepare("UPDATE staff_alerts SET pushed_at = ? WHERE pushed_at IS NULL AND created_at >= ?").bind(new Date().toISOString(), since).run();
+    return;
+  }
+  const gone: string[] = [];
+  const done = new Set<string>();
+  await Promise.all(mine.map(async (r) => {
+    const result = await deliver(ch, r.token, { id: r.id, kind: r.kind, title: r.title, body: r.body, url: r.link }, { id: r.id, kind: r.kind, link: r.link });
+    if (result === "gone") gone.push(r.token);
+    if (result !== "failed") done.add(r.id);
+  }));
+  // Alerts no listed device's role covers are done too, or they would be re-read every minute.
+  for (const r of rows) if (!mine.some((m) => m.id === r.id)) done.add(r.id);
+  const now = new Date().toISOString();
+  await db.batch([
+    db.prepare("UPDATE staff_alerts SET pushed_at = ? WHERE id IN (SELECT value FROM json_each(?))").bind(now, JSON.stringify([...done])),
+    db.prepare("DELETE FROM admin_push_devices WHERE token IN (SELECT value FROM json_each(?))").bind(JSON.stringify(gone)),
+  ]);
+}
+
 export async function runScheduled(env: Env) {
   await rideReminders(env.DB);
   await expireCredits(env.DB);
@@ -124,5 +179,8 @@ export async function runScheduled(env: Env) {
   await privacySweep(env.DB, env.DOCS);
   // A failure in the demo's simulation mustn't hold up everyone's notifications.
   await runSimulatedCarrier(env.DB).catch((e) => console.error("parcel simulation", e));
-  await pushNew(env);
+  const channels = pushChannels(env);
+  if (!channels) return; // no push configured: the inboxes still work
+  await pushNew(env, channels);
+  await pushStaff(env, channels);
 }

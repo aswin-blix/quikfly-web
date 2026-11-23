@@ -1,7 +1,8 @@
-// Firebase Cloud Messaging (HTTP v1). Free. Switched on by the FCM_SERVICE_ACCOUNT secret:
-// the JSON key of a Firebase service account, stored with `npx wrangler secret put
-// FCM_SERVICE_ACCOUNT` by the owner (it never goes in the repo). Without it nothing is sent.
-import { FCM } from "../config";
+// Phone push: Firebase Cloud Messaging (HTTP v1). Free. Switched on by the FCM_SERVICE_ACCOUNT
+// secret: the JSON key of a Firebase service account, stored with `npx wrangler secret put
+// FCM_SERVICE_ACCOUNT` by the owner (it never goes in the repo). Without it nothing is sent to
+// phones. Browsers are served by services/webpush.ts; scheduled.ts picks the channel per token.
+import { FCM, PUSH_ANDROID } from "../config";
 
 interface ServiceAccount { project_id: string; client_email: string; private_key: string }
 
@@ -48,13 +49,21 @@ async function accessToken(sa: ServiceAccount): Promise<string> {
 
 export type PushResult = "sent" | "gone" | "failed";
 
-/** Sends one notification to one device. "gone" = the token is no longer valid (forget it). */
+/**
+ * Sends one notification to one phone. "gone" = the token is no longer valid (forget it).
+ * Android shows the `notification` part itself when the app is in the background or closed, on the
+ * apps' "Trip updates" channel; the app reads `data` (kind, id, bookingId or link) to open the right screen.
+ */
 export async function sendPush(sa: ServiceAccount, token: string, msg: { title: string; body: string; data: Record<string, string> }): Promise<PushResult> {
   const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
     method: "POST",
     headers: { Authorization: `Bearer ${await accessToken(sa)}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ message: { token, notification: { title: msg.title, body: msg.body }, data: msg.data, android: { priority: "high" } } }),
+    body: JSON.stringify({ message: {
+      token, notification: { title: msg.title, body: msg.body }, data: msg.data,
+      android: { priority: "high", notification: { channel_id: PUSH_ANDROID.channelId, color: PUSH_ANDROID.color } },
+    } }),
   });
   if (res.ok) return "sent";
+  // 404 UNREGISTERED and 400 INVALID_ARGUMENT (a malformed token) both mean this token will never work.
   return res.status === 404 || res.status === 400 ? "gone" : "failed";
 }

@@ -12,6 +12,7 @@ import { auditStatement, listAudit } from "../../services/admin/audit";
 import { adminLogin, endAdminSession } from "../../services/admin/auth";
 import { dashboardStats } from "../../services/admin/stats";
 import { getSettings, updateSettings } from "../../services/settings";
+import { adminAlerts, adminPushDevices } from "./alerts";
 import { adminCatalog } from "./catalog";
 import { adminCustomers, adminSos, adminTeam } from "./customers";
 import { adminParcels } from "./parcels";
@@ -81,4 +82,6 @@ export const admin = new Hono<AppEnv>()
   .route("/customers", adminCustomers)
   .route("/parcels", adminParcels)
   .route("/sos", adminSos)
-  .route("/team", adminTeam);
+  .route("/team", adminTeam)
+  .route("/alerts", adminAlerts)
+  .route("/push-devices", adminPushDevices);

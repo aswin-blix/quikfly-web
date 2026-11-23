@@ -126,6 +126,13 @@ export async function advanceLegs(
        SELECT 'NT' || upper(${field("token")}), p.user_id, ${field("kind")}, ${field("token")}, ${field("title")}, ${field("body")}, p.booking_id, ?2
        FROM ${MOVED} WHERE ${field("kind")} IS NOT NULL`,
     ).bind(list, at),
+    // Operations hear about a parcel nobody collected (one row per parcel; the LR, never the receiver).
+    db.prepare(
+      `INSERT OR IGNORE INTO staff_alerts (id, permission, kind, ref, title, body, link, created_at)
+       SELECT 'SA' || upper(${field("token")}), 'parcels.change', 'parcel.unclaimed', p.booking_id, 'Unclaimed parcel · ' || p.lr,
+         'Nobody collected it within the hold period. Send it back when the sender books the return.', '/parcels/view?id=' || p.booking_id, ?2
+       FROM ${MOVED} WHERE ${field("state")} = 'unclaimed'`,
+    ).bind(list, at),
   ];
   if (by.actor === "staff" && by.adminId) {
     for (const { row, token, data, changed } of planned) {

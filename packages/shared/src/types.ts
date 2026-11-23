@@ -160,6 +160,7 @@ export const NOTIFICATION_KINDS = [
   "licence.approved", "licence.rejected", "ride.reminder", "credits.earned", "booking.changed", "support.reply",
   "parcel.moved", "parcel.ready", "parcel.collected", "parcel.unclaimed",
   "vendor.changes", "vendor.approved", "vendor.rejected", "vendor.active", "vendor.fleet", "vendor.document", "vendor.trip", "vendor.payout",
+  "privacy.inactive",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -647,6 +648,11 @@ export interface AppConfig {
   surgeRules?: SurgeRule[];
   /** Peak and festival dates (prices up or down by %); read as `?? []` for the same reason. */
   fareCalendar?: FareDate[];
+  /**
+   * Browser push: the VAPID public key a browser subscribes with (POST /me/push-devices, platform "web").
+   * null (or missing, on APIs before 2026-11-23) = browser push is switched off; the inbox still works.
+   */
+  push?: { vapidPublicKey: string } | null;
 }
 
 /** Body of POST /bookings. The amount comes from the quote (or the ride), never the client. */

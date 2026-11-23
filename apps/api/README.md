@@ -38,7 +38,7 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | Method | Endpoint | Purpose |
 |---|---|---|
 | GET | `/health` | liveness check |
-| GET | `/config` | everything the apps load at start-up: `{ settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers, faqs, surgeRules, fareCalendar }` (`fareCalendar`: peak and festival dates that haven't ended) (visible items only; offers only within their `validFrom`–`validUntil` dates) |
+| GET | `/config` | everything the apps load at start-up: `{ settings, places, rideOptions, cities, busOperators, popularRoutes, groupDestinations, offers, faqs, surgeRules, fareCalendar, push }` (`fareCalendar`: peak and festival dates that haven't ended; `push`: `{ vapidPublicKey }` for browser push, or null while the VAPID secrets aren't set) (visible items only; offers only within their `validFrom`–`validUntil` dates) |
 | POST | `/auth/otp` | `{ phone }` → `{ sent }` (no SMS yet) |
 | POST | `/auth/verify` | `{ phone, otp }` → `{ token, user, isNew, restored }`. Creates the user on first login (₹500 welcome credit, referral code); `isNew` stays true until a name is saved; signing in within 30 days of deleting restores the account (`restored`) |
 | POST | `/auth/logout` | ends the session for the bearer token (always succeeds) |
@@ -59,10 +59,10 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | DELETE 🔒 | `/me/travellers/:id` | remove a traveller |
 | GET / POST 🔒 | `/me/contacts` | emergency contacts (max 3); POST `{ name, phone, relation? }` |
 | DELETE 🔒 | `/me/contacts/:id` | remove a contact |
-| GET 🔒 | `/me/notifications` | `{ items, unread }`: the newest 50 (`NOTIFICATIONS_PAGE`); kinds `parcel.moved`, `parcel.ready`, `parcel.collected`, `parcel.unclaimed` (to the sender only; never the collection code), `booking.confirmed`, `booking.cancelled`, `booking.cancelled_by_staff`, `booking.deposit_returned`, `licence.approved`, `licence.rejected`, `ride.reminder` |
+| GET 🔒 | `/me/notifications` | `{ items, unread }`: the newest 50 (`NOTIFICATIONS_PAGE`); kinds `parcel.moved`, `parcel.ready`, `parcel.collected`, `parcel.unclaimed` (to the sender only; never the collection code), `booking.confirmed`, `booking.cancelled`, `booking.cancelled_by_staff`, `booking.deposit_returned`, `licence.approved`, `licence.rejected`, `ride.reminder`, `credits.earned`, `support.reply`, `privacy.inactive`, `vendor.*` (NOTIFICATION_KINDS in `packages/shared`) |
 | POST 🔒 | `/me/notifications/read` | `{ ids? }` (up to 100; none = all) → `{ unread }` |
-| POST 🔒 | `/me/push-devices` | `{ token, platform: android\|ios\|web }`: registers a Firebase token for push (201) |
-| DELETE 🔒 | `/me/push-devices/:token` | forget a device (on sign-out) |
+| POST 🔒 | `/me/push-devices` | `{ token, platform: android\|ios\|web }`: registers a phone's Firebase token, or a browser's `PushSubscription` JSON as the token with platform `web`, for push (201); `token` up to `PUSH_TOKEN_MAX` chars; a token already on another account moves to this one |
+| DELETE 🔒 | `/me/push-devices/:token` | forget a device (sign-out, or notifications turned off); a browser sends its subscription JSON URL-encoded |
 | GET 🔒 | `/me/credits` | `{ balance, nextExpiry: { amount, expiresAt } \| null, items }`: QuikFly Credits, newest 100 entries (`earned`, `spent`, `returned`, `expired`). `GET /auth/me` carries `creditBalance` |
 | GET / POST 🔒 | `/me/tickets` | the customer's support tickets and callbacks (newest activity first, first message only); POST `{ topic, message, bookingId? }` opens a ticket (201; at most 5 open; the booking must be theirs) |
 | GET 🔒 | `/me/tickets/:id` | one ticket with its whole thread (`messages`: author customer/staff, staff first name) |
@@ -153,6 +153,10 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | POST 🛡 | `/admin/auth/logout` | ends the session |
 | GET 🛡 | `/admin/auth/me` | the signed-in admin |
 | GET 🛡 | `/admin/stats?days=` | dashboard numbers for the last 1–90 days (default 7, India time): totals, by service, by day, queues (pending licences, pending deletions, returned cars to settle), latest bookings `[dashboard.view]` |
+| GET 🛡 | `/admin/alerts` | `{ items, unread, push }`: the newest 50 **staff alerts** this role can act on (`sos.raised`, `support.ticket`, `support.reply`, `support.callback`, `vendor.applied`, `vendor.fleet`, `vendor.payout`, `licence.submitted`, `parcel.unclaimed`; each addressed to a permission, `STAFF_ALERT_PERMISSION`; read marks are per admin; never a customer's name, number, a receiver or a code), and `push` = `{ vapidPublicKey }` for browser push or null `[alerts.view]` |
+| POST 🛡 | `/admin/alerts/read` | `{ ids? }` (up to 100; none = everything this admin can see) → `{ unread }`. Not audited: it changes only this admin's own read marks `[alerts.view]` |
+| POST 🛡 | `/admin/push-devices` | `{ token, platform: web\|android\|ios }`: this staff browser's `PushSubscription` JSON (or a phone's Firebase token) so alerts reach it when the panel is closed (201); not audited `[alerts.view]` |
+| DELETE 🛡 | `/admin/push-devices/:token` | forget it (sign-out, or push turned off) `[alerts.view]` |
 | GET 🛡 | `/admin/settings` | current business settings (defaults in `@quikfly/shared` `settings.ts`) `[dashboard.view]` |
 | PATCH 🛡 | `/admin/settings` | change settings; only known keys with the right type `[settings.edit]` |
 | GET 🛡 | `/admin/audit?page=&entity=&entityId=&key=` | audit log, newest first, 25 per page `[audit.view]`. `key` (a setting key; anything else is 400) keeps only settings changes that set it: the admin Settings page's per-setting History |
@@ -241,9 +245,12 @@ A client says which newer services it can show in `Accept: application/json; ser
 | `DEMO_OTP` | Fixed login code while there is no SMS provider. Every number signs in with it. |
 | `ALLOWED_ORIGINS` | Comma-separated website origins allowed by CORS, or `*`. |
 | `DOCS` (R2 binding) | Bucket `quikfly-docs` for partner document photos (private; only the partner and `vendors.review` staff can open them). Create it once with `npx wrangler r2 bucket create quikfly-docs` before deploying. Missing binding = uploads answer 409. |
-| `FCM_SERVICE_ACCOUNT` | **Secret**, optional: the Firebase service-account JSON. Unset = no push (the inbox still works). Set it with `npx wrangler secret put FCM_SERVICE_ACCOUNT`, never in `vars`. |
+| `FCM_SERVICE_ACCOUNT` | **Secret**, optional: the Firebase service-account JSON. Unset = no phone push (the inbox still works). Set it with `npx wrangler secret put FCM_SERVICE_ACCOUNT`, never in `vars`. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | **Secrets**, optional, all three together: the Web Push keys for browser notifications (website and admin). `node scripts/vapid-keys.mjs [mailto:…]` makes a pair and prints the three `secret put` commands. Unset = browser push off (`/config` and `/admin/alerts` return `push: null`). Rotating them ends every browser subscription. |
 
-**Notifications.** Events write rows to `notifications` (`services/notifications.ts`, one per user/kind/ref, so retries don't duplicate). A cron trigger (`triggers.crons`, every minute, `src/scheduled.ts`) adds `ride.reminder` rows when a scheduled ride's start window opens and, when `FCM_SERVICE_ACCOUNT` is set, sends rows not yet pushed (newer than `PUSH_MAX_AGE_MINUTES`, `PUSH_BATCH` per run) to each of the user's devices through FCM HTTP v1 (`services/push.ts`); dead tokens are removed.
+**Notifications.** Events write rows to `notifications` (`services/notifications.ts`, one per user/kind/ref, so retries don't duplicate). A cron trigger (`triggers.crons`, every minute, `src/scheduled.ts`) adds `ride.reminder` rows when a scheduled ride's start window opens and sends rows not yet pushed (newer than `PUSH_MAX_AGE_MINUTES`, `PUSH_BATCH` per run) to each of the user's devices: a token starting with `{` is a browser's `PushSubscription` and goes out as a Web Push message encrypted and VAPID-signed in the Worker (`services/webpush.ts`, `@block65/webcrypto-web-push`, when the `VAPID_*` secrets are set); any other token is a phone's and goes through FCM HTTP v1 (`services/push.ts`, when `FCM_SERVICE_ACCOUNT` is set, on the apps' `quikfly_updates` channel with `data: { id, kind, bookingId }`). Dead tokens (404/410 from a push service, 404/400 from FCM) are removed. A row counts as pushed once any device took it; failures retry each minute until the row is older than an hour.
+
+**Staff alerts** (`services/admin/alerts.ts`, table `staff_alerts`): an SOS press, a new ticket, a customer's reply or a callback request, a partner application, a vehicle or driver sent for review, a payout request, a licence to review and an unclaimed parcel each write one alert in the event's own `db.batch()`, addressed to the permission that acts on it (`STAFF_ALERT_PERMISSION` in `packages/shared/src/admin.ts`; `UNIQUE (kind, ref)` stops repeats). `GET /admin/alerts` shows an admin the kinds its role covers with its own read marks (`staff_alert_reads`); content and counter roles have none (`alerts.view` is owner and operations). Alert text never carries a customer's name or number, a receiver or a collection code: the linked page has the details. The cron's `pushStaff` sends new alerts to the staff devices in `admin_push_devices` whose admin's role covers them, over the same two channels.
 
 **Service and feature switches** (`packages/shared/src/switches.ts`, owner-only settings `service*`, `servicePausedMessage`, `feature*`). `switchError()` is checked by `POST /quotes`, ride quotes and `POST /rides`, `POST /bookings` and `POST /me/referral`; a refusal is **409 with the customer-facing message** (the owner's paused message for a paused service). Bookings made before a switch went off carry on; scheduled rides still start. SOS and trip sharing have no switch.
 
@@ -287,4 +294,4 @@ Locally, `node scripts/smoke-admin.mjs http://localhost:8787/v1` creates its own
 
 ## Not yet built
 
-Real SMS OTP, payments, live driver tracking, real bus inventory (the timetable is generated). Push needs a Firebase project and the app's `firebase_messaging` registration (the server side is ready).
+Real SMS OTP, payments, live driver tracking, real bus inventory (the timetable is generated). Phone push needs the owner's Firebase project (`FCM_SERVICE_ACCOUNT`) and browser push the VAPID secrets; both server sides are ready and stay silent until then (docs/operations.md → Push notifications).

@@ -5,6 +5,7 @@ import { PATTERNS, VEHICLE_DOCUMENTS, compactCode, type VehicleDocument, type Ve
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { text } from "../lib/validate";
+import { staffAlertStatement } from "./admin/alerts";
 import {
   futureDate, imageResponse, loadVendor, needBucket, parseAudit, parseInsurance, parseRc, parseVehicleDetails, storeImage, toVehicle,
   type VehicleRow,
@@ -143,7 +144,11 @@ export async function submitVehicle(db: D1Database, userId: string, id: string) 
     !(ve.audit_date && ve.audit_slot) && "audit day",
   ].filter(Boolean);
   if (missing.length) throw badRequest(`Add the ${missing.join(", ")} first.`);
-  await db.prepare("UPDATE vendor_vehicles SET status = 'submitted', submitted_at = ?, review_note = NULL WHERE id = ? AND status = 'draft'").bind(new Date().toISOString(), ve.id).run();
+  const now = new Date().toISOString();
+  await db.batch([
+    db.prepare("UPDATE vendor_vehicles SET status = 'submitted', submitted_at = ?, review_note = NULL WHERE id = ? AND status = 'draft'").bind(now, ve.id),
+    staffAlertStatement(db, { kind: "vendor.fleet", ref: `${ve.id}:${now}`, title: "Vehicle to review", body: `A live partner sent a ${ve.type} (${ve.reg_number}) for review.`, link: `/vendors/view?id=${v.id}` }),
+  ]);
   return fleetOf(db, v.id);
 }
 
@@ -189,8 +194,12 @@ export async function addDriver(db: D1Database, userId: string, body: Json) {
   const { dl, validTill } = parseLicence(body);
   if (await db.prepare("SELECT 1 FROM vendor_drivers WHERE dl_number = ?").bind(dl).first()) throw conflict("A driver with this licence is already registered with QuikFly.");
   const now = new Date().toISOString();
-  await db.prepare("INSERT INTO vendor_drivers (id, vendor_id, name, phone, dl_number, dl_valid_till, self, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(uid("VD"), v.id, name, phone, dl, validTill, self ? 1 : 0, now, now).run();
+  const driverId = uid("VD");
+  await db.batch([
+    db.prepare("INSERT INTO vendor_drivers (id, vendor_id, name, phone, dl_number, dl_valid_till, self, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(driverId, v.id, name, phone, dl, validTill, self ? 1 : 0, now, now),
+    staffAlertStatement(db, { kind: "vendor.fleet", ref: `${driverId}:${now}`, title: "Driver to review", body: self ? "A live partner registered themselves as a driver." : "A live partner added a driver.", link: `/vendors/view?id=${v.id}` }),
+  ]);
   return fleetOf(db, v.id);
 }
 
@@ -201,11 +210,19 @@ export async function saveDriverLicence(db: D1Database, userId: string, id: stri
   const { dl, validTill } = parseLicence(body);
   if (dl !== d.dl_number && await db.prepare("SELECT 1 FROM vendor_drivers WHERE dl_number = ? AND id <> ?").bind(dl, d.id).first()) throw conflict("A driver with this licence is already registered with QuikFly.");
   const live = d.status === "active" || d.status === "blocked";
-  await db.prepare(
-    `UPDATE vendor_drivers SET dl_number = ?, dl_valid_till = ?, updated_at = ?,
-       status = CASE WHEN ? THEN status ELSE 'submitted' END, review_note = CASE WHEN ? THEN review_note ELSE NULL END,
-       docs_pending = CASE WHEN ? THEN 1 ELSE 0 END WHERE id = ?`,
-  ).bind(dl, validTill, new Date().toISOString(), live ? 1 : 0, live ? 1 : 0, live ? 1 : 0, d.id).run();
+  const now = new Date().toISOString();
+  await db.batch([
+    db.prepare(
+      `UPDATE vendor_drivers SET dl_number = ?, dl_valid_till = ?, updated_at = ?,
+         status = CASE WHEN ? THEN status ELSE 'submitted' END, review_note = CASE WHEN ? THEN review_note ELSE NULL END,
+         docs_pending = CASE WHEN ? THEN 1 ELSE 0 END WHERE id = ?`,
+    ).bind(dl, validTill, now, live ? 1 : 0, live ? 1 : 0, live ? 1 : 0, d.id),
+    staffAlertStatement(db, {
+      kind: "vendor.fleet", ref: `${d.id}:${now}`, link: `/vendors/view?id=${v.id}`,
+      title: live ? "Driver licence renewal to check" : "Driver to review",
+      body: live ? "A live partner renewed a driver's licence." : "A live partner sent a driver for review.",
+    }),
+  ]);
   return fleetOf(db, v.id);
 }
 
@@ -215,8 +232,12 @@ export async function uploadDriverLicence(db: D1Database, bucket: R2Bucket | und
   const d = await myDriver(db, v.id, id);
   const key = await storeImage(docs, v.id, `${d.id}-dl`, body);
   const live = d.status === "active" || d.status === "blocked";
-  await db.prepare(`UPDATE vendor_drivers SET dl_key = ?, updated_at = ?, docs_pending = CASE WHEN ? THEN 1 ELSE docs_pending END,
-      status = CASE WHEN status = 'rejected' THEN 'submitted' ELSE status END WHERE id = ?`).bind(key, new Date().toISOString(), live ? 1 : 0, d.id).run();
+  const now = new Date().toISOString();
+  const statements = [db.prepare(`UPDATE vendor_drivers SET dl_key = ?, updated_at = ?, docs_pending = CASE WHEN ? THEN 1 ELSE docs_pending END,
+      status = CASE WHEN status = 'rejected' THEN 'submitted' ELSE status END WHERE id = ?`).bind(key, now, live ? 1 : 0, d.id)];
+  // A sent-back driver comes back for review with the new photo (a new driver was alerted when the licence was saved).
+  if (d.status === "rejected") statements.push(staffAlertStatement(db, { kind: "vendor.fleet", ref: `${d.id}:${now}`, title: "Driver to review again", body: "A live partner sent a new licence photo for a driver that was sent back.", link: `/vendors/view?id=${v.id}` }));
+  await db.batch(statements);
   if (d.dl_key) await docs.delete(d.dl_key).catch(() => undefined);
   return fleetOf(db, v.id);
 }
