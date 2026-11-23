@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../core/notifications.dart';
 import '../../state/catalog.dart';
 import '../../state/providers.dart';
+import '../../state/push.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/push_prompt.dart';
 import '../../widgets/ui.dart';
 
 IconData _icon(String kind) => switch (kind) {
@@ -28,6 +31,8 @@ IconData _icon(String kind) => switch (kind) {
       'vendor.fleet' => Icons.local_taxi_outlined,
       'vendor.trip' => Icons.route_outlined,
       'vendor.payout' => Icons.payments_outlined,
+      'vendor.document' => Icons.event_busy_outlined,
+      'privacy.inactive' => Icons.shield_outlined,
       _ => Icons.notifications_none,
     };
 
@@ -74,6 +79,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         data: (d) => ScreenList(
           onRefresh: () async => ref.invalidate(notificationsProvider),
           children: [
+            // Phone notifications: offered here first; afterwards the switch.
+            PushPrompt(
+              title: 'Get these on your phone',
+              message: partner
+                  ? 'Reviews, vehicle and driver updates, trips and payouts, even when QuikFly Partner is closed.'
+                  : 'Booking changes, refunds, ride reminders and parcel updates, even when QuikFly is closed.',
+            ),
+            if (!ref.watch(pushProvider).canAsk) const PushSwitch(),
             if (d.items.isEmpty)
               EmptyState(
                   icon: Icons.notifications_none,
@@ -87,19 +100,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     highlighted: n.readAt == null,
                     // Partner updates have no page of their own (the home screen shows them), and
                     // the customer pages below don't exist in QuikFly Partner.
-                    onTap: partner
-                        ? null
-                        : n.kind == 'credits.earned'
-                        ? () => context.push('/account/wallet')
-                        : n.kind == 'support.reply'
-                        ? () => context.push('/support')
-                        : n.bookingId != null && n.kind.startsWith('parcel.')
-                        ? () => context.push('/parcel/${n.bookingId}')
-                        : n.bookingId != null
-                        ? () => context.go('/trips')
-                        : n.kind.startsWith('licence')
-                            ? () => context.push('/account/licence')
-                            : null,
+                    onTap: switch (notificationTarget(n.kind, n.bookingId, ref.watch(notificationScopeProvider))) {
+                      null => null,
+                      final path => () => notificationSwitchesTab(path) ? context.go(path) : context.push(path),
+                    },
                     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Icon(_icon(n.kind), color: c.accent),
                       const SizedBox(width: 12),

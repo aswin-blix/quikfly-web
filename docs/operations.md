@@ -56,7 +56,7 @@ The in-app inboxes (customers' bell, staff alerts in admin) work without any set
 **Phones (both apps): Firebase Cloud Messaging.** The owner creates the project:
 
 1. [console.firebase.google.com](https://console.firebase.google.com) → new project (Analytics off is fine) → add **two** Android apps: package `com.quikfly.app` (QuikFly) and `com.quikfly.partner` (QuikFly Partner).
-2. For each app, Project settings → Your apps shows the client values (`apiKey`, `appId`, `messagingSenderId`, `projectId`). They go into `apps/mobile/lib/core/push_options.dart` (customer and partner options; they are client configuration, not secrets, and the apps stay silent while the placeholders are empty). The app side ships with app 0.1.18.
+2. For each app, Project settings → Your apps → **google-services.json**: save them as `apps/mobile/android/app/src/customer/google-services.json` and `apps/mobile/android/app/src/partner/google-services.json`. They are git-ignored (public repo): keep copies with the upload key. Builds without them still work, with push off. The app side ships in the first app release after the notifications PRs (see apps/mobile/README.md → Phone notifications).
 3. Project settings → Service accounts → **Generate new private key** (a JSON file). Keep it out of the repo.
 4. From `apps/api`: `npx wrangler secret put FCM_SERVICE_ACCOUNT` and paste the whole JSON. No redeploy needed; the next cron run starts sending.
 5. To turn phone push off again: `npx wrangler secret delete FCM_SERVICE_ACCOUNT`.

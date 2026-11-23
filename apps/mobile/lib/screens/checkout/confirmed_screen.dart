@@ -9,6 +9,7 @@ import '../../core/services.dart';
 import '../../core/trips.dart';
 import '../../state/providers.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/push_prompt.dart';
 import '../../widgets/ui.dart';
 
 final bookingProvider = FutureProvider.family<Booking, String>((ref, id) => ref.watch(apiProvider).booking(id));
@@ -56,6 +57,7 @@ class ConfirmedScreen extends ConsumerWidget {
                 style: TextStyle(color: c.fgMuted),
               ),
               const SizedBox(height: 20),
+              const PushPrompt(title: 'Want updates on this trip?', message: "Get a notification when it's about to start, if anything changes, and when a refund lands."),
               Panel(
                 highlighted: true,
                 padding: EdgeInsets.zero,

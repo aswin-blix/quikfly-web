@@ -8,7 +8,9 @@ import '../screens/account/notifications_screen.dart';
 import '../screens/account/privacy_screens.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/not_found.dart';
+import '../state/catalog.dart';
 import '../state/providers.dart';
+import '../state/push.dart';
 import '../theme/theme.dart';
 import 'fleet_screens.dart';
 import 'home_screen.dart';
@@ -75,6 +77,7 @@ class _PartnerAppState extends ConsumerState<PartnerApp> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(pushProvider.notifier).start(partnerRouter));
   }
 
   @override
@@ -90,6 +93,7 @@ class _PartnerAppState extends ConsumerState<PartnerApp> with WidgetsBindingObse
       ref.invalidate(configProvider);
       ref.invalidate(vendorProvider);
       ref.invalidate(fleetProvider);
+      ref.invalidate(notificationsProvider);
     }
   }
 
@@ -107,6 +111,7 @@ class _PartnerAppState extends ConsumerState<PartnerApp> with WidgetsBindingObse
       localizationsDelegates: localizationsDelegates,
       supportedLocales: supportedLocales,
       routerConfig: partnerRouter,
+      scaffoldMessengerKey: pushMessengerKey,
       builder: (_, child) => PrivacyGate(child: child!),
     );
   }
