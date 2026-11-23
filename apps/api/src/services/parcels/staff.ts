@@ -2,13 +2,13 @@
 // them at the counter); the collection code never is. Moving a parcel is carriers.ts.
 import {
   ADMIN_RULES, PARCEL_CANCELLABLE, PARCEL_FINISHED,
-  type AdminParcel, type AdminParcelRow, type BookingStatus, type Page, type ParcelEvent, type ParcelFilters, type ParcelState,
+  type AdminParcel, type AdminParcelRow, type AdminUser, type BookingStatus, type CounterScope, type Page, type ParcelEvent, type ParcelFilters, type ParcelState,
   type ParcelWeightBand, type PaymentMethod,
 } from "@quikfly/shared";
-import { notFound } from "../../lib/errors";
+import { forbidden, notFound } from "../../lib/errors";
 import { LOCAL_DATE } from "../admin/stats";
 import { refundFor } from "../bookings";
-import { LEGS_JSON, isReturn, loadParcels, parseLegs } from "./legs";
+import { LEGS_JSON, isReturn, loadParcels, parseLegs, type LoadedParcel } from "./legs";
 import { toParcel } from "./parcels";
 
 /** A search that is only a number looks at phones; an LR number has digits in it too. */
@@ -22,9 +22,38 @@ const FINISHED = `(${PARCEL_FINISHED.map((s) => `'${s}'`).join(", ")})`;
 /** A bus parcel's day is its bus's; a Quick parcel's is the day it was booked. */
 const PARCEL_WHEN = "COALESCE(p.depart_at, p.created_at)";
 
-function queueFilter(f: ParcelFilters): { filter: string; params: unknown[] } {
+/** Where this staff member may act: null is everywhere. A counter account without a counter is refused. */
+export function staffScope(admin: AdminUser): CounterScope | null {
+  if (admin.role !== "counter") return null;
+  if (!admin.counter) throw forbidden();
+  return admin.counter;
+}
+
+/** SQL over `p`: that operator's bus parcels to or from that city. */
+function inScope({ operatorId, city }: CounterScope): { sql: string; params: string[] } {
+  return {
+    sql: `(p.mode = 'intercity' AND (p.from_city = ? COLLATE NOCASE OR p.to_city = ? COLLATE NOCASE)
+      AND EXISTS (SELECT 1 FROM parcel_legs sl WHERE sl.booking_id = p.booking_id AND sl.kind = 'bus' AND sl.operator_id = ?))`,
+    params: [city, city, operatorId],
+  };
+}
+
+/** One parcel, or 404 when it isn't there or is outside the scope: which of the two isn't said. */
+export async function scopedParcel(db: D1Database, id: string, scope: CounterScope | null): Promise<LoadedParcel> {
+  const only = scope && inScope(scope);
+  const found = (await loadParcels(db, `p.booking_id = ?${only ? ` AND ${only.sql}` : ""}`, id, ...(only ? only.params : [])))[0];
+  if (!found) throw notFound("Parcel not found.");
+  return found;
+}
+
+function queueFilter(f: ParcelFilters, scope: CounterScope | null): { filter: string; params: unknown[] } {
   const where: string[] = [];
   const params: unknown[] = [];
+  if (scope) {
+    const only = inScope(scope);
+    where.push(only.sql);
+    params.push(...only.params);
+  }
   // A search looks everywhere; otherwise the queue is what's still open.
   const state = f.state ?? (f.q ? "all" : "open");
   if (state === "open") where.push(`p.state NOT IN ${FINISHED}`);
@@ -58,8 +87,8 @@ interface QueueRow {
 }
 
 /** Open parcels first, by their bus (the most urgent on top); finished ones after, newest first. */
-export async function parcelQueue(db: D1Database, f: ParcelFilters): Promise<Page<AdminParcelRow>> {
-  const { filter, params } = queueFilter(f);
+export async function parcelQueue(db: D1Database, f: ParcelFilters, scope: CounterScope | null): Promise<Page<AdminParcelRow>> {
+  const { filter, params } = queueFilter(f, scope);
   const page = Math.max(1, f.page ?? 1);
   const pageSize = ADMIN_RULES.pageSize;
   const from = "FROM parcels p JOIN bookings b ON b.id = p.booking_id JOIN users u ON u.id = p.user_id";
@@ -90,9 +119,8 @@ export async function parcelQueue(db: D1Database, f: ParcelFilters): Promise<Pag
 }
 
 /** One parcel for staff: everything but the collection code, with who made each move. */
-export async function staffParcel(db: D1Database, id: string): Promise<AdminParcel> {
-  const found = (await loadParcels(db, "p.booking_id = ?", id))[0];
-  if (!found) throw notFound("Parcel not found.");
+export async function staffParcel(db: D1Database, id: string, scope: CounterScope | null = null): Promise<AdminParcel> {
+  const found = await scopedParcel(db, id, scope);
   const [parcel, booking, { results: events }] = await Promise.all([
     toParcel(db, found, false),
     db.prepare("SELECT b.starts_at, b.created_at, b.payment, u.name, u.phone FROM bookings b JOIN users u ON u.id = b.user_id WHERE b.id = ?").bind(id)
@@ -104,7 +132,8 @@ export async function staffParcel(db: D1Database, id: string): Promise<AdminParc
   ]);
   if (!booking) throw notFound("Parcel not found.");
   const { row } = found;
-  const cancellable = (row.booking_status === "confirmed" || row.booking_status === "ongoing") && PARCEL_CANCELLABLE.includes(row.state) && !(await isReturn(db, id));
+  // A counter can't cancel, so it isn't shown what cancelling would refund.
+  const cancellable = !scope && (row.booking_status === "confirmed" || row.booking_status === "ongoing") && PARCEL_CANCELLABLE.includes(row.state) && !(await isReturn(db, id));
   const refund = cancellable
     ? await refundFor(db, { service: "parcel", payment: booking.payment, starts_at: booking.starts_at, created_at: booking.created_at, amount: row.amount, deposit: row.deposit, terms: row.terms })
     : null;

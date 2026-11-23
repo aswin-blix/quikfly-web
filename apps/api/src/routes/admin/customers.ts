@@ -1,6 +1,6 @@
 // Phase 6 staff endpoints: /v1/admin/customers, /v1/admin/sos and /v1/admin/team.
 import { Hono } from "hono";
-import { ADMIN_ROLES, ADMIN_RULES, CUSTOMER_STATUSES, LIMITS, SOS_STATUSES, type AdminRole } from "@quikfly/shared";
+import { ADMIN_ROLES, ADMIN_RULES, CUSTOMER_STATUSES, LIMITS, SOS_STATUSES, type AdminRole, type CounterScope } from "@quikfly/shared";
 import type { AppEnv } from "../../env";
 import { badRequest } from "../../lib/errors";
 import { bool, has, jsonBody, oneOf, optStr, str, text } from "../../lib/validate";
@@ -58,6 +58,15 @@ export const adminSos = new Hono<AppEnv>()
   .post("/:id/close", requireAdmin("sos.manage"), async (c) =>
     c.json(await handleSos(c.env.DB, c.var.admin.id, c.req.param("id"), "close", reason(await jsonBody(c)).replace(/^/, ""))));
 
+/** `counter`: { operatorId, city } for role "counter". */
+function counterField(body: Record<string, unknown>): CounterScope | null {
+  const v = body.counter;
+  if (v === null || v === undefined) return null;
+  if (typeof v !== "object" || Array.isArray(v)) throw badRequest('"counter" must be { operatorId, city }.');
+  const o = v as Record<string, unknown>;
+  return { operatorId: str(o, "operatorId", 30), city: str(o, "city", 60) };
+}
+
 // Staff accounts (owners only).
 export const adminTeam = new Hono<AppEnv>()
   .get("/", requireAdmin("team.manage"), async (c) => c.json(await listTeam(c.env.DB)))
@@ -65,7 +74,7 @@ export const adminTeam = new Hono<AppEnv>()
   .post("/", requireAdmin("team.manage"), async (c) => {
     const body = await jsonBody(c);
     const role = oneOf(body, "role", ADMIN_ROLES) as AdminRole;
-    return c.json(await createMember(c.env.DB, c.var.admin.id, { email: str(body, "email", 200), name: str(body, "name", LIMITS.nameMax), role }), 201);
+    return c.json(await createMember(c.env.DB, c.var.admin.id, { email: str(body, "email", 200), name: str(body, "name", LIMITS.nameMax), role, counter: counterField(body) }), 201);
   })
   // { role? , name?, disabled? }
   .patch("/:id", requireAdmin("team.manage"), async (c) => {
@@ -74,6 +83,7 @@ export const adminTeam = new Hono<AppEnv>()
       role: has(body, "role") ? (oneOf(body, "role", ADMIN_ROLES) as AdminRole) : undefined,
       name: has(body, "name") ? str(body, "name", LIMITS.nameMax) : undefined,
       disabled: has(body, "disabled") ? bool(body, "disabled") : undefined,
+      counter: has(body, "counter") ? counterField(body) : undefined,
     }));
   })
   // → { member, password }: a new one-time password; the person's sessions end.

@@ -7,7 +7,7 @@ import { int, jsonBody, matches, oneOf, optStr, query, str, text } from "../../l
 import { requireAdmin } from "../../middleware/admin";
 import { staffMove, staffReturn } from "../../services/parcels/carriers";
 import { busChoices, changeBus, changeWeight, weightChange } from "../../services/parcels/changes";
-import { parcelQueue, staffParcel } from "../../services/parcels/staff";
+import { parcelQueue, staffParcel, staffScope } from "../../services/parcels/staff";
 
 const MOVES_TO: readonly ParcelLegState[] = ["active", "done", "failed"];
 const OTP = new RegExp(`^\\d{${PARCEL_RULES.collectOtpDigits}}$`);
@@ -32,32 +32,32 @@ export const adminParcels = new Hono<AppEnv>()
   // Reading needs the permission too: these answers carry both people's numbers.
   .get("/", requireAdmin("parcels.manage"), async (c) => {
     c.header("Cache-Control", "no-store");
-    return c.json(await parcelQueue(c.env.DB, queueFilters(c.req.query())));
+    return c.json(await parcelQueue(c.env.DB, queueFilters(c.req.query()), staffScope(c.var.admin)));
   })
   .get("/:id", requireAdmin("parcels.manage"), async (c) => {
     c.header("Cache-Control", "no-store");
-    return c.json(await staffParcel(c.env.DB, c.req.param("id")));
+    return c.json(await staffParcel(c.env.DB, c.req.param("id"), staffScope(c.var.admin)));
   })
   // The buses it can still move to (same operator, same counters).
-  .get("/:id/buses", requireAdmin("parcels.manage"), async (c) => {
+  .get("/:id/buses", requireAdmin("parcels.change"), async (c) => {
     c.header("Cache-Control", "no-store");
     return c.json(await busChoices(c.env.DB, c.req.param("id")));
   })
   // { busId, departAt, note }: the same LR and price on another bus. Audited by the service.
-  .post("/:id/bus", requireAdmin("parcels.manage"), async (c) => {
+  .post("/:id/bus", requireAdmin("parcels.change"), async (c) => {
     const body = await jsonBody(c);
     return c.json(await changeBus(c.env.DB, c.var.admin.id, c.req.param("id"), {
       busId: str(body, "busId", 120), departAt: str(body, "departAt", 30), note: note(body),
     }));
   })
   // ?band=: what that weight would charge or give back.
-  .get("/:id/weight", requireAdmin("parcels.manage"), async (c) => {
+  .get("/:id/weight", requireAdmin("parcels.change"), async (c) => {
     c.header("Cache-Control", "no-store");
     const band = oneOf({ band: query(c, "band") }, "band", PARCEL_WEIGHT_BANDS);
     return c.json(await weightChange(c.env.DB, c.req.param("id"), band));
   })
   // { weightBand, charge, refund (as previewed), senderAgreed }: audited by the service.
-  .post("/:id/weight", requireAdmin("parcels.manage"), async (c) => {
+  .post("/:id/weight", requireAdmin("parcels.change"), async (c) => {
     const body = await jsonBody(c);
     return c.json(await changeWeight(c.env.DB, c.var.admin.id, c.req.param("id"), {
       weightBand: oneOf(body, "weightBand", PARCEL_WEIGHT_BANDS),
@@ -66,7 +66,7 @@ export const adminParcels = new Hono<AppEnv>()
     }));
   })
   // { lr }: an unclaimed parcel goes back as the return parcel the sender booked.
-  .post("/:id/return", requireAdmin("parcels.manage"), async (c) => {
+  .post("/:id/return", requireAdmin("parcels.change"), async (c) => {
     const lr = str(await jsonBody(c), "lr", 30).toUpperCase();
     return c.json(await staffReturn(c.env.DB, c.var.admin.id, c.req.param("id"), matches(lr, PARCEL_LR.pattern, "That doesn't look like an LR number.")));
   })
@@ -75,9 +75,10 @@ export const adminParcels = new Hono<AppEnv>()
     const seq = c.req.param("seq");
     if (!/^\d{1,2}$/.test(seq)) throw badRequest('"seq" must be a leg number.');
     const body = await jsonBody(c);
+    const scope = staffScope(c.var.admin);
     return c.json(await staffMove(c.env.DB, c.var.admin.id, c.req.param("id"), Number(seq), {
       to: oneOf(body, "to", MOVES_TO),
       note: optStr(body, "note", PARCEL_RULES.noteMax) === undefined ? undefined : text(body, "note", PARCEL_RULES.noteMin, PARCEL_RULES.noteMax),
       otp: body.otp === undefined ? undefined : matches(str(body, "otp", 10), OTP, `The collection code is ${PARCEL_RULES.collectOtpDigits} digits.`),
-    }));
+    }, scope));
   });

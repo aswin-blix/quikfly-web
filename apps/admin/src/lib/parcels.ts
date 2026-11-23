@@ -1,6 +1,6 @@
 // How the admin panel names parcel moves and states (no React). Which moves exist comes from
 // staffMoves() in @quikfly/shared, the same rules the API applies.
-import { staffMoves, type BookingStatus, type ParcelLeg, type ParcelQueueState, type ParcelState } from "@quikfly/shared";
+import { counterMakesMove, staffMoves, type BookingStatus, type CounterScope, type ParcelLeg, type ParcelQueueState, type ParcelState } from "@quikfly/shared";
 
 /** A button, by the state it moves the parcel to. */
 export const MOVE_LABEL: Record<ParcelState, string> = {
@@ -48,15 +48,19 @@ export const PARCEL_STATE_STYLE: Record<ParcelState, string> = {
 
 export const QUEUE_STATE_LABEL: Partial<Record<ParcelQueueState, string>> = { open: "Open parcels", all: "All parcels" };
 
-/** The moves open to staff; none once the booking is finished. */
-export const movesFor = (p: { bookingStatus: BookingStatus; legs: ParcelLeg[]; holdUntil: string | null }) =>
-  p.bookingStatus === "confirmed" || p.bookingStatus === "ongoing" ? staffMoves(p.legs, p.holdUntil) : [];
+/** The moves open to this staff member (a counter login: only its own end's); none once the booking is finished. */
+export function movesFor(p: { bookingStatus: BookingStatus; from: string; to: string; legs: ParcelLeg[]; holdUntil: string | null }, scope?: CounterScope | null) {
+  if (p.bookingStatus !== "confirmed" && p.bookingStatus !== "ongoing") return [];
+  const moves = staffMoves(p.legs, p.holdUntil);
+  return scope ? moves.filter((m) => counterMakesMove(scope, p, m.seq, m.to)) : moves;
+}
 
 /** The queue's "Next" column. */
-export function nextAction(p: { bookingStatus: BookingStatus; state: ParcelState; legs: ParcelLeg[]; holdUntil: string | null }) {
-  if (p.state === "unclaimed") return "Arrange the return with the sender";
+export function nextAction(p: { bookingStatus: BookingStatus; state: ParcelState; from: string; to: string; legs: ParcelLeg[]; holdUntil: string | null }, scope?: CounterScope | null) {
+  if (p.state === "unclaimed") return scope ? "Keep it: operations arrange the return" : "Arrange the return with the sender";
   // Once the hold is over a ready parcel can be handed over or marked unclaimed: handing over comes first.
-  const moves = movesFor(p).filter((m) => !m.refuses);
+  const moves = movesFor(p, scope).filter((m) => !m.refuses);
   const move = moves.find((m) => m.needsOtp) ?? moves[0];
-  return move ? MOVE_LABEL[move.state] : "None";
+  if (move) return MOVE_LABEL[move.state];
+  return scope && movesFor(p).length ? "The other counter's move" : "None";
 }

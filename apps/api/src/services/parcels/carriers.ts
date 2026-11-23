@@ -2,11 +2,11 @@
 // hand-offs, the sender playing the captain (demo: there is no driver app). An operator's API
 // would be one more carrier in this file; all of them end in advanceLegs().
 import {
-  PARCEL_EARNS, PARCEL_RETURN_LOCKED, PARCEL_RULES, PARCEL_WEIGHT_BANDS, parseTerms, planLegMove, planReturn, simulatedMove, withTerms,
-  type AdminParcel, type LegMove, type Parcel, type ParcelLegState, type Settings,
+  PARCEL_EARNS, PARCEL_RETURN_LOCKED, PARCEL_RULES, PARCEL_WEIGHT_BANDS, counterMakesMove, parseTerms, planLegMove, planReturn, simulatedMove, withTerms,
+  type AdminParcel, type CounterScope, type LegMove, type Parcel, type ParcelLegState, type Settings,
 } from "@quikfly/shared";
 import { PARCEL_SIM_BATCH } from "../../config";
-import { badRequest, conflict, notFound, tooMany } from "../../lib/errors";
+import { badRequest, conflict, forbidden, notFound, tooMany } from "../../lib/errors";
 import { audit } from "../admin/audit";
 import { cancelBookingRow, refundText } from "../bookings";
 import { earnStatement, earnedNotice } from "../credits";
@@ -15,7 +15,7 @@ import { getSettings } from "../settings";
 import { parcelRide } from "./courier";
 import { advanceLegs, isReturn, loadParcels, type LoadedParcel } from "./legs";
 import { toParcel } from "./parcels";
-import { staffParcel } from "./staff";
+import { scopedParcel, staffParcel } from "./staff";
 
 /** A parcel as planLegMove reads it, with the hold period it was sold under. */
 const journey = (settings: Settings, { row, legs }: LoadedParcel) => ({
@@ -67,10 +67,12 @@ async function checkCollectOtp(db: D1Database, adminId: string | null, id: strin
 export async function staffMove(
   db: D1Database, adminId: string, id: string, seq: number,
   input: { to: ParcelLegState; note?: string; otp?: string },
+  scope: CounterScope | null,
 ): Promise<AdminParcel> {
-  const parcel = (await loadParcels(db, "p.booking_id = ?", id))[0];
-  if (!parcel) throw notFound("Parcel not found.");
+  const parcel = await scopedParcel(db, id, scope);
   const { row } = parcel;
+  // Before anything else: the other end's clerk mustn't even get to try the code.
+  if (scope && !counterMakesMove(scope, { from: row.from_city, to: row.to_city, legs: parcel.legs }, seq, input.to)) throw forbidden();
   if (row.booking_status !== "confirmed" && row.booking_status !== "ongoing") throw conflict(`This booking is already ${row.booking_status}.`);
   const settings = await getSettings(db);
   const move = planLegMove(journey(settings, parcel), seq, input.to, "staff");
@@ -85,13 +87,13 @@ export async function staffMove(
     await notify(db, cancelled.user_id, {
       kind: "booking.cancelled_by_staff", ref: id, bookingId: id, title: `Parcel refused · ${row.lr}`, body: `${reason} ${refundText(cancelled)}`,
     });
-    return staffParcel(db, id);
+    return staffParcel(db, id, scope);
   }
 
   if (move.needsReason && !input.note) throw badRequest("Say why: the sender sees it.");
   if (move.needsOtp) await checkCollectOtp(db, adminId, id, input.otp);
   await commitMove(db, settings, parcel, move, { actor: "staff", adminId, note: input.note });
-  return staffParcel(db, id);
+  return staffParcel(db, id, scope);
 }
 
 /**

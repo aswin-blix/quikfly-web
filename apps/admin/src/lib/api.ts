@@ -1,7 +1,7 @@
 // The admin panel's only door to the backend. Screens call `adminApi`, never fetch().
 // Endpoints are listed in apps/api/README.md (Admin section).
 import type {
-  AdminCustomer, AdminCustomerDetail, AdminParcel, AdminParcelRow, AdminRental, ParcelDeparture, ParcelFilters, ParcelWeightBand, WeightChange, ParcelLegState, AdminRole, AdminSupportTicket, BookingNote, CustomerFilters, RentalPhotoSide, RentalSettlement, RentalStage,
+  AdminCustomer, AdminCustomerDetail, AdminParcel, AdminParcelRow, AdminRental, ParcelDeparture, ParcelFilters, ParcelWeightBand, WeightChange, ParcelLegState, AdminRole, CounterScope, AdminSupportTicket, BookingNote, CustomerFilters, RentalPhotoSide, RentalSettlement, RentalStage,
   SosAlert, SosStatus, SupportStatus, TeamMember,
 } from "@quikfly/shared";
 import type {
@@ -101,8 +101,8 @@ export const adminApi = {
   },
   team: {
     list: () => req<TeamMember[]>("GET", "/admin/team"),
-    create: (body: { email: string; name: string; role: AdminRole }) => req<{ member: TeamMember; password: string }>("POST", "/admin/team", body),
-    update: (id: string, patch: { role?: AdminRole; name?: string; disabled?: boolean }) => req<TeamMember>("PATCH", `/admin/team/${encodeURIComponent(id)}`, patch),
+    create: (body: { email: string; name: string; role: AdminRole; counter?: CounterScope | null }) => req<{ member: TeamMember; password: string }>("POST", "/admin/team", body),
+    update: (id: string, patch: { role?: AdminRole; name?: string; disabled?: boolean; counter?: CounterScope }) => req<TeamMember>("PATCH", `/admin/team/${encodeURIComponent(id)}`, patch),
     resetPassword: (id: string) => req<{ member: TeamMember; password: string }>("POST", `/admin/team/${encodeURIComponent(id)}/reset-password`),
   },
   auth: {

@@ -9,7 +9,7 @@ import { Badge, Button, Empty, ErrorBox, PageHeader, Pager } from "@/components/
 import { adminApi } from "@/lib/api";
 import { cx, dateTime } from "@/lib/format";
 import { PARCEL_STATE_STYLE, QUEUE_STATE_LABEL, nextAction } from "@/lib/parcels";
-import { RequireAdmin } from "@/lib/session";
+import { RequireAdmin, useSession } from "@/lib/session";
 import { useLoad } from "@/lib/useLoad";
 
 const stateLabel = (s: ParcelQueueState) => (s === "open" || s === "all" ? QUEUE_STATE_LABEL[s] : PARCEL_STATE_LABEL[s]);
@@ -49,12 +49,14 @@ const Person = ({ who }: { who: { name: string; phone: string } }) => (
 );
 
 function Queue() {
+  const { admin } = useSession();
+  const scope = admin?.counter ?? null;
   const [f, setF] = useFilters();
   const [q, setQ] = useState(f.q ?? "");
   useEffect(() => setQ(f.q ?? ""), [f.q]);
   const { data, error, loading, reload } = useLoad(() => adminApi.parcels.list(f), [JSON.stringify(f)]);
   // The counters' cities. The queue works without them, so a failure only empties the select.
-  const counters = useLoad(() => adminApi.catalog.list("parcelCounter"), []);
+  const counters = useLoad(() => (scope ? Promise.resolve([]) : adminApi.catalog.list("parcelCounter")), [scope]);
   const cities = [...new Set((counters.data ?? []).map((c) => String((c.data as { city?: unknown }).city ?? "")).filter(Boolean))].sort();
   if (f.city && !cities.includes(f.city)) cities.push(f.city);
   const state = f.state ?? (f.q ? "all" : "open");
@@ -62,7 +64,7 @@ function Queue() {
 
   return (
     <>
-      <PageHeader title="Parcels" sub="Bus and Quick parcels, the most urgent first. Open one to receive it, move it or hand it over."
+      <PageHeader title="Parcels" sub={scope ? `Bus parcels to and from ${scope.city}, the most urgent first. Open one to receive it, load it or hand it over.` : "Bus and Quick parcels, the most urgent first. Open one to receive it, move it or hand it over."}
         actions={<Button loading={loading} onClick={reload}><RefreshCw size={16} /> Refresh</Button>} />
 
       <form className="card p-3 mb-4 grid gap-2 grid-cols-2 lg:grid-cols-6 items-end" onSubmit={(e) => { e.preventDefault(); setF({ q: q.trim() || undefined }); }}>
@@ -70,11 +72,13 @@ function Queue() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
           <input className="field pl-9" placeholder="LR number or phone" maxLength={60} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search parcels" />
         </div>
-        <label className="grid gap-1"><span className="label">Counter city</span>
-          <select className="field" value={f.city ?? ""} onChange={(e) => setF({ city: e.target.value || undefined })}>
-            <option value="">All cities</option>
-            {cities.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select></label>
+        {!scope && (
+          <label className="grid gap-1"><span className="label">Counter city</span>
+            <select className="field" value={f.city ?? ""} onChange={(e) => setF({ city: e.target.value || undefined })}>
+              <option value="">All cities</option>
+              {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select></label>
+        )}
         <label className="grid gap-1"><span className="label">Status</span>
           <select className="field" value={state} onChange={(e) => setF({ state: e.target.value as ParcelQueueState })}>
             {PARCEL_QUEUE_STATES.map((s) => <option key={s} value={s}>{stateLabel(s)}</option>)}
@@ -122,7 +126,7 @@ function Queue() {
                       <td className="px-3 py-3"><Person who={p.receiver} /></td>
                       <td className="px-3 py-3 text-fg whitespace-nowrap">{p.departAt ? dateTime(p.departAt) : "With a captain"}</td>
                       <td className="px-3 py-3"><StateBadge p={p} /></td>
-                      <td className="px-5 py-3 text-fg">{nextAction(p)}</td>
+                      <td className="px-5 py-3 text-fg">{nextAction(p, scope)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -140,7 +144,7 @@ function Queue() {
                         <p className="min-w-0"><span className="label block">Sender</span><Person who={p.sender} /></p>
                         <p className="min-w-0"><span className="label block">Receiver</span><Person who={p.receiver} /></p>
                       </div>
-                      <p className="text-xs text-muted mt-2">Next: <span className="text-fg font-medium">{nextAction(p)}</span></p>
+                      <p className="text-xs text-muted mt-2">Next: <span className="text-fg font-medium">{nextAction(p, scope)}</span></p>
                     </Link>
                   </li>
                 ))}

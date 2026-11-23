@@ -1,15 +1,16 @@
 // Admin panel: roles, permissions and the shapes the /admin API returns.
 // The API enforces permissions; the admin app uses the same map to hide what a role can't do.
-import { PARCEL_STATES, type Parcel, type ParcelEvent, type ParcelLeg, type ParcelState, type ParcelWeightBand } from "./parcel";
+import { PARCEL_STATES, type CounterScope, type Parcel, type ParcelEvent, type ParcelLeg, type ParcelState, type ParcelWeightBand } from "./parcel";
 import type { Booking, BookingStatus, PaymentMethod, ServiceKey, WalletTransaction, LicenceStatus } from "./types";
 
-export const ADMIN_ROLES = ["owner", "operations", "content"] as const;
+export const ADMIN_ROLES = ["owner", "operations", "content", "counter"] as const;
 export type AdminRole = (typeof ADMIN_ROLES)[number];
 
 export const ADMIN_ROLE_INFO: Record<AdminRole, { label: string; summary: string }> = {
   owner: { label: "Owner", summary: "Everything, including settings and the audit log" },
   operations: { label: "Operations", summary: "Bookings, refunds, licence reviews, the catalog and prices" },
   content: { label: "Content", summary: "Catalog text, offer wording and FAQs (not prices)" },
+  counter: { label: "Counter", summary: "Bus parcels at one operator's counter in one city, and nothing else" },
 };
 
 /** Which roles may do what. Add a permission here, then check it in the API route and the admin UI. */
@@ -30,8 +31,13 @@ export const PERMISSIONS = {
   "customers.view": ["owner", "operations"],
   /** Wallet adjustments, suspend / lift, sign out everywhere, cancel a scheduled deletion. */
   "customers.manage": ["owner", "operations"],
-  /** The Parcels screen: the queue with both people's details, and counter actions (hand in, load, hand over, refuse). */
-  "parcels.manage": ["owner", "operations"],
+  /**
+   * The Parcels screen: the queue with both people's details, and counter actions (hand in, load, hand over, refuse).
+   * A "counter" account has it only within its scope (AdminUser.counter): every /admin/parcels route applies that.
+   */
+  "parcels.manage": ["owner", "operations", "counter"],
+  /** Another bus, the weight (it moves money) and returns: never a counter login's. */
+  "parcels.change": ["owner", "operations"],
   /** SOS alerts: acknowledge and close. */
   "sos.manage": ["owner", "operations"],
   /** The Team screen: staff accounts, roles, password resets, disabling. */
@@ -68,6 +74,8 @@ export interface AdminUser {
   email: string;
   name: string;
   role: AdminRole;
+  /** Role "counter": where it works. null for the others (and a counter account with none sees nothing). */
+  counter?: CounterScope | null;
   lastLoginAt: string | null;
   createdAt: string;
 }
