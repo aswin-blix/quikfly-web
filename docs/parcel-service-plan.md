@@ -1,6 +1,6 @@
 # Parcel service: research and implementation plan
 
-How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then the owner's decisions (10) and what changed while building (11). **Steps 1, 2, 3, 5, 6 and 7's counter role are built (2026-11-23; the app is not released), off behind `serviceParcel`; where sections 1–9 differ from section 11, section 11 wins.**
+How QuikFly adds parcels (send a package across town on a bike, or between cities with the bus network, the way KPN Parcel Service does) as a seventh service on the same API, website, admin panel and apps. Research first (sections 1–2), then the design (3–8), then the plan in steps the owner approves one at a time (9), then the owner's decisions (10) and what changed while building (11). **Steps 1, 2, 3, 5, 6 and 7's counter role are live (2026-11-23; app 0.1.17 published), and the owner switched `serviceParcel` on in production the same day with demo rates, counters and GST; where sections 1–9 differ from section 11, section 11 wins.**
 
 - **Date:** 2026-11-20. **Code:** `main` at `021b718` (after PR #112). No app code was changed.
 - **Read first:** [AGENTS.md](../AGENTS.md), [roadmap.md](roadmap.md), [decisions.md](decisions.md). The plan keeps every recorded decision; where a step leans on one it names it.
