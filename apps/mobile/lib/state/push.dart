@@ -166,6 +166,9 @@ class PushNotifier extends Notifier<PushState> {
       ..showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 6),
+        // A SnackBar with an action stays until tapped by default (this Flutter); this one goes after
+        // 6 s like any notification banner; the row stays in the inbox.
+        persist: false,
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(n.title ?? 'QuikFly', style: const TextStyle(fontWeight: FontWeight.w700)),
           if ((n.body ?? '').isNotEmpty) Text(n.body!, maxLines: 2, overflow: TextOverflow.ellipsis),
