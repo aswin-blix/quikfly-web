@@ -164,6 +164,16 @@ export const NOTIFICATION_KINDS = [
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
+/**
+ * Which phone app a push token belongs to. One account has one inbox, but QuikFly Partner shows only
+ * partner updates (kinds starting with PARTNER_NOTIFICATION_PREFIX) and QuikFly only the rest, so each
+ * phone gets only its app's pushes. Browsers register without one and get everything (the website shows
+ * both). Mirrors NotificationScope in apps/mobile/lib/state/catalog.dart.
+ */
+export const PUSH_APPS = ["customer", "partner"] as const;
+export type PushApp = (typeof PUSH_APPS)[number];
+export const PARTNER_NOTIFICATION_PREFIX = "vendor.";
+
 /** One entry in the customer's notification inbox (also pushed to their phones when push is on). */
 export interface AppNotification {
   id: string;

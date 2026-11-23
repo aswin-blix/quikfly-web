@@ -162,6 +162,12 @@ void main() {
     expect(await api.markNotificationsRead(), 0);
   });
 
+  test('a phone registers for push as its app, and is forgotten', () async {
+    await api.registerPushDevice('contract-push-token', 'android', app: 'partner');
+    await api.registerPushDevice('contract-push-token', 'android', app: 'customer'); // the same token moves apps
+    await api.removePushDevice('contract-push-token');
+  });
+
   test('partner application parses (QuikFly Partner app)', () async {
     final before = await api.vendorApplication();
     final app = before ?? await api.startVendorApplication();

@@ -2,7 +2,7 @@
 // licence, saved places, travellers, emergency contacts and wallet history.
 import { Hono } from "hono";
 import {
-  AUTO_SHARE_MODES, GENDERS, LIMITS, PATTERNS, RIDE_PIN, SUPPORT_RULES, SUPPORT_TOPICS, SAVED_PLACE_KINDS, ageFrom, compactCode, hiddenServices, type ProfileUpdate,
+  AUTO_SHARE_MODES, GENDERS, PUSH_APPS, LIMITS, PATTERNS, RIDE_PIN, SUPPORT_RULES, SUPPORT_TOPICS, SAVED_PLACE_KINDS, ageFrom, compactCode, hiddenServices, type ProfileUpdate,
 } from "@quikfly/shared";
 import type { AppEnv } from "../env";
 import { PUSH_TOKEN_MAX } from "../config";
@@ -181,6 +181,9 @@ export const me = new Hono<AppEnv>()
   // Push devices: an FCM token from the app (platform android) or a browser PushSubscription JSON (platform web)
   .post("/push-devices", async (c) => {
     const body = await jsonBody(c);
-    return c.json(await registerDevice(c.env.DB, c.var.user.id, str(body, "token", PUSH_TOKEN_MAX), oneOf(body, "platform", ["android", "ios", "web"] as const)), 201);
+    const platform = oneOf(body, "platform", ["android", "ios", "web"] as const);
+    // Phones say which app they are; a browser gets every kind, so it sends none.
+    const app = platform === "web" || body.app === undefined || body.app === null ? null : oneOf(body, "app", PUSH_APPS);
+    return c.json(await registerDevice(c.env.DB, c.var.user.id, str(body, "token", PUSH_TOKEN_MAX), platform, app), 201);
   })
   .delete("/push-devices/:token", async (c) => c.json(await removeDevice(c.env.DB, c.var.user.id, c.req.param("token"))));
