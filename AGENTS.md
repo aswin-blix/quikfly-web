@@ -9,7 +9,7 @@ Read this file first. Then read:
 - [docs/demo-script.md](docs/demo-script.md): the client demo, step by step (Phase 4).
 - [docs/privacy.md](docs/privacy.md): DPDP privacy: notice, consent, export, erasure, and the data-breach plan.
 - [docs/prompts/](docs/prompts/): ready-to-paste prompts for planned work (e.g. the admin settings and pricing audit).
-- [docs/parcel-service-plan.md](docs/parcel-service-plan.md): the parcel service (KPN-style bus parcels + bike courier): research, the owner's decisions, design and steps. Steps 1 (foundation), 2 (Bus parcel on the website and in admin), 3 (Quick parcel, in every client), 5 (the customer app; not released yet), 6 (operations) and 7's counter role are built, off behind `serviceParcel`; step 4 and the operators' share (rest of 7) wait for the owner.
+- [docs/parcel-service-plan.md](docs/parcel-service-plan.md): the parcel service (KPN-style bus parcels + bike courier): research, the owner's decisions, design and steps. Steps 1 (foundation), 2 (Bus parcel on the website and in admin), 3 (Quick parcel, in every client), 5 (the customer app, released in 0.1.17), 6 (operations) and 7's counter role are live, off behind `serviceParcel`; step 4 and the operators' share (rest of 7) wait for the owner.
 - [docs/family-profiles-plan.md](docs/family-profiles-plan.md): Phase 5 #12 (family payer with a monthly limit and shared rides, monthly GST statements) and the chauffeur toll follow-up: settled design, not started.
 - [apps/api/README.md](apps/api/README.md): endpoint list. [apps/web/README.md](apps/web/README.md): pages, theming, navigation. [apps/admin/README.md](apps/admin/README.md): admin panel structure and rules.
 
