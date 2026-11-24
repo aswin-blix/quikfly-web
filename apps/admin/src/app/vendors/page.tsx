@@ -11,6 +11,7 @@ import { Button, Empty, ErrorBox, PageHeader, Segmented } from "@/components/ui"
 import { adminApi } from "@/lib/api";
 import { VENDOR_TAB_LABEL, cx, timeAgo } from "@/lib/format";
 import { RequireAdmin } from "@/lib/session";
+import { useAlertReload } from "@/lib/alerts";
 import { useLoad } from "@/lib/useLoad";
 
 type Tab = VendorStatus | "fleet" | "payouts";
@@ -20,6 +21,7 @@ const TAB_EXTRA: Partial<Record<Tab, string>> = { fleet: "Fleet to review", payo
 /** Payout requests: pay outside the app, then record the bank reference here (or reject with a reason). */
 function Payouts() {
   const { data, setData, error, reload } = useLoad(() => adminApi.vendors.payouts("requested"), []);
+  useAlertReload("/vendors", reload);
   const [paying, setPaying] = useState<AdminPayout | null>(null);
   const [rejecting, setRejecting] = useState<AdminPayout | null>(null);
   const [reference, setReference] = useState("");
@@ -80,6 +82,7 @@ const FLEET_KIND: Record<FleetReviewItem["kind"], string> = {
 /** Live partners' vehicles and drivers waiting for staff. */
 function FleetQueue() {
   const { data, error, reload } = useLoad(() => adminApi.vendors.fleetQueue(), []);
+  useAlertReload("/vendors", reload);
   if (error) return <ErrorBox message={error} onRetry={reload} />;
   if (!data) return <div className="card p-5 grid gap-3">{[0, 1].map((i) => <div key={i} className="skeleton h-14" />)}</div>;
   return (
@@ -107,6 +110,7 @@ function Queue() {
   const [tab, setTab] = useState<Tab>("submitted");
   const status: VendorStatus = tab === "fleet" || tab === "payouts" ? "submitted" : tab;
   const { data, error, loading, reload } = useLoad(() => adminApi.vendors.list(status), [status]);
+  useAlertReload("/vendors", reload);
 
   return (
     <>

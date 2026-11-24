@@ -8,6 +8,7 @@ import { Badge, Button, Empty, ErrorBox, PageHeader, Segmented } from "@/compone
 import { adminApi } from "@/lib/api";
 import { cx, dateTime, timeAgo } from "@/lib/format";
 import { RequireAdmin } from "@/lib/session";
+import { useAlertReload } from "@/lib/alerts";
 import { useLoad } from "@/lib/useLoad";
 
 const TABS: { value: SupportStatus; label: string }[] = [
@@ -18,6 +19,7 @@ const TABS: { value: SupportStatus; label: string }[] = [
 
 function Thread({ id, onChanged }: { id: string; onChanged: (t: AdminSupportTicket) => void }) {
   const { data: t, setData, error, reload } = useLoad(() => adminApi.support.get(id), [id]);
+  useAlertReload("/support", reload); // the customer replied while this is open
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState<"reply" | "close" | null>(null);
   const [actionError, setActionError] = useState("");
@@ -67,6 +69,7 @@ function Thread({ id, onChanged }: { id: string; onChanged: (t: AdminSupportTick
 function Queue() {
   const [tab, setTab] = useState<SupportStatus>("open");
   const { data, setData, error, loading, reload } = useLoad(() => adminApi.support.list(tab), [tab]);
+  useAlertReload("/support", reload);
   const [open, setOpen] = useState<string | null>(null);
 
   // A reply or close moves the item to another tab: drop it from this list.

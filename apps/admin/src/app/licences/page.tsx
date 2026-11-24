@@ -7,6 +7,7 @@ import { Button, Empty, ErrorBox, PageHeader, Segmented } from "@/components/ui"
 import { adminApi } from "@/lib/api";
 import { cx, dateTime, timeAgo } from "@/lib/format";
 import { RequireAdmin } from "@/lib/session";
+import { useAlertReload } from "@/lib/alerts";
 import { useLoad } from "@/lib/useLoad";
 
 const TAB_LABEL: Record<LicenceQueueStatus, string> = { pending: "To review", rejected: "Rejected", verified: "Approved" };
@@ -16,6 +17,7 @@ const pretty = (n: string) => `${n.slice(0, 4)} ${n.slice(4)}`;
 function Queue() {
   const [tab, setTab] = useState<LicenceQueueStatus>("pending");
   const { data, setData, error, loading, reload } = useLoad(() => adminApi.licences.list(tab), [tab]);
+  useAlertReload("/licences", reload);
   const [busy, setBusy] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<LicenceReview | null>(null);
   const [actionError, setActionError] = useState("");
