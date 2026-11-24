@@ -5,25 +5,14 @@
 // page has the details.
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Bell, Handshake, Headphones, IdCard, PackageX, RefreshCw, Siren, type LucideIcon } from "lucide-react";
-import type { StaffAlert, StaffAlertKind } from "@quikfly/shared";
+import { ArrowRight, Bell, RefreshCw } from "lucide-react";
+import type { StaffAlert } from "@quikfly/shared";
 import { AlertSettings } from "@/components/PushCard";
 import { Button, Empty, PageHeader, Segmented } from "@/components/ui";
-import { useAlerts } from "@/lib/alerts";
+import { alertIcon, isUrgent } from "@/lib/alert-kinds";
+import { ALERTS_POLL_MS, useAlerts } from "@/lib/alerts";
 import { cx, dateTime, timeAgo } from "@/lib/format";
 import { RequireAdmin } from "@/lib/session";
-
-const ICON: Record<StaffAlertKind, LucideIcon> = {
-  "sos.raised": Siren,
-  "support.ticket": Headphones,
-  "support.reply": Headphones,
-  "support.callback": Headphones,
-  "vendor.applied": Handshake,
-  "vendor.fleet": Handshake,
-  "vendor.payout": Handshake,
-  "licence.submitted": IdCard,
-  "parcel.unclaimed": PackageX,
-};
 
 const FILTERS = [
   { value: "all", label: "All" },
@@ -36,8 +25,8 @@ const FILTERS = [
 type Filter = (typeof FILTERS)[number]["value"];
 
 function Row({ a }: { a: StaffAlert }) {
-  const Icon = ICON[a.kind] ?? Bell;
-  const sos = a.kind === "sos.raised";
+  const Icon = alertIcon(a.kind);
+  const sos = isUrgent(a.kind);
   return (
     <li>
       <Link href={a.link} className={cx("card p-4 flex items-start gap-3 hover:border-accent/50 transition-colors", !a.readAt && (sos ? "border-danger/50 bg-danger/5" : "border-accent/40"))}>
@@ -83,7 +72,7 @@ function AlertsPage() {
           <div className="overflow-x-auto"><Segmented label="Show" value={filter} onChange={setFilter} options={FILTERS.map((f) => ({ ...f }))} /></div>
           {!shown && <div className="card p-5 grid gap-3">{[0, 1, 2].map((i) => <div key={i} className="skeleton h-16" />)}</div>}
           {shown && (list.length === 0
-            ? <div className="card"><Empty icon={Bell} title="Nothing waiting" sub="New alerts appear here and on the bell; this page checks every 30 seconds." /></div>
+            ? <div className="card"><Empty icon={Bell} title="Nothing waiting" sub={`New alerts pop up wherever you are in the panel and land here; it checks every ${ALERTS_POLL_MS / 1000} seconds.`} /></div>
             : <ul className="grid gap-2">{list.map((a) => <Row key={a.id} a={a} />)}</ul>)}
         </div>
         <AlertSettings />

@@ -69,11 +69,11 @@ const STATE_TEXT: Record<PushState, string> = {
   unavailable: "This browser can't show notifications. Try Chrome, Edge or Firefox.",
   disabled: "Browser alerts aren't switched on for QuikFly yet (the owner sets the VAPID keys). Alerts still show here and on the bell.",
   blocked: "Notifications are blocked for this site. Allow them in the browser's site settings (the icon left of the address), then come back.",
-  off: "Off. Alerts show here and on the bell while the panel is open.",
+  off: "Off. Alerts pop up and show on the bell while the panel is open in a tab.",
   on: "On. Alerts arrive as notifications even when the panel is closed. An SOS stays on screen until you click it.",
 };
 
-/** The Alerts page's settings: browser alerts and the SOS tone. */
+/** The Alerts page's settings: browser alerts and the alert sounds. */
 export function AlertSettings() {
   const { muted, setMuted } = useAlerts();
   const { state, busy, error, enable, disable } = usePush();
@@ -89,10 +89,10 @@ export function AlertSettings() {
       </div>
       <div>
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium text-strong">Sound for a new SOS</p>
-          <Toggle label="Sound for a new SOS" checked={!muted} onChange={(on) => setMuted(!on)} />
+          <p className="text-sm font-medium text-strong">Alert sounds</p>
+          <Toggle label="Alert sounds" checked={!muted} onChange={(on) => setMuted(!on)} />
         </div>
-        <p className="text-xs text-muted mt-1">A short tone while the panel is open. Browsers allow it after you&apos;ve clicked anywhere in the panel once.</p>
+        <p className="text-xs text-muted mt-1">An urgent tone for an SOS and a soft chime for everything else, while the panel is open. Browsers allow sound after you&apos;ve clicked anywhere in the panel once.</p>
       </div>
     </div>
   );

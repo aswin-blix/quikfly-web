@@ -10,6 +10,7 @@ import { adminApi } from "@/lib/api";
 import { cx, dateTime } from "@/lib/format";
 import { PARCEL_STATE_STYLE, QUEUE_STATE_LABEL, nextAction } from "@/lib/parcels";
 import { RequireAdmin, useSession } from "@/lib/session";
+import { useAlertReload } from "@/lib/alerts";
 import { useLoad } from "@/lib/useLoad";
 
 const stateLabel = (s: ParcelQueueState) => (s === "open" || s === "all" ? QUEUE_STATE_LABEL[s] : PARCEL_STATE_LABEL[s]);
@@ -55,6 +56,7 @@ function Queue() {
   const [q, setQ] = useState(f.q ?? "");
   useEffect(() => setQ(f.q ?? ""), [f.q]);
   const { data, error, loading, reload } = useLoad(() => adminApi.parcels.list(f), [JSON.stringify(f)]);
+  useAlertReload("/parcels", reload);
   // The counters' cities. The queue works without them, so a failure only empties the select.
   const counters = useLoad(() => (scope ? Promise.resolve([]) : adminApi.catalog.list("parcelCounter")), [scope]);
   const cities = [...new Set((counters.data ?? []).map((c) => String((c.data as { city?: unknown }).city ?? "")).filter(Boolean))].sort();

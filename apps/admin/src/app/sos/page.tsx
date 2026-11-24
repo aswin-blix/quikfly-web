@@ -11,6 +11,7 @@ import { Badge, Button, Empty, ErrorBox, PageHeader, Segmented } from "@/compone
 import { adminApi } from "@/lib/api";
 import { cx, dateTime, timeAgo } from "@/lib/format";
 import { RequireAdmin } from "@/lib/session";
+import { useAlertReload } from "@/lib/alerts";
 import { useLoad } from "@/lib/useLoad";
 
 const TAB_LABEL: Record<SosStatus, string> = { open: "Open", acknowledged: "Being handled", closed: "Closed" };
@@ -51,6 +52,7 @@ function Alert({ a, onAcknowledge, onClose, busy }: { a: SosAlert; onAcknowledge
 function Queue() {
   const [tab, setTab] = useState<SosStatus>("open");
   const { data, setData, error, loading, reload } = useLoad(() => adminApi.sos.list(tab), [tab]);
+  useAlertReload("/sos", reload);
   const [busy, setBusy] = useState<string | null>(null);
   const [closing, setClosing] = useState<SosAlert | null>(null);
   const [actionError, setActionError] = useState("");

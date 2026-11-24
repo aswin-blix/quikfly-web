@@ -3,8 +3,10 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Bell, LogOut, Menu, Moon, Siren, Sun, X } from "lucide-react";
+import { LogOut, Menu, Moon, Siren, Sun, X } from "lucide-react";
 import { ADMIN_ROLE_INFO } from "@quikfly/shared";
+import { AlertPopups } from "./AlertPopups";
+import { AlertsMenu } from "./AlertsMenu";
 import { cx } from "@/lib/format";
 import { useAlerts } from "@/lib/alerts";
 import { LIVE_ROUTES, NAV, isActive } from "@/lib/nav";
@@ -34,19 +36,6 @@ function ThemeButton() {
   );
 }
 
-/** The bell: unread staff alerts, linking to /alerts. Hidden for roles without alerts. */
-function AlertsBell() {
-  const { enabled, unread } = useAlerts();
-  if (!enabled) return null;
-  return (
-    <Link href="/alerts" aria-label={unread ? `Alerts, ${unread} unread` : "Alerts"}
-      className="relative size-9 grid place-items-center rounded-field text-muted hover:text-fg hover:bg-raised">
-      <Bell size={18} />
-      {unread > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-on-danger text-[10px] font-bold grid place-items-center leading-none">{unread > 9 ? "9+" : unread}</span>}
-    </Link>
-  );
-}
-
 /** A new SOS since the panel was opened: a banner on every page until someone opens SOS alerts or dismisses it. */
 function SosBanner() {
   const { newSos, dismissSos, muted, setMuted } = useAlerts();
@@ -58,9 +47,20 @@ function SosBanner() {
       <p className="flex-1 min-w-[12rem] text-sm text-fg"><span className="font-semibold text-strong">New SOS alert.</span> A customer pressed SOS. Call them now.</p>
       <div className="flex items-center gap-2">
         <Link href="/sos" className="btn-primary inline-flex items-center rounded-field px-3 py-1.5 text-sm">Open SOS alerts</Link>
-        <button onClick={() => setMuted(!muted)} className="text-xs text-muted hover:text-fg px-2 py-1">{muted ? "Sound off" : "Mute sound"}</button>
+        <button onClick={() => setMuted(!muted)} className="text-xs text-muted hover:text-fg px-2 py-1">{muted ? "Sounds off" : "Mute sounds"}</button>
         <button onClick={dismissSos} aria-label="Dismiss" className="size-8 grid place-items-center rounded-field text-muted hover:text-fg hover:bg-raised"><X size={16} /></button>
       </div>
+    </div>
+  );
+}
+
+/** Desktop top bar: the bell and its menu, where people look for notifications. Not for roles without alerts. */
+function DesktopTopBar() {
+  const { enabled } = useAlerts();
+  if (!enabled) return null;
+  return (
+    <div className="hidden lg:flex sticky top-0 z-30 h-14 items-center justify-end gap-1 border-b border-line bg-surface/95 backdrop-blur px-8">
+      <AlertsMenu />
     </div>
   );
 }
@@ -129,7 +129,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-dvh lg:pl-(--sidebar-width)">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-(--sidebar-width) flex-col border-r border-line bg-surface px-3 py-4">
-        {/* No bell here: the Alerts entry below carries the count on desktop. */}
         <div className="px-3 pb-5"><Wordmark /></div>
         <div className="flex-1 overflow-y-auto"><Suspense><NavList /></Suspense></div>
         <AccountFooter />
@@ -141,7 +140,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <Menu size={20} />
         </button>
         <Wordmark />
-        <div className="flex items-center"><AlertsBell /><ThemeButton /></div>
+        <div className="flex items-center"><AlertsMenu phone /><ThemeButton /></div>
       </header>
 
       {open && (
@@ -158,7 +157,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
+      <DesktopTopBar />
+
       <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8 max-w-7xl"><SosBanner />{children}</main>
+      <AlertPopups />
     </div>
   );
 }

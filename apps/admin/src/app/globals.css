@@ -56,6 +56,16 @@ body {
     box-shadow: var(--shadow);
   }
 
+  /* Floats over the page: alert pop-ups and the bell menu. */
+  .popover {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    box-shadow: var(--shadow-float);
+  }
+  .popover-enter { animation: popover-in .18s ease-out; }
+  @keyframes popover-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
   .field {
     width: 100%;
     background: var(--surface-field);
@@ -93,5 +103,5 @@ body {
 :focus-visible { outline: 2px solid var(--brand-dark); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeleton { animation: none; }
+  .skeleton, .popover-enter { animation: none; }
 }
