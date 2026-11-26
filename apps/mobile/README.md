@@ -9,7 +9,7 @@ Two Android apps from one Flutter project, on the same REST API as the website (
 
 They share `lib/api`, `lib/theme`, `lib/widgets` and the login screen. On Android the login screen first opens Google's "Choose a phone number" sheet (`lib/core/phone_hint.dart`, `smart_auth` plugin, free via Play services); elsewhere the number is typed. `pubspec.yaml` sets `default-flavor: customer`, so plain `flutter run` / `flutter build apk` build the customer app; add `--flavor partner -t lib/main_partner.dart` for the Partner app.
 
-Flutter 3.47 · Dart 3.13 · Riverpod 3 · go_router · Dio · flutter_secure_storage · smart_auth (phone-number hint)
+Flutter 3.47 · Dart 3.13 (releases are built with **Flutter 3.47.9**; on a Mac it's pinned with `fvm global 3.47.9`. 3.50 deprecates importing `package:flutter/material.dart`: upgrade in its own PR after sign-off, decisions.md 2026-11-26) · Riverpod 3 · go_router · Dio · flutter_secure_storage · smart_auth (phone-number hint)
 
 ## Run
 
