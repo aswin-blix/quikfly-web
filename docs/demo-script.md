@@ -6,8 +6,8 @@ For whoever presents the demo. It shows one system working end to end: staff cha
 
 | What | Where |
 |---|---|
-| Website | https://quikfly-web.quikfly-api.workers.dev |
-| Admin panel | https://quikfly-admin.quikfly-api.workers.dev (owner account) |
+| Website | https://quikfly.in |
+| Admin panel | https://admin.quikfly.in (owner account) |
 | Android app (latest APK) | https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk |
 
 ## Before the demo (the day before, then again 30 minutes before)

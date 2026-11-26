@@ -52,4 +52,4 @@ src/styles/tokens.css       colours, fonts, radii (light + dark). Never use raw 
 npm run deploy -w @quikfly/admin   # builds with .env.production, uploads ./out
 ```
 
-Planned address: https://quikfly-admin.quikfly-api.workers.dev. Deploy the API first (it must have the `/admin` routes and migration 0004).
+Live at https://admin.quikfly.in (also https://quikfly-admin.quikfly-api.workers.dev). Deploy the API first (it must have the `/admin` routes and migration 0004).

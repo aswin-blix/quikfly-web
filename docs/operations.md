@@ -4,14 +4,14 @@
 
 | | Website | API | Database |
 |---|---|---|---|
-| Production | https://quikfly-web.quikfly-api.workers.dev | https://quikfly-api.quikfly-api.workers.dev/v1 | D1 `quikfly-db` (id in `apps/api/wrangler.jsonc`, region APAC) |
+| Production | https://quikfly.in | https://api.quikfly.in/v1 | D1 `quikfly-db` (id in `apps/api/wrangler.jsonc`, region APAC) |
 | Local | http://localhost:3000 (`npm run dev:web`) | http://localhost:8787/v1 (`npm run dev:api`) | local D1 in `apps/api/.wrangler/` |
 
-Admin panel (`apps/admin`): production https://quikfly-admin.quikfly-api.workers.dev (owner account `admin@quikfly.com`; the owner keeps the password, reset it with `create-admin.mjs`); local `npm run dev:admin` on :3100. It talks to the same API.
+Admin panel (`apps/admin`): production https://admin.quikfly.in (owner account `admin@quikfly.com`; the owner keeps the password, reset it with `create-admin.mjs`); local `npm run dev:admin` on :3100. It talks to the same API.
 
 Android app (`apps/mobile`): latest APK https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk and the Partner app `.../QuikFlyPartner-arm64.apk` (GitHub Releases, `app-v0.1.0` … `app-v0.1.18`); builds use the production API unless `--dart-define=API_URL` says otherwise. Details in the Android app section below.
 
-- Cloudflare account: the owner's (log in with `npx wrangler login`). The workers.dev subdomain is `quikfly-api`, which is why both URLs contain it.
+- Cloudflare account: the owner's (log in with `npx wrangler login`). The old addresses still answer and stay on: https://quikfly-web.quikfly-api.workers.dev, https://quikfly-api.quikfly-api.workers.dev/v1 and https://quikfly-admin.quikfly-api.workers.dev (the workers.dev subdomain is `quikfly-api`). Apps up to 0.1.18 call the old API address. See Domain below.
 - Production website settings are in `apps/web/.env.production` (API URL, demo OTP hint). Public values only.
 - Local website against the local API: create `apps/web/.env.local` with `NEXT_PUBLIC_API_URL=http://localhost:8787/v1` and `NEXT_PUBLIC_DEMO_OTP=1234`. Without it, the site uses the mock API.
 - API settings: `vars` in `apps/api/wrangler.jsonc` (`DEMO_OTP`, `ALLOWED_ORIGINS`).
@@ -28,8 +28,8 @@ npm run deploy -w @quikfly/web # builds with .env.production, then uploads apps/
 npm run deploy -w @quikfly/admin
 # wait until production answers with the new version everywhere (e.g. loop until a new endpoint stops returning 404
 # several times in a row); Cloudflare serves old and new versions for about a minute
-node apps/api/scripts/smoke.mjs https://quikfly-api.quikfly-api.workers.dev/v1   # once per deploy
-node apps/api/scripts/smoke-admin.mjs https://quikfly-api.quikfly-api.workers.dev/v1 <owner email> <password>
+node apps/api/scripts/smoke.mjs https://api.quikfly.in/v1   # once per deploy
+node apps/api/scripts/smoke-admin.mjs https://api.quikfly.in/v1 <owner email> <password>
 ```
 
 **First admin account** (once, after the 0004 migration): `node apps/api/scripts/create-admin.mjs --remote <email> "<name>" owner`. It prints a generated password once. Re-run it to reset a forgotten password; there is no email-based reset.
@@ -41,6 +41,17 @@ The smoke test reuses one test user (+91 90000 00001) and leaves cancelled or co
 After a deploy, record it (migration, version ids, smoke result) in `docs/roadmap.md` with a small docs PR.
 
 **New settings during a deploy:** for about a minute the website can load settings from the old API, without a field the new code reads (this crashed the holiday page once, before `whatsappLink()` accepted a missing number). Code that reads a new `Settings` field must cope with it being missing.
+
+## Domain (quikfly.in)
+
+- **Registrar:** GoDaddy, bought 2026-11-26 by the owner for 3 years (renews November 2029). Cloudflare Registrar doesn't sell `.in`. Keep 2-step verification on the GoDaddy account and the domain lock on.
+- **DNS:** Cloudflare free plan on the same account as the Workers. GoDaddy's nameservers point at `jo.ns.cloudflare.com` and `jakub.ns.cloudflare.com`; DNSSEC is off at GoDaddy. Manage every record in Cloudflare, never at GoDaddy.
+- **Hostnames:** `quikfly.in` and `www.quikfly.in` (website), `admin.quikfly.in`, `api.quikfly.in`. They are Worker custom domains in each app's `wrangler.jsonc` (`routes` with `custom_domain: true`): `wrangler deploy` creates the DNS record and the certificate, so don't add A or CNAME records for them by hand (a record already on the name makes the deploy fail). The first deploy of a new name can take a few minutes before HTTPS answers.
+- **`workers_dev: true` stays in all three configs.** Adding `routes` would otherwise turn the workers.dev addresses off, and released apps (0.1.18 and older) call `quikfly-api.quikfly-api.workers.dev`; shared ride, ticket and parcel links from those apps open `quikfly-web.quikfly-api.workers.dev`. Turn it off only when no supported app uses it.
+- **www → quikfly.in** (once, in the dashboard): quikfly.in → Rules → Create rule → Redirect Rule, "Redirect from WWW to root" template, or by hand: wildcard pattern `https://www.quikfly.in/*` → `https://quikfly.in/${1}`, status 301, preserve the query string. Until it exists, www shows the same site.
+- **CORS:** `ALLOWED_ORIGINS` stays `*` (decisions.md 2026-11-26).
+- **Tests:** `smoke.mjs` and the app contract test treat `*.quikfly.in` and `workers.dev` as production (fixed test accounts, no rentals or parcels left in staff queues). A new production hostname needs adding to both checks.
+- **Email** (`info@quikfly.in`): not set up yet. Plan: Zoho Mail's free plan, with its MX, SPF (TXT), DKIM (TXT) and a DMARC record (`_dmarc`, `v=DMARC1; p=none`) added in Cloudflare DNS from the values Zoho shows; or Cloudflare Email Routing to forward to a personal inbox.
 
 ## Push notifications (free)
 

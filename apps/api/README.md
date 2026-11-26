@@ -278,14 +278,14 @@ Roles: `owner` (everything), `operations` (bookings, licences, catalog and price
 
 ## Deploy (free tier)
 
-Live at **https://quikfly-api.quikfly-api.workers.dev/v1**. The D1 database `quikfly-db` already exists and its id is in `wrangler.jsonc`.
+Live at **https://api.quikfly.in/v1** (also still at https://quikfly-api.quikfly-api.workers.dev/v1, which apps up to 0.1.18 use). The D1 database `quikfly-db` already exists and its id is in `wrangler.jsonc`.
 
 ```bash
 npx wrangler login          # once per machine
 npm run db:migrate:remote   # only when migrations/ has a new file
 npm run deploy
-node scripts/smoke.mjs https://quikfly-api.quikfly-api.workers.dev/v1   # leaves one test user (+91 9000000001)
-node scripts/smoke-admin.mjs https://quikfly-api.quikfly-api.workers.dev/v1 <owner email> <password>   # admin endpoints
+node scripts/smoke.mjs https://api.quikfly.in/v1   # leaves one test user (+91 9000000001)
+node scripts/smoke-admin.mjs https://api.quikfly.in/v1 <owner email> <password>   # admin endpoints
 ```
 
 Locally, `node scripts/smoke-admin.mjs http://localhost:8787/v1` creates its own test admins and also checks roles and lockout.
