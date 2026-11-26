@@ -4,6 +4,9 @@
   // Build first (see `deploy` in package.json), then `wrangler deploy` uploads ./out.
   "name": "quikfly-admin",
   "compatibility_date": "2026-11-01",
+  // Custom domain (zone quikfly.in). workers_dev stays on as a fallback address.
+  "workers_dev": true,
+  "routes": [{ "pattern": "admin.quikfly.in", "custom_domain": true }],
   "assets": {
     "directory": "./out",
     "html_handling": "drop-trailing-slash",

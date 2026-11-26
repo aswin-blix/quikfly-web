@@ -4,6 +4,13 @@
   // Build first (see `deploy` in package.json), then `wrangler deploy` uploads ./out.
   "name": "quikfly-web",
   "compatibility_date": "2026-11-01",
+  // Custom domains (zone quikfly.in). www is sent to quikfly.in by a Redirect Rule in the dashboard
+  // (docs/operations.md → Domain). workers_dev stays on so old shared links keep working.
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "quikfly.in", "custom_domain": true },
+    { "pattern": "www.quikfly.in", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./out",
     // /bus/search serves out/bus/search.html; unknown paths get out/404.html.

@@ -4,6 +4,10 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",
   "observability": { "enabled": true },
+  // Custom domain (zone quikfly.in on this account; Cloudflare makes the DNS record and certificate).
+  // workers_dev stays on: released apps up to 0.1.18 call quikfly-api.quikfly-api.workers.dev.
+  "workers_dev": true,
+  "routes": [{ "pattern": "api.quikfly.in", "custom_domain": true }],
   // Every minute: scheduled-ride reminders and push delivery (src/scheduled.ts). Free plan.
   "triggers": { "crons": ["* * * * *"] },
   // Non-secret settings. Override per environment in the Cloudflare dashboard.
