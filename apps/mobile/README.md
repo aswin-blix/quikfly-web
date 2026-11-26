@@ -33,7 +33,7 @@ Build-time settings (`lib/core/env.dart`, passed with `--dart-define`):
 
 | Name | Default | Purpose |
 |---|---|---|
-| `API_URL` | production API | Base URL ending in `/v1` |
+| `API_URL` | production API (`https://api.quikfly.in/v1` from 0.1.19; 0.1.18 and older use the workers.dev address) | Base URL ending in `/v1` |
 | `DEMO_OTP` | `1234` | Hint on the OTP screen ("Demo: no SMS is sent"); empty hides it |
 | `WEB_URL` | production website | Shared ride links and help links |
 

@@ -41,11 +41,13 @@ Without it, the website runs on its built-in mock API.
 
 ## Hosting (Cloudflare free tier)
 
+The domain `quikfly.in` is registered at GoDaddy with DNS on Cloudflare; the old `*.quikfly-api.workers.dev` addresses still answer (docs/operations.md → Domain).
+
 | | URL | Deployed by |
 |---|---|---|
-| Website | https://quikfly-web.quikfly-api.workers.dev | `npm run deploy -w @quikfly/web` (static export served by a Worker, `apps/web/wrangler.jsonc`) |
-| API | https://quikfly-api.quikfly-api.workers.dev/v1 | `npm run deploy -w @quikfly/api` (Worker + D1 `quikfly-db`) |
-| Admin panel | https://quikfly-admin.quikfly-api.workers.dev | `npm run deploy -w @quikfly/admin` |
+| Website | https://quikfly.in | `npm run deploy -w @quikfly/web` (static export served by a Worker, `apps/web/wrangler.jsonc`) |
+| API | https://api.quikfly.in/v1 | `npm run deploy -w @quikfly/api` (Worker + D1 `quikfly-db`) |
+| Admin panel | https://admin.quikfly.in | `npm run deploy -w @quikfly/admin` |
 | Android apps (APK) | https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk · Partner: `.../QuikFlyPartner-arm64.apk` | GitHub Releases (`app-v<version>`), signed with the owner's upload key; see apps/mobile/README.md → Release |
 
 `npm run deploy` does API, website and admin, API first. Partner document photos live in the private R2 bucket `quikfly-docs` (docs/operations.md). Run `npm run db:migrate:remote` before deploying an API change that adds a migration. Deploys need `npx wrangler login` once per machine.
