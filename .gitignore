@@ -11,3 +11,6 @@ out-spa
 .wrangler
 .dev.vars
 dist
+
+# macOS Finder files
+.DS_Store
