@@ -1,6 +1,9 @@
 // End-to-end check of every endpoint. Usage: node scripts/smoke.mjs [baseUrl] [otp]
 // Creates one test user (phone 90000 00001) with one cancelled ride and booking, then signs out.
 const BASE = (process.argv[2] || "http://localhost:8787/v1").replace(/\/$/, "");
+// Production answers on api.quikfly.in and on the old workers.dev address. There some checks only
+// read (or cancel straight away), so no test rentals or parcels pile up in the staff queues.
+const ON_PRODUCTION = /workers\.dev|(^|\.)quikfly\.in$/.test(new URL(BASE).hostname);
 const OTP = process.argv[3] || "1234";
 const PHONE = "9000000001";
 
@@ -704,7 +707,7 @@ await expect("GET /config says whether browser push is on", call("GET", "/config
 // On production only the read and the photo rule run, then the booking is cancelled, so no
 // returned cars pile up in the staff queue.
 {
-  const PROD = BASE.includes("workers.dev");
+  const PROD = ON_PRODUCTION;
   const localIn = (minutes) => new Date(Date.now() + (330 + minutes) * 60_000).toISOString().slice(0, 16);
   const start = localIn(20), end = localIn(20 + 6 * 60);
   const rq = (await call("POST", "/quotes", { service: "rent", carId: cars[0].id, mode: "self", start, end, kmPlan: "limited", protection: "standard", doorstep: false })).json;

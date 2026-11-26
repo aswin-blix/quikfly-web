@@ -5,7 +5,7 @@
 /// Base URL of the QuikFly REST API, ending in /v1.
 const apiUrl = String.fromEnvironment(
   'API_URL',
-  defaultValue: 'https://quikfly-api.quikfly-api.workers.dev/v1',
+  defaultValue: 'https://api.quikfly.in/v1',
 );
 
 /// The fixed login code while there is no SMS provider (decision 2026-11-16).
@@ -15,5 +15,5 @@ const demoOtp = String.fromEnvironment('DEMO_OTP', defaultValue: '1234');
 /// Where the website lives (help links, shared ride links).
 const webUrl = String.fromEnvironment(
   'WEB_URL',
-  defaultValue: 'https://quikfly-web.quikfly-api.workers.dev',
+  defaultValue: 'https://quikfly.in',
 );

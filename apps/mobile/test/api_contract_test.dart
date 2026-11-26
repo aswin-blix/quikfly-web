@@ -12,9 +12,14 @@ import 'package:quikfly/api/support_models.dart';
 import 'package:quikfly/core/env.dart';
 import 'package:quikfly/core/format.dart';
 
+/// Production answers on api.quikfly.in and on the old workers.dev address; there the test makes
+/// one fixed account and skips the steps that would leave bookings in the staff queues.
+final _host = Uri.parse(apiUrl).host;
+final onProduction = _host.endsWith('workers.dev') || _host == 'quikfly.in' || _host.endsWith('.quikfly.in');
+
 void main() {
   final api = QuikFlyApi(baseUrl: apiUrl);
-  final phone = apiUrl.contains('workers.dev') ? '9000000002' : '9${(Random().nextInt(900000000) + 100000000)}';
+  final phone = onProduction ? '9000000002' : '9${(Random().nextInt(900000000) + 100000000)}';
   late AppConfig config;
 
   setUpAll(() async {
@@ -211,7 +216,7 @@ void main() {
     expect(s.passPrice, greaterThanOrEqualTo(0));
     expect((await api.me()).passUntil == null || (await api.me()).passUntil!.isAfter(DateTime.now()), isTrue);
     // Production: parse only (don't spend the shared test account's wallet on every run).
-    if (apiUrl.contains('workers.dev') || !s.passOnSale) return;
+    if (onProduction || !s.passOnSale) return;
     final until = await api.buyPass();
     expect((await api.me()).passUntil, until);
     final peak = int.parse(RegExp(r'(\d{1,2})\s*-').firstMatch(s.surgeHours)!.group(1)!);
@@ -227,7 +232,7 @@ void main() {
       expect(b.seats.every((s) => s.id.isNotEmpty), isTrue);
       if (b.service == ServiceKey.bus && b.status == BookingStatus.confirmed) expect(b.ticketToken, isNotNull);
     }
-    if (apiUrl.contains('workers.dev')) return;
+    if (onProduction) return;
     final date = isoDate(DateTime.now().add(const Duration(days: 45)));
     final buses = await api.buses('Chennai', 'Bengaluru', date);
     Future<List<Seat>> free(Bus bus, int n) async =>
@@ -255,7 +260,7 @@ void main() {
     final me = await api.me();
     expect(['off', 'night', 'always'].contains(me.autoShareRides), isTrue);
     // Production: parse only (don't change the shared test account's profile).
-    if (apiUrl.contains('workers.dev')) return;
+    if (onProduction) return;
     final u = await api.updateProfile({'gender': 'female', 'autoShareRides': 'always', 'ridePin': '5937'});
     expect(u.autoShareRides, 'always');
     expect(u.ridePin, '5937');
@@ -274,7 +279,7 @@ void main() {
     expect(list.every((t) => supportTopics.containsKey(t.topic)), isTrue);
     expect(whatsappLink('90000 12345', 'Hi')?.toString(), 'https://wa.me/919000012345?text=Hi');
     // Production: parse only (no tickets in the real staff queue).
-    if (apiUrl.contains('workers.dev')) return;
+    if (onProduction) return;
     final t = await api.openTicket('refund', 'App contract test: where is my refund?');
     expect(t.status, 'open');
     expect(t.messages.single.fromStaff, isFalse);
@@ -299,7 +304,7 @@ void main() {
     expect(r.state, 'booked');
     expect(r.photos['pickup'], isEmpty);
     // Production: parse only, then cancel (no returned cars in the real staff queue).
-    if (apiUrl.contains('workers.dev')) {
+    if (onProduction) {
       await api.cancelBooking(b.id);
       return;
     }
@@ -325,7 +330,7 @@ void main() {
 
   test('parcel: options, quote, booking, tracking, cancel', () async {
     // Production: no parcels in the real counters' queue. Elsewhere it runs while parcels are switched on.
-    if (apiUrl.contains('workers.dev') || !config.settings.serviceOn(ServiceKey.parcel)) {
+    if (onProduction || !config.settings.serviceOn(ServiceKey.parcel)) {
       markTestSkipped('parcels are off here, or this is production');
       return;
     }
