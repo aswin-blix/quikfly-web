@@ -1,6 +1,6 @@
 # QuikFly Captain: the driver app
 
-Status: **approved by the owner 2026-11-27; step 0 (this plan) done, step 1 next.** Tick the steps below as they ship and keep the status line current.
+Status: **approved by the owner 2026-11-27; steps 0 and 1 done (step 1: API foundation, migration `0033`, not deployed until the owner runs it), step 2 (dispatch and the trip) next.** Tick the steps below as they ship and keep the status line current.
 
 ## Context
 
@@ -81,6 +81,15 @@ Released apps run the timers themselves and would "complete" a live ride after 2
 
 **1. Foundation (API and shared; nothing visible).**
 Migration `0033_drivers.sql`: `vendor_drivers.user_id`, `gender`; `driver_state` (driver_id PK, online, x, y, lat, lng, demo, seen_at, ride_id); `ride_offers` (ride_id, driver_id, seq, offered_at, expires_at, outcome); the new `rides` columns. Shared `driver.ts` (types, `DRIVER_RULES`, `RIDE_TRANSITIONS`), `geo.ts`, settings, vehicle type `bike`. `requireDriver`, `linkDriver`, `GET /driver`, `POST /driver/duty`, `POST /driver/ping`. Push app and kinds. Privacy export and erase. Staff set a driver's gender in the existing review dialog (`VendorFleet.tsx`).
+
+Done 2026-11-27 (branch `feat/captain-1-foundation`). What changed from the plan:
+- **`bike` vehicles moved to step 6.** Adding the type now would show "Bike" on the website's partner form before anything can use it. Until then Captain is for autos and cars (`CAPTAIN_VEHICLE_TYPES`), and a tempo or bus driver is told so.
+- **No captain kinds in the inbox.** Ride offers will be pushed straight to the phone (step 2), not stored as notifications, so released QuikFly apps (which list every non-partner kind) never show a driver's offers. `pushAppForKind` and the three-way split in `pushNew` are ready for kinds starting with `driver.`.
+- **One number, one driver** is enforced when a driver is added (a rejected record doesn't count). Existing duplicates, if any, link to the approved one, then the newest.
+- **A silent captain is set offline when their duty is next read** (`dutyOf`), as well as by the cron backstop in step 2.
+- Staff can set a driver's gender at approval and any time after (`POST /admin/vendors/:id/drivers/:did/gender`, audited).
+- The migration also creates `ride_offers` and the new `rides` columns that step 2 uses, so the owner runs one migration, not two.
+- **Deploy order:** run migration `0033` before deploying this API (driver review, export and erasure read the new columns).
 
 **2. Dispatch and the trip (API).**
 `services/dispatch.ts`, `services/driver-rides.ts`, `routes/driver.ts`; `bookRide` branches on switch + client declaration; `getRide` returns `live { phase, captain position, etaMin }`; `readShare` reports the real phase; customer complete refused for live rides; fallback; immediate offer push; cron backstop (within the 50-queries budget).
