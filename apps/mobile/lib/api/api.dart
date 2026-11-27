@@ -142,10 +142,10 @@ class QuikFlyApi {
   // ── QuikFly Captain (/driver): every action returns the captain's state ──
   CaptainState _captainState(dynamic d) => CaptainState.fromJson(d as Json);
   Future<CaptainLookup> captain() => _get('/driver', (d) => CaptainLookup.fromJson(d as Json));
-  /// [position]: a demo location (a map point) while GPS isn't used yet.
-  Future<CaptainState> setCaptainDuty(bool online, {MapPoint? position}) =>
+  /// [position]: a GPS fix, or a demo location (a map point) while the owner allows those.
+  Future<CaptainState> setCaptainDuty(bool online, {CaptainPosition? position}) =>
       _post('/driver/duty', _captainState, {'online': online, if (position != null) 'position': position.toJson()});
-  Future<CaptainState> captainPing({MapPoint? position}) => _post('/driver/ping', _captainState, {if (position != null) 'position': position.toJson()});
+  Future<CaptainState> captainPing({CaptainPosition? position}) => _post('/driver/ping', _captainState, {if (position != null) 'position': position.toJson()});
   Future<CaptainSummary> captainSummary() => _get('/driver/summary', (d) => CaptainSummary.fromJson(d as Json));
   Future<List<CaptainTripItem>> captainTrips() => _get('/driver/trips', _listOf(CaptainTripItem.fromJson));
   Future<CaptainState> acceptOffer(String rideId) => _post('/driver/offers/$rideId/accept', _captainState);

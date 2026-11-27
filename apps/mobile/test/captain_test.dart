@@ -212,6 +212,35 @@ void main() {
     });
   }
 
+  test('a GPS fix is sent as lat/lng, a demo location as a map point', () {
+    expect(const GpsFix(13.06, 80.24).toJson(), {'lat': 13.06, 'lng': 80.24});
+    expect(const MapPoint(62, 30).toJson(), {'x': 62.0, 'y': 30.0});
+  });
+
+  CaptainLookup offlineWith({required bool demoLocation}) => CaptainLookup.fromJson({
+        'captain': {
+          ..._profile,
+          'duty': _duty(online: false),
+          'rules': {...(_profile['rules'] as Map<String, dynamic>), 'demoLocation': demoLocation},
+        },
+      });
+  CaptainLive offline() => CaptainLive(state: CaptainState(duty: CaptainDuty.fromJson(_duty(online: false)), offer: null, ride: null));
+
+  testWidgets('offline, a captain goes online with their phone\'s location', (t) async {
+    await _pump(t, offline(), lookup: offlineWith(demoLocation: false));
+    expect(find.text('Go online'), findsOneWidget);
+    expect(find.textContaining("Uses your phone's location"), findsOneWidget);
+    expect(find.text('Use a demo location instead'), findsNothing); // the owner turned demo locations off
+  });
+
+  testWidgets('while demo locations are allowed, a captain can pick one instead', (t) async {
+    await _pump(t, offline(), lookup: offlineWith(demoLocation: true));
+    await t.tap(find.text('Use a demo location instead'));
+    await t.pump();
+    expect(find.text('Go online here'), findsOneWidget);
+    expect(find.text('Use my location instead'), findsOneWidget);
+  });
+
   testWidgets('with self sign-up on, a number with no driver record can register its own vehicle', (t) async {
     await _pump(t, const CaptainLive(), lookup: CaptainLookup.fromJson({'captain': null, 'reason': "This number isn't registered as a QuikFly captain yet.", 'selfSignup': true}));
     expect(find.text('Register your own vehicle'), findsOneWidget);

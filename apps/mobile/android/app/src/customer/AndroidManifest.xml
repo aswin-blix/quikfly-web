@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This app never uses location: drop the location service the geolocator plugin brings for QuikFly Captain. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <service android:name="com.baseflow.geolocator.GeolocatorLocationService" tools:node="remove"/>
+    </application>
+</manifest>
