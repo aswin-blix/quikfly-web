@@ -35,7 +35,8 @@ void main() {
     expect(NotificationScope.customer.shows('vendor.payout'), isFalse);
     expect(NotificationScope.captain.shows('driver.offer'), isTrue);
     expect(NotificationScope.captain.shows('booking.confirmed'), isFalse);
-    expect(NotificationScope.captain.shows('vendor.trip'), isFalse);
+    // An owner-driver who registered in Captain hears about their application there too.
+    expect(NotificationScope.captain.shows('vendor.approved'), isTrue);
     expect(NotificationScope.customer.shows('driver.offer'), isFalse);
     expect(NotificationScope.partner.shows('driver.cancelled'), isFalse);
   });

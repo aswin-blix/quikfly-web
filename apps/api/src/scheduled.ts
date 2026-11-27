@@ -124,7 +124,7 @@ async function deliver(ch: Channels, token: string, msg: WebPushMessage, data: R
 /**
  * Pushes recent, not-yet-pushed notifications to each customer's phones and browsers; forgets dead
  * tokens. A row counts as pushed once any device took it; a failed send is retried next minute until
- * the row is older than PUSH_MAX_AGE_MINUTES. A phone gets only its app's kinds (pushAppForKind in the
+ * the row is older than PUSH_MAX_AGE_MINUTES. A phone gets only its app's kinds (pushAppsForKind in the
  * shared package: partner updates to QuikFly Partner, captain ones to QuikFly Captain, the rest to
  * QuikFly); a browser (app NULL) gets every kind except a captain's.
  */
@@ -138,7 +138,9 @@ async function pushNew(env: Env, ch: Channels) {
        AND ((d.app IS NULL AND substr(n.kind, 1, length(?4)) <> ?4) OR d.app = CASE
              WHEN substr(n.kind, 1, length(?1)) = ?1 THEN 'partner'
              WHEN substr(n.kind, 1, length(?4)) = ?4 THEN 'captain'
-             ELSE 'customer' END)
+             ELSE 'customer' END
+         -- Partner updates also reach QuikFly Captain: an owner-driver who registered there (pushAppsForKind).
+         OR (d.app = 'captain' AND substr(n.kind, 1, length(?1)) = ?1))
      WHERE n.pushed_at IS NULL AND n.created_at >= ?2 ORDER BY n.created_at LIMIT ?3`,
   ).bind(PARTNER_NOTIFICATION_PREFIX, since, PUSH_BATCH, CAPTAIN_NOTIFICATION_PREFIX).all<{ id: string; user_id: string; kind: string; title: string; body: string; booking_id: string | null; token: string }>();
   if (!rows.length) {
