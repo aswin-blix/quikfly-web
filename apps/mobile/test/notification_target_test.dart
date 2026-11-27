@@ -22,8 +22,15 @@ void main() {
     }
   });
 
+  test('captain notifications open the Captain home, where the offer or the ride is', () {
+    for (final kind in ['driver.offer', 'driver.cancelled']) {
+      expect(notificationTarget(kind, null, NotificationScope.captain), '/');
+    }
+  });
+
   test('My Trips is a tab switch, the rest open on top', () {
     expect(notificationSwitchesTab('/trips'), isTrue);
+    expect(notificationSwitchesTab('/'), isTrue);
     expect(notificationSwitchesTab('/parcel/B2'), isFalse);
   });
 }

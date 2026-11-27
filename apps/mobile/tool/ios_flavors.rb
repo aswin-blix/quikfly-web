@@ -1,4 +1,4 @@
-# Adds the `customer` and `partner` flavors to the iOS project, matching Android's (pubspec.yaml sets
+# Adds the `customer`, `partner` and `captain` flavors to the iOS project, matching Android's (pubspec.yaml sets
 # default-flavor: customer, so `flutter run` on iOS looks for a `customer` scheme).
 # Creates build configurations Debug/Release/Profile-<flavor> and one shared scheme per flavor.
 # Run once from apps/mobile with CocoaPods' Ruby (it ships the xcodeproj gem); it is safe to re-run:
@@ -8,6 +8,7 @@ require 'xcodeproj'
 FLAVORS = {
   'customer' => { bundle: 'com.quikfly.app', name: 'QuikFly', icon: 'AppIcon' },
   'partner' => { bundle: 'com.quikfly.partner', name: 'QuikFly Partner', icon: 'AppIcon-partner' },
+  'captain' => { bundle: 'com.quikfly.captain', name: 'QuikFly Captain', icon: 'AppIcon-captain' },
 }.freeze
 BASES = %w[Debug Release Profile].freeze
 

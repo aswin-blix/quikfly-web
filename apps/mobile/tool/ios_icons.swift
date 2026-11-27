@@ -24,7 +24,7 @@ func render(_ out: String, draw: (CGContext) -> Void) {
 
 let full = CGRect(x: 0, y: 0, width: size, height: size)
 
-for (source, iconSet) in [("assets/icon/icon.png", "AppIcon"), ("assets/icon/icon-partner.png", "AppIcon-partner")] {
+for (source, iconSet) in [("assets/icon/icon.png", "AppIcon"), ("assets/icon/icon-partner.png", "AppIcon-partner"), ("assets/icon/icon-captain.png", "AppIcon-captain")] {
   render("ios/Runner/Assets.xcassets/\(iconSet).appiconset/Icon-1024.png") { ctx in
     ctx.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
     ctx.fill(full)

@@ -173,6 +173,18 @@ void main() {
     await api.removePushDevice('contract-push-token');
   });
 
+  test('a number with no driver record is told so (QuikFly Captain)', () async {
+    try {
+      final l = await api.captain();
+      expect(l.captain, isNull);
+      expect(l.reason, contains('registered'));
+    } on ApiException catch (e) {
+      // An API from before QuikFly Captain (production until it is deployed) has no /driver.
+      if (e.status != 404) rethrow;
+      markTestSkipped('This API has no /driver yet.');
+    }
+  });
+
   test('partner application parses (QuikFly Partner app)', () async {
     final before = await api.vendorApplication();
     final app = before ?? await api.startVendorApplication();
