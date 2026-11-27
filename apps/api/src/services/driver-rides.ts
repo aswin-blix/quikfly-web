@@ -5,7 +5,7 @@
 import {
   CAPTAIN_RELEASE_REASONS, DRIVER_RULES, dailyFeePaise, formatRegNumber, isWomenOnly, mapDistanceKm, onDailyFee, pick, releasePenaltyPaise, tripEarnings,
   type CaptainMoney, type CaptainOffer, type CaptainReleaseReason, type CaptainRide, type CaptainState, type CaptainSummary, type CaptainTrip,
-  type CaptainTripDone, type Driver, type LiveRide, type MapPoint, type PaymentMethod, type Settings,
+  type CaptainTripDone, type CaptainTripItem, type Driver, type LiveRide, type MapPoint, type PaymentMethod, type Settings,
 } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
@@ -299,4 +299,19 @@ export async function captainSummary(db: D1Database, c: CaptainContext): Promise
      FROM vendor_trips WHERE driver_id = ? AND completed_at >= ?`,
   ).bind(c.id, from).first<{ trips: number; earning: number; cash: number }>();
   return { day, trips: r?.trips ?? 0, earningPaise: r?.earning ?? 0, cashPaise: r?.cash ?? 0 };
+}
+
+/** Trips to show on the list. */
+const TRIPS_PAGE = 50;
+
+/** The captain's completed trips, newest first (TRIPS_PAGE of them). */
+export async function captainTrips(db: D1Database, c: CaptainContext): Promise<CaptainTripItem[]> {
+  const { results } = await db.prepare(
+    `SELECT t.booking_id, t.completed_at, b.title, b.subtitle, t.payment, t.gross_paise - t.discount_paise AS paid, t.earning_paise
+     FROM vendor_trips t JOIN bookings b ON b.id = t.booking_id
+     WHERE t.driver_id = ? ORDER BY t.completed_at DESC LIMIT ?`,
+  ).bind(c.id, TRIPS_PAGE).all<{ booking_id: string; completed_at: string; title: string; subtitle: string; payment: PaymentMethod; paid: number; earning_paise: number }>();
+  return results.map((t) => ({
+    bookingId: t.booking_id, completedAt: t.completed_at, title: t.title, subtitle: t.subtitle, payment: t.payment, paidPaise: t.paid, earningPaise: t.earning_paise,
+  }));
 }
