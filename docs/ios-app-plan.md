@@ -1,6 +1,6 @@
 # iPhone apps: plan
 
-Status: **scoped 2026-11-27, not started.** Start with "start iOS step 1".
+Status: **step 1 in progress (2026-11-27):** the iOS project, flavors, icons and Info.plist are done and both apps run in the iPhone Simulator; installing on the owner's iPhone waits for their Apple ID in Xcode and Developer Mode on the phone. How to build: [apps/mobile/README.md](../apps/mobile/README.md) → iPhone.
 
 Both QuikFly apps are Android only today: `apps/mobile` has no `ios/` folder, and every release (up to 0.1.19) is an APK. On an iPhone, customers can already use the website (https://quikfly.in in Safari, Share → Add to Home Screen). This plan adds real iPhone builds of the same Flutter apps, without paying for anything before the client signs off.
 
@@ -31,8 +31,8 @@ The Android-only parts already turn themselves off elsewhere, so the shared Dart
 **1. The iPhone project and a test build of QuikFly (free).**
 - `flutter create --platforms=ios --org com.quikfly .` in `apps/mobile` adds `ios/`. Bundle ids follow Android: `com.quikfly.app` and `com.quikfly.partner`.
 - **Flavors:** `pubspec.yaml` sets `default-flavor: customer`, so iOS needs matching Xcode schemes and build configurations (`customer` and `partner`, each Debug/Release/Profile) with their own bundle id and display name ("QuikFly", "QuikFly Partner"). Without them, `flutter run` on iOS fails.
-- **Info.plist:** camera and photo library reasons (licence, documents, rental checklist photos, through image_picker); `LSApplicationQueriesSchemes` for `tel`, `sms` and `whatsapp` so the call, SMS and WhatsApp buttons open; no location permission (the apps don't use it).
-- **Icons:** iOS icons must be square and opaque. Use the existing icon art with its dark background (`flutter_launcher_icons`: `ios: true`, `remove_alpha_ios: true`; Partner its own icon). The transparent logo rule (never on a badge) applies to screens, not to the app icon, which already has a background on Android.
+- **Info.plist:** camera and photo library reasons (rental checklist photos, partner documents and vehicle photos, through image_picker); `NSAllowsLocalNetworking` for local test APIs; no location permission (the apps don't use it). No `LSApplicationQueriesSchemes`: the apps open tel, mailto and wa.me links with `launchUrl` and never ask `canLaunchUrl` (found while building step 1).
+- **Icons:** iOS icons must be square and opaque. `tool/ios_icons.swift` renders one 1024 px icon per app from the Android art (QuikFly on its dark background; Partner from its adaptive layers, zoomed 1.3× so the sparkle clears iOS's rounded corners). The transparent logo rule (never on a badge) applies to screens, not to the app icon, which already has a background on Android.
 - **Sign and install:** the owner signs in to Xcode with their Apple ID (Xcode → Settings → Accounts) and picks their personal team; on the iPhone: Settings → Privacy & Security → Developer Mode on, trust the Mac and then the developer profile (Settings → General → VPN & Device Management). Claude never types the Apple ID password.
 - **Check:** home, sign-in with OTP 1234, a bus search, a ride quote, My Trips, wallet, a share sheet, a camera upload, dark mode, at iPhone sizes. `flutter analyze` and `flutter test` stay green (the tests don't depend on the platform).
 

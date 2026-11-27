@@ -1,5 +1,7 @@
 # QuikFly Android app
 
+(iPhone test builds from the same project: see **iPhone** below.)
+
 Two Android apps from one Flutter project, on the same REST API as the website (`apps/api`), shared as signed APKs on GitHub Releases (no Play Store until the client signs off):
 
 | App | Flavor | Package id | Entry point |
@@ -98,6 +100,24 @@ Both apps get push notifications through Firebase Cloud Messaging (`lib/state/pu
 - **What happens:** after sign-in the phone's FCM token is registered (`POST /me/push-devices`, platform `android`, `app` = this app's `NotificationScope`, so QuikFly Partner gets only partner updates and QuikFly only the rest), and again when Firebase refreshes it; signing out removes it first, while the session is still valid. In the background or when closed, Android shows the notification itself on the `quikfly_updates` channel (created in `MainActivity.kt`) with the bell icon `res/drawable/ic_stat_quikfly.xml` and the gold accent. In the foreground a banner shows with **View** and the inbox refreshes. A tap opens the same screen as the inbox row (`core/notifications.dart`; QuikFly Partner always opens its inbox).
 - **Token API:** `getToken`, `onTokenRefresh` and `deleteToken` are deprecated in firebase_messaging 17 in favour of `register()`/`onRegistered`, which hand out a Firebase Installation ID. The API sends with FCM HTTP v1's `message.token` (the registration token), so the app keeps the token calls until the sender changes.
 - The bell's count refreshes when the app returns to the foreground.
+
+## iPhone (iOS, test builds only)
+
+`ios/` holds the iPhone project (added 2026-11-27, [docs/ios-app-plan.md](../../docs/ios-app-plan.md)). Until the client signs off there's no Apple Developer Program: builds are installed from the Mac with a free Apple ID, keep opening for **7 days**, and have **no push** (`PushStatus.unavailable`, as on an Android build without `google-services.json`). The Android-only parts (phone-number hint, contact picker) already hide themselves on iOS.
+
+- **Flavors:** the `customer` and `partner` schemes with `Debug/Release/Profile-<flavor>` configurations, bundle ids `com.quikfly.app` / `com.quikfly.partner`, names "QuikFly" / "QuikFly Partner", icons `AppIcon` / `AppIcon-partner`. Made by `tool/ios_flavors.rb` (re-run it if `flutter create` ever regenerates the project): `GEM_HOME=$(brew --prefix cocoapods)/libexec $(brew --prefix ruby)/bin/ruby tool/ios_flavors.rb`.
+- **Icons:** iOS wants one opaque 1024 px icon; `swift tool/ios_icons.swift` renders both from the Android art (`assets/icon/`). Run it after changing an icon.
+- **Plugins** come in through Swift Package Manager (no CocoaPods); `Package.resolved` is committed. Minimum iOS 15.
+- **Info.plist:** camera and photo-library reasons (image_picker uploads) and `NSAllowsLocalNetworking`, so debug builds reach a local API over http. Links open with `launchUrl` only, so no `LSApplicationQueriesSchemes` list is needed.
+- **Simulator** (no Apple ID needed):
+  ```bash
+  flutter build ios --simulator --debug --flavor customer --dart-define=API_URL=http://127.0.0.1:8787/v1
+  xcrun simctl boot "iPhone 17"; xcrun simctl install "iPhone 17" build/ios/iphonesimulator/Runner.app
+  xcrun simctl launch "iPhone 17" com.quikfly.app        # Partner: --flavor partner -t lib/main_partner.dart, com.quikfly.partner
+  xcrun simctl io "iPhone 17" screenshot shot.png         # xcrun simctl ui "iPhone 17" appearance dark for dark mode
+  ```
+- **Your own iPhone** (free Apple ID): sign in once in Xcode → Settings → Accounts (the owner does this; agents never type the Apple ID password). On the iPhone turn on Settings → Privacy & Security → **Developer Mode** (it restarts) and trust the Mac. Then, with the phone unlocked and connected: `flutter run --release --flavor customer -d <iPhone id>` (`flutter devices` lists it); Flutter picks the signing team from Xcode. The first time, trust the developer on the phone: Settings → General → VPN & Device Management. Reinstall the same way after 7 days. A free Apple ID may find `com.quikfly.app` already registered by someone else; then build with another bundle id for testing only.
+- `GoogleService-Info.plist` (Firebase for iOS, after sign-off) is git-ignored like `google-services.json`.
 
 ## Icons and fonts
 
