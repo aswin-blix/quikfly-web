@@ -167,7 +167,7 @@ class _HomeState extends ConsumerState<_Home> {
                 ),
               ),
             ),
-          if ((s?.duty.demo ?? p.duty.demo) && pos != null)
+          if (live.online && (s?.duty.demo ?? false) && pos != null)
             Padding(padding: const EdgeInsets.only(top: 6), child: Text('Demo location: the app moves you along the route during a trip.', style: TextStyle(color: c.fgSubtle, fontSize: 12.5))),
           const SizedBox(height: 12),
           const _Today(),
@@ -226,7 +226,12 @@ class _DutyCard extends ConsumerWidget {
           Text("You're offline", style: Theme.of(context).textTheme.titleMedium),
         ]),
         const SizedBox(height: 10),
-        if (places.isNotEmpty)
+        // The demo locations are the city's places, from GET /config.
+        if (places.isEmpty)
+          ref.watch(configProvider).hasError
+              ? ErrorBox("Couldn't load the places to start from.", onRetry: () => ref.invalidate(configProvider))
+              : Text('Loading places…', style: TextStyle(color: c.fgMuted))
+        else
           DropdownButtonFormField<Place>(
             initialValue: start,
             isExpanded: true,

@@ -33,6 +33,11 @@ void main() {
     expect(NotificationScope.partner.shows('booking.confirmed'), isFalse);
     expect(NotificationScope.customer.shows('booking.confirmed'), isTrue);
     expect(NotificationScope.customer.shows('vendor.payout'), isFalse);
+    expect(NotificationScope.captain.shows('driver.offer'), isTrue);
+    expect(NotificationScope.captain.shows('booking.confirmed'), isFalse);
+    expect(NotificationScope.captain.shows('vendor.trip'), isFalse);
+    expect(NotificationScope.customer.shows('driver.offer'), isFalse);
+    expect(NotificationScope.partner.shows('driver.cancelled'), isFalse);
   });
 
   testWidgets('partner notifications do not navigate anywhere', (t) async {

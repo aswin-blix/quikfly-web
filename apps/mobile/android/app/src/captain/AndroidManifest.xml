@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- QuikFly Captain only (merged into src/main's manifest). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <!-- flutter_tts: offers are read aloud by the phone's text-to-speech engine (Android 11+ needs this to find it). -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE"/>
+        </intent>
+    </queries>
+</manifest>

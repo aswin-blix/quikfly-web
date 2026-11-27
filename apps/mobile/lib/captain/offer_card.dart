@@ -62,7 +62,7 @@ class _OfferCardState extends ConsumerState<OfferCard> {
         Wrap(spacing: 6, runSpacing: 6, children: [
           if (t.womenOnly) Pill('Women-only ride', color: c.highlight, icon: Icons.female),
           Pill(t.cash ? 'Cash' : 'Paid online', color: t.cash ? c.warning : c.success, icon: t.cash ? Icons.payments_outlined : Icons.check_circle_outline),
-          if (t.pickupKm != null) Pill('${t.pickupKm!.toStringAsFixed(1)} km to pickup', icon: Icons.near_me_outlined),
+          if (t.pickupKm != null) Pill(t.pickupKm! < 0.1 ? "You're at the pickup" : '${t.pickupKm!.toStringAsFixed(1)} km to pickup', icon: Icons.near_me_outlined),
         ]),
         const SizedBox(height: 12),
         RouteLines(pickup: t.pickup, drop: t.drop, stops: t.stops),
@@ -126,13 +126,13 @@ class MoneySplit extends StatelessWidget {
     return Column(children: [
       KeyValue('Rider pays', inr(m.customerPays)),
       // Coupons and credits are QuikFly's cost: the vehicle earns on the full fare.
-      if (m.farePaise + m.gstPaise > m.customerPays * 100) KeyValue('Discount QuikFly covers', '+${rupees(m.farePaise + m.gstPaise - m.customerPays * 100)}'),
-      if (m.gstPaise > 0) KeyValue('GST (QuikFly pays it)', '−${rupees(m.gstPaise)}'),
+      if (m.farePaise + m.gstPaise > m.customerPays * 100) KeyValue('Discount QuikFly covers', '+${inrPaise(m.farePaise + m.gstPaise - m.customerPays * 100)}'),
+      if (m.gstPaise > 0) KeyValue('GST (QuikFly pays it)', '−${inrPaise(m.gstPaise)}'),
       m.onDailyFee
           ? KeyValue('QuikFly share', 'None (daily fee)', valueColor: c.success)
-          : KeyValue('QuikFly share', '−${rupees(m.commissionPaise)}'),
-      if (m.tdsPaise > 0) KeyValue('TDS (0.1%)', '−${rupees(m.tdsPaise)}'),
-      KeyValue('Vehicle earns', rupees(m.earningPaise), bold: true, valueColor: c.success),
+          : KeyValue('QuikFly share', '−${inrPaise(m.commissionPaise)}'),
+      if (m.tdsPaise > 0) KeyValue('TDS (0.1%)', '−${inrPaise(m.tdsPaise)}'),
+      KeyValue('Vehicle earns', inrPaise(m.earningPaise), bold: true, valueColor: c.success),
     ]);
   }
 }

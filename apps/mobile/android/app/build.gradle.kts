@@ -12,6 +12,13 @@ plugins {
 // push stays off (lib/state/push.dart). See apps/mobile/README.md → Phone notifications.
 if (file("src/customer/google-services.json").exists() && file("src/partner/google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
+    // QuikFly Captain joins once its own Android app is added to the Firebase project and its file is in
+    // src/captain/. Until then its Firebase step is skipped, so it builds with push off (lib/state/push.dart).
+    if (!file("src/captain/google-services.json").exists()) {
+        tasks.configureEach {
+            if (name.startsWith("processCaptain") && name.endsWith("GoogleServices")) enabled = false
+        }
+    }
 }
 
 android {
@@ -39,8 +46,8 @@ android {
         versionName = flutter.versionName
     }
 
-    // Two apps from one project: the customer app (default, lib/main.dart) and QuikFly Partner
-    // for vehicle owners (lib/main_partner.dart). pubspec.yaml sets the default flavor, so
+    // Three apps from one project: the customer app (default, lib/main.dart), QuikFly Partner
+    // for vehicle owners (lib/main_partner.dart) and QuikFly Captain for drivers (lib/main_captain.dart). pubspec.yaml sets the default flavor, so
     // `flutter run` / `flutter build apk` keep building the customer app.
     flavorDimensions += "app"
     productFlavors {
@@ -53,6 +60,12 @@ android {
             dimension = "app"
             applicationId = "com.quikfly.partner"
             manifestPlaceholders["appLabel"] = "QuikFly Partner"
+        }
+        // QuikFly Captain, for drivers (lib/main_captain.dart; docs/driver-app-plan.md).
+        create("captain") {
+            dimension = "app"
+            applicationId = "com.quikfly.captain"
+            manifestPlaceholders["appLabel"] = "QuikFly Captain"
         }
     }
 
