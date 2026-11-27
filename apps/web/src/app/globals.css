@@ -48,3 +48,13 @@ body {
   -webkit-font-smoothing: antialiased;
   transition: background-color var(--theme-transition), color var(--theme-transition);
 }
+
+/* The logo on its plate: dark in light mode, transparent in dark mode (tokens --logo-plate*). The padding is the
+   same in both themes so switching never moves the layout. Use components/Logo.tsx rather than this class directly. */
+.logo-plate {
+  display: inline-flex;
+  background: var(--logo-plate);
+  border-radius: var(--logo-plate-radius);
+  padding: .375rem .75rem;
+  transition: background-color var(--theme-transition);
+}

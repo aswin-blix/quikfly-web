@@ -5,6 +5,7 @@ import {
   ArrowRight, BadgePercent, Download, Headphones, IndianRupee, MapPin, PhoneCall, Quote, Route, ShieldCheck, Share2, Smartphone, Sparkles, Star, Timer, UserCheck, Wallet,
 } from "lucide-react";
 import { BookingWidget } from "@/components/BookingWidget";
+import { Logo } from "@/components/Logo";
 import { SceneArt } from "@/components/SceneArt";
 import { CountUp, fadeUp, Magnetic, Marquee, Parallax, Reveal, SplitHeadline, StaggerGroup, Tilt } from "@/components/motion";
 import { Accordion, GhostLink, SectionTitle } from "@/components/ui";
@@ -328,7 +329,7 @@ function PhoneMock() {
     <div className="on-media w-[230px] h-[460px] rounded-[2.4rem] border-[6px] border-line bg-ink shadow-2xl overflow-hidden mx-auto translate-y-16">
       <div className="h-6 flex justify-center"><span className="w-20 h-4 bg-line rounded-b-xl" /></div>
       <div className="p-3 space-y-2">
-        <img src="/assets/logo.svg" alt="" width={1504} height={458} className="w-full h-auto" />
+        <Logo alt="" className="w-full" imgClassName="w-full h-auto" />
         <div className="grid grid-cols-3 gap-1.5">
           {/* The app: it has no parcels until step 5 of docs/parcel-service-plan.md. */}
           {SERVICES.filter((s) => s.key !== "parcel").map((s) => <div key={s.key} className="rounded-lg overflow-hidden border border-gold/20"><img src={s.image} alt="" className="aspect-square object-cover" /><p className="text-[8px] text-center py-0.5">{s.nav}</p></div>)}
