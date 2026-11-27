@@ -25,7 +25,8 @@ Pt routePoint(Pt a, Pt b, double t) {
 /// Where the simulated driver starts before heading to the pickup.
 Pt driverStartFor(Pt pickup) => Offset(math.max(4, pickup.dx - 14), math.min(96, pickup.dy + 12));
 
-enum RidePhase { plan, searching, arriving, ontrip, done }
+/// `arrived` and `unmatched` come only from a live ride (the server); simulated rides go arriving → ontrip → done.
+enum RidePhase { plan, searching, arriving, arrived, ontrip, done, unmatched }
 
 /// Point on the route through [points] (pickup, stops…, drop) at t: shared out by leg length (as the website).
 Pt routeVia(List<Pt> points, double t) {

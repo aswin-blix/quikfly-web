@@ -80,7 +80,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   const [simFallback, setSimFallback] = useState(false);
   /** A captain gave the ride back and the search started again. */
   const [researching, setResearching] = useState(false);
-  /** Re-runs the live poll after a failed read. */
+  /** Arms the next live poll after each read. */
   const [pollTick, setPollTick] = useState(0);
   const bookingStarted = useRef(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
@@ -196,7 +196,8 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
     if (!ride || !live || ["done", "unmatched", "cancelled"].includes(live.phase)) return;
     const seconds = live.phase === "searching" ? DRIVER_RULES.searchPollSeconds : DRIVER_RULES.pingBusySeconds;
     const id = window.setTimeout(() => {
-      api.rides.get(ride.id).then(onLiveUpdate, () => setPollTick((n) => n + 1)); // a failed read is retried
+      // Every read (or failed read) arms the next one, also while nothing changed (still searching).
+      api.rides.get(ride.id).then(onLiveUpdate, () => undefined).finally(() => setPollTick((n) => n + 1));
     }, seconds * 1000);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
