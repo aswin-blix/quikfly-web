@@ -1,6 +1,7 @@
 // Builds both apps' launcher icons from the Q of the master logo (brand/quikfly-logo.svg):
 //   QuikFly          the gold Q on the navy background (apps/mobile/assets/icon/background.png)
-//   QuikFly Partner  the gold Q on a light background with a blue tick, so the two are easy to tell apart
+//   QuikFly Partner  the gold Q with a blue tick on the brand's near-black (PARTNER_BG), so the two are easy
+//                    to tell apart; the logo was drawn on black, so its gold and glow read best there
 // Writes every Android density for both flavors (legacy, round and the adaptive background, foreground
 // and monochrome layers), the old shared icon in src/main, and the 1024 px squares in assets/icon/ that
 // `swift tool/ios_icons.swift` (run in apps/mobile, on a Mac) turns into the iPhone icons.
@@ -32,6 +33,9 @@ const IOS_VISIBLE = 1 / 1.3; // iOS has square-ish corners, so its icon shows a 
 const SOURCE = 1024; // every design is drawn once at this size, then scaled down
 
 const BLUE = ["#4f7df0", "#1f3d9e"]; // the Partner tick
+const TICK_RIM = "#ffffff"; // a thin rim keeps the blue tick clear of the dark background
+// The Partner background: near-black with a soft lift in the middle (dark tokens --surface → --bg).
+const PARTNER_BG = "radial-gradient(circle at 50% 42%,#26262f 0%,#111116 50%,#07070a 100%)";
 const APPS = {
   customer: {
     mark: { cx: 0.5, cy: 0.5, w: 0.47 },
@@ -41,8 +45,8 @@ const APPS = {
   partner: {
     mark: { cx: 0.475, cy: 0.465, w: 0.43 },
     tick: { cx: 0.652, cy: 0.648, r: 0.088 },
-    glow: "drop-shadow(0 0.01em 0.018em rgba(90,55,0,.45))",
-    background: (s) => `<div style="position:absolute;left:0;top:0;width:${s}px;height:${s}px;background:radial-gradient(circle at 50% 42%,#ffffff 0%,#f4f1ea 55%,#e2dccd 100%)"></div>`,
+    glow: "drop-shadow(0 0 0.012em rgba(255,176,40,.55)) drop-shadow(0 0.012em 0.02em rgba(0,0,0,.45))",
+    background: (s) => `<div style="position:absolute;left:0;top:0;width:${s}px;height:${s}px;background:${PARTNER_BG}"></div>`,
   },
 };
 
@@ -63,7 +67,7 @@ function tickBadge(s, { cx, cy, r }, oneColour) {
   const R = s * r;
   const disc = oneColour
     ? `<circle r="${R * 0.9}" fill="none" stroke="#fff" stroke-width="${R * 0.2}"/>`
-    : `<circle r="${R}" fill="url(#b)"/>`;
+    : `<circle r="${R}" fill="url(#b)" stroke="${TICK_RIM}" stroke-width="${R * 0.09}"/>`;
   return `<svg width="${s}" height="${s}" style="position:absolute;left:0;top:0${oneColour ? "" : ";filter:drop-shadow(0 0.01em 0.012em rgba(0,0,0,.35));font-size:" + s + "px"}">
     <defs><linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${BLUE[0]}"/><stop offset="1" stop-color="${BLUE[1]}"/></linearGradient></defs>
     <g transform="translate(${s * cx} ${s * cy})">${disc}
