@@ -314,7 +314,9 @@ void main() {
 
     test('declare the same services as packages/shared/src/clients.ts', () {
       expect(ServiceKey.declared.map((s) => s.name), quoted(shared('clients.ts'), 'DECLARED_SERVICES'));
-      expect(ServiceKey.clientAccept, 'application/json; services=parcel');
+      // LIVE_CLIENT_ACCEPT: the declared services, and live rides (LIVE_RIDES_PARAM).
+      expect(shared('clients.ts'), contains('LIVE_RIDES_PARAM = "rides=live"'));
+      expect(ServiceKey.clientAccept, 'application/json; services=parcel; rides=live');
     });
 
     test('every service the app knows has its meta and settings', () {
