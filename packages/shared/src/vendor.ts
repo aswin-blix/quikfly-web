@@ -206,14 +206,27 @@ export const VENDOR_RULES = {
 export const TDS_194O_PERCENT = 0.1;
 
 /**
+ * True when a trip of this service is on the flat daily fee instead of commission: city rides, while
+ * `vendorFlatDailyFee` is on. Other partner trips (group travel) always pay commission. `=== true`
+ * because a new setting can be missing for a minute after a deploy.
+ */
+export const onDailyFee = (settings: Settings, service: ServiceKey) =>
+  settings.vendorFlatDailyFee === true && (service === "bike" || service === "car");
+
+/** The daily fee in paise for a trip of this service; 0 when it pays commission. */
+export const dailyFeePaise = (settings: Settings, service: ServiceKey) =>
+  onDailyFee(settings, service) ? Math.max(0, Math.round((settings.vendorDailyFee ?? 0) * 100)) : 0;
+
+/**
  * What a partner earns on one trip, in paise. `gross` is the fare before coupons and credits
  * (QuikFly absorbs those); prices include GST, which QuikFly pays as the e-commerce operator.
- * earning = fare without GST − QuikFly's commission − TDS.
+ * earning = fare without GST − QuikFly's commission − TDS. On the flat daily fee the commission
+ * is 0; the fee is charged once a day, apart from any trip (services/partner-trips.ts).
  */
 export function tripEarnings(settings: Settings, service: ServiceKey, grossRupees: number) {
   const gross = Math.round(grossRupees * 100);
   const fare = Math.round(gross / (1 + gstRate(settings, service) / 100));
-  const commission = Math.round((fare * settings.vendorCommissionPercent) / 100);
+  const commission = onDailyFee(settings, service) ? 0 : Math.round((fare * settings.vendorCommissionPercent) / 100);
   const tds = Math.round((gross * TDS_194O_PERCENT) / 100);
   return { gross, gst: gross - fare, fare, commission, tds, earning: fare - commission - tds };
 }
@@ -263,10 +276,11 @@ export interface VendorTripSummary {
   drivers: { driverId: string; name: string; trips: number; earningPaise: number }[];
 }
 
-export type LedgerKind = "earning" | "cash" | "payout" | "payment" | "adjustment";
+export type LedgerKind = "earning" | "cash" | "fee" | "payout" | "payment" | "adjustment";
 export const LEDGER_LABEL: Record<LedgerKind, string> = {
   earning: "Trip earning",
   cash: "Cash your driver collected",
+  fee: "Daily fee",
   payout: "Paid to your bank",
   payment: "You paid QuikFly",
   adjustment: "Adjustment",
@@ -297,7 +311,8 @@ export interface VendorMoney {
   balancePaise: number;
   minPayoutPaise: number;
   pendingPayout: VendorPayout | null;
-  statements: { month: string; trips: number; grossPaise: number; commissionPaise: number; tdsPaise: number; earningPaise: number; cashPaise: number }[];
+  /** `feePaise`: daily fees charged in the month (a positive number), apart from the trips' own figures. */
+  statements: { month: string; trips: number; grossPaise: number; commissionPaise: number; feePaise: number; tdsPaise: number; earningPaise: number; cashPaise: number }[];
   entries: LedgerEntry[];
   payouts: VendorPayout[];
 }

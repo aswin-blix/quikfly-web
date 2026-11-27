@@ -256,6 +256,7 @@ class VendorTripSummary {
 const ledgerLabel = {
   'earning': 'Trip earning',
   'cash': 'Cash your driver collected',
+  'fee': 'Daily fee',
   'payout': 'Paid to your bank',
   'payment': 'You paid QuikFly',
   'adjustment': 'Adjustment',
@@ -280,9 +281,9 @@ class VendorMoney {
   int get balance => _p(j['balancePaise']);
   int get minPayout => _p(j['minPayoutPaise']);
   VendorPayout? get pending => j['pendingPayout'] == null ? null : VendorPayout(j['pendingPayout'] as Json);
-  List<({String month, int trips, int gross, int commission, int tds, int earning, int cash})> get statements => [
+  List<({String month, int trips, int gross, int commission, int fee, int tds, int earning, int cash})> get statements => [
         for (final s in (j['statements'] as List?) ?? const [])
-          (month: '${s['month']}', trips: _p(s['trips']), gross: _p(s['grossPaise']), commission: _p(s['commissionPaise']), tds: _p(s['tdsPaise']), earning: _p(s['earningPaise']), cash: _p(s['cashPaise'])),
+          (month: '${s['month']}', trips: _p(s['trips']), gross: _p(s['grossPaise']), commission: _p(s['commissionPaise']), fee: _p(s['feePaise']), tds: _p(s['tdsPaise']), earning: _p(s['earningPaise']), cash: _p(s['cashPaise'])),
       ];
   List<({String id, String kind, int amount, String note, DateTime at})> get entries => [
         for (final e in (j['entries'] as List?) ?? const [])

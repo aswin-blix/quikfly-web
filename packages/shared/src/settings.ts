@@ -194,6 +194,14 @@ export interface Settings {
   vendorExpiryWarnDays: number;
   /** QuikFly's commission on a partner trip (% of the fare without GST). The 2025 guidelines leave cab drivers at least 80%. */
   vendorCommissionPercent: number;
+  /**
+   * How QuikFly earns from city rides on partners' vehicles. Off: commission on every trip. On: no commission
+   * on rides; a driver's first completed ride of the day charges the owner `vendorDailyFee` once (no rides, no fee).
+   * Group-travel trips keep the commission either way.
+   */
+  vendorFlatDailyFee: boolean;
+  /** The flat daily fee per driver (₹), used while `vendorFlatDailyFee` is on. 0 means rides are free of any platform charge. */
+  vendorDailyFee: number;
   /** The smallest payout a partner can request (₹). */
   vendorMinPayout: number;
 
@@ -337,6 +345,8 @@ export const DEFAULT_SETTINGS: Settings = {
   vendorAuditAddress: "QuikFly partner hub, Chennai",
   vendorExpiryWarnDays: 30,
   vendorCommissionPercent: 20,
+  vendorFlatDailyFee: false,
+  vendorDailyFee: 50,
   vendorMinPayout: 500,
   featureLiveDrivers: false,
   rideSimulateDrivers: true,
@@ -477,6 +487,8 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   vendorAuditAddress: { type: "text", min: 5, max: 200 },
   vendorExpiryWarnDays: { type: "number", min: 1, max: 90, integer: true },
   vendorCommissionPercent: { type: "number", min: 0, max: 20, integer: true },
+  vendorFlatDailyFee: { type: "boolean" },
+  vendorDailyFee: money(500),
   vendorMinPayout: money(10000),
   featureLiveDrivers: { type: "boolean" },
   rideSimulateDrivers: { type: "boolean" },

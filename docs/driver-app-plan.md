@@ -18,7 +18,7 @@ Researched: Rapido Captain, Uber Driver, Namma Yatri, and the Motor Vehicle Aggr
 
 | QuikFly Captain | Competitors today |
 |---|---|
-| **Every offer shows the full trip and the money split**: pickup, drop, distance, what the customer pays, what the vehicle earns, QuikFly's share. For every driver, always. | Uber shows the destination only above an acceptance threshold; the fare breakdown comes after the trip. |
+| **Every offer shows the full trip and the money split**: pickup, drop, distance, what the customer pays, what the vehicle earns, QuikFly's share (or "no commission" on the daily fee). For every driver, always. | Uber shows the destination only above an acceptance threshold; the fare breakdown comes after the trip. |
 | **Offers are read aloud in the driver's language** (Tamil, Hindi, English): "Bike ride, T. Nagar to Adyar, 6 km, ₹84". A rider on a bike shouldn't have to read a phone. | Text and a sound. |
 | **Declining is free.** No acceptance score, no penalty, no hidden ranking. Among drivers about equally near, the one waiting longest is asked first. | Acceptance rates gate features and incentives. |
 | **Owners see their drivers live** in QuikFly Partner: who is online, who is on a trip. | Fleet owners use separate tools, or none. |
@@ -182,7 +182,8 @@ A "How it works" page built from the live values, never typed by hand: time to a
 
 1. **The privacy notice.** Add the captains' location section and bump the notice version (every user is asked to agree again), or show the location notice only inside Captain?
 2. **Name and package id.** "QuikFly Captain", `com.quikfly.captain`. The id can't change once the app is on the Play Store; it can until then.
-3. **Who is paid.** A trip's earning goes to the vehicle's owner (the partner), as today; a fleet driver sees trips, fares and cash held, not a payout. Owner-drivers are their own partner. Say if drivers should have their own earnings ledger.
+3. **How QuikFly earns (decided 2026-11-27): a setting.** Commission per ride (`vendorCommissionPercent`, the default) or a flat daily fee per driver (`vendorFlatDailyFee` + `vendorDailyFee`): no commission on rides, and the driver's first completed ride of the day charges the owner the fee once; no rides, no fee. Built in `feat/partner-daily-fee` (migration `0034`). Captain's offer sheet and earnings must read the model from settings and never show a share that isn't taken. Before turning the fee on for real partners: reword the agreement term that says "commission" and bump its version.
+4. **Who is paid.** A trip's earning goes to the vehicle's owner (the partner), as today; a fleet driver sees trips, fares and cash held, not a payout. Owner-drivers are their own partner. Say if drivers should have their own earnings ledger.
 
 ## Sources (research, 2026-11-27)
 

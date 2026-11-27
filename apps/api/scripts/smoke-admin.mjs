@@ -1215,6 +1215,32 @@ if (pvUp.status === 409) {
       await expect("pay what's owed (demo)", call("POST", "/vendor/payments", null, PV), 200, (j) => j.balancePaise === 0 && j.entries[0].kind === "payment");
       await expect("nothing more to pay", call("POST", "/vendor/payments", null, PV), 409);
     }
+    // The other way QuikFly can earn: a flat daily fee per driver instead of commission on rides.
+    await call("PATCH", "/admin/settings", { vendorFlatDailyFee: true, vendorDailyFee: 30 }, T);
+    await eventually("the daily-fee model reaches the API", () => call("GET", "/config"), (r) => r.json?.settings?.vendorFlatDailyFee === true && r.json.settings.vendorDailyFee === 30);
+    const owedBefore = (await call("GET", "/vendor/money", null, PV)).json.balancePaise;
+    const feeRide = await partnerRide("upi");
+    check("a ride still reaches the partner cab on the daily fee", !!feeRide);
+    if (feeRide) {
+      const net = (b) => Math.round((b.amount * 100) / (1 + s0.gstRides / 100)) - Math.round((b.amount * 100 * 0.1) / 100);
+      await expect("before it's done, the estimate already shows no commission", call("GET", "/vendor/trips", null, PV), 200,
+        (j) => { const t = j.find((x) => x.bookingId === feeRide.b.id); return t && t.estimate && t.commissionPaise === 0 && t.earningPaise === net(feeRide.b); });
+      await call("POST", `/bookings/${feeRide.b.id}/complete`, null, RC);
+      await expect("on the daily fee a ride settles with no commission", call("GET", "/vendor/trips", null, PV), 200,
+        (j) => { const t = j.find((x) => x.bookingId === feeRide.b.id); return t && !t.estimate && t.commissionPaise === 0 && t.earningPaise === net(feeRide.b); });
+      await expect("the driver's first ride of the day charges the fee once", call("GET", "/vendor/money", null, PV), 200,
+        (j) => j.balancePaise === owedBefore + net(feeRide.b) - 3000 && j.entries.filter((e) => e.kind === "fee").length === 1
+          && j.entries.find((e) => e.kind === "fee").amountPaise === -3000 && j.statements[0].feePaise === 3000);
+      await call("POST", `/bookings/${feeRide.b.id}/complete`, null, RC);
+      const second = await partnerRide("upi");
+      if (second) {
+        await call("POST", `/bookings/${second.b.id}/complete`, null, RC);
+        await expect("a second ride the same day pays no second fee", call("GET", "/vendor/money", null, PV), 200,
+          (j) => j.balancePaise === owedBefore + net(feeRide.b) + net(second.b) - 3000 && j.entries.filter((e) => e.kind === "fee").length === 1 && j.statements[0].feePaise === 3000);
+      }
+    }
+    await call("PATCH", "/admin/settings", { vendorFlatDailyFee: s0.vendorFlatDailyFee ?? false, vendorDailyFee: s0.vendorDailyFee ?? 50 }, T);
+    await eventually("commission is back", () => call("GET", "/config"), (r) => r.json?.settings?.vendorFlatDailyFee === false);
   }
   for (const id of ridesToCancel) await call("POST", `/bookings/${id}/cancel`, null, RC);
   // Staff give a group-travel booking to a partner vehicle
