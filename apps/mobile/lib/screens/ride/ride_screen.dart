@@ -1,6 +1,8 @@
 // Bike taxi and cab: pickup/drop → fares from the API → driver search → live trip → rating.
-// The trip itself is simulated (RIDE_SIMULATION timings) like on the website; the API prices
-// the ride and the booking carries its rideId, never an amount.
+// A simulated ride plays its trip with timers (RIDE_SIMULATION) like on the website. A live ride (live
+// captains on, docs/driver-app-plan.md) follows the API: it searches for a captain, is paid once one
+// accepts, then moves as the captain moves. The API prices the ride; the booking carries its rideId.
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -65,6 +67,12 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
   int _rating = 0;
   late final _clock = AnimationController(vsync: this)..addListener(() => setState(() {}));
   int _quoteRequest = 0;
+
+  /// Live rides: the next read of the ride, whether the payment has been started, a captain gave the
+  /// ride back (searching again), and a fall back to a simulated captain (labelled on screen).
+  Timer? _poll;
+  bool _bookingStarted = false, _researching = false, _simFallback = false;
+  RideLive? get _live => _ride?.live;
 
   bool get _bike => widget.service == ServiceKey.bike;
   double get _t => _clock.value;
@@ -144,8 +152,124 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
 
   @override
   void dispose() {
+    _poll?.cancel();
     _clock.dispose();
     super.dispose();
+  }
+
+  /// Reads a live ride again after DRIVER_RULES' interval (each read also moves its captain search on).
+  void _schedulePoll() {
+    _poll?.cancel();
+    final r = _ride, live = r?.live;
+    if (r == null || live == null || const ['done', 'unmatched', 'cancelled'].contains(live.phase)) return;
+    _poll = Timer(Duration(seconds: live.phase == 'searching' ? Rules.rideSearchPollSeconds : Rules.rideLivePollSeconds), () async {
+      try {
+        final next = await ref.read(apiProvider).ride(r.id);
+        if (mounted && _ride?.id == r.id) _onLive(next);
+      } catch (_) {
+        if (mounted) _schedulePoll(); // a failed read is tried again
+      }
+    });
+  }
+
+  /// A new read of a live ride: follow its phase; pay once a captain accepts.
+  void _onLive(Ride r) {
+    final was = _live?.phase;
+    final live = r.live;
+    if (live == null) {
+      // Nobody took it and a simulated captain stepped in: play it like any simulated ride.
+      setState(() {
+        _ride = r;
+        _simFallback = true;
+      });
+      _startPhase(RidePhase.arriving);
+      if (_bookingId == null) _payFor(r);
+      return;
+    }
+    setState(() => _ride = r);
+    switch (live.phase) {
+      case 'searching':
+        setState(() {
+          if (was == 'arriving' || was == 'arrived') _researching = true;
+          _phase = RidePhase.searching;
+        });
+      case 'arriving' || 'arrived':
+        setState(() {
+          _researching = false;
+          _phase = live.phase == 'arrived' ? RidePhase.arrived : RidePhase.arriving;
+        });
+        if (_bookingId == null) _payFor(r);
+      case 'ontrip':
+        setState(() => _phase = RidePhase.ontrip);
+      case 'done':
+        setState(() => _phase = RidePhase.done);
+        ref.invalidate(bookingsProvider);
+      case 'unmatched':
+        setState(() => _phase = RidePhase.unmatched);
+        ref.invalidate(bookingsProvider); // anything already paid came back
+        ref.read(sessionProvider.notifier).refresh();
+      case 'cancelled':
+        toast(context, 'This ride was cancelled.');
+        ref.invalidate(bookingsProvider);
+        _reset();
+        return;
+    }
+    _schedulePoll();
+  }
+
+  /// Pays for a live ride a captain has just taken (once). If paying fails, the captain is let go.
+  Future<void> _payFor(Ride r) async {
+    if (_bookingStarted) return;
+    _bookingStarted = true;
+    try {
+      await _createBooking(r);
+      _autoShareIfNight(r);
+    } catch (e) {
+      ref.read(apiProvider).cancelRide(r.id).catchError((_) {});
+      if (!mounted) return;
+      toast(context, errorText(e));
+      _reset();
+    }
+  }
+
+  /// The booking (the payment) for a ride: right after booking a simulated one, once a captain accepts a live one.
+  Future<Booking> _createBooking(Ride r) async {
+    final driver = r.driver;
+    final booking = await ref.read(apiProvider).createBooking(
+      service: widget.service,
+      title: '${r.quote.option.name} · ${r.drop.name}',
+      subtitle: '${r.pickup.name} → ${r.drop.name}',
+      payment: PaymentMethod.values.firstWhere((p) => p.name == r.payment, orElse: () => _payment),
+      rideId: r.id,
+      useCredits: _creditsOff() > 0,
+      tripOf: widget.tripOf,
+      // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
+      lines: r.scheduledFor != null || driver == null
+          ? [
+              if (r.scheduledFor != null) ('Pickup time', dateTime(r.scheduledFor!)),
+              if (r.stops.isNotEmpty) ('Stops', r.stops.map((s) => s.name).join(' → ')),
+              ('Payment', paymentLabel(r.payment)),
+              ('Distance', '${r.quote.distanceKm} km'),
+            ]
+          : [
+              ('Driver', driver.name),
+              ('Vehicle', '${driver.vehicle} · ${driver.plate}'),
+              ('Ride OTP', r.otp),
+              ('Payment', paymentLabel(r.payment)),
+              ('Distance', '${r.quote.distanceKm} km'),
+            ],
+    );
+    _creditsPaid = booking.creditsUsed;
+    if (mounted) {
+      setState(() {
+        _bookingId = booking.id;
+        _bookedAt = booking.createdAt;
+        _bookedTerms = booking.terms;
+      });
+    }
+    ref.invalidate(bookingsProvider);
+    ref.read(sessionProvider.notifier).refresh();
+    return booking;
   }
 
   void _startPhase(RidePhase p) {
@@ -212,48 +336,24 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     Ride? r;
     try {
       r = await api.bookRide(q.option.id, a.id, b.id, _payment, scheduledFor: _scheduledFor, stopIds: [for (final s in _stops) s.id]);
-      final booking = await api.createBooking(
-        service: widget.service,
-        title: '${r.quote.option.name} · ${r.drop.name}',
-        subtitle: '${r.pickup.name} → ${r.drop.name}',
-        payment: _payment,
-        rideId: r.id,
-        useCredits: _creditsOff() > 0,
-        tripOf: widget.tripOf,
-        // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
-        lines: r.scheduledFor != null
-            ? [
-                ('Pickup time', dateTime(r.scheduledFor!)),
-                if (r.stops.isNotEmpty) ('Stops', r.stops.map((s) => s.name).join(' → ')),
-                ('Payment', paymentLabel(_payment.name)),
-                ('Distance', '${r.quote.distanceKm} km'),
-              ]
-            : [
-          ('Driver', r.driver.name),
-          ('Vehicle', '${r.driver.vehicle} · ${r.driver.plate}'),
-          ('Ride OTP', r.otp),
-          ('Payment', paymentLabel(_payment.name)),
-          ('Distance', '${r.quote.distanceKm} km'),
-        ],
-      );
       if (!mounted) return;
-      _creditsPaid = booking.creditsUsed;
+      if (r.isLive) {
+        // Real captains: wait for one to accept (the poll), then pay.
+        setState(() => _ride = r);
+        _schedulePoll();
+        return;
+      }
+      await _createBooking(r);
+      if (!mounted) return;
       if (r.scheduledFor != null) {
         setState(() {
           _scheduled = r;
           _phase = RidePhase.plan;
         });
-        ref.invalidate(bookingsProvider);
-        ref.read(sessionProvider.notifier).refresh();
         return;
       }
       _ride = r;
-      _bookingId = booking.id;
-      _bookedAt = booking.createdAt;
-      _bookedTerms = booking.terms;
       _startPhase(RidePhase.arriving);
-      ref.invalidate(bookingsProvider);
-      ref.read(sessionProvider.notifier).refresh();
       _autoShareIfNight(r);
     } catch (e) {
       // e.g. the wallet ran short between quote and booking: release the driver.
@@ -320,14 +420,15 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     final reason = await _askReason();
     if (reason == null || !mounted) return;
     // The dialog may have stayed open until the trip started; cancelling is only for the wait.
-    if (_phase != RidePhase.arriving) {
+    if (_phase != RidePhase.arriving && _phase != RidePhase.arrived) {
       toast(context, 'Your trip has already started, so it can no longer be cancelled.');
       return;
     }
     _clock.stop();
     final api = ref.read(apiProvider);
     try {
-      if (_ride != null) await api.cancelRide(_ride!.id);
+      // A paid live ride is cancelled through its booking (the API frees and tells the captain).
+      if (_ride != null && !(_ride!.isLive && _bookingId != null)) await api.cancelRide(_ride!.id);
       final done = _bookingId == null ? null : await api.cancelBooking(_bookingId!, reason: reason);
       final fee = done?.cancelFee ?? 0;
       if (mounted) {
@@ -347,10 +448,28 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
     _reset();
   }
 
-  /// Trip over: move the booking from Upcoming to Past.
+  /// Stops a live search: before a captain took it nothing was paid; after one gave a paid ride back the API waives the fee.
+  Future<void> _cancelSearch() async {
+    final api = ref.read(apiProvider);
+    try {
+      if (_bookingId != null) {
+        await api.cancelBooking(_bookingId!);
+        if (mounted) toast(context, 'Ride cancelled. No charges applied.');
+      } else if (_ride != null) {
+        await api.cancelRide(_ride!.id);
+      }
+    } catch (e) {
+      if (mounted) toast(context, errorText(e));
+    }
+    ref.invalidate(bookingsProvider);
+    ref.read(sessionProvider.notifier).refresh();
+    _reset();
+  }
+
+  /// Trip over: move the booking from Upcoming to Past (a live ride is completed by its captain).
   Future<void> _complete() async {
     final id = _bookingId;
-    if (id == null) return;
+    if (id == null || (_ride?.isLive ?? false)) return;
     try {
       await ref.read(apiProvider).completeBooking(id);
     } catch (_) {/* stays upcoming; nothing to show the rider */}
@@ -359,10 +478,14 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
 
   void _reset() {
     _clock.stop();
+    _poll?.cancel();
     setState(() {
       _phase = RidePhase.plan;
       _ride = null;
       _bookingId = null;
+      _bookingStarted = false;
+      _researching = false;
+      _simFallback = false;
       _rating = 0;
       _clock.value = 0;
     });
@@ -377,7 +500,9 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       final url = '$webUrl/track?t=${Uri.encodeQueryComponent(link.token)}';
       await SharePlus.instance.share(ShareParams(
         subject: 'My QuikFly ride',
-        text: 'Follow my QuikFly ride: ${r.driver.vehicle} (${r.driver.plate}) from ${r.pickup.name} to ${r.drop.name}. $url',
+        text: r.driver == null
+            ? 'Follow my QuikFly ride from ${r.pickup.name} to ${r.drop.name}. $url'
+            : 'Follow my QuikFly ride: ${r.driver!.vehicle} (${r.driver!.plate}) from ${r.pickup.name} to ${r.drop.name}. $url',
       ));
     } catch (e) {
       if (mounted) toast(context, errorText(e));
@@ -412,6 +537,13 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
 
     final pickup = _pickup, drop = _drop;
     final live = _phase == RidePhase.arriving || _phase == RidePhase.ontrip || _phase == RidePhase.done;
+    final rl = _live;
+    // A live ride shows where its captain really is (at the pickup once arrived); a simulated one is worked out from the clock.
+    final Offset? vehicle = rl != null
+        ? (rl.hasCaptain ? Offset(rl.captainX!, rl.captainY!) : (_phase == RidePhase.arrived && pickup != null ? placePt(pickup) : null))
+        : pickup != null && drop != null && live
+            ? vehiclePosition(_phase, placePt(pickup), placePt(drop), _t, [for (final s in _stops) placePt(s)])
+            : null;
     final map = CityMap(
       places: places,
       pickup: pickup,
@@ -420,16 +552,16 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       bike: _bike,
       showRoute: drop != null && _phase != RidePhase.arriving,
       searching: _phase == RidePhase.searching,
-      vehicle: pickup != null && drop != null && live ? vehiclePosition(_phase, placePt(pickup), placePt(drop), _t, [for (final s in _stops) placePt(s)]) : null,
-      vehicleFrom: _phase == RidePhase.arriving && pickup != null ? driverStartFor(placePt(pickup)) : null,
+      vehicle: vehicle,
+      vehicleFrom: rl == null && _phase == RidePhase.arriving && pickup != null ? driverStartFor(placePt(pickup)) : null,
     );
     final panel = AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
-      child: KeyedSubtree(key: ValueKey(_phase == RidePhase.ontrip ? RidePhase.arriving : _phase), child: _panel(places)),
+      child: KeyedSubtree(key: ValueKey(_phase == RidePhase.ontrip || _phase == RidePhase.arrived ? RidePhase.arriving : _phase), child: _panel(places)),
     );
 
     return PopScope(
-      canPop: _phase == RidePhase.plan || _phase == RidePhase.done,
+      canPop: _phase == RidePhase.plan || _phase == RidePhase.done || _phase == RidePhase.unmatched,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) toast(context, 'Your ride is in progress. Cancel it first to leave.');
       },
@@ -462,8 +594,9 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         RidePhase.plan when _scheduled != null => _scheduledView(_scheduled!),
         RidePhase.plan => _plan(places),
         RidePhase.searching => _searching(),
-        RidePhase.arriving || RidePhase.ontrip => _live(),
+        RidePhase.arriving || RidePhase.arrived || RidePhase.ontrip => _ride?.driver == null ? _searching() : _liveView(),
         RidePhase.done => _done(),
+        RidePhase.unmatched => _unmatched(),
       };
 
   Settings get _settings => ref.watch(configProvider).value?.settings ?? const Settings({});
@@ -814,24 +947,71 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
       child: Column(children: [
         const SizedBox(width: 56, height: 56, child: CircularProgressIndicator(strokeWidth: 3)),
         const SizedBox(height: 18),
-        Text('Finding your ${_quote?.option.name ?? 'ride'}…', style: Theme.of(context).textTheme.titleLarge),
+        Text(_researching ? 'Finding you another captain…' : 'Finding your ${_ride?.quote.option.name ?? _quote?.option.name ?? 'ride'}…',
+            textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 4),
-        Text('Matching you with the nearest top-rated driver', style: TextStyle(color: c.fgMuted)),
+        Text(
+          _researching
+              ? "Your captain couldn't make it. We're asking the next nearest one; you pay nothing extra."
+              : _ride?.isLive == true
+                  ? 'Asking the nearest captain. You pay only once one accepts.'
+                  : 'Matching you with the nearest top-rated driver',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: c.fgMuted),
+        ),
+        if (_ride?.isLive == true) ...[
+          const SizedBox(height: 12),
+          TextButton(onPressed: _cancelSearch, child: Text(_bookingId != null ? 'Cancel (no charge)' : 'Cancel')),
+        ],
       ]),
     );
   }
 
-  Widget _live() {
+  /// No captain took the ride (and no simulated one stepped in): nothing is owed.
+  Widget _unmatched() {
+    final c = context.qf;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Column(children: [
+        Icon(Icons.person_search_outlined, size: 44, color: c.fgMuted),
+        const SizedBox(height: 10),
+        Text('No captain found', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 6),
+        Text(Rules.noCaptain, textAlign: TextAlign.center, style: TextStyle(color: c.fgMuted)),
+        const SizedBox(height: 16),
+        GoldButton(label: 'Try again', onPressed: _reset),
+      ]),
+    );
+  }
+
+  Widget _liveView() {
     final c = context.qf;
     final r = _ride!;
-    final arriving = _phase == RidePhase.arriving;
-    final left = arriving ? (r.quote.etaMin * (1 - _t)).ceil().clamp(1, 999) : (r.quote.durationMin * (1 - _t)).ceil().clamp(1, 999);
+    final d = r.driver!;
+    final rl = r.live;
+    final arrived = _phase == RidePhase.arrived;
+    final arriving = _phase == RidePhase.arriving || arrived;
+    // A live ride's minutes come from the API; a simulated one's from the clock.
+    final left = rl != null
+        ? (rl.etaMin ?? (arriving ? r.quote.etaMin : r.quote.durationMin))
+        : arriving ? (r.quote.etaMin * (1 - _t)).ceil().clamp(1, 999) : (r.quote.durationMin * (1 - _t)).ceil().clamp(1, 999);
+    final progress = rl == null
+        ? _t
+        : arrived ? 1.0
+        : (1 - left / (arriving ? r.quote.etaMin : r.quote.durationMin).clamp(1, 999)).clamp(0.0, 1.0);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (_simFallback)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Text('No captain was free, so a simulated captain (demo) is taking this ride.', style: TextStyle(color: c.warning, fontSize: 12.5)),
+        ),
       Row(children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(arriving ? 'DRIVER ON THE WAY' : 'ON TRIP', style: TextStyle(color: c.success, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1)),
-            Text(arriving ? 'Arriving in $left min' : '$left min to drop', style: Theme.of(context).textTheme.headlineSmall),
+            Text(arrived ? 'YOUR CAPTAIN IS HERE' : arriving ? (rl != null ? 'CAPTAIN ON THE WAY' : 'DRIVER ON THE WAY') : 'ON TRIP',
+                style: TextStyle(color: c.success, fontSize: 11.5, fontWeight: FontWeight.w700, letterSpacing: 1)),
+            Text(arrived ? 'Meet at the pickup' : arriving ? 'Arriving in $left min' : '$left min to drop', style: Theme.of(context).textTheme.headlineSmall),
+            if (arrived) Text('Tell your captain your PIN to start the trip.', style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
           ]),
         ),
         if (arriving)
@@ -841,7 +1021,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
           ]),
       ]),
       const SizedBox(height: 10),
-      ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: _t, minHeight: 6, backgroundColor: c.border)),
+      ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: progress, minHeight: 6, backgroundColor: c.border)),
       const SizedBox(height: 14),
       Panel(
         padding: const EdgeInsets.all(12),
@@ -849,20 +1029,20 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
           CircleAvatar(
             radius: 24,
             backgroundColor: Brand.gold,
-            child: Text(r.driver.name[0], style: const TextStyle(color: Brand.onGold, fontWeight: FontWeight.w700, fontSize: 18)),
+            child: Text(d.name[0], style: const TextStyle(color: Brand.onGold, fontWeight: FontWeight.w700, fontSize: 18)),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(r.driver.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(d.name, style: const TextStyle(fontWeight: FontWeight.w700)),
               Row(children: [
                 Icon(Icons.star, size: 14, color: c.accent),
                 const SizedBox(width: 3),
-                Text('${r.driver.rating} · ${r.driver.trips} trips', style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
+                Text('${d.rating} · ${d.trips} trips', style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
               ]),
             ]),
           ),
-          IconButton.outlined(tooltip: 'Call driver', onPressed: () => call(r.driver.phone), icon: const Icon(Icons.call, size: 18)),
+          IconButton.outlined(tooltip: 'Call driver', onPressed: () => call(d.phone), icon: const Icon(Icons.call, size: 18)),
         ]),
       ),
       const SizedBox(height: 10),
@@ -872,7 +1052,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
         child: Row(children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(r.driver.vehicle, style: TextStyle(color: c.fgSoft)),
+              Text(d.vehicle, style: TextStyle(color: c.fgSoft)),
               Text(r.quote.option.name, style: TextStyle(color: c.fgSubtle, fontSize: 12)),
             ]),
           ),
@@ -880,7 +1060,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.black26)),
-            child: Text(r.driver.plate, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
+            child: Text(d.plate, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
           ),
         ]),
       ),
@@ -970,7 +1150,7 @@ class _RideScreenState extends ConsumerState<RideScreen> with SingleTickerProvid
           Text('${inr(_earnedNow(r))} QuikFly Credits earned', style: TextStyle(color: c.accent, fontWeight: FontWeight.w600)),
         ],
         const SizedBox(height: 16),
-        Text('Rate your ride with ${r.driver.name}'),
+        Text('Rate your ride with ${r.driver?.name ?? 'your captain'}'),
         const SizedBox(height: 6),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           for (var n = 1; n <= 5; n++)

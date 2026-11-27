@@ -28,8 +28,9 @@ enum ServiceKey {
   /// Declaring one promises this app shows it everywhere a booking can appear.
   static const declared = [ServiceKey.parcel];
 
-  /// The `Accept` every request sends (CLIENT_ACCEPT); without it the API keeps those services from us.
-  static String get clientAccept => 'application/json; services=${declared.map((s) => s.name).join('+')}';
+  /// The `Accept` every request sends (LIVE_CLIENT_ACCEPT): the services above, and `rides=live` because the ride
+  /// screen follows a live ride's phases (docs/driver-app-plan.md). Without it the API keeps those from us.
+  static String get clientAccept => 'application/json; services=${declared.map((s) => s.name).join('+')}; rides=live';
 }
 
 enum PaymentMethod { upi, card, netbanking, wallet, cash }
@@ -300,12 +301,31 @@ class Driver {
       Driver('${j['name']}', _num(j['rating']), _int(j['trips']), '${j['vehicle']}', '${j['plate']}', '${j['phone'] ?? ''}');
 }
 
+/// A live ride's progress (RideLive in packages/shared/src/driver.ts): the server owns it.
+class RideLive {
+  const RideLive(this.phase, this.captainX, this.captainY, this.etaMin);
+  /// searching | arriving | arrived | ontrip | done | unmatched | cancelled
+  final String phase;
+  /// The captain on the city map, from acceptance to the drop.
+  final double? captainX, captainY;
+  final int? etaMin;
+  bool get hasCaptain => captainX != null && captainY != null;
+  factory RideLive.fromJson(Json j) {
+    final c = j['captain'] as Json?;
+    return RideLive('${j['phase']}', c == null ? null : _num(c['x']), c == null ? null : _num(c['y']), j['etaMin'] == null ? null : _int(j['etaMin']));
+  }
+}
+
 class Ride {
-  const Ride(this.id, this.quote, this.pickup, this.drop, this.driver, this.otp, this.payment, {this.scheduledFor, this.stops = const []});
+  const Ride(this.id, this.quote, this.pickup, this.drop, this.driver, this.otp, this.payment, {this.scheduledFor, this.stops = const [], this.live});
   final String id, otp, payment;
   final FareQuote quote;
   final Place pickup, drop;
-  final Driver driver;
+  /// Null while a live ride is still looking for its captain.
+  final Driver? driver;
+  /// Set for a live ride (a real captain): its progress comes from the API, not the screen's timers.
+  final RideLive? live;
+  bool get isLive => live != null;
 
   /// Pickup time of a ride booked ahead (local time); null for ride-now. Started from My Trips.
   final DateTime? scheduledFor;
@@ -313,9 +333,10 @@ class Ride {
   /// Stops between pickup and drop, in order.
   final List<Place> stops;
   factory Ride.fromJson(Json j) => Ride(j['id'] as String, FareQuote.fromJson(j['quote'] as Json), Place.fromJson(j['pickup'] as Json),
-      Place.fromJson(j['drop'] as Json), Driver.fromJson(j['driver'] as Json), '${j['otp']}', '${j['payment']}',
+      Place.fromJson(j['drop'] as Json), j['driver'] == null ? null : Driver.fromJson(j['driver'] as Json), '${j['otp']}', '${j['payment']}',
       scheduledFor: j['scheduledFor'] == null ? null : DateTime.tryParse('${j['scheduledFor']}')?.toLocal(),
-      stops: ((j['stops'] as List?) ?? const []).map((p) => Place.fromJson(p as Json)).toList());
+      stops: ((j['stops'] as List?) ?? const []).map((p) => Place.fromJson(p as Json)).toList(),
+      live: j['live'] == null ? null : RideLive.fromJson(j['live'] as Json));
 }
 
 class Bus {
@@ -895,6 +916,11 @@ abstract final class Rules {
   /// Simulated ride timings (RIDE_SIMULATION).
   static const rideArrive = Duration(milliseconds: 9000);
   static const rideTrip = Duration(milliseconds: 12000);
+  /// DRIVER_RULES: how often the ride screen reads a live ride (seconds), while searching and during the trip.
+  static const rideSearchPollSeconds = 3;
+  static const rideLivePollSeconds = 5;
+  /// NO_CAPTAIN in packages/shared/src/driver.ts.
+  static const noCaptain = "No captain is free near you right now. You haven't been charged. Please try again in a few minutes.";
 
   /// Scheduled rides: driver assigned, and "Start ride" open, this many minutes before pickup (RIDE_SCHEDULE).
   static const rideStartWindowMinutes = 15;
