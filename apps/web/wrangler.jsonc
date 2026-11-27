@@ -1,18 +1,25 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  // Static hosting for the website: a Worker with no code that serves the `next build` export.
+  // Static hosting for the website: a Worker that serves the `next build` export (its only code redirects the old workers.dev address).
   // Build first (see `deploy` in package.json), then `wrangler deploy` uploads ./out.
   "name": "quikfly-web",
+  // Page requests on the old workers.dev address are redirected to CANONICAL_ORIGIN (same path and query);
+  // see workers/canonical-redirect.mjs. workers_dev stays true so that address keeps answering with the redirect.
+  "main": "../../workers/canonical-redirect.mjs",
   "compatibility_date": "2026-11-01",
+  "vars": { "CANONICAL_ORIGIN": "https://quikfly.in" },
   // Custom domains (zone quikfly.in). www is sent to quikfly.in by a Redirect Rule in the dashboard
-  // (docs/operations.md → Domain). workers_dev stays on so old shared links keep working.
+  // (docs/operations.md → Domain). workers_dev stays on so old shared links keep working (redirected to the same page here).
   "workers_dev": true,
   "routes": [
     { "pattern": "quikfly.in", "custom_domain": true },
     { "pattern": "www.quikfly.in", "custom_domain": true }
   ],
   "assets": {
+    "binding": "ASSETS",
     "directory": "./out",
+    // Only page requests run the script; built files are served straight from the assets.
+    "run_worker_first": ["/*", "!/_next/*", "!/assets/*"],
     // /bus/search serves out/bus/search.html; unknown paths get out/404.html.
     "html_handling": "drop-trailing-slash",
     "not_found_handling": "404-page"
