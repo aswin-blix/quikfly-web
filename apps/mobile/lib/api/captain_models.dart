@@ -111,13 +111,18 @@ class CaptainProfile {
   }
 }
 
-/// GET /driver: the profile, or why this number isn't a captain.
+/// GET /driver: the profile, or why this number isn't a captain (and whether it may register its own vehicle).
 class CaptainLookup {
-  const CaptainLookup(this.captain, this.reason);
+  const CaptainLookup(this.captain, this.reason, {this.selfSignup = false});
   final CaptainProfile? captain;
   final String? reason;
-  factory CaptainLookup.fromJson(Json j) =>
-      CaptainLookup(j['captain'] == null ? null : CaptainProfile.fromJson(j['captain'] as Json), j['reason'] as String?);
+  /// Settings.captainSelfSignup: offer owner-driver registration.
+  final bool selfSignup;
+  factory CaptainLookup.fromJson(Json j) => CaptainLookup(
+        j['captain'] == null ? null : CaptainProfile.fromJson(j['captain'] as Json),
+        j['reason'] as String?,
+        selfSignup: j['selfSignup'] == true,
+      );
 }
 
 /// What a trip is worth to the vehicle. Paise, except [customerPays] (₹).

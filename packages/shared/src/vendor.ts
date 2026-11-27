@@ -2,14 +2,15 @@ import type { CaptainLiveStatus } from "./driver";
 import { gstRate, type Settings } from "./settings";
 import type { Gender, PaymentMethod, ServiceKey } from "./types";
 
-// Vendor (partner) registration: vehicle owners who put a cab, auto, tempo traveller or bus
+// Vendor (partner) registration: vehicle owners who put a bike, cab, auto, tempo traveller or bus
 // on QuikFly, through the QuikFly Partner app. Step 1 is an application of six sections that
 // staff review one by one; step 2 (onboarding) is the joining fee, the agreement, and the
 // QuikFly sticker and paint. The API enforces these rules; the apps check early with them.
 
-export const VENDOR_VEHICLE_TYPES = ["car", "auto", "tempo", "bus"] as const;
+export const VENDOR_VEHICLE_TYPES = ["bike", "car", "auto", "tempo", "bus"] as const;
 export type VendorVehicleType = (typeof VENDOR_VEHICLE_TYPES)[number];
 export const VENDOR_VEHICLE_LABEL: Record<VendorVehicleType, string> = {
+  bike: "Bike (bike taxi)",
   car: "Car (cab or outstation)",
   auto: "Auto",
   tempo: "Tempo traveller",
@@ -19,6 +20,10 @@ export const VENDOR_VEHICLE_LABEL: Record<VendorVehicleType, string> = {
 export const FUEL_TYPES = ["petrol_diesel", "cng_lpg", "electric"] as const;
 export type FuelType = (typeof FUEL_TYPES)[number];
 export const FUEL_LABEL: Record<FuelType, string> = { petrol_diesel: "Petrol or diesel", cng_lpg: "CNG or LPG", electric: "Electric" };
+
+/** The fuels a vehicle type can run on (a bike: petrol or electric). The API refuses any other; the forms offer only these. */
+export const fuelsFor = (type: VendorVehicleType | null | undefined): readonly FuelType[] =>
+  type === "bike" ? ["petrol_diesel", "electric"] : FUEL_TYPES;
 
 /** The application's sections, in the order the Partner app lists them. */
 export const VENDOR_SECTIONS = ["vehicle", "photo", "bank", "rc", "insurance", "audit"] as const;
@@ -234,20 +239,22 @@ export function tripEarnings(settings: Settings, service: ServiceKey, grossRupee
   return { gross, gst: gross - fare, fare, commission, tds, earning: fare - commission - tds };
 }
 
-/** Which partner vehicle type can take a ride option: cabs for car rides, autos for the Auto option. */
+/** Which partner vehicle type can take a ride option: cabs for car rides, autos for the Auto option, bikes for the other bike-taxi options. */
 export function vehicleTypeForRide(option: { id: string; service: ServiceKey }): VendorVehicleType | null {
   if (option.service === "car") return "car";
-  return option.id === "auto" ? "auto" : null;
+  if (option.service !== "bike") return null;
+  return option.id === "auto" ? "auto" : "bike";
 }
 
-/** Vehicle types whose drivers can take rides in QuikFly Captain (bikes join with self sign-up, step 6 of the plan). */
-export const CAPTAIN_VEHICLE_TYPES: readonly VendorVehicleType[] = ["car", "auto"];
+/** Vehicle types whose drivers can take rides in QuikFly Captain. */
+export const CAPTAIN_VEHICLE_TYPES: readonly VendorVehicleType[] = ["bike", "car", "auto"];
 export const vehicleTypeForCaptain = (type: VendorVehicleType) => CAPTAIN_VEHICLE_TYPES.includes(type);
 
 /** True when a ride option goes to real captains: live captains on, a vehicle type that can take it, and that type switched on. */
 export function liveRideType(settings: Settings, option: { id: string; service: ServiceKey }): VendorVehicleType | null {
   if (settings.featureLiveDrivers !== true) return null;
   const type = vehicleTypeForRide(option);
+  if (type === "bike") return settings.liveRideBike === false ? null : type;
   if (type === "auto") return settings.liveRideAuto === false ? null : type;
   if (type === "car") return settings.liveRideCab === false ? null : type;
   return null;

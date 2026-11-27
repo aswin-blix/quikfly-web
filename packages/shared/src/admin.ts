@@ -188,7 +188,7 @@ export interface AdminCaptain {
 /** GET /admin/captains: the readiness card and the list. */
 export interface AdminCaptains {
   readiness: {
-    /** Approved drivers on a vehicle Captain serves (autos and cars). */
+    /** Approved drivers on a vehicle Captain serves (bikes, autos and cars). */
     approved: number;
     /** Of those, signed in to QuikFly Captain at least once. */
     signedIn: number;

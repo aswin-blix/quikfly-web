@@ -13,7 +13,11 @@ void main() {
     ];
     expect(patterns, isNotEmpty);
 
-    final files = [File('lib/main_captain.dart'), ...Directory('lib/captain').listSync().whereType<File>().where((f) => f.path.endsWith('.dart'))];
+    // Captain also mounts QuikFly Partner's registration screens for owner-drivers (captainSelfSignup), so every
+    // address those link to must exist here too; the Partner app's own shell and money screens aren't mounted.
+    final partner = Directory('lib/partner').listSync().whereType<File>()
+        .where((f) => f.path.endsWith('.dart') && !f.path.endsWith('partner_app.dart') && !f.path.endsWith('money_screens.dart'));
+    final files = [File('lib/main_captain.dart'), ...Directory('lib/captain').listSync().whereType<File>().where((f) => f.path.endsWith('.dart')), ...partner];
     final bad = <String>[];
     for (final f in files) {
       // Quoted addresses: '/…' with no spaces; interpolations stand for one path segment.

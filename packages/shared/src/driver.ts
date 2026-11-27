@@ -250,4 +250,4 @@ export function captainLiveStatus(s: { online: boolean | number; rideId: string 
 export const NO_CAPTAIN = "No captain is free near you right now. You haven't been charged. Please try again in a few minutes.";
 
 /** What a captain is told when their number has no approved driver record. */
-export const NOT_A_CAPTAIN = "This number isn't registered as a QuikFly captain yet. Ask your fleet owner to add you in QuikFly Partner, or register your own vehicle.";
+export const NOT_A_CAPTAIN = "This number isn't registered as a QuikFly captain yet. Ask your fleet owner to add you in QuikFly Partner with this number.";

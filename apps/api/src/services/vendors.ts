@@ -3,7 +3,7 @@
 // step 2 is onboarding (joining fee, agreement, sticker & paint). Document photos go to
 // R2 (binding DOCS) under vendors/<vendorId>/; the tables keep only their keys.
 import {
-  AUDIT_SLOTS, FUEL_TYPES, VENDOR_AGREEMENT_VERSION, VENDOR_RULES, VENDOR_SECTIONS, VENDOR_VEHICLE_TYPES,
+  AUDIT_SLOTS, FUEL_TYPES, fuelsFor, VENDOR_AGREEMENT_VERSION, VENDOR_RULES, VENDOR_SECTIONS, VENDOR_VEHICLE_TYPES,
   normaliseRegNumber, readyToSubmit, vehicleAgeYears,
   type AuditSlot, type SectionState, type VendorApplication, type VendorDocument, type VendorSection, type VendorStatus, type VendorVehicle,
 } from "@quikfly/shared";
@@ -141,6 +141,7 @@ export async function parseVehicleDetails(db: D1Database, body: Json, vehicleId:
   const settings = await getSettings(db);
   const type = oneOf(body, "type", VENDOR_VEHICLE_TYPES);
   const fuel = oneOf(body, "fuel", FUEL_TYPES);
+  if (!fuelsFor(type).includes(fuel)) throw badRequest("A bike runs on petrol or electric. Choose one of those.");
   const reg = matches(normaliseRegNumber(text(body, "regNumber", 6, 16)), VENDOR_RULES.regNumber, "Enter the registration number as on the RC, e.g. TN57AX9979.");
   const purchase = date(body, "purchaseDate", "Purchase date");
   if (purchase > today()) throw badRequest("Purchase date can't be in the future.");

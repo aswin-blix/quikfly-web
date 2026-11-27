@@ -1,9 +1,12 @@
 // Partner (vendor) registration shapes: a Dart copy of packages/shared/src/vendor.ts.
 import 'models.dart' show Json;
 
-const vendorVehicleTypes = ['car', 'auto', 'tempo', 'bus'];
-const vendorVehicleLabel = {'car': 'Car (cab or outstation)', 'auto': 'Auto', 'tempo': 'Tempo traveller', 'bus': 'Bus or coach'};
+const vendorVehicleTypes = ['bike', 'car', 'auto', 'tempo', 'bus'];
+const vendorVehicleLabel = {'bike': 'Bike (bike taxi)', 'car': 'Car (cab or outstation)', 'auto': 'Auto', 'tempo': 'Tempo traveller', 'bus': 'Bus or coach'};
 const fuelTypes = ['petrol_diesel', 'cng_lpg', 'electric'];
+
+/// fuelsFor in packages/shared/src/vendor.ts: a bike runs on petrol or electric.
+List<String> fuelsFor(String? type) => type == 'bike' ? const ['petrol_diesel', 'electric'] : fuelTypes;
 const fuelLabel = {'petrol_diesel': 'Petrol or diesel', 'cng_lpg': 'CNG or LPG', 'electric': 'Electric'};
 const vendorSections = ['vehicle', 'photo', 'bank', 'rc', 'insurance', 'audit'];
 const vendorSectionLabel = {

@@ -37,7 +37,7 @@ function Readiness({ r }: { r: AdminCaptains["readiness"] }) {
         <Link href="/settings" className="text-accent hover:underline">Settings → Captains</Link>
       </p>
       <ul className="grid gap-2 sm:grid-cols-2">
-        {item(r.approved > 0, `${r.approved} approved driver${r.approved === 1 ? "" : "s"} on autos and cars`, r.approved ? undefined : "Approve drivers on a partner's page first.")}
+        {item(r.approved > 0, `${r.approved} approved driver${r.approved === 1 ? "" : "s"} on bikes, autos and cars`, r.approved ? undefined : "Approve drivers on a partner's page first.")}
         {item(r.signedIn > 0, `${r.signedIn} signed in to QuikFly Captain`, r.signedIn < r.approved ? "Drivers sign in with the number their owner registered." : undefined)}
         {item(r.online + r.onRide > 0, `${r.online} online now, ${r.onRide} on a ride`, r.online + r.onRide ? undefined : "With nobody online, every live ride finds no captain.")}
         {item(!r.demoLocation, r.demoLocation ? "Demo locations are on (test mode)" : "Demo locations are off", r.demoLocation ? "Captains can pretend to be anywhere. Turn off before real riders." : undefined)}

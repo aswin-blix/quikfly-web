@@ -1,9 +1,12 @@
 // QuikFly Captain's home: signed out → what Captain is and "Sign in"; a number with no driver record →
-// what to do; otherwise the online switch, the offer or the ride, and today's trips, earnings and cash.
+// what to do (or, with captainSelfSignup, registering their own vehicle: QuikFly Partner's checklist, then
+// themselves as the driver); otherwise the online switch, the offer or the ride, and today's trips, earnings and cash.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../api/api.dart';
+import '../partner/home_screen.dart' show PartnerHomeScreen;
+import '../partner/partner_app.dart' show fleetProvider, vendorProvider;
 import '../api/models.dart';
 import '../state/providers.dart';
 import '../theme/tokens.dart';
@@ -32,7 +35,7 @@ class CaptainHomeScreen extends ConsumerWidget {
     return lookup.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(appBar: _bar(context, ref), body: ScreenList(children: [ErrorBox(errorText(e), onRetry: () => ref.invalidate(captainLookupProvider))])),
-      data: (l) => l?.captain == null ? _NotACaptain(l?.reason) : _Home(l!.captain!),
+      data: (l) => l?.captain == null ? _SignUpGate(l) : _Home(l!.captain!),
     );
   }
 }
@@ -82,11 +85,52 @@ class _Welcome extends StatelessWidget {
   }
 }
 
-class _NotACaptain extends ConsumerWidget {
-  const _NotACaptain(this.reason);
-  final String? reason;
+/// No driver record for this number: an application already started (by this account) shows its checklist;
+/// a live partner with no driver record for themselves finishes setup; otherwise what to do.
+class _SignUpGate extends ConsumerWidget {
+  const _SignUpGate(this.lookup);
+  final CaptainLookup? lookup;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final vendor = ref.watch(vendorProvider);
+    return vendor.when(
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      // The application can't be read: still say what this number needs.
+      error: (_, _) => _NotACaptain(lookup?.reason, selfSignup: false),
+      data: (a) => a == null
+          ? _NotACaptain(lookup?.reason, selfSignup: lookup?.selfSignup ?? false)
+          : a.status == 'active'
+              ? const _FinishSetup()
+              : const PartnerHomeScreen(), // the application checklist, sections and onboarding
+    );
+  }
+}
+
+class _NotACaptain extends ConsumerStatefulWidget {
+  const _NotACaptain(this.reason, {required this.selfSignup});
+  final String? reason;
+  final bool selfSignup;
+  @override
+  ConsumerState<_NotACaptain> createState() => _NotACaptainState();
+}
+
+class _NotACaptainState extends ConsumerState<_NotACaptain> {
+  bool _starting = false;
+
+  /// Starts the partner application for this account: the same one QuikFly Partner and the website use.
+  Future<void> _register() async {
+    setState(() => _starting = true);
+    try {
+      await ref.read(apiProvider).startVendorApplication();
+      ref.invalidate(vendorProvider);
+    } catch (e) {
+      if (mounted) toast(context, errorText(e));
+    }
+    if (mounted) setState(() => _starting = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final phone = ref.watch(userProvider)?.phone ?? '';
     return Scaffold(
       appBar: _bar(context, ref, signedIn: false),
@@ -94,12 +138,81 @@ class _NotACaptain extends ConsumerWidget {
         EmptyState(
           icon: Icons.badge_outlined,
           title: 'Not set up as a captain yet',
-          message: '${reason ?? "This number isn't registered as a QuikFly captain yet."}\n\nSigned in as $phone. Your owner must add you with this same number.',
+          message: '${widget.reason ?? "This number isn't registered as a QuikFly captain yet."}\n\nSigned in as $phone. Your owner must add you with this same number.',
           action: Column(children: [
+            if (widget.selfSignup) ...[
+              GoldButton(label: 'Register your own vehicle', icon: Icons.two_wheeler, loading: _starting, onPressed: _register),
+              const SizedBox(height: 4),
+              Text('For a bike, auto or car you own. QuikFly checks your documents and vehicle first.', textAlign: TextAlign.center, style: TextStyle(color: context.qf.fgMuted, fontSize: 12.5)),
+              const SizedBox(height: 8),
+            ],
             OutlinedButton(onPressed: () => ref.invalidate(captainLookupProvider), child: const Text('Check again')),
             TextButton(onPressed: () => signOutCaptain(context, ref), child: const Text('Use another number')),
           ]),
         ),
+      ]),
+    );
+  }
+}
+
+/// A live partner (their application passed) who isn't a captain yet: add themselves as the driver.
+class _FinishSetup extends ConsumerWidget {
+  const _FinishSetup();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.qf;
+    final fleet = ref.watch(fleetProvider);
+    final self = fleet.value?.drivers.where((d) => d.self).firstOrNull;
+    Widget step(int n, String title, String text, {bool done = false}) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            CircleAvatar(radius: 13, backgroundColor: done ? c.success : c.accent.withValues(alpha: 0.15),
+                child: done ? const Icon(Icons.check, size: 16, color: Colors.white) : Text('$n', style: TextStyle(color: c.accent, fontSize: 13, fontWeight: FontWeight.w700))),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(text, style: TextStyle(color: c.fgMuted)),
+            ])),
+          ]),
+        );
+    return Scaffold(
+      appBar: _bar(context, ref, signedIn: false),
+      body: ScreenList(onRefresh: () async {
+        ref.invalidate(fleetProvider);
+        ref.invalidate(captainLookupProvider);
+      }, children: [
+        Text("You're a QuikFly partner", style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 4),
+        Text('Two last steps before you can take rides.', style: TextStyle(color: c.fgMuted)),
+        const SizedBox(height: 16),
+        Panel(child: Column(children: [
+          step(1, 'Add yourself as the driver', 'Your driving licence number, validity and a photo of it.', done: self != null),
+          step(2, 'QuikFly checks your licence', 'Usually within a day. You can go online once it is approved and you have picked your vehicle.'),
+        ])),
+        const SizedBox(height: 16),
+        if (fleet.hasError) ErrorBox(errorText(fleet.error!), onRetry: () => ref.invalidate(fleetProvider)),
+        if (self?.status == 'rejected') ...[
+          ErrorBox("QuikFly couldn't approve your licence${self!.reviewNote == null ? '.' : ': ${self.reviewNote}'} Correct it and send it again."),
+          const SizedBox(height: 8),
+          GoldButton(label: 'Correct your licence', onPressed: () async {
+            await context.push('/driver/${self.id}/licence');
+            ref.invalidate(fleetProvider);
+            ref.invalidate(captainLookupProvider);
+          }),
+        ] else
+        if (self == null)
+          GoldButton(
+            label: 'Add yourself as the driver',
+            icon: Icons.badge_outlined,
+            onPressed: () async {
+              await context.push('/drivers/new');
+              // The new driver record has this number: Captain links it at once.
+              ref.invalidate(fleetProvider);
+              ref.invalidate(captainLookupProvider);
+            },
+          )
+        else
+          OutlinedButton(onPressed: () => ref.invalidate(captainLookupProvider), child: const Text('Check again')),
       ]),
     );
   }
@@ -145,7 +258,19 @@ class _HomeState extends ConsumerState<_Home> {
           await ref.read(captainProvider.notifier).refresh();
         },
         children: [
-          if (p.blocker != null) ...[ErrorBox(p.blocker!, onRetry: () => ref.invalidate(captainLookupProvider)), const SizedBox(height: 12)],
+          if (p.blocker != null) ...[
+            ErrorBox(p.blocker!, onRetry: () => ref.invalidate(captainLookupProvider)),
+            // An owner-driver sorts their own vehicle here (a fleet driver's owner does it in QuikFly Partner).
+            if (p.self && p.regNumber == null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: GoldButton(label: 'Choose your vehicle', icon: Icons.two_wheeler, onPressed: () async {
+                  await context.push('/driver/${p.driverId}');
+                  ref.invalidate(captainLookupProvider);
+                }),
+              ),
+            const SizedBox(height: 12),
+          ],
           if (s?.ride != null) ...[RidePanel(s!.ride!, key: ValueKey(s.ride!.trip.rideId)), const SizedBox(height: 12)]
           else if (s?.offer != null) ...[OfferCard(s!.offer!, key: ValueKey(s.offer!.trip.rideId)), const SizedBox(height: 12)],
           _DutyCard(profile: p, live: live, places: places, start: _start ?? _nearest(places, pos), onStart: (pl) => setState(() => _start = pl)),

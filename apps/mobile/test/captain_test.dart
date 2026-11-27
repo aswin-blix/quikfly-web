@@ -7,9 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quikfly/api/captain_models.dart';
 import 'package:quikfly/api/models.dart';
+import 'package:quikfly/api/vendor_models.dart';
 import 'package:quikfly/captain/captain_state.dart';
 import 'package:quikfly/captain/home_screen.dart';
 import 'package:quikfly/captain/speech.dart';
+import 'package:quikfly/partner/partner_app.dart';
 import 'package:quikfly/state/providers.dart';
 import 'package:quikfly/theme/theme.dart';
 
@@ -81,7 +83,7 @@ class _Captain extends CaptainController {
   CaptainLive build() => live;
 }
 
-Future<void> _pump(WidgetTester t, CaptainLive live, {CaptainLookup? lookup, Size size = const Size(390, 2000), double textScale = 1, Brightness brightness = Brightness.light}) async {
+Future<void> _pump(WidgetTester t, CaptainLive live, {CaptainLookup? lookup, VendorApplication? vendor, VendorFleet? fleet, Size size = const Size(390, 2000), double textScale = 1, Brightness brightness = Brightness.light}) async {
   // A 390 px wide phone by default (rule 8), tall enough that the whole home screen is built.
   t.view.physicalSize = size * 3;
   t.view.devicePixelRatio = 3;
@@ -97,9 +99,14 @@ Future<void> _pump(WidgetTester t, CaptainLive live, {CaptainLookup? lookup, Siz
       captainProvider.overrideWith(() => _Captain(live)),
       captainSummaryProvider.overrideWith((ref) async => const CaptainSummary('2026-11-27', 2, 38046, 25000)),
       configProvider.overrideWith((ref) => Completer<AppConfig>().future), // no map in these tests
+      // Owner-driver sign-up (captainSelfSignup): the partner application and fleet of this account.
+      vendorProvider.overrideWith((ref) async => vendor),
+      fleetProvider.overrideWith((ref) async => fleet),
     ],
     child: MaterialApp(theme: buildTheme(brightness), home: const CaptainHomeScreen()),
   ));
+  // The captain lookup, then (no driver record) the partner application: a frame each.
+  await t.pump();
   await t.pump();
   await t.pump();
 }
@@ -205,9 +212,24 @@ void main() {
     });
   }
 
+  testWidgets('with self sign-up on, a number with no driver record can register its own vehicle', (t) async {
+    await _pump(t, const CaptainLive(), lookup: CaptainLookup.fromJson({'captain': null, 'reason': "This number isn't registered as a QuikFly captain yet.", 'selfSignup': true}));
+    expect(find.text('Register your own vehicle'), findsOneWidget);
+  });
+
+  testWidgets('a live partner who is not a captain yet adds themselves as the driver', (t) async {
+    await _pump(t, const CaptainLive(),
+        lookup: CaptainLookup.fromJson({'captain': null, 'reason': "This number isn't registered as a QuikFly captain yet.", 'selfSignup': true}),
+        vendor: VendorApplication.fromJson({'id': 'VN1', 'status': 'active'}),
+        fleet: VendorFleet.fromJson({'vehicles': [], 'drivers': []}));
+    expect(find.text("You're a QuikFly partner"), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Add yourself as the driver'), findsOneWidget);
+  });
+
   testWidgets('a number with no driver record is told what to do', (t) async {
     await _pump(t, const CaptainLive(), lookup: CaptainLookup.fromJson({'captain': null, 'reason': "This number isn't registered as a QuikFly captain yet."}));
     expect(find.text('Not set up as a captain yet'), findsOneWidget);
     expect(find.textContaining("isn't registered"), findsOneWidget);
+    expect(find.text('Register your own vehicle'), findsNothing); // self sign-up is off
   });
 }
