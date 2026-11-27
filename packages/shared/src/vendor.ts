@@ -241,6 +241,15 @@ export function vehicleTypeForRide(option: { id: string; service: ServiceKey }):
 export const CAPTAIN_VEHICLE_TYPES: readonly VendorVehicleType[] = ["car", "auto"];
 export const vehicleTypeForCaptain = (type: VendorVehicleType) => CAPTAIN_VEHICLE_TYPES.includes(type);
 
+/** True when a ride option goes to real captains: live captains on, a vehicle type that can take it, and that type switched on. */
+export function liveRideType(settings: Settings, option: { id: string; service: ServiceKey }): VendorVehicleType | null {
+  if (settings.featureLiveDrivers !== true) return null;
+  const type = vehicleTypeForRide(option);
+  if (type === "auto") return settings.liveRideAuto === false ? null : type;
+  if (type === "car") return settings.liveRideCab === false ? null : type;
+  return null;
+}
+
 /** A trip on a partner's vehicle (GET /vendor/trips). Money is in paise. */
 export interface VendorTrip {
   bookingId: string;
@@ -276,11 +285,12 @@ export interface VendorTripSummary {
   drivers: { driverId: string; name: string; trips: number; earningPaise: number }[];
 }
 
-export type LedgerKind = "earning" | "cash" | "fee" | "payout" | "payment" | "adjustment";
+export type LedgerKind = "earning" | "cash" | "fee" | "penalty" | "payout" | "payment" | "adjustment";
 export const LEDGER_LABEL: Record<LedgerKind, string> = {
   earning: "Trip earning",
   cash: "Cash your driver collected",
   fee: "Daily fee",
+  penalty: "Ride cancelled by your driver",
   payout: "Paid to your bank",
   payment: "You paid QuikFly",
   adjustment: "Adjustment",

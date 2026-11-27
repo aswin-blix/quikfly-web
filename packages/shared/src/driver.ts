@@ -1,7 +1,7 @@
 // QuikFly Captain: the driver side of a ride (docs/driver-app-plan.md). A captain is a partner's
 // approved driver (vendor_drivers) linked to the account that signs in with the driver's number.
 // The API enforces everything here; the Captain app, the website and the customer app read it.
-import type { Gender } from "./types";
+import type { Driver, Gender, PaymentMethod, Place, Ride, ServiceKey } from "./types";
 import type { VendorVehicleType } from "./vendor";
 import type { MapPoint } from "./geo";
 
@@ -16,6 +16,12 @@ export const DRIVER_RULES = {
   /** Wrong ride PINs before the start is locked, and for how long. */
   pinTries: 5,
   pinLockMinutes: 15,
+  /** Captains whose distance to the pickup falls in the same band (km) count as equally near: the one waiting longest is asked first. */
+  distanceBandKm: 1,
+  /** With no captain to ask, a search ends after this long (seconds) instead of the full driverSearchSeconds. */
+  noCaptainSeconds: 10,
+  /** The most a captain can be charged for giving a ride back without a valid reason (₹); the 2025 guidelines' cap. */
+  cancelPenaltyCap: 100,
 } as const;
 
 /** A live ride's progress. Simulated rides have none (the customer's app plays them). */
@@ -44,15 +50,27 @@ export function nextRidePhase(phase: RidePhaseLive | null, move: RideMove, actor
   return phase && (t.from as readonly string[]).includes(phase) && (t.by as readonly string[]).includes(actor) ? t.to : null;
 }
 
-/** Why a captain gives a ride back (shown to staff; the rider pays nothing). */
+/**
+ * Why a captain gives an accepted ride back (shown to staff; the rider pays nothing). `valid` reasons
+ * never cost the captain anything; the others can carry Settings.driverCancelPenaltyPercent (0 by default),
+ * as the 2025 guidelines allow. Declining an offer is not a cancellation and is always free.
+ */
 export const CAPTAIN_RELEASE_REASONS = [
-  { id: "rider_no_show", label: "Rider didn't show up" },
-  { id: "rider_asked", label: "Rider asked me to cancel" },
-  { id: "vehicle_problem", label: "Vehicle problem" },
-  { id: "wrong_pickup", label: "Can't reach the pickup" },
-  { id: "other", label: "Something else" },
+  { id: "rider_no_show", label: "Rider didn't show up", valid: true },
+  { id: "rider_asked", label: "Rider asked me to cancel", valid: true },
+  { id: "vehicle_problem", label: "Vehicle problem", valid: true },
+  { id: "wrong_pickup", label: "Can't reach the pickup", valid: true },
+  { id: "changed_mind", label: "I can't take this ride", valid: false },
+  { id: "other", label: "Something else", valid: false },
 ] as const;
 export type CaptainReleaseReason = (typeof CAPTAIN_RELEASE_REASONS)[number]["id"];
+
+/** What giving a ride back costs the vehicle's owner, in paise: nothing for a valid reason or while the setting is 0. */
+export function releasePenaltyPaise(percent: number | undefined, reason: CaptainReleaseReason, fareRupees: number): number {
+  const valid = CAPTAIN_RELEASE_REASONS.find((r) => r.id === reason)?.valid ?? false;
+  if (valid || !percent || percent <= 0) return 0;
+  return Math.min(Math.round(fareRupees * percent), DRIVER_RULES.cancelPenaltyCap * 100);
+}
 
 /** Where a captain is and whether they take rides. */
 export interface CaptainDuty {
@@ -79,10 +97,98 @@ export interface CaptainProfile {
 /** What a captain's position report looks like: a GPS fix, or (demo location on) a point on the map. */
 export type CaptainPosition = { lat: number; lng: number } | { x: number; y: number };
 
-/** POST /driver/ping: the captain's state after their position was recorded. Offers and the ride arrive in step 2. */
+/** What a trip is worth to the vehicle, shown on every offer and trip. Paise, except `customerPays` (₹). */
+export interface CaptainMoney {
+  /** What the rider pays, GST included (₹). */
+  customerPays: number;
+  /** The fare without GST. */
+  farePaise: number;
+  /** QuikFly's commission; 0 on the flat daily fee. */
+  commissionPaise: number;
+  tdsPaise: number;
+  /** What the vehicle earns from this trip. */
+  earningPaise: number;
+  /** "commission": a share of each trip. "dailyFee": no share; `dailyFeePaise` once on the day's first completed ride. */
+  model: "commission" | "dailyFee";
+  dailyFeePaise: number;
+}
+
+/** A trip as a captain sees it before and during the ride. Never carries the ride PIN. */
+export interface CaptainTrip {
+  rideId: string;
+  service: ServiceKey;
+  /** The ride type's name ("Auto", "Mini"…). */
+  rideType: string;
+  womenOnly: boolean;
+  pickup: Place;
+  drop: Place;
+  stops: Place[];
+  distanceKm: number;
+  durationMin: number;
+  /** From where the captain is now to the pickup; null without a position. */
+  pickupKm: number | null;
+  payment: PaymentMethod;
+  money: CaptainMoney;
+}
+
+/** A ride being offered to this captain. */
+export interface CaptainOffer extends CaptainTrip {
+  expiresAt: string;
+  /** Seconds left to answer, by the server's clock. */
+  secondsLeft: number;
+}
+
+/** The ride a captain is on. */
+export interface CaptainRide extends CaptainTrip {
+  phase: "arriving" | "arrived" | "ontrip";
+  /** The rider's first name. */
+  riderName: string;
+  /** The rider's number, only until the trip starts (to find each other at the pickup). */
+  riderPhone: string | null;
+  /** False until the rider's booking exists: the trip can't start before that. */
+  booked: boolean;
+  /** Cash to collect at the end (₹); null when the rider paid another way. */
+  collectCash: number | null;
+  /** Wrong PINs left before the start is locked. */
+  pinTriesLeft: number;
+  pinLockedUntil: string | null;
+}
+
+/** POST /driver/ping and every captain action: where they stand now. */
 export interface CaptainState {
   duty: CaptainDuty;
+  offer: CaptainOffer | null;
+  ride: CaptainRide | null;
 }
+
+/** POST /driver/rides/:id/complete: the state, plus what the trip that just ended came to. */
+export interface CaptainTripDone extends CaptainState {
+  done: { rideId: string; earningPaise: number; collectCash: number | null };
+}
+
+/** GET /driver/summary: the captain's India day so far. Paise. */
+export interface CaptainSummary {
+  day: string;
+  trips: number;
+  earningPaise: number;
+  /** Cash the captain collected today and holds for the vehicle's owner. */
+  cashPaise: number;
+}
+
+/** A live ride as its rider sees it (GET /rides/:id for clients that declare `rides=live`). */
+export interface RideLive {
+  phase: RidePhaseLive | "cancelled";
+  /** Where the captain is on the city map, from acceptance to the end of the trip. */
+  captain: MapPoint | null;
+  /** Minutes until the captain reaches the pickup (arriving) or the trip ends (ontrip). */
+  etaMin: number | null;
+}
+
+/** A ride whose progress the server owns. `driver` is null until a captain accepts. */
+export type LiveRide = Omit<Ride, "driver"> & { driver: Driver | null; live: RideLive };
+
+/** What riders are told when nobody could take their ride. */
+export const NO_CAPTAIN = "No captain is free near you right now. You haven't been charged. Please try again in a few minutes.";
 
 /** What a captain is told when their number has no approved driver record. */
 export const NOT_A_CAPTAIN = "This number isn't registered as a QuikFly captain yet. Ask your fleet owner to add you in QuikFly Partner, or register your own vehicle.";
