@@ -1,14 +1,21 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  // Static hosting for the admin panel: a Worker with no code that serves the `next build` export.
+  // Static hosting for the admin panel: a Worker that serves the `next build` export (its only code redirects the old workers.dev address).
   // Build first (see `deploy` in package.json), then `wrangler deploy` uploads ./out.
   "name": "quikfly-admin",
+  // Page requests on the old workers.dev address are redirected to CANONICAL_ORIGIN (same path and query);
+  // see workers/canonical-redirect.mjs. workers_dev stays true so that address keeps answering with the redirect.
+  "main": "../../workers/canonical-redirect.mjs",
   "compatibility_date": "2026-11-01",
-  // Custom domain (zone quikfly.in). workers_dev stays on as a fallback address.
+  "vars": { "CANONICAL_ORIGIN": "https://admin.quikfly.in" },
+  // Custom domain (zone quikfly.in). workers_dev stays on so the old address answers with a redirect to admin.quikfly.in.
   "workers_dev": true,
   "routes": [{ "pattern": "admin.quikfly.in", "custom_domain": true }],
   "assets": {
+    "binding": "ASSETS",
     "directory": "./out",
+    // Only page requests run the script; built files are served straight from the assets.
+    "run_worker_first": ["/*", "!/_next/*", "!/assets/*"],
     "html_handling": "drop-trailing-slash",
     "not_found_handling": "404-page"
   }
