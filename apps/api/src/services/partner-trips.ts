@@ -4,7 +4,7 @@
 // Money here is in paise. No payment gateway yet: payouts are paid by staff outside the app
 // and recorded with a reference; partner payments are simulated (labelled in the app).
 import {
-  formatRegNumber, parseTerms, tripEarnings, vehicleTypeForRide, withTerms, VENDOR_VEHICLE_LABEL,
+  dailyFeePaise, formatRegNumber, parseTerms, tripEarnings, vehicleTypeForRide, withTerms, VENDOR_VEHICLE_LABEL,
   type LedgerEntry, type LedgerKind, type PaymentMethod, type RideOption, type ServiceKey, type Settings, type VendorMoney, type VendorPayout,
   type VendorTrip, type VendorTripSummary,
 } from "@quikfly/shared";
@@ -46,6 +46,8 @@ interface SettleRow {
  * Statements that settle a completed partner trip: its split in vendor_trips, the earning
  * (+) and, for cash, what the driver collected (−) in vendor_ledger. Each only runs once the
  * booking is completed, and only once per booking. Empty for bookings without a partner.
+ * On the flat daily fee (setting vendorFlatDailyFee) a ride carries no commission; the driver's
+ * first completed ride of the India day also charges the fee once (vendor_day_fees is the guard).
  */
 export function settlementStatements(db: D1Database, settings: Settings, row: SettleRow): D1PreparedStatement[] {
   if (!row.vendor_id) return [];
@@ -65,6 +67,20 @@ export function settlementStatements(db: D1Database, settings: Settings, row: Se
   if (row.payment === "cash") {
     statements.push(db.prepare(`INSERT OR IGNORE INTO vendor_ledger (id, vendor_id, kind, amount_paise, booking_id, note, created_at) SELECT ?2, ?3, 'cash', ?4, ?1, ?5, ?6 WHERE ${done}`)
       .bind(row.id, uid("VL"), row.vendor_id, -Math.round(row.amount * 100), `Cash collected · ${row.title}`, now));
+  }
+  const fee = dailyFeePaise(settings, row.service);
+  const unit = row.vendor_driver_id ?? row.vendor_vehicle_id;
+  if (fee > 0 && unit) {
+    const day = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
+    statements.push(
+      db.prepare(`INSERT OR IGNORE INTO vendor_day_fees (unit_id, day, vendor_id, booking_id, amount_paise, created_at) SELECT ?2, ?3, ?4, ?1, ?5, ?6 WHERE ${done}`)
+        .bind(row.id, unit, day, row.vendor_id, fee, now),
+      // Only the booking that took the day's slot pays; a retry finds the ledger row already there.
+      db.prepare(
+        `INSERT OR IGNORE INTO vendor_ledger (id, vendor_id, kind, amount_paise, booking_id, note, created_at)
+         SELECT ?2, ?3, 'fee', ?4, ?1, ?5, ?6 WHERE EXISTS (SELECT 1 FROM vendor_day_fees WHERE unit_id = ?7 AND day = ?8 AND booking_id = ?1)`,
+      ).bind(row.id, uid("VL"), row.vendor_id, -fee, `Daily fee · ${day}`, now, unit, day),
+    );
   }
   return statements;
 }
@@ -171,7 +187,7 @@ export async function balanceOf(db: D1Database, vendorId: string) {
 export async function partnerMoney(db: D1Database, userId: string): Promise<VendorMoney> {
   const vendorId = await vendorIdOf(db, userId);
   const settings = await getSettings(db);
-  const [bal, statements, entries, payouts] = await db.batch([
+  const [bal, statements, entries, payouts, fees] = await db.batch([
     db.prepare("SELECT COALESCE(SUM(amount_paise), 0) AS bal FROM vendor_ledger WHERE vendor_id = ?").bind(vendorId),
     // India months: completed_at shifted by +5:30.
     db.prepare(
@@ -181,14 +197,16 @@ export async function partnerMoney(db: D1Database, userId: string): Promise<Vend
     ).bind(vendorId),
     db.prepare("SELECT id, kind, amount_paise, note, booking_id, created_at FROM vendor_ledger WHERE vendor_id = ? ORDER BY created_at DESC LIMIT 100").bind(vendorId),
     db.prepare("SELECT * FROM vendor_payouts WHERE vendor_id = ? ORDER BY requested_at DESC LIMIT 50").bind(vendorId),
+    db.prepare("SELECT substr(day, 1, 7) AS month, SUM(amount_paise) AS fee FROM vendor_day_fees WHERE vendor_id = ? GROUP BY month").bind(vendorId),
   ]) as [D1Result<{ bal: number }>, D1Result<{ month: string; trips: number; gross: number; commission: number; tds: number; earning: number; cash: number }>,
-    D1Result<{ id: string; kind: LedgerKind; amount_paise: number; note: string; booking_id: string | null; created_at: string }>, D1Result<PayoutRow>];
+    D1Result<{ id: string; kind: LedgerKind; amount_paise: number; note: string; booking_id: string | null; created_at: string }>, D1Result<PayoutRow>, D1Result<{ month: string; fee: number }>];
+  const feeOf = new Map(fees.results.map((f) => [f.month, f.fee]));
   const all = payouts.results.map(toPayout);
   return {
     balancePaise: bal.results[0]?.bal ?? 0,
     minPayoutPaise: settings.vendorMinPayout * 100,
     pendingPayout: all.find((p) => p.status === "requested") ?? null,
-    statements: statements.results.map((s) => ({ month: s.month, trips: s.trips, grossPaise: s.gross, commissionPaise: s.commission, tdsPaise: s.tds, earningPaise: s.earning, cashPaise: s.cash })),
+    statements: statements.results.map((s) => ({ month: s.month, trips: s.trips, grossPaise: s.gross, commissionPaise: s.commission, feePaise: feeOf.get(s.month) ?? 0, tdsPaise: s.tds, earningPaise: s.earning, cashPaise: s.cash })),
     entries: entries.results.map((e): LedgerEntry => ({ id: e.id, kind: e.kind, amountPaise: e.amount_paise, note: e.note, bookingId: e.booking_id, createdAt: e.created_at })),
     payouts: all,
   };
