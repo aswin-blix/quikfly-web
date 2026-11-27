@@ -92,6 +92,43 @@ export interface CaptainProfile {
   /** Null when they can go online; otherwise what stops them, in words for the captain. */
   blocker: string | null;
   duty: CaptainDuty;
+  /** The live rules, for the app's "How it works" page (never typed into the app by hand). */
+  rules: CaptainRules;
+}
+
+/** How taking rides works right now, from Settings and DRIVER_RULES. A rule change reaches captains without an app release. */
+export interface CaptainRules {
+  offerSeconds: number;
+  pingIdleSeconds: number;
+  pingBusySeconds: number;
+  searchRadiusKm: number;
+  /** "Arrived" works only this near the pickup (km); 0 = anywhere. */
+  arrivedRadiusKm: number;
+  pinTries: number;
+  pinLockMinutes: number;
+  /** Charged to the vehicle's owner for giving an accepted ride back without a valid reason (% of the fare); 0 = never. */
+  cancelPenaltyPercent: number;
+  /** The most that penalty can be (₹). */
+  cancelPenaltyCap: number;
+  releaseReasons: { id: CaptainReleaseReason; label: string; valid: boolean }[];
+  /** How QuikFly earns from a city ride: a share of each trip, or a fee once a day. */
+  model: "commission" | "dailyFee";
+  commissionPercent: number;
+  dailyFeePaise: number;
+  /** Captains may use a pretend position (Settings.driverDemoLocation). */
+  demoLocation: boolean;
+}
+
+/** GET /driver/trips: one of the captain's completed trips. Paise. */
+export interface CaptainTripItem {
+  bookingId: string;
+  completedAt: string;
+  title: string;
+  subtitle: string;
+  payment: PaymentMethod;
+  /** What the rider paid after coupons and credits (the cash a captain collected on a cash ride). */
+  paidPaise: number;
+  earningPaise: number;
 }
 
 /** What a captain's position report looks like: a GPS fix, or (demo location on) a point on the map. */

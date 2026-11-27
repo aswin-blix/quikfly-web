@@ -150,9 +150,10 @@ A captain is a partner's driver record whose mobile number matches the signed-in
 
 | Method | Path | What it does |
 |---|---|---|
-| GET 🔒 | `/driver` | `{ captain }`: driver, vehicle, owner, `blocker` (what stops them going online, or null) and `duty`. `{ captain: null, reason }` when the number has no driver record |
+| GET 🔒 | `/driver` | `{ captain }`: driver, vehicle, owner, `blocker` (what stops them going online, or null), `duty` and `rules` (the live "How it works" values: offer seconds, arrival radius, PIN tries and lock, give-back penalty and reasons, earning model, demo location). `{ captain: null, reason }` when the number has no driver record |
 | POST 🔒 | `/driver/duty` | `{ online, position?: { lat, lng } \| { x, y } }` → state. Online needs no blocker and a position: a GPS fix is placed on the city map (outside the city → 409); a map point is a demo location (setting `driverDemoLocation`). Offline during a ride → 409. Not a captain → 403 |
 | POST 🔒 | `/driver/ping` | `{ position? }` → state: the heartbeat while online (`DRIVER_RULES.pingIdleSeconds`, `pingBusySeconds` with an offer or a ride). Also moves on the two oldest searches nobody is polling. A bad fix keeps the last position; offline it changes nothing. A captain silent for `driverStaleSeconds` is set offline |
+| GET 🔒 | `/driver/trips` | the captain's last 50 completed trips, newest first: `{ bookingId, completedAt, title, subtitle, payment, paidPaise, earningPaise }` |
 | GET 🔒 | `/driver/summary` | the captain's India day: `{ day, trips, earningPaise, cashPaise }` (cash they collected and hold for the owner) |
 | POST 🔒 | `/driver/offers/:rideId/accept` | takes the offer while it is still theirs (409 when it timed out, was declined or the rider cancelled): the rider's card shows this captain and vehicle; a booking already paid now earns for this vehicle → state |
 | POST 🔒 | `/driver/offers/:rideId/decline` | always free (no score, no penalty); the next captain is asked at once → state |

@@ -3,8 +3,8 @@
 // driver's number. Offers and the trip itself are in dispatch.ts and driver-rides.ts (step 2 of
 // docs/driver-app-plan.md). Staff review of drivers stays in services/admin/fleet.ts.
 import {
-  NOT_A_CAPTAIN, formatRegNumber, onMap, toMapPoint, vehicleTypeForCaptain,
-  type CaptainDuty, type CaptainProfile, type Gender, type MapPoint, type User, type VendorVehicleType,
+  CAPTAIN_RELEASE_REASONS, DRIVER_RULES, NOT_A_CAPTAIN, dailyFeePaise, formatRegNumber, onDailyFee, onMap, toMapPoint, vehicleTypeForCaptain,
+  type CaptainDuty, type CaptainProfile, type CaptainRules, type Gender, type Settings, type MapPoint, type User, type VendorVehicleType,
 } from "@quikfly/shared";
 import { badRequest, conflict, forbidden } from "../lib/errors";
 import { getSettings } from "./settings";
@@ -96,6 +96,26 @@ export async function dutyOf(db: D1Database, driverId: string): Promise<CaptainD
   return toDuty(s);
 }
 
+/** The rules a captain works under now (the app's "How it works"); city rides, so the car service's earning model. */
+export function captainRules(settings: Settings): CaptainRules {
+  return {
+    offerSeconds: settings.driverOfferSeconds,
+    pingIdleSeconds: DRIVER_RULES.pingIdleSeconds,
+    pingBusySeconds: DRIVER_RULES.pingBusySeconds,
+    searchRadiusKm: settings.driverSearchRadiusKm,
+    arrivedRadiusKm: settings.driverArrivedRadiusKm ?? 0,
+    pinTries: DRIVER_RULES.pinTries,
+    pinLockMinutes: DRIVER_RULES.pinLockMinutes,
+    cancelPenaltyPercent: settings.driverCancelPenaltyPercent ?? 0,
+    cancelPenaltyCap: DRIVER_RULES.cancelPenaltyCap,
+    releaseReasons: CAPTAIN_RELEASE_REASONS.map((r) => ({ id: r.id, label: r.label, valid: r.valid })),
+    model: onDailyFee(settings, "car") ? "dailyFee" : "commission",
+    commissionPercent: settings.vendorCommissionPercent,
+    dailyFeePaise: dailyFeePaise(settings, "car"),
+    demoLocation: settings.driverDemoLocation !== false,
+  };
+}
+
 export async function captainProfile(db: D1Database, c: CaptainContext): Promise<CaptainProfile> {
   return {
     driver: { id: c.id, name: c.name, phone: c.phone, gender: c.gender, self: !!c.self },
@@ -103,6 +123,7 @@ export async function captainProfile(db: D1Database, c: CaptainContext): Promise
     owner: { name: c.owner_name },
     blocker: captainBlocker(c),
     duty: await dutyOf(db, c.id),
+    rules: captainRules(await getSettings(db)),
   };
 }
 

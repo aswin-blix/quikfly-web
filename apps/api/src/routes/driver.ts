@@ -10,7 +10,7 @@ import { requireUser } from "../middleware/auth";
 import { requireDriver } from "../middleware/driver";
 import { captainFor, captainProfile, ping, setDuty } from "../services/drivers";
 import {
-  acceptOffer, captainState, captainSummary, completeTrip, declineOffer, markArrived, pingDispatch, releaseRide, startTrip,
+  acceptOffer, captainState, captainSummary, captainTrips, completeTrip, declineOffer, markArrived, pingDispatch, releaseRide, startTrip,
 } from "../services/driver-rides";
 
 const RELEASE_REASON_IDS = CAPTAIN_RELEASE_REASONS.map((r) => r.id);
@@ -41,6 +41,7 @@ export const driver = new Hono<AppEnv>()
     return c.json(await captainState(c.env.DB, c.var.captain));
   })
   .get("/summary", requireDriver, async (c) => c.json(await captainSummary(c.env.DB, c.var.captain)))
+  .get("/trips", requireDriver, async (c) => c.json(await captainTrips(c.env.DB, c.var.captain)))
   .post("/offers/:rideId/accept", requireDriver, async (c) => c.json(await acceptOffer(c.env.DB, c.var.captain, c.req.param("rideId"))))
   .post("/offers/:rideId/decline", requireDriver, async (c) => {
     const wake = newWake();

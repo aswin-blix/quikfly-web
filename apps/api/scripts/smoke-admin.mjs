@@ -1306,6 +1306,10 @@ if (pvUp.status === 409) {
     await expect("live: the booking is completed", call("GET", `/bookings/${b2.id}`, null, RC, LIVE), 200, (j) => j.status === "completed");
     await expect("live: the rider sees it done", liveRide(r2.id), 200, (j) => j.live.phase === "done");
     await expect("live: completing twice is refused", call("POST", `/driver/rides/${r2.id}/complete`, null, PV), 404);
+    await expect("live: the trip is on the captain's list", call("GET", "/driver/trips", null, PV), 200,
+      (j) => j[0]?.bookingId === b2.id && j[0].earningPaise === done?.done.earningPaise && j[0].paidPaise === b2.amount * 100 && j[0].payment === "upi");
+    await expect("live: the captain's profile carries the live rules", call("GET", "/driver", null, PV), 200,
+      (j) => j.captain.rules.offerSeconds === s0.driverOfferSeconds && j.captain.rules.pinTries === 5 && j.captain.rules.releaseReasons.some((r) => r.id === "rider_no_show" && r.valid) && j.captain.rules.model === "commission" && j.captain.rules.demoLocation === true);
     await expect("live: the captain's day counts the trip", call("GET", "/driver/summary", null, PV), 200, (j) => j.trips >= 1 && j.earningPaise >= done?.done.earningPaise && /^\d{4}-\d{2}-\d{2}$/.test(j.day));
 
     // 3. The PIN locks after five wrong tries.
