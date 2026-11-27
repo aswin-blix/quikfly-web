@@ -333,6 +333,8 @@ export async function refundFor(
 export async function cancelBookingRow(
   db: D1Database, userId: string | null, id: string, refundNote = "Refund", reason: string | null = null,
   refusal?: { adminId: string; note: string }, retried = false,
+  /** The rider owes no cancellation fee (their captain gave the ride back and a new one is being found). */
+  waiveFee = false,
 ): Promise<BookingRow | null> {
   // ?1 = booking id, ?2 = owner, or null for staff (any customer's booking)
   const owner = "AND (?2 IS NULL OR user_id = ?2)";
@@ -346,7 +348,7 @@ export async function cancelBookingRow(
   // A customer cancelling a ride may owe the cancellation fee; staff never charge one.
   const refund = refusal
     ? { percent: 100, amount: row.service === "parcel" && row.payment === "cash" ? 0 : row.amount, fee: 0 }
-    : await refundFor(db, row, userId === null ? undefined : { reason });
+    : await refundFor(db, row, userId === null || waiveFee ? undefined : { reason });
   const credit = row.payment === "wallet" ? refund.amount : 0;
   const detail = refund.fee ? ` (less ₹${refund.fee} cancellation fee)` : refund.percent < 100 ? ` (${refund.percent}%${row.deposit ? ", deposit in full" : ""})` : "";
   const note = `${refundNote}${detail} · ${row.title}`;
@@ -382,14 +384,16 @@ export async function cancelBookingRow(
     return cancelled;
   }
   // The amount changed meanwhile: once more, from the new one.
-  return retried ? null : cancelBookingRow(db, userId, id, refundNote, reason, refusal, true);
+  return retried ? null : cancelBookingRow(db, userId, id, refundNote, reason, refusal, true, waiveFee);
 }
 
 export async function cancelBooking(db: D1Database, userId: string, id: string, reason: string | null = null): Promise<Booking> {
   const picked = await db.prepare("SELECT 1 AS ok FROM rentals WHERE booking_id = ? AND pickup_at IS NOT NULL").bind(id).first();
   if (picked) throw conflict("You've already started this rental. End it from My trips instead of cancelling.");
-  if ((await livePhase(db, id)) === "ontrip") throw conflict(LIVE_TRIP_STARTED);
-  const row = await cancelBookingRow(db, userId, id, "Refund", reason);
+  const phase = await livePhase(db, id);
+  if (phase === "ontrip") throw conflict(LIVE_TRIP_STARTED);
+  // Looking for a new captain after the last one gave the ride back: not the rider's doing, so no fee.
+  const row = await cancelBookingRow(db, userId, id, "Refund", reason, undefined, false, phase === "searching");
   if (!row) return notActive(db, userId, id);
   await notify(db, userId, { kind: "booking.cancelled", ref: id, bookingId: id, title: `Cancelled · ${row.title}`, body: refundText(row) });
   return toBooking(row, [], null, row.service === "parcel" ? "cancelled" : null);

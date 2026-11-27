@@ -1,12 +1,14 @@
 "use client";
 // Bike Taxi & Car Ride: pickup/drop → fare options → driver search → live trip.
+// A simulated ride plays its trip with timers (RIDE_SIMULATION). A live ride (live captains on, docs/driver-app-plan.md)
+// follows the server: it searches for a captain, is booked once one accepts, then moves as the captain moves.
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useHideBottomNav } from "./BottomNav";
 import { ArrowUpDown, Clock, Coins, MapPin, Navigation, Phone, Plus, Share2, Siren, Star, Users, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { PASS_NAME, RIDE_CANCEL_REASONS, autoSharesAt, isWomenOnly, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, creditsEarned, creditsUsable, effectiveSurge, passSaleError, rideCancelFee, rideDiscountRoom, hourRangesText, withTerms } from "@quikfly/shared";
-import type { BookingTerms, FareQuote, PaymentMethod, Place, Ride, RideCancelReason, SavedPlace } from "@quikfly/shared";
+import { DRIVER_RULES, NO_CAPTAIN, isLiveRide, PASS_NAME, RIDE_CANCEL_REASONS, autoSharesAt, isWomenOnly, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIMULATION, creditsEarned, creditsUsable, effectiveSurge, passSaleError, rideCancelFee, rideDiscountRoom, hourRangesText, withTerms } from "@quikfly/shared";
+import type { Booking, BookingTerms, FareQuote, LiveRide, PaymentMethod, Place, Ride, RideCancelReason, SavedPlace } from "@quikfly/shared";
 import { trackUrl } from "@/lib/account";
 import { Link } from "@/lib/nav";
 import { cx, inr, prettyDateTime, toLocalInput } from "@/lib/format";
@@ -19,7 +21,8 @@ import { GoldButton, Spinner } from "./ui";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
 import { serviceByKey } from "@/lib/services";
 
-type Phase = "plan" | "searching" | "scheduled" | "arriving" | "ontrip" | "done";
+/** `arrived` and `unmatched` happen only on live rides (the server says so); simulated rides go arriving → ontrip → done. */
+type Phase = "plan" | "searching" | "scheduled" | "arriving" | "arrived" | "ontrip" | "done" | "unmatched";
 
 /** Payment options offered for rides (net banking is checkout-only). */
 const RIDE_PAYMENTS: PaymentMethod[] = ["upi", "cash", "wallet", "card"];
@@ -70,7 +73,16 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   const [phase, setPhase] = useState<Phase>("plan");
   // Keep the screen focused on the ride once it is booked.
   useHideBottomNav(phase !== "plan");
-  const [ride, setRide] = useState<Ride | null>(null);
+  const [ride, setRide] = useState<Ride | LiveRide | null>(null);
+  /** The ride's progress belongs to the server (a real captain); null for a simulated ride. */
+  const live = ride && isLiveRide(ride) ? ride.live : null;
+  /** A live search that fell back to a simulated captain (setting rideSimulateDrivers): labelled on screen. */
+  const [simFallback, setSimFallback] = useState(false);
+  /** A captain gave the ride back and the search started again. */
+  const [researching, setResearching] = useState(false);
+  /** Re-runs the live poll after a failed read. */
+  const [pollTick, setPollTick] = useState(0);
+  const bookingStarted = useRef(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [bookedAt, setBookedAt] = useState<string>("");
   /** The cancellation fee rules the ride was booked under. */
@@ -101,12 +113,12 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   }, [signedIn]);
 
   /** Creates (or reuses) a public link for this ride and hands it to the share sheet or clipboard. */
-  async function shareTrip(r: Ride | null = ride) {
+  async function shareTrip(r: Ride | LiveRide | null = ride) {
     if (!r) return;
     try {
       const { token } = await api.rides.share(r.id);
       const url = trackUrl(token);
-      const text = `Follow my QuikFly ride: ${r.driver.vehicle} (${r.driver.plate}) from ${r.pickup.name} to ${r.drop.name}.`;
+      const text = r.driver ? `Follow my QuikFly ride: ${r.driver.vehicle} (${r.driver.plate}) from ${r.pickup.name} to ${r.drop.name}.` : `Follow my QuikFly ride from ${r.pickup.name} to ${r.drop.name}.`;
       if (navigator.share) { try { await navigator.share({ title: "My QuikFly ride", text, url }); return; } catch { /* dismissed: fall back to copy */ } }
       await navigator.clipboard.writeText(`${text} ${url}`);
       toast("Trip link copied. Paste it to anyone.");
@@ -114,7 +126,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   }
 
   /** Safety Preferences: share with emergency contacts automatically (night rides or every ride). */
-  async function autoShareIfNight(r: Ride) {
+  async function autoShareIfNight(r: Ride | LiveRide) {
     if (!user || !autoSharesAt(user.autoShareRides, new Date().getHours())) return;
     const contacts = await api.contacts.list().catch(() => []);
     if (!contacts.length) return;
@@ -155,9 +167,10 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeKey]);
 
-  // Drive the vehicle animation for arriving / on-trip phases
+  // Drive the vehicle animation for arriving / on-trip phases (simulated rides only: a live one moves with its captain).
+  const isLive = !!live;
   useEffect(() => {
-    if (phase !== "arriving" && phase !== "ontrip") return;
+    if (isLive || (phase !== "arriving" && phase !== "ontrip")) return;
     const dur = phase === "arriving" ? ARRIVE_MS : TRIP_MS;
     const start = performance.now();
     const tick = (now: number) => {
@@ -168,22 +181,76 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
     };
     raf.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf.current);
-  }, [phase]);
+  }, [phase, isLive]);
 
-  // Trip over: move the booking from Upcoming to Past.
+  // Trip over: move the booking from Upcoming to Past. A live ride is completed by its captain.
   useEffect(() => {
     if (phase !== "done" || !bookingId) return;
+    if (isLive) { refreshBookings(); return; }
     api.bookings.complete(bookingId).then(() => refreshBookings(), () => { /* stays upcoming; nothing to show the rider */ });
-  }, [phase, bookingId, refreshBookings]);
+  }, [phase, bookingId, refreshBookings, isLive]);
+
+  // A live ride: ask the server for its progress (each read also moves the captain search on).
+  const liveKey = live ? `${ride!.id}:${live.phase}:${live.captain?.x},${live.captain?.y}:${live.etaMin}` : "";
+  useEffect(() => {
+    if (!ride || !live || ["done", "unmatched", "cancelled"].includes(live.phase)) return;
+    const seconds = live.phase === "searching" ? DRIVER_RULES.searchPollSeconds : DRIVER_RULES.pingBusySeconds;
+    const id = window.setTimeout(() => {
+      api.rides.get(ride.id).then(onLiveUpdate, () => setPollTick((n) => n + 1)); // a failed read is retried
+    }, seconds * 1000);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveKey, pollTick]);
+
+  /** A new read of a live ride: follow its phase; pay once a captain accepts. */
+  function onLiveUpdate(r: Ride | LiveRide) {
+    if (!isLiveRide(r)) {
+      // Nobody took it and a simulated captain stepped in: play it like any simulated ride.
+      setRide(r); setSimFallback(true); setT(0); setPhase("arriving");
+      if (!bookingId) void payFor(r);
+      return;
+    }
+    const was = live?.phase;
+    setRide(r);
+    switch (r.live.phase) {
+      case "searching":
+        if (was === "arriving" || was === "arrived") setResearching(true);
+        setPhase("searching");
+        break;
+      case "arriving":
+      case "arrived":
+        setResearching(false);
+        setPhase(r.live.phase);
+        if (!bookingId) void payFor(r);
+        break;
+      case "ontrip":
+        setPhase("ontrip");
+        break;
+      case "done":
+        setPhase("done");
+        break;
+      case "unmatched":
+        setPhase("unmatched");
+        refreshBookings(); // anything already paid came back
+        break;
+      case "cancelled":
+        toast("This ride was cancelled.", "err");
+        refreshBookings(); reset();
+        break;
+    }
+  }
 
   const quote = quotes?.find((q) => q.option.id === selected);
   const driverStart: Pt | null = useMemo(() => pickup ? driverStartFor(pickup) : null, [pickup]);
-  const vehicle: Pt | null = pickup && drop && (phase === "arriving" || phase === "ontrip" || phase === "done")
-    ? vehiclePosition(phase, pickup, drop, t, chosenStops) : null;
+  const vehicle: Pt | null = live
+    ? (live.captain ?? (phase === "arrived" ? pickup : null))
+    : pickup && drop && (phase === "arriving" || phase === "ontrip" || phase === "done")
+      ? vehiclePosition(phase, pickup, drop, t, chosenStops) : null;
 
   function reset() {
     cancelAnimationFrame(raf.current);
     setPhase("plan"); setRide(null); setBookingId(null); setCreditsPaid(0); setT(0); setRating(0); setCancelling(false); setReason(null); setWhen("now"); setStops([]);
+    setSimFallback(false); setResearching(false); bookingStarted.current = false;
   }
 
   // Credits: the same rule the API applies at booking.
@@ -194,30 +261,56 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   const earns = quote ? creditsEarned(settings, service, payable) : 0;
   const walletShort = !!user && !!quote && user.walletBalance < payable;
 
+  /** The booking (the payment) for a ride: right after booking a simulated one, once a captain accepts a live one. */
+  async function createBooking(r: Ride | LiveRide): Promise<Booking> {
+    const stopLine: [string, string][] = r.stops?.length ? [["Stops", r.stops.map((s) => s.name).join(" → ")]] : [];
+    // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
+    const b = await api.bookings.create({
+      service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, rideId: r.id, payment: r.payment, useCredits: creditsOff > 0,
+      ...(tripOf ? { tripOf } : {}),
+      lines: r.scheduledFor || !r.driver
+        ? [...(r.scheduledFor ? [["Pickup time", prettyDateTime(r.scheduledFor)] as [string, string]] : []), ...stopLine, ["Payment", r.payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]]
+        : [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ...stopLine, ["Payment", r.payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
+    });
+    setCreditsPaid(b.creditsUsed);
+    setBookingId(b.id); setBookedAt(b.createdAt); setBookedTerms(b.terms);
+    refreshBookings();
+    return b;
+  }
+
+  /** A live ride a captain has just taken (or one that fell back to a simulated captain): pay for it now, once. */
+  async function payFor(r: Ride | LiveRide) {
+    if (bookingStarted.current) return;
+    bookingStarted.current = true;
+    try {
+      await createBooking(r);
+      autoShareIfNight(r);
+    } catch (e) {
+      // e.g. the wallet ran short meanwhile: let the captain go.
+      api.rides.cancel(r.id).catch(() => undefined);
+      toast((e as Error).message, "err");
+      reset();
+    }
+  }
+
   function book() {
     if (!pickup || !drop || !quote) return;
     requireAuth(async () => {
       setPhase("searching");
-      let r: Ride | null = null;
+      let r: Ride | LiveRide | null = null;
       try {
         r = await api.rides.book({ optionId: quote.option.id, pickupId: pickup.id, dropId: drop.id, payment, scheduledFor, stopIds: chosenStops.map((s) => s.id) });
-        const stopLine: [string, string][] = r.stops?.length ? [["Stops", r.stops.map((s) => s.name).join(" → ")]] : [];
-        // A ride booked ahead gets its driver near pickup time, so its booking has no driver lines yet.
-        const b = await api.bookings.create({
-          service, title: `${r.quote.option.name} · ${r.drop.name}`, subtitle: `${r.pickup.name} → ${r.drop.name}`, rideId: r.id, payment, useCredits: creditsOff > 0,
-          ...(tripOf ? { tripOf } : {}),
-          lines: r.scheduledFor
-            ? [["Pickup time", prettyDateTime(r.scheduledFor)], ...stopLine, ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]]
-            : [["Driver", r.driver.name], ["Vehicle", `${r.driver.vehicle} · ${r.driver.plate}`], ["Ride OTP", r.otp], ...stopLine, ["Payment", payment.toUpperCase()], ["Distance", `${r.quote.distanceKm} km`]],
-        });
-        setCreditsPaid(b.creditsUsed);
-        if (r.scheduledFor) {
-          setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setBookedTerms(b.terms); setPhase("scheduled");
-          refreshBookings();
+        if (isLiveRide(r)) {
+          // Real captains: wait for one to accept (the poll above), then pay.
+          setRide(r); setT(0);
           return;
         }
-        setRide(r); setBookingId(b.id); setBookedAt(b.createdAt); setBookedTerms(b.terms); setT(0); setPhase("arriving");
-        refreshBookings();
+        await createBooking(r);
+        if (r.scheduledFor) {
+          setRide(r); setPhase("scheduled");
+          return;
+        }
+        setRide(r); setT(0); setPhase("arriving");
         autoShareIfNight(r);
       } catch (e) {
         // e.g. the wallet ran short between quote and booking: release the driver.
@@ -232,10 +325,17 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
   const sold = withTerms(settings, bookedTerms);
   const feeNow = ride && bookedAt ? rideCancelFee(sold, ride.quote.fare, reason, bookedAt, Date.now(), ride.scheduledFor) : 0;
 
+  /** Stops a live search before any captain took it (nothing was paid). */
+  async function cancelSearch() {
+    if (ride && live) await api.rides.cancel(ride.id).catch(() => undefined);
+    reset();
+  }
+
   async function cancelRide() {
     cancelAnimationFrame(raf.current);
     try {
-      if (ride) await api.rides.cancel(ride.id);
+      // A paid live ride is cancelled through its booking (the API frees and tells the captain).
+      if (ride && !(live && bookingId)) await api.rides.cancel(ride.id);
       const done = bookingId ? await api.bookings.cancel(bookingId, reason ?? undefined) : null;
       toast(!done?.cancelFee ? "Ride cancelled. No charges applied."
         : done.payment === "wallet" ? `Ride cancelled. ${inr(done.cancelFee)} cancellation fee kept; ${inr(done.refundAmount ?? 0)} back in your wallet.`
@@ -244,14 +344,20 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
     refreshBookings(); reset();
   }
 
-  const etaLeft = ride ? Math.max(1, Math.ceil(ride.quote.etaMin * (1 - t))) : 0;
-  const tripLeft = ride ? Math.max(1, Math.ceil(ride.quote.durationMin * (1 - t))) : 0;
+  const etaLeft = live ? live.etaMin ?? ride!.quote.etaMin : ride ? Math.max(1, Math.ceil(ride.quote.etaMin * (1 - t))) : 0;
+  const tripLeft = live ? live.etaMin ?? ride!.quote.durationMin : ride ? Math.max(1, Math.ceil(ride.quote.durationMin * (1 - t))) : 0;
+  /** The progress bar: worked out from the minutes left on a live ride. */
+  const progress = !live ? t
+    : phase === "arrived" ? 1
+    : phase === "arriving" ? Math.min(1, Math.max(0, 1 - etaLeft / Math.max(1, ride!.quote.etaMin)))
+    : phase === "ontrip" ? Math.min(1, Math.max(0, 1 - tripLeft / Math.max(1, ride!.quote.durationMin))) : 0;
+  const onTheWay = phase === "arriving" || phase === "arrived";
 
   return (
     <div className="grid grid-cols-1 [&>*]:min-w-0 lg:grid-cols-[420px_1fr] gap-5">
       <div className="panel p-5">
        <AnimatePresence mode="wait" initial={false}>
-        <motion.div key={phase === "arriving" || phase === "ontrip" ? "live" : phase} className="space-y-5"
+        <motion.div key={phase === "arriving" || phase === "arrived" || phase === "ontrip" ? "live" : phase} className="space-y-5"
           initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.25 }}>
         {phase === "plan" && (
           <>
@@ -415,27 +521,41 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
               ))}
               <span className="w-14 h-14 rounded-full btn-gold grid place-items-center"><Spinner size={22} /></span>
             </div>
-            <p className="font-semibold text-lg">Finding your {quote?.option.name}…</p>
-            <p className="text-sm text-muted">Matching you with the nearest top-rated driver</p>
-            <button className="text-sm text-muted underline" onClick={reset}>Cancel</button>
+            <p className="font-semibold text-lg">{researching ? "Finding you another captain…" : `Finding your ${ride?.quote.option.name ?? quote?.option.name ?? "ride"}…`}</p>
+            <p className="text-sm text-muted">{researching
+              ? "Your captain couldn't make it. We're asking the next nearest one; you pay nothing extra."
+              : live ? "Asking the nearest captain. You pay only once one accepts." : "Matching you with the nearest top-rated driver"}</p>
+            {/* Before a captain accepts nothing is paid; after a captain gave a paid ride back, the API waives the fee. */}
+            {bookingId ? <button className="text-sm text-muted underline" onClick={cancelRide}>Cancel (no charge)</button>
+              : <button className="text-sm text-muted underline" onClick={cancelSearch}>Cancel</button>}
           </div>
         )}
 
-        {ride && (phase === "arriving" || phase === "ontrip") && (
+        {phase === "unmatched" && (
+          <div className="py-8 text-center space-y-4">
+            <p className="font-display text-2xl">No captain found</p>
+            <p className="text-sm text-muted">{NO_CAPTAIN}</p>
+            <GoldButton className="w-full" onClick={() => reset()}>Try again</GoldButton>
+          </div>
+        )}
+
+        {ride?.driver && (phase === "arriving" || phase === "arrived" || phase === "ontrip") && (
           <div className="space-y-4">
+            {simFallback && <p className="text-xs text-warning border border-warning/30 bg-warning/10 rounded-lg px-3 py-2">No captain was free, so a simulated captain (demo) is taking this ride.</p>}
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="label !text-success">{phase === "arriving" ? "Driver on the way" : "On trip"}</p>
-                <p className="text-2xl font-bold">{phase === "arriving" ? `Arriving in ${etaLeft} min` : `${tripLeft} min to drop`}</p>
+                <p className="label !text-success">{phase === "arrived" ? "Your captain is here" : phase === "arriving" ? (live ? "Captain on the way" : "Driver on the way") : "On trip"}</p>
+                <p className="text-2xl font-bold">{phase === "arrived" ? "Meet at the pickup" : phase === "arriving" ? `Arriving in ${etaLeft} min` : `${tripLeft} min to drop`}</p>
+                {phase === "arrived" && <p className="text-xs text-muted mt-1">Tell your captain your PIN to start the trip.</p>}
               </div>
-              {phase === "arriving" && (
+              {onTheWay && (
                 <div className="text-center">
                   <p className="label">{user?.ridePin && ride.otp === user.ridePin ? "Your PIN" : "OTP"}</p>
                   <p className="text-2xl font-bold tracking-widest text-gold">{ride.otp}</p>
                 </div>
               )}
             </div>
-            <div className="h-1.5 rounded-full bg-line overflow-hidden"><div className="h-full bg-gradient-to-r from-gold-deep to-gold" style={{ width: `${t * 100}%` }} /></div>
+            <div className="h-1.5 rounded-full bg-line overflow-hidden"><div className="h-full bg-gradient-to-r from-gold-deep to-gold" style={{ width: `${progress * 100}%` }} /></div>
             <div className="flex items-center gap-3 p-3 rounded-2xl bg-ink/60 border border-line">
               <div className="w-12 h-12 rounded-full btn-gold grid place-items-center text-lg">{ride.driver.name[0]}</div>
               <div className="flex-1">
@@ -459,9 +579,9 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
               <button type="button" onClick={() => setSosOpen(true)} aria-label="SOS: safety options"
                 className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-danger text-on-brand text-sm font-bold hover:opacity-90"><Siren size={16} />SOS</button>
               <button type="button" onClick={() => shareTrip()} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-line text-sm hover:border-line-strong"><Share2 size={16} className="text-success" />Share trip</button>
-              {phase === "arriving" && !cancelling && <button onClick={() => setCancelling(true)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-danger/30 text-danger text-sm hover:bg-danger/10"><X size={16} />Cancel</button>}
+              {onTheWay && !cancelling && <button onClick={() => setCancelling(true)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-danger/30 text-danger text-sm hover:bg-danger/10"><X size={16} />Cancel</button>}
             </div>
-            {phase === "arriving" && cancelling && (
+            {onTheWay && cancelling && (
               <div className="rounded-2xl border border-danger/30 p-4 space-y-3" role="group" aria-label="Why are you cancelling?">
                 <p className="font-semibold text-sm">Why are you cancelling?</p>
                 <div className="space-y-1.5">
@@ -486,7 +606,7 @@ export function RidePanel({ service, initialFrom, initialTo, resume, scheduleAt,
           </div>
         )}
 
-        {ride && phase === "done" && (
+        {ride?.driver && phase === "done" && (
           <div className="text-center space-y-4 py-4">
             <p className="label !text-success">You have arrived</p>
             <p className="text-3xl font-bold">{inr(ride.quote.fare - creditsPaid)}</p>

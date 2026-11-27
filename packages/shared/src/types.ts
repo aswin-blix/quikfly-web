@@ -212,6 +212,8 @@ export interface SharedRide {
   driver: { name: string; rating: number; vehicle: string; plate: string } | null;
   /** A live ride's real progress (RIDE_PHASES); absent or null for a simulated ride, which the page plays itself. */
   phase?: "searching" | "arriving" | "arrived" | "ontrip" | "done" | "unmatched" | null;
+  /** A live ride's captain on the city map, from acceptance to the drop; absent or null otherwise. */
+  captain?: { x: number; y: number } | null;
 }
 
 export interface Place {

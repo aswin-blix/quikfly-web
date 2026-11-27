@@ -226,6 +226,9 @@ export interface RideLive {
 /** A ride whose progress the server owns. `driver` is null until a captain accepts. */
 export type LiveRide = Omit<Ride, "driver"> & { driver: Driver | null; live: RideLive };
 
+/** True for a ride whose progress the server owns (POST /rides and GET /rides/:id for a client that declared `rides=live`). */
+export const isLiveRide = (r: Ride | LiveRide): r is LiveRide => "live" in r && !!(r as LiveRide).live;
+
 /** What riders are told when nobody could take their ride. */
 export const NO_CAPTAIN = "No captain is free near you right now. You haven't been charged. Please try again in a few minutes.";
 

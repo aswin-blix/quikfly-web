@@ -1,10 +1,11 @@
 "use client";
 // /track?t=TOKEN: public page (no login) where family can follow a shared ride.
-// The ride is simulated, so the position is worked out from the start time with the
-// same timings as the rider's screen (RIDE_SIMULATION).
+// A simulated ride's position is worked out from the start time with the same timings as the
+// rider's screen (RIDE_SIMULATION). A live ride (a real captain) shows the server's phase and the
+// captain's position on the city map, read again every few seconds.
 import { useEffect, useState } from "react";
 import { CircleCheck, MapPin, Navigation, ShieldCheck, Star, XCircle } from "lucide-react";
-import { RIDE_SIMULATION, type SharedRide } from "@quikfly/shared";
+import { DRIVER_RULES, RIDE_SIMULATION, type SharedRide } from "@quikfly/shared";
 import { CityMap, driverStartFor, vehiclePosition } from "@/components/CityMap";
 import { Empty, Spinner } from "@/components/ui";
 import { EMERGENCY_NUMBER } from "@/lib/account";
@@ -12,8 +13,19 @@ import { useSettings } from "@/components/ConfigProvider";
 import { api } from "@/lib/api";
 import { useQuery } from "@/lib/nav";
 
-/** How often to re-check the ride (e.g. to notice a cancellation). */
+/** How often to re-check a simulated ride (e.g. to notice a cancellation); a live one is read as often as its rider's screen. */
 const REFRESH_MS = 15_000;
+const LIVE_REFRESH_MS = DRIVER_RULES.pingBusySeconds * 1000;
+
+/** A live ride's headline and how far along the bar is (0–1), by its phase. */
+const LIVE_STEP: Record<NonNullable<SharedRide["phase"]>, { text: (name: string) => string; at: number }> = {
+  searching: { text: (n) => `Finding a captain for ${n}`, at: 0 },
+  arriving: { text: (n) => `Captain on the way to ${n}`, at: 0.25 },
+  arrived: { text: (n) => `Captain has reached ${n}`, at: 0.5 },
+  ontrip: { text: (n) => `${n} is on the way`, at: 0.75 },
+  done: { text: (n) => `${n} has arrived`, at: 1 },
+  unmatched: { text: () => "No captain was free for this ride", at: 0 },
+};
 
 type Phase = "arriving" | "ontrip" | "done";
 function progress(startedAt: string, now: number): { phase: Phase; t: number } {
@@ -36,12 +48,20 @@ export function TrackScreen() {
     let live = true;
     const load = () => api.rides.shared(token).then((r) => live && setRide(r), (e) => live && setError((e as Error).message));
     load();
-    const poll = setInterval(load, REFRESH_MS);
-    return () => { live = false; clearInterval(poll); };
+    return () => { live = false; };
   }, [token]);
 
+  // Read again: often while a live ride is moving, every 15 s otherwise, not at all once it's over.
+  const livePhase = ride?.phase ?? null;
+  const over = !!ride && (ride.status === "cancelled" || livePhase === "done" || livePhase === "unmatched");
+  useEffect(() => {
+    if (!token || !ride || over) return;
+    const id = setTimeout(() => api.rides.shared(token).then(setRide, () => setRide({ ...ride })), livePhase ? LIVE_REFRESH_MS : REFRESH_MS);
+    return () => clearTimeout(id);
+  }, [token, ride, over, livePhase]);
+
   // Smooth movement on the map while the ride is in progress.
-  const finished = !ride || ride.status === "cancelled" || progress(ride.startedAt, now).phase === "done";
+  const finished = !ride || !!ride.phase || ride.status === "cancelled" || progress(ride.startedAt, now).phase === "done";
   useEffect(() => {
     if (finished) return;
     const tick = setInterval(() => setNow(Date.now()), 250);
@@ -55,13 +75,20 @@ export function TrackScreen() {
     return <div className="py-32 grid place-items-center text-muted gap-3"><Spinner size={26} />Loading trip…</div>;
   }
 
-  const { phase, t } = progress(ride.startedAt, now);
+  const step = ride.phase ? LIVE_STEP[ride.phase] : null;
+  const sim = progress(ride.startedAt, now);
+  // A live ride's phase in the simulated terms the map and the bar use.
+  const phase: Phase = step ? (ride.phase === "done" ? "done" : ride.phase === "ontrip" ? "ontrip" : "arriving") : sim.phase;
+  const t = step ? 0 : sim.t;
   const cancelled = ride.status === "cancelled";
   const minsLeft = phase === "arriving" ? Math.max(1, Math.ceil(ride.etaMin * (1 - t))) : Math.max(1, Math.ceil(ride.durationMin * (1 - t)));
   const headline = cancelled ? "This ride was cancelled"
+    : step ? step.text(ride.riderName)
     : phase === "arriving" ? `Driver reaching ${ride.riderName} in ${minsLeft} min`
     : phase === "ontrip" ? `${ride.riderName} is on the way · ${minsLeft} min to drop`
     : `${ride.riderName} has arrived`;
+  const bar = step ? step.at : phase === "done" ? 1 : phase === "ontrip" ? 0.5 + t / 2 : t / 2;
+  const vehicle = cancelled ? null : step ? ride.captain ?? null : vehiclePosition(phase, ride.pickup, ride.drop, t, ride.stops ?? []);
 
   return (
     <div className="max-w-6xl mx-auto px-4 pt-8 pb-16">
@@ -73,13 +100,13 @@ export function TrackScreen() {
           {!cancelled && (
             <div className="panel p-4">
               <div className="h-1.5 rounded-full bg-line overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-gold-deep to-gold" style={{ width: `${phase === "done" ? 100 : phase === "ontrip" ? 50 + t * 50 : t * 50}%` }} />
+                <div className="h-full bg-gradient-to-r from-gold-deep to-gold" style={{ width: `${bar * 100}%` }} />
               </div>
               <div className="flex justify-between text-xs text-subtle mt-2"><span>Driver assigned</span><span>Picked up</span><span>Arrived</span></div>
             </div>
           )}
-          {/* A live ride has no driver until a captain accepts (step 4 of docs/driver-app-plan.md shows its real progress). */}
-          {!ride.driver ? <div className="panel p-4 text-sm text-muted">Finding a captain…</div> : <div className="panel p-4 flex items-center gap-3">
+          {/* A live ride has no driver until a captain accepts. */}
+          {!ride.driver ? <div className="panel p-4 text-sm text-muted">{ride.phase === "unmatched" ? "No captain was found. Nothing was charged." : "Finding a captain…"}</div> : <div className="panel p-4 flex items-center gap-3">
             <div className="w-12 h-12 rounded-full btn-gold grid place-items-center text-lg">{ride.driver.name[0]}</div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-strong">{ride.driver.name}</p>
@@ -92,13 +119,13 @@ export function TrackScreen() {
             <p className="flex gap-2"><Navigation size={16} className="text-gold shrink-0" />{ride.drop.name}</p>
             <p className="text-xs text-subtle pt-1">{ride.distanceKm} km · about {ride.durationMin} min</p>
           </div>
-          {phase === "done" && !cancelled && <p className="text-sm text-success flex items-center gap-2"><CircleCheck size={16} />Reached the destination safely.</p>}
+          {phase === "done" && !cancelled && ride.phase !== "unmatched" && <p className="text-sm text-success flex items-center gap-2"><CircleCheck size={16} />Reached the destination safely.</p>}
           <p className="text-xs text-subtle">Worried? Call {SAFETY.emergency} or the QuikFly safety line {SAFETY.safetyLine}. Driver phone numbers aren&apos;t shown on shared links.</p>
         </div>
         <div className="h-[340px] lg:h-auto lg:min-h-[480px] order-1 lg:order-2">
           <CityMap pickup={ride.pickup} drop={ride.drop} stops={ride.stops ?? []} kind={ride.service} showRoute={phase !== "arriving"}
-            vehicle={cancelled ? null : vehiclePosition(phase, ride.pickup, ride.drop, t, ride.stops ?? [])}
-            vehicleFrom={!cancelled && phase === "arriving" ? driverStartFor(ride.pickup) : null} />
+            vehicle={vehicle}
+            vehicleFrom={!cancelled && !step && phase === "arriving" ? driverStartFor(ride.pickup) : null} />
         </div>
       </div>
     </div>

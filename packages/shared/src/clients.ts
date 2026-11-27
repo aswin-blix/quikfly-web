@@ -28,3 +28,6 @@ export const UPDATE_TO_SEE = "Update QuikFly to see this booking, or open My Tri
  */
 export const LIVE_RIDES_PARAM = "rides=live";
 export const acceptsLiveRides = (accept: string | null | undefined) => /;\s*rides=live\b/i.test(accept ?? "");
+
+/** The `Accept` of a client that also follows live rides (the website, and the apps from the release that shows them). */
+export const LIVE_CLIENT_ACCEPT = `${CLIENT_ACCEPT}; ${LIVE_RIDES_PARAM}`;
