@@ -18,3 +18,5 @@ export * from "./privacy";
 export * from "./terms";
 export * from "./parcel";
 export * from "./clients";
+export * from "./geo";
+export * from "./driver";

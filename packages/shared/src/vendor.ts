@@ -1,5 +1,5 @@
 import { gstRate, type Settings } from "./settings";
-import type { PaymentMethod, ServiceKey } from "./types";
+import type { Gender, PaymentMethod, ServiceKey } from "./types";
 
 // Vendor (partner) registration: vehicle owners who put a cab, auto, tempo traveller or bus
 // on QuikFly, through the QuikFly Partner app. Step 1 is an application of six sections that
@@ -113,6 +113,10 @@ export interface VendorDriver {
   vehicleId: string | null;
   /** The partner drives this vehicle themselves. */
   self: boolean;
+  /** Set by staff at review; women-only rides go only to women captains. */
+  gender: Gender | null;
+  /** True once the driver has signed in to QuikFly Captain with this number. */
+  linked: boolean;
 }
 
 /** A partner's vehicles and drivers (GET /vendor/fleet). */
@@ -219,6 +223,10 @@ export function vehicleTypeForRide(option: { id: string; service: ServiceKey }):
   if (option.service === "car") return "car";
   return option.id === "auto" ? "auto" : null;
 }
+
+/** Vehicle types whose drivers can take rides in QuikFly Captain (bikes join with self sign-up, step 6 of the plan). */
+export const CAPTAIN_VEHICLE_TYPES: readonly VendorVehicleType[] = ["car", "auto"];
+export const vehicleTypeForCaptain = (type: VendorVehicleType) => CAPTAIN_VEHICLE_TYPES.includes(type);
 
 /** A trip on a partner's vehicle (GET /vendor/trips). Money is in paise. */
 export interface VendorTrip {
