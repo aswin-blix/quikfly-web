@@ -19,6 +19,12 @@ abstract final class Brand {
 
   /// Side gutter of every screen.
   static const gutter = 16.0;
+
+  /// The dark plate behind the logo in light mode (the logo was drawn on black): its corner radius and
+  /// padding, as fractions of the logo's height. The plate's colour is the dark theme's `surface`.
+  static const logoPlateRadius = 0.3;
+  static const logoPlatePadX = 0.32;
+  static const logoPlatePadY = 0.16;
 }
 
 /// Theme-dependent colours. One instance for dark (default) and one for light.

@@ -16,6 +16,7 @@
 
   --card-radius: .9rem;
   --field-radius: .6rem;
+  --logo-plate-radius: .8rem; /* the dark plate behind the logo in light mode */
 
   --sidebar-width: 15rem;
 
@@ -25,6 +26,8 @@
 
 :root, [data-theme="light"] {
   color-scheme: light;
+  /* A dark plate behind the logo (the dark theme's --surface), so its gold and silver read. */
+  --logo-plate: #14141a;
   --bg: #f6f5f1;
   --surface: #ffffff;
   --surface-raised: #f1efe9;
@@ -63,6 +66,7 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
+  --logo-plate: transparent; /* the logo was drawn on black */
   --bg: #0b0b0e;
   --surface: #14141a;
   --surface-raised: #1c1c24;

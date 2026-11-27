@@ -4,7 +4,9 @@
 //   apps     apps/mobile/assets/images/logo.png  (transparent PNG rendered by headless Chrome;
 //            Flutter's SVG support drops blur filters, so the apps use a sharp raster of it)
 //   browser notifications  apps/{web,admin}/public/assets/notify-icon.png (square, transparent:
-//            browsers don't take SVG notification icons; the logo sits centred, never on a badge)
+//            browsers don't take SVG notification icons; the logo sits centred on transparency)
+// Screens show the logo through components/Logo.tsx (web, admin) and AppLogo (apps): bare in dark mode,
+// on a dark plate in light mode.
 // Run from the repo root after replacing the master:  node scripts/logo.mjs
 // then  node scripts/app-icons.mjs  (the launcher icons use the logo's Q).
 // Chrome or Edge must be installed; set CHROME=/path/to/chrome if it isn't found.

@@ -1,24 +1,42 @@
-// The logo has a transparent background and suits light and dark screens: it must never sit
-// on a badge or background of its own again (owner, 2026-11-19), and the asset must stay
-// transparent (it's rendered from brand/quikfly-logo.svg by scripts/logo.mjs).
+// The logo was drawn on black (owner's new logo, 2026-11-27): in light mode it sits on a dark plate,
+// in dark mode it shows bare. The asset must stay transparent (rendered from brand/quikfly-logo.svg
+// by scripts/logo.mjs), so the plate, not the image, supplies the background.
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quikfly/theme/theme.dart';
+import 'package:quikfly/theme/tokens.dart';
 import 'package:quikfly/widgets/logo.dart';
 
+Future<Finder> _pump(WidgetTester t, Brightness b) async {
+  await t.pumpWidget(MaterialApp(theme: buildTheme(b), home: const Scaffold(body: Center(child: AppLogo(height: 40)))));
+  final logo = find.byType(AppLogo);
+  expect(find.descendant(of: logo, matching: find.byType(Image)), findsOneWidget);
+  return logo;
+}
+
 void main() {
-  for (final b in Brightness.values) {
-    testWidgets('AppLogo is the bare image in ${b.name} mode', (t) async {
-      await t.pumpWidget(MaterialApp(theme: buildTheme(b), home: const Scaffold(body: Center(child: AppLogo(height: 40)))));
-      final logo = find.byType(AppLogo);
-      expect(find.descendant(of: logo, matching: find.byType(Image)), findsOneWidget);
-      expect(find.descendant(of: logo, matching: find.byType(DecoratedBox)), findsNothing);
-      expect(find.descendant(of: logo, matching: find.byType(ColoredBox)), findsNothing);
-      expect(find.descendant(of: logo, matching: find.byType(Container)), findsNothing);
-    });
-  }
+  testWidgets('AppLogo is bare in dark mode', (t) async {
+    final logo = await _pump(t, Brightness.dark);
+    expect(find.descendant(of: logo, matching: find.byType(DecoratedBox)), findsNothing);
+    expect(find.descendant(of: logo, matching: find.byType(ColoredBox)), findsNothing);
+  });
+
+  testWidgets('AppLogo sits on the dark plate in light mode', (t) async {
+    final logo = await _pump(t, Brightness.light);
+    final plate = t.widget<DecoratedBox>(find.descendant(of: logo, matching: find.byType(DecoratedBox)));
+    expect((plate.decoration as BoxDecoration).color, QfColors.dark.surface);
+  });
+
+  testWidgets('switching theme never changes the logo size', (t) async {
+    final sizes = <Size>[];
+    for (final b in Brightness.values) {
+      final logo = await _pump(t, b);
+      sizes.add(t.getSize(logo));
+    }
+    expect(sizes.first, sizes.last);
+  });
 
   test('logo.png is a transparent RGBA image', () {
     final bytes = File('assets/images/logo.png').readAsBytesSync();

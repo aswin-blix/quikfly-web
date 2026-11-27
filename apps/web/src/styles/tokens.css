@@ -25,6 +25,7 @@
   /* Shape */
   --radius-panel: 1.25rem;
   --radius-field: .8rem;
+  --logo-plate-radius: .9rem; /* the dark plate behind the logo in light mode */
 
   /* Layout */
   --bottom-nav-height: 4rem; /* mobile bottom tab bar, excluding the iPhone home-indicator inset */
@@ -46,6 +47,9 @@
 [data-theme="dark"],
 .on-media {
   color-scheme: dark;
+
+  /* The logo was drawn on black: no plate needed on dark surfaces. */
+  --logo-plate: transparent;
 
   /* Surfaces */
   --bg: #07070a;
@@ -109,6 +113,9 @@
 /* ── Light theme ── */
 [data-theme="light"] {
   color-scheme: light;
+
+  /* A dark plate behind the logo (same as the dark theme's --surface), so its gold and silver read. */
+  --logo-plate: #111116;
 
   --bg: #faf8f3;
   --surface: #ffffff;

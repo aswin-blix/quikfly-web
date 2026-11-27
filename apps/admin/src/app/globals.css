@@ -49,6 +49,15 @@ body {
 
 /* Component classes live in the components layer so Tailwind utilities (w-56, pl-9...) can override them. */
 @layer components {
+  /* The logo on its plate: dark in light mode, transparent in dark (tokens --logo-plate*); same padding in both
+     themes so switching never moves the layout. Use components/Logo.tsx. */
+  .logo-plate {
+    display: inline-flex;
+    background: var(--logo-plate);
+    border-radius: var(--logo-plate-radius);
+    padding: .3rem .65rem;
+  }
+
   .card {
     background: var(--surface);
     border: 1px solid var(--border);

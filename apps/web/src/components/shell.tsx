@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Bell, ChevronDown, CircleCheck, Download, HelpCircle, LayoutGrid, Ticket, TriangleAlert, User as UserIcon, Wallet } from "lucide-react";
 import { AppProvider, useApp } from "./AppProvider";
 import { LoginModal } from "./LoginModal";
+import { Logo } from "./Logo";
 import { PrivacyConsent } from "./PrivacyConsent";
 import { LanguageMenu } from "./LanguageMenu";
 import { LanguageProvider, useT } from "./LanguageProvider";
@@ -93,7 +94,7 @@ function Header({ onOpenServices }: { onOpenServices: () => void }) {
       )}
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-3">
         <Link href="/" className="shrink-0" aria-label={t("navLogoHome")}>
-          <img src="/assets/logo.svg" alt="QuikFly" width={1504} height={458} className="h-10 sm:h-11 w-auto" />
+          <Logo imgClassName="h-9 sm:h-10 w-auto" />
         </Link>
         <nav className="hidden xl:flex items-center ml-4" aria-label={t("navServices")}>
           {open.map((s) => (
@@ -162,7 +163,7 @@ function Footer() {
     <footer className="no-print mt-24 border-t border-line bg-coal/40">
       <div className="max-w-7xl mx-auto px-4 py-14 grid sm:grid-cols-2 lg:grid-cols-5 gap-10 text-sm">
         <div className="lg:col-span-2">
-          <img src="/assets/logo.svg" alt="QuikFly" width={1504} height={458} className="h-14 w-auto" />
+          <Logo imgClassName="h-12 w-auto" />
           <p className="text-muted mt-4 max-w-sm">{t("footerTagline")}</p>
           <div className="flex gap-3 mt-5">
             <a href={ANDROID_APP.downloadUrl} download className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gold/50 text-xs text-gold hover:bg-gold/10">

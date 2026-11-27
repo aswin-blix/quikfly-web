@@ -7,6 +7,7 @@ import { LogOut, Menu, Moon, Siren, Sun, X } from "lucide-react";
 import { ADMIN_ROLE_INFO } from "@quikfly/shared";
 import { AlertPopups } from "./AlertPopups";
 import { AlertsMenu } from "./AlertsMenu";
+import { Logo } from "@/components/Logo";
 import { cx } from "@/lib/format";
 import { useAlerts } from "@/lib/alerts";
 import { LIVE_ROUTES, NAV, isActive } from "@/lib/nav";
@@ -16,8 +17,7 @@ import { currentTheme, setTheme, type Theme } from "@/lib/theme";
 function Wordmark() {
   return (
     <Link href="/" className="flex items-center gap-2" aria-label="QuikFly Admin home">
-      {/* brand/quikfly-logo.svg, copied by scripts/logo.mjs; transparent, so it suits both themes */}
-      <img src="/assets/logo.svg" alt="QuikFly" width={1504} height={458} className="h-8 w-auto" />
+      <Logo imgClassName="h-7 w-auto" />
       <span className="text-[11px] uppercase tracking-widest text-subtle">Admin</span>
     </Link>
   );

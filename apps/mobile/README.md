@@ -128,7 +128,7 @@ Both apps get push notifications through Firebase Cloud Messaging (`lib/state/pu
   - Sizes, colours and the Q's position inside the logo are constants at the top of the script. If the logo is redrawn, re-measure `Q` and `Q_OUTLINE` there.
 - Outfit is shipped as static weights (400/500/600/700) cut from the variable font with `fonttools varLib.instancer`, because Flutter doesn't map `FontWeight` onto a variable font's axis.
 - `lib/core/cancellation.dart` is a Dart copy of `packages/shared/src/cancellation.ts`: it previews the refund before cancelling; the API decides the amount.
-- `assets/images/logo.png` is rendered from `brand/quikfly-logo.svg` by `node scripts/logo.mjs` (transparent, 1240×378; Flutter's SVG support drops the logo's glow filters, so the apps use a sharp PNG). `AppLogo` shows it bare in both themes, never on a badge or background (`test/logo_test.dart`).
+- `assets/images/logo.png` is rendered from `brand/quikfly-logo.svg` by `node scripts/logo.mjs` (transparent, 1240×378; Flutter's SVG support drops the logo's glow filters, so the apps use a sharp PNG). `AppLogo` shows it bare in dark mode and on a dark plate (the dark theme's `surface`, shape in `Brand.logoPlate*`) in light mode, because the logo was drawn on black; the padding is the same in both themes so nothing moves (`test/logo_test.dart`).
 
 ## Release (signed APK)
 
