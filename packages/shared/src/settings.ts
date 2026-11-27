@@ -197,6 +197,26 @@ export interface Settings {
   /** The smallest payout a partner can request (₹). */
   vendorMinPayout: number;
 
+  /**
+   * QuikFly Captain (docs/driver-app-plan.md). The master switch: on, a ride from a client that can follow a
+   * live ride is offered to real captains; off, every ride is simulated as before.
+   */
+  featureLiveDrivers: boolean;
+  /** When no captain takes a live ride: on, a simulated captain steps in (demo); off, the customer is told none is free. */
+  rideSimulateDrivers: boolean;
+  /** Captains may pick a demo location on the map instead of GPS (for demos and testing away from the city). */
+  driverDemoLocation: boolean;
+  /** Seconds a captain has to answer an offer. */
+  driverOfferSeconds: number;
+  /** A ride is offered to at most this many captains, one at a time. */
+  driverOfferMaxDrivers: number;
+  /** A search gives up after this many seconds. */
+  driverSearchSeconds: number;
+  /** Captains further than this from the pickup aren't asked (km). */
+  driverSearchRadiusKm: number;
+  /** A captain who hasn't been heard from for this long gets no offers and is set offline (seconds). */
+  driverStaleSeconds: number;
+
   /** Seller details printed on invoices. */
   companyName: string;
   companyAddress: string;
@@ -318,6 +338,14 @@ export const DEFAULT_SETTINGS: Settings = {
   vendorExpiryWarnDays: 30,
   vendorCommissionPercent: 20,
   vendorMinPayout: 500,
+  featureLiveDrivers: false,
+  rideSimulateDrivers: true,
+  driverDemoLocation: true,
+  driverOfferSeconds: 15,
+  driverOfferMaxDrivers: 5,
+  driverSearchSeconds: 90,
+  driverSearchRadiusKm: 5,
+  driverStaleSeconds: 60,
   companyName: "QuikFly Mobility Pvt. Ltd.",
   companyAddress: "Chennai, Tamil Nadu, India",
   companyGstin: "33AAACQ0000A1Z5",
@@ -450,6 +478,14 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   vendorExpiryWarnDays: { type: "number", min: 1, max: 90, integer: true },
   vendorCommissionPercent: { type: "number", min: 0, max: 20, integer: true },
   vendorMinPayout: money(10000),
+  featureLiveDrivers: { type: "boolean" },
+  rideSimulateDrivers: { type: "boolean" },
+  driverDemoLocation: { type: "boolean" },
+  driverOfferSeconds: { type: "number", min: 10, max: 60, integer: true },
+  driverOfferMaxDrivers: { type: "number", min: 1, max: 10, integer: true },
+  driverSearchSeconds: { type: "number", min: 30, max: 300, integer: true },
+  driverSearchRadiusKm: { type: "number", min: 1, max: 30, integer: true },
+  driverStaleSeconds: { type: "number", min: 30, max: 600, integer: true },
   companyName: { type: "text", min: 2, max: 120 },
   companyAddress: { type: "text", min: 2, max: 240 },
   companyGstin: { type: "text", max: 15, pattern: /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, hint: "A 15-character GSTIN, e.g. 33ABCDE1234F1Z5." },
