@@ -1,6 +1,6 @@
 # QuikFly Captain: the driver app
 
-Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 = PR #175 with migration `0035`; step 3, the Captain app, on branch `feat/captain-3-app` on top of it), step 4 (riders see the real trip) next.** Tick the steps below as they ship and keep the status line current.
+Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 = PR #175 with migration `0035`; step 3 = PR #176, the Captain app; step 4, riders see the real trip, on branch `feat/captain-4-riders` on top of #176), step 5 (staff and owners can see it) next.** Tick the steps below as they ship and keep the status line current.
 
 ## Context
 
@@ -117,6 +117,14 @@ Done 2026-11-27 (branch `feat/captain-3-app`, on top of step 2). What changed fr
 
 **4. Customers see the real trip.**
 Website `RidePanel.tsx`, `TrackScreen.tsx`, `contract.ts` / `http.ts` / `mock.ts`; app `ride_screen.dart`: declare `rides=live`, poll instead of timers when the ride is live, "Finding your captain", re-search when a captain cancels, the no-captain message. Simulated rides keep the timers.
+
+Done 2026-11-27 (branch `feat/captain-4-riders`, on top of step 3). What changed from the plan:
+- **The website sends `LIVE_CLIENT_ACCEPT` always** (`rides=live`); the app sends it from its next release. The mock API stays simulated, so the demo build and `build:demo` are unchanged.
+- **Pay on accept** on both: the booking is created when the first poll after acceptance sees `arriving`; if paying fails, the ride is cancelled so the captain is freed.
+- **A rider never pays a fee while a new captain is being found** (their captain gave the ride back): the API waives it, so the app and website show "Cancel (no charge)".
+- **The shared-trip page** shows a live ride's phase and the captain's map position, read every 5 s (`SharedRide.captain`).
+- **Checked end to end in a browser at 390 px against the local API**, with a test captain driven by API calls: searching, accept → paid → "Captain on the way" with the real name and plate, arrived with the PIN, started with that PIN → "min to drop" with Cancel gone, the shared-trip page with the captain between pickup and drop, completed → "You have arrived" (light and dark), booking completed and credits earned. The browser test found and fixed a poll that stopped while a search stayed unchanged. **Not checked in a browser:** the no-captain screen (the browser session was closed; covered by the API smoke and the same poll), the app screens (no device; `flutter test` covers the models and the Accept).
+- Checks: typecheck; `flutter analyze` clean; `flutter test` 133 passed on the local API; local smoke 343 + 807.
 
 **5. Staff and owners can see it.**
 Admin: a Captains page (online now, on a trip, last seen), a ride's dispatch log (who was asked, what they did) in the booking view, the new settings. Partner app: each driver's live status. Permission `drivers.view` in `PERMISSIONS`.

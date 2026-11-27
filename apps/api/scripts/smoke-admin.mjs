@@ -1295,10 +1295,10 @@ if (pvUp.status === 409) {
     await expect("live: the booking is under way", call("GET", `/bookings/${b2.id}`, null, RC, LIVE), 200, (j) => j.status === "ongoing");
     await expect("live: the rider can't cancel once the trip has started", call("POST", `/bookings/${b2.id}/cancel`, {}, RC, LIVE), 409, (j) => /has started/.test(j.message));
     await expect("live: the rider's app can't end a live ride", call("POST", `/bookings/${b2.id}/complete`, null, RC, LIVE), 409, (j) => /captain ends/.test(j.message));
-    await expect("live: the shared-trip page shows the real phase", (async () => {
+    await expect("live: the shared-trip page shows the real phase and where the captain is", (async () => {
       const share = (await call("POST", `/rides/${r2.id}/share`, null, RC)).json;
       return call("GET", `/share/${share.token}`);
-    })(), 200, (j) => j.phase === "ontrip" && j.driver?.name === "Smoke Vendor");
+    })(), 200, (j) => j.phase === "ontrip" && j.driver?.name === "Smoke Vendor" && j.captain?.x === pick.x && j.captain?.y === pick.y);
     const done = await expect("live: the captain ends the trip and sees what it earned", call("POST", `/driver/rides/${r2.id}/complete`, null, PV), 200,
       (j) => j.done.rideId === r2.id && j.done.earningPaise > 0 && j.done.collectCash === null && j.ride === null && j.duty.online);
     await expect("live: the trip settles once for the partner", call("GET", "/vendor/trips", null, PV), 200,
