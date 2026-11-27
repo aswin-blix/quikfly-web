@@ -17,12 +17,13 @@ enum NotificationScope {
   partner,
   captain;
 
-  /// Each app's kinds start with its prefix (PARTNER_ / CAPTAIN_NOTIFICATION_PREFIX); the rest are the customer app's.
-  static const prefixes = {NotificationScope.partner: 'vendor.', NotificationScope.captain: 'driver.'};
+  /// Each app's kinds start with its prefixes (PARTNER_ / CAPTAIN_NOTIFICATION_PREFIX); the rest are the customer app's.
+  /// Captain also shows partner updates: in Captain those belong to an owner-driver who registered there.
+  static const prefixes = {NotificationScope.partner: ['vendor.'], NotificationScope.captain: ['driver.', 'vendor.']};
 
   bool shows(String kind) {
     final own = prefixes[this];
-    return own != null ? kind.startsWith(own) : !prefixes.values.any(kind.startsWith);
+    return own != null ? own.any(kind.startsWith) : !prefixes.values.expand((p) => p).any(kind.startsWith);
   }
 }
 

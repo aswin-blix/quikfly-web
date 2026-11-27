@@ -170,17 +170,18 @@ export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
  * Which phone app a push token belongs to. One account has one inbox, but QuikFly Partner shows only
  * partner updates (kinds starting with PARTNER_NOTIFICATION_PREFIX) and QuikFly only the rest, so each
  * phone gets only its app's pushes. Browsers register without one and get everything (the website shows
- * both). QuikFly Captain gets only kinds starting with CAPTAIN_NOTIFICATION_PREFIX. Mirrors NotificationScope in
- * apps/mobile/lib/state/catalog.dart.
+ * both). QuikFly Captain gets kinds starting with CAPTAIN_NOTIFICATION_PREFIX, and the partner updates too: an account
+ * that gets those in Captain is an owner-driver who registered there (a fleet driver's account is never the partner).
+ * Mirrors NotificationScope in apps/mobile/lib/state/catalog.dart.
  */
 export const PUSH_APPS = ["customer", "partner", "captain"] as const;
 export type PushApp = (typeof PUSH_APPS)[number];
 export const PARTNER_NOTIFICATION_PREFIX = "vendor.";
 /** Kinds for QuikFly Captain: a ride offer, and a ride the rider cancelled. */
 export const CAPTAIN_NOTIFICATION_PREFIX = "driver.";
-/** Which app's phones get a notification kind: its prefix decides, and everything else is the customer app's. */
-export const pushAppForKind = (kind: string): PushApp =>
-  kind.startsWith(PARTNER_NOTIFICATION_PREFIX) ? "partner" : kind.startsWith(CAPTAIN_NOTIFICATION_PREFIX) ? "captain" : "customer";
+/** Which apps' phones get a notification kind: its prefix decides (partner updates also reach Captain); everything else is the customer app's. */
+export const pushAppsForKind = (kind: string): PushApp[] =>
+  kind.startsWith(PARTNER_NOTIFICATION_PREFIX) ? ["partner", "captain"] : kind.startsWith(CAPTAIN_NOTIFICATION_PREFIX) ? ["captain"] : ["customer"];
 
 /** One entry in the customer's notification inbox (also pushed to their phones when push is on). */
 export interface AppNotification {
