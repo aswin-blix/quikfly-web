@@ -1,6 +1,6 @@
 # QuikFly Captain: the driver app
 
-Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 = PR #175 with migration `0035`; step 3 = PR #176, the Captain app; step 4 = PR #177, riders see the real trip; step 5 = PR #178, staff and owners can see it; step 6, self sign-up and bikes, on branch `feat/captain-6-signup` on top of #178), step 7 (real GPS in the background) next.** Tick the steps below as they ship and keep the status line current.
+Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 = PR #175 with migration `0035`; step 3 = PR #176, the Captain app; step 4 = PR #177, riders see the real trip; step 5 = PR #178, staff and owners can see it; step 6 = PR #179, self sign-up and bikes; step 7, real GPS in the background, on branch `feat/captain-7-gps` on top of #179). All eight steps are built; nothing is merged or deployed beyond step 1, and `featureLiveDrivers` stays off.** Tick the steps below as they ship and keep the status line current.
 
 ## Context
 
@@ -149,6 +149,15 @@ Done 2026-11-27 (branch `feat/captain-6-signup`, on top of step 5). What changed
 
 **7. Real GPS in the background.** `geolocator`, the Android foreground service and disclosure, iPhone location strings, `driverDemoLocation` off path.
 
+Done 2026-11-27 (branch `feat/captain-7-gps`, on top of step 6). What changed from the plan:
+- **`geolocator`** (on Swift Package Manager, so no CocoaPods): going online asks for one fix and starts the position stream as an Android foreground service (`ForegroundNotificationConfig`: "You're online in QuikFly Captain") or with iOS background location; the heartbeat sends the latest fix and keeps running with the app closed. Going offline, or staff setting the captain offline, stops it. After a restart while online, the stream starts again if location is still allowed (never a prompt at launch).
+- **The app explains first** (once, `gpsDisclosure`): why, that it continues with the app closed, that only the latest position is kept; then Android's or iOS's prompt. Blocked location or location turned off says so, with "Open settings".
+- **Demo locations stay** as an alternative ("Use a demo location instead") while `driverDemoLocation` is on; with it off, only GPS.
+- **Only Captain asks for location:** its permissions are in its own manifest, the customer and Partner manifests remove the plugin's service (checked in the built APKs), and Captain has its own iOS Info.plist (`Runner/Info-captain.plist`, set by `tool/ios_flavors.rb`) with the location reasons and background location.
+- **Also fixed here (gap from step 6):** an owner-driver's partner updates (`vendor.*`) are listed and pushed in Captain too.
+- **Not checked on a phone** (no device here): the prompt, the notification, staying online with the screen off, battery use. That is the first thing to try with a test build.
+- Checks: typecheck; `flutter analyze`; `flutter test` 138; Captain, customer and Partner debug APKs built and their manifests compared; Captain built for the iPhone Simulator.
+
 **After sign-off (paid or policy-bound):** real maps and turn-by-turn, WebSockets via Durable Objects instead of polling, real SMS, Play Store listing for Captain, ratings, parcels and outstation jobs.
 
 ## Files that matter
@@ -210,7 +219,7 @@ A "How it works" page built from the live values, never typed by hand: time to a
 
 - **Polling costs requests.** One captain online for 8 hours is about 2,000–5,000 requests a day; the free plan allows 100,000 a day in total. Fine for a pilot of about ten captains; beyond that the $5 plan (after sign-off) or WebSockets.
 - **An offer can take up to 15 s to appear** if the push doesn't arrive and the app is idle-polling. Acceptable for a pilot; WebSockets remove it.
-- **Without step 7 the app must stay open** to keep a captain online.
+- **With GPS a captain stays online with the app closed** (a notification shows while it does); with a demo location the app must stay open. Phone makers that kill background apps (some Android skins) can still stop it: the captain goes silent and is set offline after `driverStaleSeconds`.
 - **Scheduled rides** start dispatch when the rider taps Start (as today), not automatically.
 
 ## Verification
