@@ -1,6 +1,6 @@
 # QuikFly Captain: the driver app
 
-Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 = PR #175 with migration `0035`; step 3 = PR #176, the Captain app; step 4 = PR #177, riders see the real trip; step 5 = PR #178, staff and owners can see it; step 6 = PR #179, self sign-up and bikes; step 7, real GPS in the background, on branch `feat/captain-7-gps` on top of #179). All eight steps are built; nothing is merged or deployed beyond step 1, and `featureLiveDrivers` stays off.** Tick the steps below as they ship and keep the status line current.
+Status: **approved 2026-11-27; all steps built, merged (#173–#180) and the API, website and admin deployed 2026-11-27 (migrations `0033`–`0036` on production). `featureLiveDrivers` is off in production: nothing changes for riders until the owner turns it on. Next: a Captain build on a phone, the privacy-notice decision, Captain in Firebase.** Tick the steps below as they ship and keep the status line current.
 
 ## Context
 
