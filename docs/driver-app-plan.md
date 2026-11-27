@@ -107,6 +107,54 @@ Admin: a Captains page (online now, on a trip, last seen), a ride's dispatch log
 - New: `packages/shared/src/{driver,geo}.ts`, `apps/api/src/{middleware/driver.ts,routes/driver.ts,services/drivers.ts,services/dispatch.ts,services/driver-rides.ts}`, migration `0033`, `apps/mobile/lib/main_captain.dart`, `lib/captain/`, `lib/api/captain_models.dart`.
 - Every step follows rule 1 (one contract, four implementations): shared types → API → web contract/http/mock → smoke → `apps/api/README.md` → `models.dart` / `api.dart` + contract test → docs.
 
+## Admin settings and screens (planned 2026-11-27)
+
+The aim: staff can run live rides without a developer, and a captain is never surprised by a rule.
+
+**Rules for every setting here**
+- A plain label, a unit, limits that stop a harmful value, and one sentence of help saying what a captain or rider will notice.
+- Settings that do nothing while **Live captains** is off are dimmed, with "Turn on Live captains to use this".
+- A global rule is a setting. Anything about one captain (blocked, gender, vehicle) lives on that captain's card, not in Settings.
+- Security limits (PIN tries and lock time) stay constants in code, not settings.
+- Each value is read with a safe fallback, because a new setting can be missing for a minute after a deploy.
+- Every change is audited, as all settings are.
+
+**Settings, under "Captains (live rides)" in the order staff think about them**
+
+| Part | Setting | Default | Step | Why it helps |
+|---|---|---|---|---|
+| Going live | `featureLiveDrivers` Live captains | off | 1 (built) | The master switch. Step 5 shows "N captains online now" beside it, so nobody turns it on with no one to drive. |
+| Going live | `liveRideBike`, `liveRideAuto`, `liveRideCab` | all on | 2 | Start with one ride type (for example autos) and add the others when there are enough captains. A type that is off stays simulated. |
+| Going live | `rideSimulateDrivers` | on | 1 (built) | When no captain takes a ride: on falls back to a simulated one (demo), off tells the rider honestly. Turn off for real operations. |
+| Going live | `driverDemoLocation` | on | 1 (built) | Captains may use a pretend position. Admin shows a "test mode" banner while it is on; turn off before real riders. |
+| Matching | `driverSearchRadiusKm` | 5 | 1 (built) | How far a captain can be from the pickup. |
+| Matching | `driverOfferSeconds` | 15 | 1 (built) | Time to answer an offer. The app shows the same countdown. |
+| Matching | `driverOfferMaxDrivers`, `driverSearchSeconds` | 5, 90 | 1 (built) | When to stop looking. |
+| Matching | `driverStaleSeconds` | 60 | 1 (built) | A silent app goes offline after this. |
+| Trip | `driverArrivedRadiusKm` | 0.3 (0 = no check) | 2 | "Arrived" only works near the pickup, so a waiting clock can't be started from far away (a known complaint about other apps). |
+| Trip | `driverCancelPenaltyPercent` | 0 | 2 | For cancelling after accepting without a listed valid reason. The guidelines allow up to 10%, capped at ₹100; 0 during the pilot. Declining an offer is always free. |
+| Trip | `driverFreeWaitMinutes`, `driverWaitPerMinute` | 3, ₹0 | later | Paid waiting after arrival. ₹0 keeps it off. Needs a fare change for riders, so not in version 1. |
+| Money | `vendorFlatDailyFee`, `vendorDailyFee`, `vendorCommissionPercent` | off, ₹50, 20% | built (#174) | Commission per ride or a flat daily fee. Shown here as well as under Partners, since it is the first thing a captain asks. |
+| Money | `driverCashLimit` | ₹2,000 (0 = no limit) | 5 | A captain holding more cash than this gets no new cash rides until the owner settles. Protects QuikFly; the app shows how close they are. |
+| Safety | `driverMaxOnlineHours` | 12 | 5 | Longest time online in a day; the app warns an hour before and then sets the captain offline. Check the figure against the guidelines before launch. |
+| Sign-up | `captainSelfSignup` | off | 6 | Opens owner-driver registration in the app. Off: only drivers a fleet owner added can sign in. |
+
+Reused, not duplicated: the support number, the document expiry warning (`vendorExpiryWarnDays`), the joining fee and the rider's cancellation reasons.
+
+**Admin screens that make the settings usable**
+
+| Screen | Step | What staff get |
+|---|---|---|
+| Captains page | 5 | Who is online, on a trip or silent, with last seen and vehicle. One captain's card shows **the same "why can't I go online" reasons the app shows**, so support and the captain read the same words. Actions: set offline, block with a reason, set gender. |
+| Ride dispatch log | 5 | On a booking: who was offered the ride, in what order, how far away, and what each did. Answers "why did nobody come?". |
+| Send a test offer | 5 | Sends a clearly labelled practice offer to one captain, to check their phone rings and speaks. Creates no ride and no money. |
+| Readiness card | 5 | Above the master switch: captains approved, captains online, demo location on or off, simulated fallback on or off. Red where a real launch would go wrong. |
+| Settings page | each step | The Captains group in the order above, dependent fields dimmed, and a test-mode banner. |
+
+**In the Captain app, from the same settings**
+
+A "How it works" page built from the live values, never typed by hand: time to answer an offer, that declining is free, what cancelling after accepting costs and the valid reasons, the commission or the daily fee, the cash limit and the online-hours limit. `GET /driver` returns these rules with the profile, so the app needs no release when staff change one.
+
 ## Limits to know
 
 - **Polling costs requests.** One captain online for 8 hours is about 2,000–5,000 requests a day; the free plan allows 100,000 a day in total. Fine for a pilot of about ten captains; beyond that the $5 plan (after sign-off) or WebSockets.
