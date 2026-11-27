@@ -1,6 +1,6 @@
 # QuikFly Captain: the driver app
 
-Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 = PR #175 with migration `0035`; step 3 = PR #176, the Captain app; step 4 = PR #177, riders see the real trip; step 5, staff and owners can see it, on branch `feat/captain-5-staff` on top of #177), step 6 (self sign-up) next.** Tick the steps below as they ship and keep the status line current.
+Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 = PR #175 with migration `0035`; step 3 = PR #176, the Captain app; step 4 = PR #177, riders see the real trip; step 5 = PR #178, staff and owners can see it; step 6, self sign-up and bikes, on branch `feat/captain-6-signup` on top of #178), step 7 (real GPS in the background) next.** Tick the steps below as they ship and keep the status line current.
 
 ## Context
 
@@ -139,6 +139,13 @@ Done 2026-11-27 (branch `feat/captain-5-staff`, on top of step 4). What changed 
 - Checks: typecheck; `flutter analyze`; local smoke 343 + 817 (10 new: list, readiness, fleet status, dispatch log with distance and reason, set offline refused on a ride and when already offline, audited, the content role refused); the Captains page and a booking's "Captains asked" at 390 px in light and dark (no sideways scroll).
 
 **6. Self sign-up.** Owner-driver registration inside Captain on the existing `/vendor` application; `bike` vehicles end to end.
+
+Done 2026-11-27 (branch `feat/captain-6-signup`, on top of step 5). What changed from the plan:
+- **Behind `captainSelfSignup` (off by default)**, so staff open sign-ups when they're ready to review them. `GET /driver` tells a number with no driver record whether to offer it (`selfSignup`).
+- **Captain reuses QuikFly Partner's screens** instead of copies: home shows the Partner checklist (`PartnerHomeScreen`) while the application is in progress, and the router mounts the sections, onboarding, vehicle and driver screens. Once live, a two-step screen: add yourself as the driver (the licence; Captain links you by your number at once), then QuikFly checks it; "Choose your vehicle" assigns the vehicle.
+- **Bikes:** vehicle type `bike` (petrol or electric only, `fuelsFor`; the API, the mock and both forms enforce it); bike-taxi options other than Auto go to bikes (`vehicleTypeForRide`), also for simulated partner rides; new switch `liveRideBike`. Group-travel assignment stays cars, tempo travellers and buses.
+- **Known gaps:** partners' own updates (application approved, changes asked) still arrive only in QuikFly Partner and on the website, not in Captain; Partner apps up to 0.1.20 show a bike without a label until the next release.
+- Checks: typecheck; `flutter analyze`; `flutter test` 135 (sign-up states and the extended routes test); local smoke 343 + 827 (10 new: bike vehicle and fuel rule, bike rides live and simulated by the switch, self sign-up offered only when on).
 
 **7. Real GPS in the background.** `geolocator`, the Android foreground service and disclosure, iPhone location strings, `driverDemoLocation` off path.
 

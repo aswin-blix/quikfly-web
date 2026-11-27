@@ -126,7 +126,7 @@ class _Welcome extends ConsumerWidget {
       body: ScreenList(children: [
         Text('QuikFly Partner', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 6),
-        Text('Put your cab, auto, tempo traveller or bus on QuikFly and manage it from your phone.', style: TextStyle(color: c.fgMuted)),
+        Text('Put your bike, cab, auto, tempo traveller or bus on QuikFly and manage it from your phone.', style: TextStyle(color: c.fgMuted)),
         const SizedBox(height: 22),
         point(Icons.assignment_outlined, '1 · Apply', 'Vehicle details, bank account, RC, insurance and a vehicle audit. Save as you go.'),
         point(Icons.verified_outlined, '2 · Get approved', 'QuikFly checks each part and tells you if anything needs fixing.'),
