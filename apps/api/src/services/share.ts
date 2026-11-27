@@ -3,7 +3,7 @@ import { SHARE_LINK_HOURS, type LiveRide, type SharedRide } from "@quikfly/share
 import { notFound } from "../lib/errors";
 import { randomToken } from "../lib/random";
 
-interface ShareRow { data: string; status: string; created_at: string; started_at: string | null; rider: string; dispatch: string; phase: SharedRide["phase"] }
+interface ShareRow { data: string; status: string; created_at: string; started_at: string | null; rider: string; dispatch: string; phase: SharedRide["phase"]; cx: number | null; cy: number | null }
 
 /** Returns the existing link for this ride if there is a live one, otherwise a new one. */
 export async function shareRide(db: D1Database, userId: string, rideId: string) {
@@ -22,8 +22,9 @@ export async function shareRide(db: D1Database, userId: string, rideId: string) 
 
 export async function readShare(db: D1Database, token: string): Promise<SharedRide> {
   const row = await db.prepare(
-    `SELECT r.data, r.status, r.created_at, r.started_at, r.dispatch, r.phase, u.name AS rider FROM ride_shares s
+    `SELECT r.data, r.status, r.created_at, r.started_at, r.dispatch, r.phase, u.name AS rider, ds.x AS cx, ds.y AS cy FROM ride_shares s
      JOIN rides r ON r.id = s.ride_id JOIN users u ON u.id = s.user_id
+     LEFT JOIN driver_state ds ON ds.driver_id = r.vendor_driver_id AND r.phase IN ('arriving', 'arrived', 'ontrip')
      WHERE s.token = ? AND s.expires_at > ?`,
   ).bind(token, Date.now()).first<ShareRow>();
   if (!row) throw notFound("This trip link has expired or doesn't exist.");
@@ -44,5 +45,7 @@ export async function readShare(db: D1Database, token: string): Promise<SharedRi
     driver: ride.driver ? { name: ride.driver.name, rating: ride.driver.rating, vehicle: ride.driver.vehicle, plate: ride.driver.plate } : null,
     // The real progress of a live ride; a simulated one is played by the page from startedAt.
     phase: row.dispatch === "live" ? row.phase : null,
+    // Where the captain is (the city map, never GPS), so family can follow the real ride.
+    captain: row.dispatch === "live" && row.status !== "cancelled" && row.cx !== null && row.cy !== null ? { x: row.cx, y: row.cy } : null,
   };
 }

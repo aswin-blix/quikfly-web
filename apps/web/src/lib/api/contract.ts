@@ -1,6 +1,6 @@
 import type {
   AppConfig, AuthResult, Booking, Bus, CouponCheck, EmergencyContact, FareQuote, Gender, NewBooking, PaymentMethod, Place, PriceQuote,
-  ProfileUpdate, QuoteRequest, RentalCar, Ride, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
+  ProfileUpdate, QuoteRequest, RentalCar, Ride, LiveRide, SavedPlace, SavedPlaceKind, Seat, SharedRide, TourPackage, Traveller, TravelVehicle, User,
   WalletTransaction, AppNotification, CreditSummary, DataExport,
 } from "@quikfly/shared";
 import type { CallbackTime, FareLine, Parcel, ParcelOptions, PublicTracking, PublicTicket, Rental, RentalPhotoSide, RentalStage, RideCancelReason, SosReceipt, SosRequest, SupportTicket, SupportTopic, VendorApplication, VendorDocument, VendorSection } from "@quikfly/shared";
@@ -88,10 +88,13 @@ export interface QuikflyApi {
   rides: {
     /** POST /rides/quote; `scheduledFor` ("YYYY-MM-DDTHH:mm", India) prices a ride booked ahead. */
     quote(service: "bike" | "car", pickupId: string, dropId: string, scheduledFor?: string, stopIds?: string[]): Promise<FareQuote[]>;
-    /** POST /rides; `stopIds` = up to RIDE_MAX_STOPS places between pickup and drop, in order. */
-    book(input: { optionId: string; pickupId: string; dropId: string; payment: PaymentMethod; scheduledFor?: string; stopIds?: string[] }): Promise<Ride>;
-    /** GET /rides/:id (the rider's own ride) */
-    get(rideId: string): Promise<Ride>;
+    /**
+     * POST /rides; `stopIds` = up to RIDE_MAX_STOPS places between pickup and drop, in order. With live captains on,
+     * a ride-now ride comes back live (isLiveRide): no driver yet, booked once a captain accepts. The mock is always simulated.
+     */
+    book(input: { optionId: string; pickupId: string; dropId: string; payment: PaymentMethod; scheduledFor?: string; stopIds?: string[] }): Promise<Ride | LiveRide>;
+    /** GET /rides/:id (the rider's own ride). A live ride's poll also moves its captain search on. */
+    get(rideId: string): Promise<Ride | LiveRide>;
     /** POST /rides/:id/start: starts a scheduled ride near pickup time. */
     start(rideId: string): Promise<Ride>;
     /** POST /rides/:id/cancel */

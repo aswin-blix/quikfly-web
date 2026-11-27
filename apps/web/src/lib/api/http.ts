@@ -1,7 +1,10 @@
 // Real backend implementation of the API contract.
 // Activated by setting NEXT_PUBLIC_API_URL. Endpoints mirror the comments in contract.ts,
 // so the same REST API serves both this website and the mobile app.
-import { CLIENT_ACCEPT, type AuthResult } from "@quikfly/shared";
+import { LIVE_CLIENT_ACCEPT, type AuthResult } from "@quikfly/shared";
+
+/** The website shows every service and follows live rides (packages/shared/src/clients.ts). */
+const CLIENT_ACCEPT = LIVE_CLIENT_ACCEPT;
 import type { QuikflyApi } from "./contract";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
