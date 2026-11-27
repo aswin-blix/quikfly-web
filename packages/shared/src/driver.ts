@@ -138,6 +138,8 @@ export type CaptainPosition = { lat: number; lng: number } | { x: number; y: num
 export interface CaptainMoney {
   /** What the rider pays, GST included (₹). */
   customerPays: number;
+  /** GST in the fare before coupons and credits (QuikFly pays it as the e-commerce operator). */
+  gstPaise: number;
   /** The fare without GST. */
   farePaise: number;
   /** QuikFly's commission; 0 on the flat daily fee. */

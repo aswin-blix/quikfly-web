@@ -27,7 +27,7 @@ function moneyFor(settings: Settings, ride: LiveRide, booked: { amount: number; 
   const e = tripEarnings(settings, service, gross);
   return {
     customerPays: booked ? booked.amount : ride.quote.fare,
-    farePaise: e.fare, commissionPaise: e.commission, tdsPaise: e.tds, earningPaise: e.earning,
+    gstPaise: e.gst, farePaise: e.fare, commissionPaise: e.commission, tdsPaise: e.tds, earningPaise: e.earning,
     model: onDailyFee(settings, service) ? "dailyFee" : "commission",
     dailyFeePaise: dailyFeePaise(settings, service),
   };
