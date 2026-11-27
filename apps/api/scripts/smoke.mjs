@@ -693,6 +693,7 @@ await call("POST", "/me/delete", { otp: OTP }, V2);
 // Push devices (Firebase tokens from the app)
 await expect("register a push device", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "android" }), 201, (j) => j.registered === true);
 await expect("a phone says which app it is", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "android", app: "partner" }), 201, (j) => j.registered === true);
+await expect("QuikFly Captain is a known app", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "android", app: "captain" }), 201, (j) => j.registered === true);
 await expect("a push device's app must be known", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "android", app: "fridge" }), 400);
 await expect("a push device needs a known platform", call("POST", "/me/push-devices", { token: "smoke-token-123", platform: "fridge" }), 400);
 await expect("remove a push device", call("DELETE", "/me/push-devices/smoke-token-123"), 200, (j) => j.removed === true);

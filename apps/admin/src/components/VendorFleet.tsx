@@ -4,8 +4,8 @@
 import { useState } from "react";
 import { BadgeCheck, Ban, CheckCircle2, RotateCcw, ShieldCheck, Undo2, XCircle } from "lucide-react";
 import {
-  AUDIT_SLOT_LABEL, FUEL_LABEL, VENDOR_VEHICLE_LABEL, formatLicence, formatRegNumber,
-  type AdminVendorDetail, type VendorDriver, type VendorVehicle,
+  AUDIT_SLOT_LABEL, FUEL_LABEL, GENDERS, VENDOR_VEHICLE_LABEL, formatLicence, formatRegNumber,
+  type AdminVendorDetail, type Gender, type VendorDriver, type VendorVehicle,
 } from "@quikfly/shared";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PrivatePhoto } from "./PrivatePhoto";
@@ -31,6 +31,7 @@ const DRIVER_STATUS: Record<VendorDriver["status"], { label: string; cls: string
   blocked: { label: "Blocked", cls: "bg-danger/10 text-danger" },
 };
 
+const GENDER_LABEL: Record<Gender, string> = { female: "Female", male: "Male", other: "Other" };
 function Row({ k, v, warn }: { k: string; v: React.ReactNode; warn?: boolean }) {
   return <div className="flex justify-between gap-3"><dt className="text-muted">{k}</dt><dd className={warn ? "text-danger text-right" : "text-fg text-right"}>{v}</dd></div>;
 }
@@ -49,6 +50,8 @@ export function VendorFleet({ detail, onChange }: { detail: AdminVendorDetail; o
   const [reason, setReason] = useState<Pending | null>(null);
   const [approving, setApproving] = useState<VendorDriver | null>(null);
   const [checks, setChecks] = useState({ police: false, training: false });
+  // As on the driver's documents; "" = not recorded. Women-only rides go only to women captains.
+  const [gender, setGender] = useState<Gender | "">("");
   const [photos, setPhotos] = useState<Record<string, boolean>>({});
   const today = todayIndia();
 
@@ -153,6 +156,13 @@ export function VendorFleet({ detail, onChange }: { detail: AdminVendorDetail; o
                   <Row k="Valid till" v={d.dlValidTill} warn={d.dlValidTill < today} />
                   <Row k="Police verification" v={d.policeVerifiedAt ? dateTime(d.policeVerifiedAt) : "Not confirmed"} />
                   <Row k="Vehicle" v={vehicleReg(d.vehicleId) ?? "None"} />
+                  <Row k="QuikFly Captain" v={d.linked ? "Signed in" : "Not signed in yet"} />
+                  <Row k="Gender" v={
+                    <select className="field py-1 text-sm w-auto" aria-label={`Gender of ${d.name}`} value={d.gender ?? ""} disabled={busy === k}
+                      onChange={(e) => act(k, () => adminApi.vendors.driver(id, d.id, "gender", { gender: e.target.value || null }), "Gender saved.")}>
+                      <option value="">Not recorded</option>
+                      {GENDERS.map((g) => <option key={g} value={g}>{GENDER_LABEL[g]}</option>)}
+                    </select>} />
                 </dl>
                 {d.blockedReason && <p className="text-sm text-danger">Blocked: {d.blockedReason}</p>}
                 {d.reviewNote && <p className="text-xs text-warning">Note to partner: {d.reviewNote}</p>}
@@ -161,7 +171,7 @@ export function VendorFleet({ detail, onChange }: { detail: AdminVendorDetail; o
                   : <button className="text-sm text-accent hover:underline justify-self-start" onClick={() => setPhotos((p) => ({ ...p, [d.id]: true }))}>Show licence photo</button>)}
                 <div className="flex flex-wrap gap-2">
                   {d.status === "submitted" && <>
-                    <Button size="sm" variant="primary" onClick={() => { setChecks({ police: false, training: false }); setError(""); setApproving(d); }}><CheckCircle2 size={14} /> Approve</Button>
+                    <Button size="sm" variant="primary" onClick={() => { setChecks({ police: false, training: false }); setGender(d.gender ?? ""); setError(""); setApproving(d); }}><CheckCircle2 size={14} /> Approve</Button>
                     <Button size="sm" variant="danger" onClick={() => setReason({ kind: "driver", d, action: "reject" })}><XCircle size={14} /> Reject</Button>
                   </>}
                   {d.docsPending && <>
@@ -188,11 +198,18 @@ export function VendorFleet({ detail, onChange }: { detail: AdminVendorDetail; o
       />
       <ConfirmDialog open={!!approving} title={`Approve ${approving?.name ?? ""} as a driver?`} confirmLabel="Approve driver" busy={!!approving && busy === `d-${approving.id}`}
         onCancel={() => setApproving(null)}
-        onConfirm={() => approving && act(`d-${approving.id}`, () => adminApi.vendors.driver(id, approving.id, "review", { decision: "approve", policeVerified: checks.police, trainingDone: checks.training }), `${approving.name} approved.`)}>
+        onConfirm={() => approving && act(`d-${approving.id}`, () => adminApi.vendors.driver(id, approving.id, "review", { decision: "approve", policeVerified: checks.police, trainingDone: checks.training, ...(gender ? { gender } : {}) }), `${approving.name} approved.`)}>
         <div className="grid gap-2 text-sm">
           <p>The 2025 aggregator guidelines need both before a driver takes trips:</p>
           <label className="flex items-center gap-2"><input type="checkbox" className="accent-accent" checked={checks.police} onChange={(e) => setChecks((c) => ({ ...c, police: e.target.checked }))} /> Police verification is done</label>
           <label className="flex items-center gap-2"><input type="checkbox" className="accent-accent" checked={checks.training} onChange={(e) => setChecks((c) => ({ ...c, training: e.target.checked }))} /> Induction training is done</label>
+          <label className="grid gap-1 mt-1">
+            <span>Gender, as on their documents <span className="text-muted">(women-only rides go only to women captains)</span></span>
+            <select className="field" value={gender} onChange={(e) => setGender(e.target.value as Gender | "")}>
+              <option value="">Not recorded</option>
+              {GENDERS.map((g) => <option key={g} value={g}>{GENDER_LABEL[g]}</option>)}
+            </select>
+          </label>
           {error && <p className="text-danger">{error}</p>}
         </div>
       </ConfirmDialog>

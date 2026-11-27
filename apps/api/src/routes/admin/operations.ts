@@ -1,7 +1,7 @@
 // Operations endpoints for staff: /v1/admin/bookings, /v1/admin/licences and /v1/admin/vendors.
 import { staffClose, staffReply, supportQueue, supportTicket } from "../../services/support";
 import { Hono } from "hono";
-import { ADMIN_RULES, BOOKING_STATUSES, LICENCE_QUEUE_STATUSES, PATTERNS, RENTAL_PHOTO_SIDES, RENTAL_RULES, RENTAL_STAGES, SUPPORT_RULES, VENDOR_DOCUMENTS, VENDOR_SECTIONS, VENDOR_STATUSES, type BookingFilters } from "@quikfly/shared";
+import { ADMIN_RULES, BOOKING_STATUSES, GENDERS, LICENCE_QUEUE_STATUSES, PATTERNS, RENTAL_PHOTO_SIDES, RENTAL_RULES, RENTAL_STAGES, SUPPORT_RULES, VENDOR_DOCUMENTS, VENDOR_SECTIONS, VENDOR_STATUSES, type BookingFilters } from "@quikfly/shared";
 import { SERVICE_KEYS } from "../../config";
 import type { AppEnv } from "../../env";
 import { badRequest } from "../../lib/errors";
@@ -15,7 +15,7 @@ import { licenceQueue, reviewLicence } from "../../services/admin/licences";
 import { finishReview, markSticker, reviewSection, vendorDetail, vendorDocument, vendorQueue } from "../../services/admin/vendors";
 import { assignBookingVendor, assignableVehicles, decidePayout, payoutQueue } from "../../services/admin/partner-money";
 import {
-  adminDriverLicence, adminVehicleDocument, blockDriver, blockVehicle, fleetQueue, reviewDriver, reviewDriverDocs, reviewVehicle, reviewVehicleDocs, stickerVehicle,
+  adminDriverLicence, adminVehicleDocument, blockDriver, blockVehicle, fleetQueue, reviewDriver, reviewDriverDocs, reviewVehicle, reviewVehicleDocs, setDriverGender, stickerVehicle,
 } from "../../services/admin/fleet";
 
 const pick = <T extends string>(v: string | undefined, allowed: readonly T[], name: string): T | undefined => {
@@ -197,7 +197,14 @@ export const adminVendors = new Hono<AppEnv>()
     const decision = pick(String(body.decision ?? ""), ["approve", "reject"] as const, "decision");
     if (!decision) throw badRequest('"decision" is required.');
     return c.json(await reviewDriver(c.env.DB, c.var.admin.id, c.req.param("id"), c.req.param("did"), decision,
-      { note: note(body), policeVerified: body.policeVerified === true, trainingDone: body.trainingDone === true }));
+      { note: note(body), policeVerified: body.policeVerified === true, trainingDone: body.trainingDone === true, gender: pick(typeof body.gender === "string" ? body.gender : undefined, GENDERS, "gender") }));
+  })
+  // { gender: female | male | other | null } — as on the driver's documents (women-only rides need a woman captain)
+  .post("/:id/drivers/:did/gender", requireAdmin("vendors.review"), async (c) => {
+    const body = await jsonBody(c);
+    const gender = body.gender === null ? null : pick(typeof body.gender === "string" ? body.gender : undefined, GENDERS, "gender");
+    if (gender === undefined) throw badRequest('"gender" must be female, male, other or null.');
+    return c.json(await setDriverGender(c.env.DB, c.var.admin.id, c.req.param("id"), c.req.param("did"), gender));
   })
   .post("/:id/drivers/:did/docs", requireAdmin("vendors.review"), async (c) => {
     const body = await jsonBody(c);

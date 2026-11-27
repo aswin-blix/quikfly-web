@@ -1,7 +1,7 @@
 // Staff side of partner fleets: review added vehicles (then sticker & paint), approve drivers
 // (police verification and training confirmed), check renewed documents, block and unblock.
 // Every decision is audited and the partner gets a "vendor.fleet" notification.
-import { formatRegNumber, type FleetReviewItem, type VehicleDocument } from "@quikfly/shared";
+import { formatRegNumber, type FleetReviewItem, type Gender, type VehicleDocument } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { driverLicencePhoto, EXPIRED_PREFIX, vehicleDocument, type DriverRow } from "../fleet";
 import { today, type VehicleRow } from "../vendors";
@@ -120,7 +120,7 @@ export async function blockVehicle(db: D1Database, adminId: string, vendorId: st
 }
 
 /** A new driver: approve once police verification and training are confirmed, or reject with a reason. */
-export async function reviewDriver(db: D1Database, adminId: string, vendorId: string, id: string, decision: "approve" | "reject", opts: { note?: string; policeVerified?: boolean; trainingDone?: boolean }) {
+export async function reviewDriver(db: D1Database, adminId: string, vendorId: string, id: string, decision: "approve" | "reject", opts: { note?: string; policeVerified?: boolean; trainingDone?: boolean; gender?: Gender }) {
   const d = await driverOf(db, vendorId, id);
   if (d.status !== "submitted") throw conflict("This driver isn't waiting for review.");
   if (decision === "approve" && !(opts.policeVerified && opts.trainingDone)) throw badRequest("Confirm police verification and training before approving (2025 aggregator guidelines).");
@@ -129,12 +129,20 @@ export async function reviewDriver(db: D1Database, adminId: string, vendorId: st
   const now = new Date().toISOString();
   await apply(db,
     decision === "approve"
-      ? db.prepare("UPDATE vendor_drivers SET status = 'active', police_verified_at = COALESCE(police_verified_at, ?), training_done_at = COALESCE(training_done_at, ?), review_note = NULL, updated_at = ? WHERE id = ? AND status = 'submitted'").bind(now, now, now, id)
+      ? db.prepare("UPDATE vendor_drivers SET status = 'active', police_verified_at = COALESCE(police_verified_at, ?), training_done_at = COALESCE(training_done_at, ?), review_note = NULL, gender = COALESCE(?, gender), updated_at = ? WHERE id = ? AND status = 'submitted'").bind(now, now, opts.gender ?? null, now, id)
       : db.prepare("UPDATE vendor_drivers SET status = 'rejected', review_note = ?, updated_at = ? WHERE id = ? AND status = 'submitted'").bind(opts.note!, now, id),
     adminId, `vendor.driver.${decision}`, vendorId, { driver: d.name, licence: d.dl_number, ...(opts.note ? { note: opts.note } : {}) });
   await notify(db, d.user_id, { kind: "vendor.fleet", ref: `${id}:${decision}:${Date.now()}`,
     title: decision === "approve" ? `${d.name} approved as a driver` : `${d.name} not approved as a driver`,
     body: decision === "approve" ? "Assign them to a vehicle in the Partner app." : `${opts.note} Fix the licence details to send again.` });
+  return vendorDetail(db, vendorId);
+}
+
+/** Records (or clears) a driver's gender as staff saw it on their documents: women-only rides go only to women captains. */
+export async function setDriverGender(db: D1Database, adminId: string, vendorId: string, id: string, gender: Gender | null) {
+  const d = await driverOf(db, vendorId, id);
+  await apply(db, db.prepare("UPDATE vendor_drivers SET gender = ?, updated_at = ? WHERE id = ?").bind(gender, new Date().toISOString(), id),
+    adminId, "vendor.driver.gender", vendorId, { driver: d.name, gender: gender ?? "not set" });
   return vendorDetail(db, vendorId);
 }
 

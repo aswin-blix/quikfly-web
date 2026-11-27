@@ -10,6 +10,7 @@ import { share } from "./routes/share";
 import { tickets } from "./routes/tickets";
 import { support } from "./routes/support";
 import { vendor } from "./routes/vendor";
+import { driver } from "./routes/driver";
 import { bookings } from "./routes/bookings";
 import { buses } from "./routes/buses";
 import { config, rentals, tours } from "./routes/catalog";
@@ -53,6 +54,7 @@ const v1 = new Hono<AppEnv>()
   .route("/parcels", parcels)
   .route("/track", track)
   .route("/vendor", vendor)
+  .route("/driver", driver)
   .route("/admin", admin);
 
 app.get("/", (c) => c.json({ name: "QuikFly API", version: API_PREFIX.slice(1) }));

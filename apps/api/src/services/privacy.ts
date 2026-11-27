@@ -73,6 +73,10 @@ export async function exportData(db: D1Database, userId: string): Promise<DataEx
     byVendor("vendor_trips"),
     byVendor("vendor_ledger"),
     byVendor("vendor_payouts"),
+    // QuikFly Captain: the person's own driver record (wherever it is registered), where they last were, and the rides they were offered.
+    ["captain", "SELECT id, name, phone, dl_number, dl_valid_till, gender, status, vehicle_id, created_at FROM vendor_drivers WHERE user_id = ?1"],
+    ["captain_location", "SELECT online, x, y, lat, lng, demo, seen_at FROM driver_state WHERE driver_id IN (SELECT id FROM vendor_drivers WHERE user_id = ?1)"],
+    ["captain_offers", "SELECT ride_id, offered_at, outcome, decided_at FROM ride_offers WHERE driver_id IN (SELECT id FROM vendor_drivers WHERE user_id = ?1)"],
   ];
   const results = await db.batch(queries.map(([, sql]) => db.prepare(sql).bind(userId)));
   const data: Record<string, unknown[]> = {};
@@ -95,7 +99,7 @@ export async function eraseAccounts(db: D1Database, bucket: R2Bucket | undefined
     `SELECT photo_key AS k FROM vendors WHERE user_id IN ${IN_USERS} AND photo_key IS NOT NULL
      UNION ALL SELECT rc_key FROM vendor_vehicles WHERE vendor_id IN ${IN_VENDORS} AND rc_key IS NOT NULL
      UNION ALL SELECT insurance_key FROM vendor_vehicles WHERE vendor_id IN ${IN_VENDORS} AND insurance_key IS NOT NULL
-     UNION ALL SELECT dl_key FROM vendor_drivers WHERE vendor_id IN ${IN_VENDORS} AND dl_key IS NOT NULL`,
+     UNION ALL SELECT dl_key FROM vendor_drivers WHERE (vendor_id IN ${IN_VENDORS} OR user_id IN ${IN_USERS}) AND dl_key IS NOT NULL`,
   ).bind(list).all<{ k: string }>();
   // Photos first: if the database step then fails, the account is picked up again next run.
   if (bucket && keys.length) await bucket.delete(keys.map((r) => r.k));
@@ -114,7 +118,14 @@ export async function eraseAccounts(db: D1Database, bucket: R2Bucket | undefined
       .map((t) => forUsers(`DELETE FROM ${t} WHERE user_id IN ${IN_USERS}`)),
     forUsers(`DELETE FROM booking_notes WHERE booking_id IN (SELECT id FROM bookings WHERE user_id IN ${IN_USERS})`),
     forUsers(`UPDATE vendor_vehicles SET rc_key = NULL, insurance_key = NULL WHERE vendor_id IN ${IN_VENDORS}`),
-    forUsers(`UPDATE vendor_drivers SET dl_key = NULL WHERE vendor_id IN ${IN_VENDORS}`),
+    // Drivers: everyone on an erased partner's fleet, and the erased person's own driver record on anyone's
+    // fleet. The row stays (trips and earnings point at it) without the person; it can't take rides again.
+    forUsers(`DELETE FROM driver_state WHERE driver_id IN (SELECT id FROM vendor_drivers WHERE vendor_id IN ${IN_VENDORS} OR user_id IN ${IN_USERS})`),
+    forUsers(
+      `UPDATE vendor_drivers SET name = 'Erased driver', phone = 'erased:' || id, dl_number = 'erased:' || id, dl_key = NULL, gender = NULL,
+         user_id = NULL, vehicle_id = NULL, status = 'blocked', blocked_reason = 'Account erased'
+       WHERE vendor_id IN ${IN_VENDORS} OR user_id IN ${IN_USERS}`,
+    ),
     db.prepare(`UPDATE vendors SET bank_holder = NULL, bank_ifsc = NULL, bank_account = NULL, photo_key = NULL, updated_at = ?2 WHERE user_id IN ${IN_USERS}`)
       .bind(list, now),
     db.prepare(

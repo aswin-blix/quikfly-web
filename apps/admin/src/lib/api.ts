@@ -183,7 +183,7 @@ export const adminApi = {
     assignable: () => req<AssignableVehicle[]>("GET", "/admin/vendors/assignable-vehicles"),
     vehicle: (id: string, vehicleId: string, action: "review" | "sticker" | "docs" | "block", body?: Record<string, unknown>) =>
       req<AdminVendorDetail>("POST", `/admin/vendors/${encodeURIComponent(id)}/vehicles/${encodeURIComponent(vehicleId)}/${action}`, body),
-    driver: (id: string, driverId: string, action: "review" | "docs" | "block", body: Record<string, unknown>) =>
+    driver: (id: string, driverId: string, action: "review" | "docs" | "block" | "gender", body: Record<string, unknown>) =>
       req<AdminVendorDetail>("POST", `/admin/vendors/${encodeURIComponent(id)}/drivers/${encodeURIComponent(driverId)}/${action}`, body),
   },
   licences: {

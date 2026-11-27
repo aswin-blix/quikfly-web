@@ -143,6 +143,16 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/vendor/payouts` | request a payout of the whole balance (≥ `vendorMinPayout`, bank account on file, one open request) → 201 |
 | POST 🔒 | `/vendor/payments` | settle a negative balance: **demo, nothing is collected** |
 
+### Captain (`/driver/*`, QuikFly Captain app; customer login)
+
+A captain is a partner's driver record whose mobile number matches the signed-in account; the first `GET /driver` links them. Nothing here changes a ride yet (docs/driver-app-plan.md, step 1 of 8).
+
+| Method | Path | What it does |
+|---|---|---|
+| GET 🔒 | `/driver` | `{ captain }`: driver, vehicle, owner, `blocker` (what stops them going online, or null) and `duty`. `{ captain: null, reason }` when the number has no driver record |
+| POST 🔒 | `/driver/duty` | `{ online, position?: { lat, lng } \| { x, y } }` → `{ duty }`. Online needs no blocker and a position: a GPS fix is placed on the city map (outside the city → 409); a map point is a demo location (setting `driverDemoLocation`). Not a captain → 403 |
+| POST 🔒 | `/driver/ping` | `{ position? }` → `{ duty }`: the heartbeat while online (`DRIVER_RULES.pingIdleSeconds`). A bad fix keeps the last position; offline it changes nothing. A captain silent for `driverStaleSeconds` is set offline |
+
 ### Admin (`/admin/*`, staff only)
 
 Staff sign in with email + password (accounts come from `scripts/create-admin.mjs`; there is no sign-up). 🛡 = admin bearer token; the permission in brackets is checked against the role (`PERMISSIONS` in `@quikfly/shared`), 403 when the role lacks it. Every change writes an `audit_log` row.
@@ -217,7 +227,8 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | POST 🛡 | `/admin/vendors/:id/vehicles/:vid/docs` | `{ decision: approve\|changes, note? }` a renewal; accepting lifts an expiry block when everything is valid `[vendors.review]` |
 | POST 🛡 | `/admin/vendors/:id/vehicles/:vid/block` | `{ block, note? }` (reason required to block); unblocking needs valid documents `[vendors.review]` |
 | GET 🛡 | `/admin/vendors/:id/vehicles/:vid/documents/:kind`, `/admin/vendors/:id/drivers/:did/documents/dl` | document photos `[vendors.review]` |
-| POST 🛡 | `/admin/vendors/:id/drivers/:did/review` | `{ decision: approve\|reject, note?, policeVerified, trainingDone }`: approve needs both ticks and the licence photo `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/:id/drivers/:did/review` | `{ decision: approve\|reject, note?, policeVerified, trainingDone, gender? }`: approve needs both ticks and the licence photo `[vendors.review]` |
+| POST 🛡 | `/admin/vendors/:id/drivers/:did/gender` | `{ gender: female\|male\|other\|null }` as on the driver's documents (women-only rides will go only to women captains) `[vendors.review]` |
 | POST 🛡 | `/admin/vendors/:id/drivers/:did/docs`, `/admin/vendors/:id/drivers/:did/block` | renewal check; block (taken off the vehicle) / unblock `[vendors.review]` |
 | POST 🛡 | `/admin/vendors/:id/sticker` | sticker & paint done (after the agreement): the partner and vehicle go live `[vendors.review]` |
 | GET 🛡 | `/admin/licences?status=` | licence queue: `pending` (default, oldest first), `rejected` or `verified` `[licences.review]` |
@@ -294,4 +305,4 @@ Locally, `node scripts/smoke-admin.mjs http://localhost:8787/v1` creates its own
 
 ## Not yet built
 
-Real SMS OTP, payments, live driver tracking, real bus inventory (the timetable is generated). Phone push needs the owner's Firebase project (`FCM_SERVICE_ACCOUNT`) and browser push the VAPID secrets; both server sides are ready and stay silent until then (docs/operations.md → Push notifications).
+Real SMS OTP, payments, live rides with real captains (in progress: docs/driver-app-plan.md; captains can sign in and go online, rides are still simulated), real bus inventory (the timetable is generated). Phone push needs the owner's Firebase project (`FCM_SERVICE_ACCOUNT`) and browser push the VAPID secrets; both server sides are ready and stay silent until then (docs/operations.md → Push notifications).

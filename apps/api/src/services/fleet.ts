@@ -1,7 +1,7 @@
 // A live partner's fleet: more vehicles (each reviewed by staff, then stickered), drivers
 // (staff confirm police verification and training), renewals of expiring documents, and
 // active/inactive. Staff actions are in services/admin/fleet.ts; expiry runs from the cron.
-import { PATTERNS, VEHICLE_DOCUMENTS, compactCode, type VehicleDocument, type VendorDriver, type VendorFleet } from "@quikfly/shared";
+import { PATTERNS, VEHICLE_DOCUMENTS, compactCode, type Gender, type VehicleDocument, type VendorDriver, type VendorFleet } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { text } from "../lib/validate";
@@ -17,6 +17,8 @@ export interface DriverRow {
   id: string; vendor_id: string; name: string; phone: string; dl_number: string; dl_valid_till: string; dl_key: string | null; self: number;
   status: VendorDriver["status"]; police_verified_at: string | null; training_done_at: string | null; review_note: string | null;
   blocked_reason: string | null; docs_pending: number; vehicle_id: string | null; created_at: string; updated_at: string;
+  /** The account that signed in to QuikFly Captain with this driver's number (migration 0033). */
+  user_id: string | null; gender: Gender | null;
 }
 
 /** Blocks the cron adds start with this, so a checked renewal can lift them. */
@@ -25,7 +27,7 @@ export const EXPIRED_PREFIX = "Expired: ";
 export const toDriver = (r: DriverRow): VendorDriver => ({
   id: r.id, name: r.name, phone: r.phone, dlNumber: r.dl_number, dlValidTill: r.dl_valid_till, hasDlPhoto: !!r.dl_key, status: r.status,
   policeVerifiedAt: r.police_verified_at, trainingDoneAt: r.training_done_at, reviewNote: r.review_note, blockedReason: r.blocked_reason,
-  docsPending: !!r.docs_pending, vehicleId: r.vehicle_id, self: !!r.self,
+  docsPending: !!r.docs_pending, vehicleId: r.vehicle_id, self: !!r.self, gender: r.gender ?? null, linked: !!r.user_id,
 });
 
 export async function fleetOf(db: D1Database, vendorId: string): Promise<VendorFleet> {
@@ -193,6 +195,8 @@ export async function addDriver(db: D1Database, userId: string, body: Json) {
   if (self && await db.prepare("SELECT 1 FROM vendor_drivers WHERE vendor_id = ? AND self = 1").bind(v.id).first()) throw conflict("You're already registered as a driver.");
   const { dl, validTill } = parseLicence(body);
   if (await db.prepare("SELECT 1 FROM vendor_drivers WHERE dl_number = ?").bind(dl).first()) throw conflict("A driver with this licence is already registered with QuikFly.");
+  // One number, one driver: a captain signs in to QuikFly Captain with it (services/drivers.ts).
+  if (await db.prepare("SELECT 1 FROM vendor_drivers WHERE phone = ? AND status <> 'rejected'").bind(phone).first()) throw conflict(self ? "Your number is already registered as a driver with QuikFly." : "A driver with this mobile number is already registered with QuikFly.");
   const now = new Date().toISOString();
   const driverId = uid("VD");
   await db.batch([

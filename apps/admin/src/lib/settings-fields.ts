@@ -194,6 +194,20 @@ export const SETTING_GROUPS: SettingGroup[] = [
     ],
   },
   {
+    title: "Captains (live rides)",
+    sub: "Drivers who take rides in the QuikFly Captain app. Everything stays simulated until the first switch is on.",
+    fields: [
+      { key: "featureLiveDrivers", type: "toggle", label: "Live captains", help: "On: a ride booked from an up-to-date app or the website is offered to real captains who are online. Off: every ride is simulated, as before. Older apps always get simulated rides." },
+      { key: "rideSimulateDrivers", type: "toggle", label: "Simulated captain when none is free (demo)", help: "On: if no captain takes a ride, a simulated one steps in and the screen says so. Off: the customer is told no captain is free and nothing is charged." },
+      { key: "driverDemoLocation", type: "toggle", label: "Demo locations", help: "Captains may pick a place on the map instead of using GPS, and the app moves itself during a trip. For demos and testing away from the city. Off once captains drive for real." },
+      { key: "driverOfferSeconds", type: "number", unit: "sec", label: "Time to answer an offer", help: "After this the ride is offered to the next captain." },
+      { key: "driverOfferMaxDrivers", type: "number", label: "Captains asked per ride", help: "One at a time, nearest first; among captains about equally near, the one waiting longest." },
+      { key: "driverSearchSeconds", type: "number", unit: "sec", label: "Search gives up after", help: "Counted from the booking." },
+      { key: "driverSearchRadiusKm", type: "number", unit: "km", label: "Search radius", help: "Captains further than this from the pickup aren't asked." },
+      { key: "driverStaleSeconds", type: "number", unit: "sec", label: "Offline after silence", help: "A captain whose app hasn't been heard from for this long gets no offers and is set offline." },
+    ],
+  },
+  {
     title: "Licence checks",
     sub: "Self-drive customers submit a driving licence before pickup.",
     fields: [

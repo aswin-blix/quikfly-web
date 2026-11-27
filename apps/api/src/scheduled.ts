@@ -4,7 +4,7 @@
 // customer notifications and staff alerts to phones (Firebase) and browsers (Web Push) when those are
 // configured. Stays well under the free plan's 50 queries per invocation: a fixed handful of
 // statements, no per-row queries.
-import { PARTNER_NOTIFICATION_PREFIX, RIDE_SCHEDULE, can, type AdminRole, type Permission } from "@quikfly/shared";
+import { CAPTAIN_NOTIFICATION_PREFIX, PARTNER_NOTIFICATION_PREFIX, RIDE_SCHEDULE, can, type AdminRole, type Permission } from "@quikfly/shared";
 import { PUSH_BATCH, PUSH_MAX_AGE_MINUTES } from "./config";
 import type { Env } from "./env";
 import { sendPush, serviceAccount, type PushResult } from "./services/push";
@@ -110,8 +110,9 @@ async function deliver(ch: Channels, token: string, msg: WebPushMessage, data: R
 /**
  * Pushes recent, not-yet-pushed notifications to each customer's phones and browsers; forgets dead
  * tokens. A row counts as pushed once any device took it; a failed send is retried next minute until
- * the row is older than PUSH_MAX_AGE_MINUTES. A phone gets only its app's kinds (PUSH_APPS: partner
- * updates to QuikFly Partner, the rest to QuikFly); a browser (app NULL) gets every kind.
+ * the row is older than PUSH_MAX_AGE_MINUTES. A phone gets only its app's kinds (pushAppForKind in the
+ * shared package: partner updates to QuikFly Partner, captain ones to QuikFly Captain, the rest to
+ * QuikFly); a browser (app NULL) gets every kind.
  */
 async function pushNew(env: Env, ch: Channels) {
   const db = env.DB;
@@ -119,9 +120,12 @@ async function pushNew(env: Env, ch: Channels) {
   const { results: rows } = await db.prepare(
     `SELECT n.id, n.user_id, n.kind, n.title, n.body, n.booking_id, d.token
      FROM notifications n JOIN push_devices d ON d.user_id = n.user_id
-       AND (d.app IS NULL OR (d.app = 'partner') = (substr(n.kind, 1, length(?1)) = ?1))
+       AND (d.app IS NULL OR d.app = CASE
+             WHEN substr(n.kind, 1, length(?1)) = ?1 THEN 'partner'
+             WHEN substr(n.kind, 1, length(?4)) = ?4 THEN 'captain'
+             ELSE 'customer' END)
      WHERE n.pushed_at IS NULL AND n.created_at >= ?2 ORDER BY n.created_at LIMIT ?3`,
-  ).bind(PARTNER_NOTIFICATION_PREFIX, since, PUSH_BATCH).all<{ id: string; user_id: string; kind: string; title: string; body: string; booking_id: string | null; token: string }>();
+  ).bind(PARTNER_NOTIFICATION_PREFIX, since, PUSH_BATCH, CAPTAIN_NOTIFICATION_PREFIX).all<{ id: string; user_id: string; kind: string; title: string; body: string; booking_id: string | null; token: string }>();
   if (!rows.length) {
     // Nothing deliverable: mark what's left (customers with no device) so it isn't scanned again.
     await db.prepare("UPDATE notifications SET pushed_at = ? WHERE pushed_at IS NULL AND created_at >= ?").bind(new Date().toISOString(), since).run();
