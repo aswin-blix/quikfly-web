@@ -1243,6 +1243,119 @@ if (pvUp.status === 409) {
     await eventually("commission is back", () => call("GET", "/config"), (r) => r.json?.settings?.vendorFlatDailyFee === false);
   }
   for (const id of ridesToCancel) await call("POST", `/bookings/${id}/cancel`, null, RC);
+  // QuikFly Captain, step 2 (docs/driver-app-plan.md): live rides. Only a client that declares rides=live gets one.
+  {
+    const LIVE = `${SHOWS_PARCELS}; rides=live`;
+    const [pick, drop] = [places.find((p) => p.id === "p1") ?? places[0], places.find((p) => p.id === "p3") ?? places[2]];
+    const book = (accept = LIVE) => call("POST", "/rides", { optionId: "mini", pickupId: pick.id, dropId: drop.id, payment: "upi" }, RC, accept);
+    const liveRide = (id) => call("GET", `/rides/${id}`, null, RC, LIVE);
+    const payFor = (ride) => call("POST", "/bookings", { service: "car", title: "Smoke live ride", subtitle: `${pick.name} → ${drop.name}`, payment: "upi", lines: [], rideId: ride.id }, RC, LIVE);
+    const setLive = async (patch, name, test) => {
+      await call("PATCH", "/admin/settings", patch, T);
+      await eventually(name, () => call("GET", "/config"), (r) => !!r.json?.settings && test(r.json.settings));
+    };
+    await setLive({ featureLiveDrivers: true, rideSimulateDrivers: true, driverCancelPenaltyPercent: 0 }, "live: the live captains switch reaches the API", (s) => s.featureLiveDrivers === true);
+    await expect("live: the captain goes online at the pickup, with nothing offered yet", call("POST", "/driver/duty", { online: true, position: { x: pick.x, y: pick.y } }, PV), 200,
+      (j) => j.duty.online && j.offer === null && j.ride === null);
+    const old = await expect("live: a client that doesn't declare rides=live still gets a simulated ride", book(SHOWS_PARCELS), 201, (j) => !!j.driver && !("live" in j));
+    if (old) await call("POST", `/rides/${old.id}/cancel`, null, RC);
+
+    // 1. Declined: nobody else is free, so a simulated captain steps in (rideSimulateDrivers on).
+    const r1 = await expect("live: a live ride starts with no driver, searching", book(), 201, (j) => j.driver === null && j.live?.phase === "searching" && /^\d{4}$/.test(j.otp));
+    const offered = await expect("live: the nearest captain is offered it at once, with the full trip and the money", call("POST", "/driver/ping", {}, PV), 200,
+      (j) => j.offer?.rideId === r1?.id && j.offer.pickup.id === pick.id && j.offer.drop.id === drop.id && j.offer.pickupKm === 0 && j.offer.secondsLeft > 0
+        && j.offer.money.customerPays === r1.quote.fare && j.offer.money.earningPaise > 0 && j.offer.money.model === "commission" && !JSON.stringify(j).includes(r1.otp));
+    await expect("live: the rider can't pay before a captain accepts", payFor(r1), 409, (j) => /Wait for a captain/.test(j.message));
+    await expect("live: a released app is told to update while there is no captain", call("GET", `/rides/${r1.id}`, null, RC, SHOWS_PARCELS), 409);
+    await expect("live: the rider sees it searching", liveRide(r1.id), 200, (j) => j.live.phase === "searching" && j.driver === null);
+    await expect("live: declining is free and returns the captain's state", call("POST", `/driver/offers/${r1.id}/decline`, null, PV), 200, (j) => j.offer === null && j.ride === null);
+    await expect("live: with nobody else free, a simulated captain steps in", liveRide(r1.id), 200, (j) => !!j.driver && j.driver.name !== "Smoke Vendor" && !("live" in j));
+    await expect("live: an offer that was declined can't be accepted", call("POST", `/driver/offers/${r1.id}/accept`, null, PV), 409);
+    await call("POST", `/rides/${r1.id}/cancel`, null, RC);
+
+    // 2. The whole trip: accept, arrive, pay, PIN, complete.
+    const r2 = (await book()).json;
+    await call("POST", "/driver/ping", {}, PV);
+    const accepted = await expect("live: the captain accepts and is on the way", call("POST", `/driver/offers/${r2.id}/accept`, null, PV), 200,
+      (j) => j.offer === null && j.ride?.rideId === r2.id && j.ride.phase === "arriving" && j.ride.riderName && /\d{10}$/.test(j.ride.riderPhone) && j.ride.booked === false && j.ride.pinTriesLeft === 5);
+    await expect("live: the rider sees their captain, the vehicle and the plate", liveRide(r2.id), 200,
+      (j) => j.live.phase === "arriving" && j.driver?.name === "Smoke Vendor" && j.driver.plate === carPlate && j.live.captain?.x === pick.x && j.live.etaMin === 1);
+    await expect("live: the captain can't go offline during a ride", call("POST", "/driver/duty", { online: false }, PV), 409);
+    await call("POST", "/driver/ping", { position: { x: pick.x + 10, y: pick.y } }, PV);
+    await expect("live: \"arrived\" is refused far from the pickup", call("POST", `/driver/rides/${r2.id}/arrived`, null, PV), 409, (j) => /km from the pickup/.test(j.message));
+    await call("POST", "/driver/ping", { position: { x: pick.x, y: pick.y } }, PV);
+    await expect("live: \"arrived\" at the pickup", call("POST", `/driver/rides/${r2.id}/arrived`, null, PV), 200, (j) => j.ride.phase === "arrived");
+    await expect("live: the trip can't start before the rider has paid", call("POST", `/driver/rides/${r2.id}/start`, { otp: r2.otp }, PV), 409, (j) => /hasn't confirmed/.test(j.message));
+    const b2 = await expect("live: the rider pays once the captain has accepted", payFor(r2), 201, (j) => j.rideId === r2.id && j.status === "confirmed");
+    await expect("live: the partner sees the trip on their cab", call("GET", "/vendor/trips", null, PV), 200, (j) => j.some((t) => t.bookingId === b2?.id && t.regNumber === regCar && t.driverId === d1));
+    const wrong = r2.otp === "0000" ? "1111" : "0000";
+    await expect("live: a wrong PIN is refused, with the tries left", call("POST", `/driver/rides/${r2.id}/start`, { otp: wrong }, PV), 400, (j) => /4 tries left/.test(j.message));
+    await expect("live: the right PIN starts the trip, and the rider's number is no longer shown", call("POST", `/driver/rides/${r2.id}/start`, { otp: r2.otp }, PV), 200,
+      (j) => j.ride.phase === "ontrip" && j.ride.riderPhone === null && j.ride.booked && j.ride.pinTriesLeft === 5);
+    await expect("live: the booking is under way", call("GET", `/bookings/${b2.id}`, null, RC, LIVE), 200, (j) => j.status === "ongoing");
+    await expect("live: the rider can't cancel once the trip has started", call("POST", `/bookings/${b2.id}/cancel`, {}, RC, LIVE), 409, (j) => /has started/.test(j.message));
+    await expect("live: the rider's app can't end a live ride", call("POST", `/bookings/${b2.id}/complete`, null, RC, LIVE), 409, (j) => /captain ends/.test(j.message));
+    await expect("live: the shared-trip page shows the real phase", (async () => {
+      const share = (await call("POST", `/rides/${r2.id}/share`, null, RC)).json;
+      return call("GET", `/share/${share.token}`);
+    })(), 200, (j) => j.phase === "ontrip" && j.driver?.name === "Smoke Vendor");
+    const done = await expect("live: the captain ends the trip and sees what it earned", call("POST", `/driver/rides/${r2.id}/complete`, null, PV), 200,
+      (j) => j.done.rideId === r2.id && j.done.earningPaise > 0 && j.done.collectCash === null && j.ride === null && j.duty.online);
+    await expect("live: the trip settles once for the partner", call("GET", "/vendor/trips", null, PV), 200,
+      (j) => j.filter((t) => t.bookingId === b2.id).length === 1 && j.find((t) => t.bookingId === b2.id).estimate === false && j.find((t) => t.bookingId === b2.id).earningPaise === done?.done.earningPaise);
+    await expect("live: the booking is completed", call("GET", `/bookings/${b2.id}`, null, RC, LIVE), 200, (j) => j.status === "completed");
+    await expect("live: the rider sees it done", liveRide(r2.id), 200, (j) => j.live.phase === "done");
+    await expect("live: completing twice is refused", call("POST", `/driver/rides/${r2.id}/complete`, null, PV), 404);
+    await expect("live: the captain's day counts the trip", call("GET", "/driver/summary", null, PV), 200, (j) => j.trips >= 1 && j.earningPaise >= done?.done.earningPaise && /^\d{4}-\d{2}-\d{2}$/.test(j.day));
+
+    // 3. The PIN locks after five wrong tries.
+    const r3 = (await book()).json;
+    await call("POST", "/driver/ping", {}, PV);
+    await call("POST", `/driver/offers/${r3.id}/accept`, null, PV);
+    await call("POST", `/driver/rides/${r3.id}/arrived`, null, PV);
+    const b3 = (await payFor(r3)).json;
+    for (let i = 0; i < 4; i++) await call("POST", `/driver/rides/${r3.id}/start`, { otp: wrong }, PV);
+    await expect("live: the fifth wrong PIN locks the start", call("POST", `/driver/rides/${r3.id}/start`, { otp: wrong }, PV), 400, (j) => /locked/.test(j.message));
+    await expect("live: even the right PIN waits for the lock", call("POST", `/driver/rides/${r3.id}/start`, { otp: r3.otp }, PV), 409, (j) => /Too many wrong PINs/.test(j.message));
+    await expect("live: the captain's state shows the lock", call("POST", "/driver/ping", {}, PV), 200, (j) => j.ride.pinTriesLeft === 0 && !!j.ride.pinLockedUntil);
+    // 4. The rider cancels before the trip: refunded under the ride rules, and the captain is freed and told.
+    await expect("live: the rider can cancel before the trip starts", call("POST", `/bookings/${b3.id}/cancel`, { reason: "driver_late" }, RC, LIVE), 200, (j) => j.status === "cancelled" && j.cancelFee === 0);
+    await expect("live: the captain is free again and told", call("POST", "/driver/ping", {}, PV), 200, (j) => j.ride === null && j.duty.online);
+    await expect("live: a captain's notifications never reach an inbox", call("GET", "/me/notifications", null, PV), 200, (j) => !j.items.some((n) => n.kind.startsWith("driver.")));
+
+    // 5. Given back after the rider paid, no other captain, simulation off: the rider is told and refunded; a penalty applies without a valid reason.
+    await setLive({ rideSimulateDrivers: false, driverCancelPenaltyPercent: 10 }, "live: simulation off and a 10% penalty reach the API", (s) => s.rideSimulateDrivers === false && s.driverCancelPenaltyPercent === 10);
+    const r5 = (await book()).json;
+    await call("POST", "/driver/ping", {}, PV);
+    await call("POST", `/driver/offers/${r5.id}/accept`, null, PV);
+    const b5 = (await payFor(r5)).json;
+    await expect("live: giving a ride back needs a listed reason", call("POST", `/driver/rides/${r5.id}/cancel`, { reason: "bored" }, PV), 400);
+    await expect("live: the captain gives the ride back", call("POST", `/driver/rides/${r5.id}/cancel`, { reason: "changed_mind" }, PV), 200, (j) => j.ride === null && j.offer === null);
+    await expect("live: with nobody else free, the rider is told no captain was found", liveRide(r5.id), 200, (j) => j.live.phase === "unmatched" && j.driver === null);
+    await expect("live: and gets everything back", call("GET", `/bookings/${b5.id}`, null, RC, LIVE), 200, (j) => j.status === "cancelled" && j.refundAmount === b5.amount && j.cancelFee === 0);
+    await expect("live: the rider was told why", call("GET", "/me/notifications", null, RC, LIVE), 200,
+      (j) => j.items.some((n) => n.kind === "ride.captain" && /another captain/.test(n.title)) && j.items.some((n) => n.kind === "ride.captain" && n.title === "No captain found"));
+    await expect("live: giving it back without a valid reason charged the owner 10% (at most ₹100)", call("GET", "/vendor/money", null, PV), 200,
+      (j) => j.entries.some((e) => e.kind === "penalty" && e.amountPaise === -Math.min(r5.quote.fare * 10, 10000)));
+    // 6. Nobody online at all: told at once, nothing to pay.
+    await call("POST", "/driver/duty", { online: false }, PV);
+    const r6 = (await book()).json;
+    await new Promise((res) => setTimeout(res, 11_000)); // DRIVER_RULES.noCaptainSeconds
+    await expect("live: with no captain online the search ends and the rider can't pay", liveRide(r6.id), 200, (j) => j.live.phase === "unmatched");
+    await expect("live: an unmatched ride can't be booked", payFor(r6), 409, (j) => /No captain is free/.test(j.message));
+    // 7. The rider cancels while it is still being offered: the offer is withdrawn.
+    await call("POST", "/driver/duty", { online: true, position: { x: pick.x, y: pick.y } }, PV);
+    const r7 = (await book()).json;
+    await expect("live: the captain has the offer", call("POST", "/driver/ping", {}, PV), 200, (j) => j.offer?.rideId === r7.id);
+    await call("POST", `/rides/${r7.id}/cancel`, null, RC, LIVE);
+    await expect("live: and loses it when the rider cancels", call("POST", "/driver/ping", {}, PV), 200, (j) => j.offer === null);
+    await expect("live: the rider sees it cancelled", liveRide(r7.id), 200, (j) => j.live.phase === "cancelled");
+    await expect("live: the captain's export lists the offers with what they did", call("GET", "/me/export", null, PV), 200,
+      (j) => j.data.captain_offers.some((o) => o.ride_id === r5.id && o.outcome === "released" && o.reason === "changed_mind"));
+    await call("POST", "/driver/duty", { online: false }, PV);
+    await setLive({ featureLiveDrivers: s0.featureLiveDrivers ?? false, rideSimulateDrivers: s0.rideSimulateDrivers ?? true, driverCancelPenaltyPercent: s0.driverCancelPenaltyPercent ?? 0 },
+      "live: settings back as they were", (s) => s.featureLiveDrivers === (s0.featureLiveDrivers ?? false) && s.driverCancelPenaltyPercent === (s0.driverCancelPenaltyPercent ?? 0));
+  }
   // Staff give a group-travel booking to a partner vehicle
   const gv = (await call("GET", "/rentals/travel-vehicles")).json;
   const gq = (await call("POST", "/quotes", { service: "rentals", vehicleId: gv[0].id, trip: "local", days: 1, start: TRAVEL }, RC)).json;
