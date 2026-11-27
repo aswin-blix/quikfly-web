@@ -7,11 +7,25 @@ int _int(Object? v) => (v as num?)?.round() ?? 0;
 double _num(Object? v) => (v as num?)?.toDouble() ?? 0;
 DateTime? _date(Object? v) => v == null ? null : DateTime.tryParse('$v')?.toLocal();
 
-/// A point on the demo city map (0–100, x east, y south), like a Place.
-class MapPoint {
+/// What a captain's position report sends: a GPS fix ({lat, lng}) or a demo location ({x, y}).
+abstract interface class CaptainPosition {
+  Map<String, double> toJson();
+}
+
+/// A real position from the phone's GPS; the API places it on the city map.
+class GpsFix implements CaptainPosition {
+  const GpsFix(this.lat, this.lng);
+  final double lat, lng;
+  @override
+  Map<String, double> toJson() => {'lat': lat, 'lng': lng};
+}
+
+/// A point on the demo city map (0–100, x east, y south), like a Place. Sent as a demo location.
+class MapPoint implements CaptainPosition {
   const MapPoint(this.x, this.y);
   final double x, y;
   static MapPoint? maybe(Object? j) => j is Map ? MapPoint(_num(j['x']), _num(j['y'])) : null;
+  @override
   Map<String, double> toJson() => {'x': x, 'y': y};
   @override
   bool operator ==(Object other) => other is MapPoint && other.x == x && other.y == y;

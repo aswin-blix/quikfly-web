@@ -16,6 +16,7 @@ import '../widgets/push_prompt.dart';
 import '../widgets/theme_toggle.dart';
 import '../widgets/ui.dart';
 import 'captain_state.dart';
+import 'location.dart';
 import 'offer_card.dart';
 import 'ride_panel.dart';
 
@@ -311,21 +312,47 @@ class _HomeState extends ConsumerState<_Home> {
   }
 }
 
-class _DutyCard extends ConsumerWidget {
+class _DutyCard extends ConsumerStatefulWidget {
   const _DutyCard({required this.profile, required this.live, required this.places, required this.start, required this.onStart});
   final CaptainProfile profile;
   final CaptainLive live;
   final List<Place> places;
   final Place? start;
   final ValueChanged<Place> onStart;
+  @override
+  ConsumerState<_DutyCard> createState() => _DutyCardState();
+}
+
+class _DutyCardState extends ConsumerState<_DutyCard> {
+  /// Reading the first fix; what stops GPS (with how to fix it); the demo-location picker is open.
+  bool _locating = false;
+  GpsProblem? _problem;
+  bool _demo = false;
+
+  /// Online with the phone's location: the explanation first (once), then Android's or iOS's prompt, then one fix.
+  Future<void> _goOnlineGps() async {
+    setState(() => _problem = null);
+    if (!await gpsDisclosure(context) || !mounted) return;
+    setState(() => _locating = true);
+    final problem = await CaptainGps.access();
+    final fix = problem == null ? await CaptainGps.current() : null;
+    if (!mounted) return;
+    setState(() {
+      _locating = false;
+      _problem = problem ?? (fix == null ? GpsProblem.unavailable : null);
+    });
+    if (fix != null) await ref.read(captainProvider.notifier).goOnlineWithGps(fix);
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final c = context.qf;
+    final live = widget.live, profile = widget.profile, places = widget.places, start = widget.start;
     final rules = ref.watch(captainRulesProvider);
     final ctl = ref.read(captainProvider.notifier);
     final onRide = live.state?.ride != null;
     if (live.online) {
+      final demo = live.state?.duty.demo ?? false;
       return Panel(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
@@ -335,14 +362,17 @@ class _DutyCard extends ConsumerWidget {
             if (!onRide) TextButton(onPressed: live.busy ? null : () => ctl.goOffline(), child: const Text('Go offline')),
           ]),
           if (!onRide && live.state?.offer == null)
-            Text('Waiting for rides near you. Keep the app open: QuikFly Captain stays online only while it is on screen.', style: TextStyle(color: c.fgMuted)),
+            Text(
+              demo
+                  ? 'Waiting for rides near you. Keep the app open: with a demo location you stay online only while it is on screen.'
+                  : 'Waiting for rides near you. Your location is shared while you\'re online, also with the app closed. Go offline to stop.',
+              style: TextStyle(color: c.fgMuted),
+            ),
           if (!onRide && live.state?.offer == null && live.error != null) FormError(live.error),
         ]),
       );
     }
-    if (!rules.demoLocation) {
-      return const Panel(child: Text('Going online needs your phone\'s location, which arrives in the next version of QuikFly Captain. Ask QuikFly to turn on demo locations meanwhile.'));
-    }
+    final blocked = profile.blocker != null;
     return Panel(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -351,27 +381,42 @@ class _DutyCard extends ConsumerWidget {
           Text("You're offline", style: Theme.of(context).textTheme.titleMedium),
         ]),
         const SizedBox(height: 10),
-        // The demo locations are the city's places, from GET /config.
-        if (places.isEmpty)
-          ref.watch(configProvider).hasError
-              ? ErrorBox("Couldn't load the places to start from.", onRetry: () => ref.invalidate(configProvider))
-              : Text('Loading places…', style: TextStyle(color: c.fgMuted))
-        else
-          DropdownButtonFormField<Place>(
-            initialValue: start,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Start from (demo location)', helperText: 'Pretend you are here; no GPS is used.'),
-            items: [for (final p in places) DropdownMenuItem(value: p, child: Text('${p.name} · ${p.area}', overflow: TextOverflow.ellipsis))],
-            onChanged: (p) => p == null ? null : onStart(p),
-          ),
-        const SizedBox(height: 12),
         if (live.error != null) FormError(live.error),
-        GoldButton(
-          label: 'Go online',
-          icon: Icons.power_settings_new,
-          loading: live.busy,
-          onPressed: profile.blocker != null || start == null ? null : () => ctl.goOnline(MapPoint(start!.x, start!.y)),
-        ),
+        if (_problem != null) ...[
+          ErrorBox(_problem!.message),
+          if (_problem!.hasSettings)
+            Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: _problem!.openSettings, child: const Text('Open settings'))),
+          const SizedBox(height: 8),
+        ],
+        if (!_demo) ...[
+          GoldButton(label: 'Go online', icon: Icons.power_settings_new, loading: _locating || live.busy, onPressed: blocked ? null : _goOnlineGps),
+          const SizedBox(height: 6),
+          Text('Uses your phone\'s location while you\'re online.', style: TextStyle(color: c.fgSubtle, fontSize: 12.5)),
+          if (rules.demoLocation)
+            TextButton(onPressed: () => setState(() => _demo = true), child: const Text('Use a demo location instead')),
+        ] else ...[
+          // The demo locations are the city's places, from GET /config (the owner's driverDemoLocation allows them).
+          if (places.isEmpty)
+            ref.watch(configProvider).hasError
+                ? ErrorBox("Couldn't load the places to start from.", onRetry: () => ref.invalidate(configProvider))
+                : Text('Loading places…', style: TextStyle(color: c.fgMuted))
+          else
+            DropdownButtonFormField<Place>(
+              initialValue: start,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Start from (demo location)', helperText: 'Pretend you are here; no GPS is used. Keep the app open.'),
+              items: [for (final p in places) DropdownMenuItem(value: p, child: Text('${p.name} · ${p.area}', overflow: TextOverflow.ellipsis))],
+              onChanged: (p) => p == null ? null : widget.onStart(p),
+            ),
+          const SizedBox(height: 12),
+          GoldButton(
+            label: 'Go online here',
+            icon: Icons.power_settings_new,
+            loading: live.busy,
+            onPressed: blocked || start == null ? null : () => ctl.goOnline(MapPoint(start.x, start.y)),
+          ),
+          TextButton(onPressed: () => setState(() => _demo = false), child: const Text('Use my location instead')),
+        ],
       ]),
     );
   }

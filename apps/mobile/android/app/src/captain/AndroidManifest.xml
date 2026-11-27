@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- QuikFly Captain only (merged into src/main's manifest). -->
+<!-- QuikFly Captain only (merged into src/main's manifest). The other two apps never ask for location. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Real GPS while online (lib/captain/location.dart): asked only after the app's own explanation. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Keeps a captain online with the app closed: geolocator's foreground service of type location, with its notification. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <queries>
         <!-- Offers are read aloud by the phone's text-to-speech engine (MainActivity.kt); Android 11+ needs this to find it. -->
         <intent>

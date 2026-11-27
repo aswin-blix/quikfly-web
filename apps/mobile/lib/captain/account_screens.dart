@@ -154,7 +154,9 @@ class HowItWorksScreen extends ConsumerWidget {
             ? 'No share of your rides. Your owner pays a fee of ${rupees(r.dailyFeePaise)} once on each day you complete a ride; no rides, no fee.'
             : 'QuikFly keeps ${r.commissionPercent.toStringAsFixed(r.commissionPercent % 1 == 0 ? 0 : 1)}% of each fare (after GST), and 0.1% TDS is deducted. Every offer shows the exact split.'),
         item(Icons.payments_outlined, 'Cash', 'On a cash ride you collect what the rider pays at the end. The app shows it full screen, and "Cash you hold" adds up the day. You hand it to your owner.'),
-        item(Icons.phone_android, 'Keep the app open', 'In this version you stay online only while QuikFly Captain is on screen. Locations are demo locations: you pick where you start and the app moves you during a trip.'),
+        item(Icons.phone_android, 'Your location', r.demoLocation
+            ? "While you're online your phone's location is shared, also with the app closed (a notification shows); go offline to stop. Only your latest position is kept. For testing you can instead pick a demo location: then keep the app open."
+            : "While you're online your phone's location is shared, also with the app closed (a notification shows); go offline to stop. Only your latest position is kept."),
       ]),
     );
   }

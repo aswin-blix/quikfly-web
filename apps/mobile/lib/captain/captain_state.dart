@@ -1,14 +1,16 @@
 // QuikFly Captain's state: who the captain is (GET /driver), and while they are online a heartbeat
 // (POST /driver/ping) that brings offers and keeps their ride current. Every action returns the new
 // state from the API, which owns the ride; the app never moves a ride by itself.
-// Version 1 keeps the captain online only while the app is open (real GPS in the background is step 7
-// of docs/driver-app-plan.md); positions are demo locations the captain picks, moved by the app on a trip.
+// With GPS (step 7 of docs/driver-app-plan.md) the position stream runs in the background (location.dart), so
+// the heartbeat carries on with the app closed. With a demo location (the owner's driverDemoLocation) the captain
+// picks a place, the app moves them on a trip, and they stay online only while the app is open.
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api.dart';
 import '../state/providers.dart';
+import 'location.dart';
 import 'speech.dart';
 
 /// Demo locations: how far the app moves the captain per heartbeat on a trip (map units; 3 ≈ 1 km).
@@ -58,10 +60,17 @@ class CaptainController extends Notifier<CaptainLive> {
   Timer? _timer;
   bool _foreground = true;
   String? _announced;
+  /// Real GPS while online: the background position stream and its latest fix.
+  StreamSubscription<GpsFix>? _gps;
+  GpsFix? _fix;
+  bool get _usingGps => _gps != null;
 
   @override
   CaptainLive build() {
-    ref.onDispose(() => _timer?.cancel());
+    ref.onDispose(() {
+      _timer?.cancel();
+      _gps?.cancel();
+    });
     // A captain who was online (or on a ride) when the app was closed picks up where they were.
     ref.listen(captainLookupProvider, (_, next) {
       final c = next.value?.captain;
@@ -77,22 +86,36 @@ class CaptainController extends Notifier<CaptainLive> {
     return const CaptainLive();
   }
 
-  void _resume(CaptainProfile c) {
+  Future<void> _resume(CaptainProfile c) async {
     if (state.state != null) return;
     state = state.copy(state: CaptainState(duty: c.duty, offer: null, ride: null));
+    // Online with GPS when the app was closed: start the position stream again (no prompt: only if already allowed).
+    if (c.duty.online && !c.duty.demo && await CaptainGps.allowed()) _startGps();
     // Online, or still on a ride: the first heartbeat brings the offer or the ride back.
     refresh();
+  }
+
+  void _startGps() {
+    if (_usingGps) return;
+    _gps = CaptainGps.watch().listen((f) => _fix = f, onError: (_) {/* the last fix stays; the heartbeat goes on */});
+  }
+
+  void _stopGps() {
+    _gps?.cancel();
+    _gps = null;
+    _fix = null;
   }
 
   QuikFlyApi get _api => ref.read(apiProvider);
   CaptainRules get _rules => ref.read(captainRulesProvider);
 
-  /// The app went to the background (no heartbeat: version 1 needs the app open) or came back (ask now).
+  /// The app went to the background or came back (ask now). With GPS the heartbeat carries on in the background
+  /// (the position stream keeps the app running); with a demo location it stops until the app is back.
   void setForeground(bool front) {
     _foreground = front;
     if (front) {
       refresh();
-    } else {
+    } else if (!_usingGps) {
       _timer?.cancel();
     }
   }
@@ -102,7 +125,7 @@ class CaptainController extends Notifier<CaptainLive> {
     final s = state.state;
     if (s == null || (!s.duty.online && s.ride == null)) return;
     try {
-      _apply(await _api.captainPing(position: _demoStep(s)));
+      _apply(await _api.captainPing(position: _usingGps ? _fix : _demoStep(s)));
     } catch (_) {
       // A missed heartbeat is retried at the next one; the API keeps the captain online for driverStaleSeconds.
       _schedule();
@@ -129,6 +152,8 @@ class CaptainController extends Notifier<CaptainLive> {
       ref.read(voiceProvider.notifier).speak(offer);
     }
     state = state.copy(state: s, done: s.done);
+    // Offline (staff set it, or the app went silent too long) with no ride: stop sharing the location.
+    if (!s.duty.online && s.ride == null && _usingGps) _stopGps();
     if (s.done != null) {
       ref.invalidate(captainSummaryProvider);
       ref.invalidate(captainTripsProvider);
@@ -140,7 +165,7 @@ class CaptainController extends Notifier<CaptainLive> {
   void _schedule() {
     _timer?.cancel();
     final s = state.state;
-    if (!_foreground || s == null || (!s.duty.online && s.ride == null)) return;
+    if ((!_foreground && !_usingGps) || s == null || (!s.duty.online && s.ride == null)) return;
     final busy = s.offer != null || s.ride != null;
     _timer = Timer(Duration(seconds: busy ? _rules.pingBusySeconds : _rules.pingIdleSeconds), refresh);
   }
@@ -162,8 +187,27 @@ class CaptainController extends Notifier<CaptainLive> {
     }
   }
 
-  Future<String?> goOnline(MapPoint at) => _run((a) => a.setCaptainDuty(true, position: at));
-  Future<String?> goOffline() => _run((a) => a.setCaptainDuty(false));
+  /// Online at a demo location the captain picked (no GPS).
+  Future<String?> goOnline(MapPoint at) {
+    _stopGps();
+    return _run((a) => a.setCaptainDuty(true, position: at));
+  }
+
+  /// Online with a GPS fix; the position stream then keeps them online with the app closed.
+  Future<String?> goOnlineWithGps(GpsFix fix) async {
+    final err = await _run((a) => a.setCaptainDuty(true, position: fix));
+    if (err == null && state.online) {
+      _fix = fix;
+      _startGps();
+    }
+    return err;
+  }
+
+  Future<String?> goOffline() async {
+    final err = await _run((a) => a.setCaptainDuty(false));
+    if (err == null) _stopGps();
+    return err;
+  }
   Future<String?> accept(String rideId) => _run((a) => a.acceptOffer(rideId));
   Future<String?> decline(String rideId) => _run((a) => a.declineOffer(rideId));
   Future<String?> arrived(String rideId) => _run((a) => a.captainArrived(rideId));

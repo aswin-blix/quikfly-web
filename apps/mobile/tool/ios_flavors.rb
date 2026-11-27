@@ -8,7 +8,8 @@ require 'xcodeproj'
 FLAVORS = {
   'customer' => { bundle: 'com.quikfly.app', name: 'QuikFly', icon: 'AppIcon' },
   'partner' => { bundle: 'com.quikfly.partner', name: 'QuikFly Partner', icon: 'AppIcon-partner' },
-  'captain' => { bundle: 'com.quikfly.captain', name: 'QuikFly Captain', icon: 'AppIcon-captain' },
+  # Captain has its own Info.plist: location reasons and background location, which the other two apps must not declare.
+  'captain' => { bundle: 'com.quikfly.captain', name: 'QuikFly Captain', icon: 'AppIcon-captain', plist: 'Runner/Info-captain.plist' },
 }.freeze
 BASES = %w[Debug Release Profile].freeze
 
@@ -41,6 +42,7 @@ FLAVORS.each do |flavor, info|
       config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = info[:bundle]
       config.build_settings['APP_DISPLAY_NAME'] = info[:name]
       config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = info[:icon]
+      config.build_settings['INFOPLIST_FILE'] = info[:plist] || 'Runner/Info.plist'
     end
   end
 end
