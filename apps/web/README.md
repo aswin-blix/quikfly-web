@@ -130,7 +130,7 @@ Set `NEXT_PUBLIC_API_URL` (see `.env.example`) to switch to the real API in `app
 
 - **Images:** the service photos are cropped from the client's small banner (about 120×80 px each) and look soft at large sizes. Get high-resolution originals of the vehicles, plus real photos for holiday packages (currently illustrated SVG scenes).
 - **Service photos:** `public/assets/services/<service>.webp` (1200 px WebP, about 70–110 KB). `SERVICES` in `src/lib/services.ts` holds each path in full (the single-file demo build inlines images by exact path), and other screens reuse them through `serviceByKey(key).image`. The app ships the same files in `apps/mobile/assets/images/services/`; replace both together (`parcel.webp` is a drawn illustration).
-- **Logo:** `public/assets/logo.svg`, a copy of `brand/quikfly-logo.svg` made by `node scripts/logo.mjs` (never edit the copy). Transparent with dark outlines, so it works in light and dark without a background.
+- **Logo:** `public/assets/logo.svg`, a copy of `brand/quikfly-logo.svg` made by `node scripts/logo.mjs` (never edit the copy). Transparent, so it works in light and dark without a background (1504×458; the `<img>` tags carry that size).
 - **Maps:** replace the illustrated map in `CityMap.tsx` with Google Maps, Mapbox or Ola Maps; the props stay the same.
 - **Live tracking:** WebSockets (e.g. Laravel Reverb or Socket.IO) instead of the simulated vehicle animation.
 - **Payments:** Razorpay or Cashfree at checkout.
