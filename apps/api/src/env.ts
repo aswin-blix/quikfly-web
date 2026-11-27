@@ -1,4 +1,5 @@
 import type { AdminUser, User } from "@quikfly/shared";
+import type { CaptainContext } from "./services/drivers";
 
 /** Bindings and variables declared in wrangler.jsonc. */
 export interface Env {
@@ -19,5 +20,5 @@ export interface Env {
   DOCS?: R2Bucket;
 }
 
-/** Hono app typing shared by every router. `user` is set by requireUser, `admin` by requireAdmin. */
-export type AppEnv = { Bindings: Env; Variables: { user: User; admin: AdminUser } };
+/** Hono app typing shared by every router. `user` is set by requireUser, `admin` by requireAdmin, `captain` by requireDriver. */
+export type AppEnv = { Bindings: Env; Variables: { user: User; admin: AdminUser; captain: CaptainContext } };

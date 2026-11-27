@@ -1061,19 +1061,22 @@ if (pvUp.status === 409) {
   // Drivers
   const dl1 = `TN09${new Date().getFullYear() - 5}${String(Date.now()).slice(-7)}`;
   const dl2 = `TN10${new Date().getFullYear() - 3}${String(Date.now() + 5).slice(-7)}`;
+  const dl3 = `TN11${new Date().getFullYear() - 2}${String(Date.now() + 9).slice(-7)}`;
+  const raviPhone = "9" + String(Date.now() + 3).slice(-9); // a fresh number each run: one number, one driver
   await expect("a bad licence number is refused", call("POST", "/vendor/drivers", { self: true, dlNumber: "12345", dlValidTill: dayOffset(900) }, PV), 400);
   const withSelf = await expect("the partner registers themselves as a driver", call("POST", "/vendor/drivers", { self: true, dlNumber: dl1, dlValidTill: dayOffset(900) }, PV), 201,
     (j) => j.drivers.some((d) => d.self && d.name === "Smoke Vendor" && d.status === "submitted"));
   const d1 = withSelf.drivers.find((d) => d.self).id;
   await expect("only one self driver", call("POST", "/vendor/drivers", { self: true, dlNumber: dl2, dlValidTill: dayOffset(900) }, PV), 409);
-  await expect("a duplicate licence is refused", call("POST", "/vendor/drivers", { name: "Copy Cat", phone: "9123456780", dlNumber: dl1, dlValidTill: dayOffset(900) }, PV), 409);
+  await expect("a duplicate licence is refused", call("POST", "/vendor/drivers", { name: "Copy Cat", phone: raviPhone, dlNumber: dl1, dlValidTill: dayOffset(900) }, PV), 409);
   await expect("a driver needs a 10-digit phone", call("POST", "/vendor/drivers", { name: "Ravi Kumar", phone: "123", dlNumber: dl2, dlValidTill: dayOffset(900) }, PV), 400);
-  const withRavi = await expect("add a driver", call("POST", "/vendor/drivers", { name: "Ravi Kumar", phone: "91234 56780", dlNumber: dl2, dlValidTill: dayOffset(20) }, PV), 201,
-    (j) => j.drivers.some((d) => d.name === "Ravi Kumar" && d.phone === "+91 9123456780"));
+  const withRavi = await expect("add a driver", call("POST", "/vendor/drivers", { name: "Ravi Kumar", phone: `${raviPhone.slice(0, 5)} ${raviPhone.slice(5)}`, dlNumber: dl2, dlValidTill: dayOffset(20) }, PV), 201,
+    (j) => j.drivers.some((d) => d.name === "Ravi Kumar" && d.phone === `+91 ${raviPhone}`));
   const d2 = withRavi.drivers.find((d) => d.name === "Ravi Kumar").id;
+  await expect("one number, one driver: a second driver with Ravi's number is refused", call("POST", "/vendor/drivers", { name: "Ravi Again", phone: raviPhone, dlNumber: dl3, dlValidTill: dayOffset(900) }, PV), 409, (j) => /mobile number/.test(j.message));
   await expect("an unapproved driver can't be assigned", call("POST", `/vendor/drivers/${d1}/assign`, { vehicleId: v2 }, PV), 409);
   await expect("staff are alerted about the drivers, without names", call("GET", "/admin/alerts", null, T), 200,
-    (j) => j.items.some((a) => a.kind === "vendor.fleet" && a.title === "Driver to review") && !j.items.some((a) => /Ravi|Copy Cat|9123456780/.test(a.title + a.body)));
+    (j) => j.items.some((a) => a.kind === "vendor.fleet" && a.title === "Driver to review") && !j.items.some((a) => new RegExp(`Ravi|Copy Cat|${raviPhone}`).test(a.title + a.body)));
   await expect("approving needs police verification and training", call("POST", `/admin/vendors/${vid}/drivers/${d1}/review`, { decision: "approve" }, T), 400, (j) => /police/.test(j.message));
   await expect("approving needs the licence photo", call("POST", `/admin/vendors/${vid}/drivers/${d1}/review`, { decision: "approve", policeVerified: true, trainingDone: true }, T), 409);
   await upload(`/vendor/drivers/${d1}/documents/dl`, JPEG, PV);
@@ -1131,6 +1134,37 @@ if (pvUp.status === 409) {
   await call("POST", `/admin/vendors/${vid}/vehicles/${car}/review`, { decision: "approve" }, T);
   await call("POST", `/admin/vendors/${vid}/vehicles/${car}/sticker`, null, T);
   await expect("put the partner's own driver on the cab", call("POST", `/vendor/drivers/${d1}/assign`, { vehicleId: car }, PV), 200, (j) => j.vehicles.find((v) => v.id === car).driverId === d1);
+
+  // QuikFly Captain, step 1 (docs/driver-app-plan.md): the driver's number is their login; duty and position.
+  await expect("captain: someone with no driver record is told so, not refused", call("GET", "/driver", null, RC), 200, (j) => j.captain === null && /isn't registered/.test(j.reason));
+  await expect("captain: and can't go online", call("POST", "/driver/duty", { online: true, position: { lat: 13.06, lng: 80.24 } }, RC), 403);
+  await expect("captain: signing in with the driver's number links the record", call("GET", "/driver", null, PV), 200,
+    (j) => j.captain?.driver.id === d1 && j.captain.driver.self && j.captain.vehicle?.regNumber === regCar && j.captain.owner.name === "Smoke Vendor" && j.captain.blocker === null && j.captain.duty.online === false);
+  await expect("captain: the owner's fleet shows the driver has signed in", call("GET", "/vendor/fleet", null, PV), 200, (j) => j.drivers.find((d) => d.id === d1).linked === true);
+  await expect("captain: going online needs a location", call("POST", "/driver/duty", { online: true }, PV), 400);
+  await expect("captain: a location outside the city is refused", call("POST", "/driver/duty", { online: true, position: { lat: 28.61, lng: 77.21 } }, PV), 409, (j) => /outside/.test(j.message));
+  await expect("captain: goes online with a GPS fix, placed on the city map", call("POST", "/driver/duty", { online: true, position: { lat: 13.06, lng: 80.24 } }, PV), 200,
+    (j) => j.duty.online && j.duty.position.x === 50 && j.duty.position.y === 50 && j.duty.demo === false && !!j.duty.seenAt);
+  await expect("captain: a ping moves them (a demo location is a point on the map)", call("POST", "/driver/ping", { position: { x: 20, y: 30 } }, PV), 200,
+    (j) => j.duty.online && j.duty.position.x === 20 && j.duty.position.y === 30 && j.duty.demo === true);
+  await expect("captain: a bad fix keeps the last position", call("POST", "/driver/ping", { position: { lat: 0, lng: 0 } }, PV), 200, (j) => j.duty.position.x === 20 && j.duty.position.y === 30);
+  await expect("captain: a point off the map is refused when going online", call("POST", "/driver/duty", { online: true, position: { x: 140, y: 30 } }, PV), 400);
+  await expect("captain: goes offline", call("POST", "/driver/duty", { online: false }, PV), 200, (j) => j.duty.online === false);
+  await expect("captain: a ping while offline changes nothing", call("POST", "/driver/ping", { position: { x: 60, y: 60 } }, PV), 200, (j) => !j.duty.online && j.duty.position.x === 20);
+  await expect("captain: staff record the driver's gender", call("POST", `/admin/vendors/${vid}/drivers/${d1}/gender`, { gender: "female" }, T), 200, (j) => j.fleet.drivers.find((d) => d.id === d1).gender === "female");
+  await expect("captain: an unknown gender is refused", call("POST", `/admin/vendors/${vid}/drivers/${d1}/gender`, { gender: "robot" }, T), 400);
+  await expect("captain: and the captain's profile carries it", call("GET", "/driver", null, PV), 200, (j) => j.captain.driver.gender === "female");
+  await call("POST", "/driver/duty", { online: true, position: { x: 20, y: 30 } }, PV);
+  await call("POST", `/admin/vendors/${vid}/drivers/${d1}/block`, { block: true, note: "Smoke: checking a complaint" }, T);
+  await expect("captain: a blocked driver is told why", call("GET", "/driver", null, PV), 200, (j) => /Smoke: checking a complaint/.test(j.captain.blocker ?? ""));
+  await expect("captain: and can't go online", call("POST", "/driver/duty", { online: true, position: { x: 20, y: 30 } }, PV), 409);
+  await call("POST", `/admin/vendors/${vid}/drivers/${d1}/block`, { block: false }, T);
+  await expect("captain: unblocked but without a vehicle, they are told to get one assigned", call("GET", "/driver", null, PV), 200, (j) => /Assign yourself/.test(j.captain.blocker ?? ""));
+  await call("POST", `/vendor/drivers/${d1}/assign`, { vehicleId: car }, PV);
+  await call("POST", "/driver/duty", { online: false }, PV);
+  await expect("captain: the gender change is audited", call("GET", `/admin/audit?entity=vendor&entityId=${vid}`, null, T), 200, (j) => j.items.some((e) => e.action === "vendor.driver.gender"));
+  await expect("captain: the driver's own export has their record and last location", call("GET", "/me/export", null, PV), 200,
+    (j) => j.data.captain?.length === 1 && j.data.captain[0].id === d1 && j.data.captain_location?.length === 1 && Array.isArray(j.data.captain_offers));
   const carPlate = regCar.replace(/^([A-Z]{2})(\d{2})([A-Z]+)(\d{4})$/, "$1 $2 $3 $4");
   // Other live partner cabs may exist; each booked ride keeps its cab busy, so the next ride tries another.
   const ridesToCancel = [];
