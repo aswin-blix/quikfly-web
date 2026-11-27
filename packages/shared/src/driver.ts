@@ -229,6 +229,23 @@ export type LiveRide = Omit<Ride, "driver"> & { driver: Driver | null; live: Rid
 /** True for a ride whose progress the server owns (POST /rides and GET /rides/:id for a client that declared `rides=live`). */
 export const isLiveRide = (r: Ride | LiveRide): r is LiveRide => "live" in r && !!(r as LiveRide).live;
 
+/**
+ * Where a captain stands for staff and fleet owners: on a ride; online (heard from within driverStaleSeconds);
+ * silent (marked online but not heard from: dispatch skips them, the next read sets them offline); offline.
+ */
+export type CaptainLiveStatus = "onRide" | "online" | "silent" | "offline";
+
+export const CAPTAIN_STATUS_LABEL: Record<CaptainLiveStatus, string> = {
+  onRide: "On a ride", online: "Online", silent: "Not heard from", offline: "Offline",
+};
+
+export function captainLiveStatus(s: { online: boolean | number; rideId: string | null; seenAt: string | null } | null, staleSeconds: number, now = Date.now()): CaptainLiveStatus {
+  if (!s) return "offline";
+  if (s.rideId) return "onRide";
+  if (!s.online) return "offline";
+  return s.seenAt && now - Date.parse(s.seenAt) <= staleSeconds * 1000 ? "online" : "silent";
+}
+
 /** What riders are told when nobody could take their ride. */
 export const NO_CAPTAIN = "No captain is free near you right now. You haven't been charged. Please try again in a few minutes.";
 

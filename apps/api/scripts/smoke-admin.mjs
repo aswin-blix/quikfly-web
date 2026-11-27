@@ -1278,6 +1278,10 @@ if (pvUp.status === 409) {
     await call("POST", "/driver/ping", {}, PV);
     const accepted = await expect("live: the captain accepts and is on the way", call("POST", `/driver/offers/${r2.id}/accept`, null, PV), 200,
       (j) => j.offer === null && j.ride?.rideId === r2.id && j.ride.phase === "arriving" && j.ride.riderName && /\d{10}$/.test(j.ride.riderPhone) && j.ride.booked === false && j.ride.pinTriesLeft === 5);
+    await expect("staff: the Captains page shows the captain on a ride, with the readiness counts", call("GET", "/admin/captains", null, T), 200,
+      (j) => j.readiness.liveDrivers === true && j.readiness.onRide >= 1 && j.readiness.signedIn >= 1 && j.captains.find((x) => x.driverId === d1)?.status === "onRide" && j.captains.find((x) => x.driverId === d1).blocker === null);
+    await expect("owner: the fleet shows the driver is on a ride in Captain", call("GET", "/vendor/fleet", null, PV), 200, (j) => j.drivers.find((d) => d.id === d1).captain?.status === "onRide");
+    await expect("staff: a captain on a ride can't be set offline", call("POST", `/admin/captains/${d1}/offline`, null, T), 409, (j) => /on a ride/.test(j.message));
     await expect("live: the rider sees their captain, the vehicle and the plate", liveRide(r2.id), 200,
       (j) => j.live.phase === "arriving" && j.driver?.name === "Smoke Vendor" && j.driver.plate === carPlate && j.live.captain?.x === pick.x && j.live.etaMin === 1);
     await expect("live: the captain can't go offline during a ride", call("POST", "/driver/duty", { online: false }, PV), 409);
@@ -1304,6 +1308,8 @@ if (pvUp.status === 409) {
     await expect("live: the trip settles once for the partner", call("GET", "/vendor/trips", null, PV), 200,
       (j) => j.filter((t) => t.bookingId === b2.id).length === 1 && j.find((t) => t.bookingId === b2.id).estimate === false && j.find((t) => t.bookingId === b2.id).earningPaise === done?.done.earningPaise);
     await expect("live: the booking is completed", call("GET", `/bookings/${b2.id}`, null, RC, LIVE), 200, (j) => j.status === "completed");
+    await expect("staff: the booking shows its dispatch log (who was asked, how far, what they did)", call("GET", `/admin/bookings/${b2.id}`, null, T), 200,
+      (j) => j.dispatch?.length === 1 && j.dispatch[0].driverId === d1 && j.dispatch[0].outcome === "accepted" && j.dispatch[0].km === 0 && j.dispatch[0].vendorId === vid);
     await expect("live: the rider sees it done", liveRide(r2.id), 200, (j) => j.live.phase === "done");
     await expect("live: completing twice is refused", call("POST", `/driver/rides/${r2.id}/complete`, null, PV), 404);
     await expect("live: the trip is on the captain's list", call("GET", "/driver/trips", null, PV), 200,
@@ -1354,6 +1360,13 @@ if (pvUp.status === 409) {
     await call("POST", `/rides/${r7.id}/cancel`, null, RC, LIVE);
     await expect("live: and loses it when the rider cancels", call("POST", "/driver/ping", {}, PV), 200, (j) => j.offer === null);
     await expect("live: the rider sees it cancelled", liveRide(r7.id), 200, (j) => j.live.phase === "cancelled");
+    await expect("staff: a ride given back shows the reason in its dispatch log", call("GET", `/admin/bookings/${b5.id}`, null, T), 200,
+      (j) => j.dispatch?.some((x) => x.outcome === "released" && x.reason === "changed_mind"));
+    await expect("staff: set an idle captain offline", call("POST", `/admin/captains/${d1}/offline`, null, T), 200, (j) => j.captains.find((x) => x.driverId === d1)?.status === "offline");
+    await expect("staff: and not twice", call("POST", `/admin/captains/${d1}/offline`, null, T), 409);
+    await expect("live: the captain's app shows they are offline", call("POST", "/driver/ping", {}, PV), 200, (j) => j.duty.online === false);
+    await expect("staff: setting a captain offline is audited on the partner", call("GET", `/admin/audit?entity=vendor&entityId=${vid}`, null, T), 200, (j) => j.items.some((e) => e.action === "vendor.captain.offline"));
+    if (LOCAL) await expect("staff: the content role can't see captains", call("GET", "/admin/captains", null, (await login(CONTENT)).json.token), 403);
     await expect("live: the captain's export lists the offers with what they did", call("GET", "/me/export", null, PV), 200,
       (j) => j.data.captain_offers.some((o) => o.ride_id === r5.id && o.outcome === "released" && o.reason === "changed_mind"));
     await call("POST", "/driver/duty", { online: false }, PV);

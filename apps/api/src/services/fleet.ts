@@ -1,11 +1,12 @@
 // A live partner's fleet: more vehicles (each reviewed by staff, then stickered), drivers
 // (staff confirm police verification and training), renewals of expiring documents, and
 // active/inactive. Staff actions are in services/admin/fleet.ts; expiry runs from the cron.
-import { PATTERNS, VEHICLE_DOCUMENTS, compactCode, type Gender, type VehicleDocument, type VendorDriver, type VendorFleet } from "@quikfly/shared";
+import { PATTERNS, VEHICLE_DOCUMENTS, captainLiveStatus, compactCode, type Gender, type VehicleDocument, type VendorDriver, type VendorFleet } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { text } from "../lib/validate";
 import { staffAlertStatement } from "./admin/alerts";
+import { getSettings } from "./settings";
 import {
   futureDate, imageResponse, loadVendor, needBucket, parseAudit, parseInsurance, parseRc, parseVehicleDetails, storeImage, toVehicle,
   type VehicleRow,
@@ -24,19 +25,27 @@ export interface DriverRow {
 /** Blocks the cron adds start with this, so a checked renewal can lift them. */
 export const EXPIRED_PREFIX = "Expired: ";
 
-export const toDriver = (r: DriverRow): VendorDriver => ({
+/** A driver's row in driver_state (QuikFly Captain), when they have one. */
+interface DutyRow { driver_id: string; online: number; ride_id: string | null; seen_at: string | null }
+
+export const toDriver = (r: DriverRow, duty?: DutyRow, staleSeconds = 60): VendorDriver => ({
   id: r.id, name: r.name, phone: r.phone, dlNumber: r.dl_number, dlValidTill: r.dl_valid_till, hasDlPhoto: !!r.dl_key, status: r.status,
   policeVerifiedAt: r.police_verified_at, trainingDoneAt: r.training_done_at, reviewNote: r.review_note, blockedReason: r.blocked_reason,
   docsPending: !!r.docs_pending, vehicleId: r.vehicle_id, self: !!r.self, gender: r.gender ?? null, linked: !!r.user_id,
+  captain: r.user_id ? { status: captainLiveStatus(duty ? { online: duty.online, rideId: duty.ride_id, seenAt: duty.seen_at } : null, staleSeconds), seenAt: duty?.seen_at ?? null } : null,
 });
 
 export async function fleetOf(db: D1Database, vendorId: string): Promise<VendorFleet> {
-  const [{ results: vehicles }, { results: drivers }] = await db.batch([
+  const [{ results: vehicles }, { results: drivers }, { results: duties }] = await db.batch([
     db.prepare("SELECT * FROM vendor_vehicles WHERE vendor_id = ? ORDER BY created_at").bind(vendorId),
     db.prepare("SELECT * FROM vendor_drivers WHERE vendor_id = ? ORDER BY created_at").bind(vendorId),
-  ]) as [D1Result<VehicleRow>, D1Result<DriverRow>];
+    // Live status in QuikFly Captain, so the owner sees who is online or on a ride.
+    db.prepare("SELECT s.driver_id, s.online, s.ride_id, s.seen_at FROM driver_state s JOIN vendor_drivers d ON d.id = s.driver_id WHERE d.vendor_id = ?").bind(vendorId),
+  ]) as [D1Result<VehicleRow>, D1Result<DriverRow>, D1Result<DutyRow>];
   const driverOf = new Map(drivers.filter((d) => d.vehicle_id).map((d) => [d.vehicle_id!, d.id]));
-  return { vehicles: vehicles.map((v) => toVehicle(v, driverOf.get(v.id) ?? null)), drivers: drivers.map(toDriver) };
+  const dutyOf = new Map(duties.map((s) => [s.driver_id, s]));
+  const stale = (await getSettings(db)).driverStaleSeconds;
+  return { vehicles: vehicles.map((v) => toVehicle(v, driverOf.get(v.id) ?? null)), drivers: drivers.map((d) => toDriver(d, dutyOf.get(d.id), stale)) };
 }
 
 async function vendorOf(db: D1Database, userId: string) {

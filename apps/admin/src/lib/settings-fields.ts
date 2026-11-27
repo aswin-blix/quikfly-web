@@ -197,7 +197,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
   },
   {
     title: "Captains (live rides)",
-    sub: "Drivers who take rides in the QuikFly Captain app. Everything stays simulated until the first switch is on.",
+    sub: "Drivers who take rides in the QuikFly Captain app. Everything stays simulated until the first switch is on. The Captains page shows who is online and whether you're ready to go live.",
     fields: [
       { key: "featureLiveDrivers", type: "toggle", label: "Live captains", help: "On: a ride booked from an up-to-date app or the website is offered to real captains who are online. Off: every ride is simulated, as before. Older apps always get simulated rides." },
       { key: "liveRideAuto", type: "toggle", label: "Autos go to real captains", help: "Off: Auto rides stay simulated even while live captains is on. Use it to start with one ride type." },
