@@ -6,17 +6,16 @@
 //   browser notifications  apps/{web,admin}/public/assets/notify-icon.png (square, transparent:
 //            browsers don't take SVG notification icons; the logo sits centred, never on a badge)
 // Run from the repo root after replacing the master:  node scripts/logo.mjs
+// then  node scripts/app-icons.mjs  (the launcher icons use the logo's Q).
 // Chrome or Edge must be installed; set CHROME=/path/to/chrome if it isn't found.
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { done, fileUrl, render } from "./lib/chrome.mjs";
 
 const MASTER = resolve("brand/quikfly-logo.svg");
 const COPIES = ["apps/web/public/assets/logo.svg", "apps/admin/public/assets/logo.svg"];
 const APP_PNG = resolve("apps/mobile/assets/images/logo.png");
-const APP_PNG_WIDTH = 1240; // 72 px tall at 3× (largest use: the login screen) needs ~298 px of height
+const APP_PNG_WIDTH = 1240; // 72 px tall at 3× (largest use: the login screen) needs ~216 px of height
 
 if (!existsSync(MASTER)) throw new Error(`Missing ${MASTER}`);
 for (const c of COPIES) {
@@ -30,28 +29,7 @@ const svg = readFileSync(MASTER, "utf8");
 const [, , vw, vh] = svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number);
 const height = Math.round((APP_PNG_WIDTH * vh) / vw);
 
-const chrome = [
-  process.env.CHROME,
-  "C:/Program Files/Google/Chrome/Application/chrome.exe",
-  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  "/usr/bin/google-chrome",
-  "/usr/bin/chromium",
-].find((p) => p && existsSync(p));
-if (!chrome) throw new Error("Chrome/Edge not found; set CHROME=/path/to/chrome");
-
-const work = mkdtempSync(join(tmpdir(), "qf-logo-"));
-/** Renders `html` (a transparent page) to a PNG of the given size with headless Chrome. */
-function render(out, width, h, body) {
-  const page = join(work, "page.html");
-  writeFileSync(page, `<!doctype html><html style="background:transparent"><body style="margin:0;background:transparent">${body}</body></html>`);
-  mkdirSync(dirname(out), { recursive: true });
-  execFileSync(chrome, [
-    "--headless=new", "--disable-gpu", "--hide-scrollbars", "--default-background-color=00000000",
-    `--window-size=${width},${h}`, `--screenshot=${out}`, pathToFileURL(page).href,
-  ], { stdio: "ignore" });
-}
-const logo = (w) => `<img src="${pathToFileURL(MASTER).href}" style="display:block;width:${w}px;height:${Math.round((w * vh) / vw)}px">`;
+const logo = (w) => `<img src="${fileUrl(MASTER)}" style="display:block;width:${w}px;height:${Math.round((w * vh) / vw)}px">`;
 
 render(APP_PNG, APP_PNG_WIDTH, height, logo(APP_PNG_WIDTH));
 console.log(`rendered → ${APP_PNG} (${APP_PNG_WIDTH}×${height}, transparent)`);
@@ -63,4 +41,4 @@ for (const out of ["apps/web/public/assets/notify-icon.png", "apps/admin/public/
   render(out, NOTIFY_SIZE, NOTIFY_SIZE, `<div style="width:${NOTIFY_SIZE}px;height:${NOTIFY_SIZE}px;display:grid;place-items:center">${logo(NOTIFY_LOGO_WIDTH)}</div>`);
   console.log(`rendered → ${out} (${NOTIFY_SIZE}×${NOTIFY_SIZE}, transparent)`);
 }
-rmSync(work, { recursive: true, force: true });
+done();

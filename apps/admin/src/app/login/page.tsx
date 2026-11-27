@@ -36,7 +36,7 @@ function LoginForm() {
     <div className="min-h-dvh grid place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
-          <img src="/assets/logo.svg" alt="QuikFly" width={2059} height={495} className="h-14 w-auto mx-auto" />
+          <img src="/assets/logo.svg" alt="QuikFly" width={1504} height={458} className="h-14 w-auto mx-auto" />
           <p className="text-sm text-muted mt-2">Admin · staff sign-in</p>
         </div>
         <form onSubmit={submit} className="card p-6 grid gap-4" noValidate>

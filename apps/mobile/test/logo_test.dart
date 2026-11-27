@@ -25,6 +25,6 @@ void main() {
     final header = ByteData.sublistView(bytes, 16, 26);
     expect(bytes.sublist(1, 4), 'PNG'.codeUnits);
     expect(header.getUint8(9), 6, reason: 'colour type 6 = RGBA (has an alpha channel)');
-    expect(header.getUint32(0) / header.getUint32(4), closeTo(2059 / 495, 0.02), reason: 'same shape as the SVG');
+    expect(header.getUint32(0) / header.getUint32(4), closeTo(1504 / 458, 0.02), reason: 'same shape as the SVG');
   });
 }
