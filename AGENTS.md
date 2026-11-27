@@ -41,6 +41,7 @@ apps/mobile/      Flutter Android apps, plus iPhone test builds in ios/ (read ap
   lib/theme/      tokens.dart mirrors apps/web tokens.css · lib/screens/ one folder per area · test/api_contract_test.dart
 packages/shared/i18n/ app_en.arb (template), app_ta.arb, app_hi.arb: UI strings for the website (useT()) and both apps (L.of(context))
 brand/           quikfly-logo.svg: the one logo. After changing it run `node scripts/logo.mjs` (copies to web/admin, renders the app PNG)
+                 and `node scripts/app-icons.mjs` (both apps' launcher icons, drawn from the logo's Q)
 packages/shared/  @quikfly/shared: types.ts (domain types), rules.ts (validation patterns, limits),
                   catalog.ts (SEED data only) + catalog-kinds.ts (18 kinds, fields, validation), settings.ts
                   (runtime Settings, defaults, rules), pricing.ts (all price maths + bus/ride simulation),
@@ -102,7 +103,7 @@ cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://1
 - Production lives on `quikfly.in` (`api.`, `admin.`, `www`) as Worker custom domains, and on the old `*.quikfly-api.workers.dev` addresses that released apps call. Keep `workers_dev: true` in every `wrangler.jsonc` (adding `routes` turns workers.dev off otherwise), never add DNS records for those names by hand, and add any new production hostname to the production checks in `smoke.mjs` and `test/api_contract_test.dart`.
 - Run the production smoke test once per deploy; every run leaves bookings, tickets and callbacks on production.
 - Languages (see docs/roadmap.md): until the feature freeze, UI text may stay hard-coded; text already in `packages/shared/i18n` is changed there (all three files). After editing the `.arb` files run `flutter gen-l10n` in apps/mobile (`test/l10n_test.dart` fails otherwise). `npm run typecheck` warns about untranslated strings; `npm run i18n:strict` must pass before `featureLanguages` is turned on.
-- The logo is transparent and suits both themes: never put it on a badge or background (`test/logo_test.dart` checks the app). Edit only `brand/quikfly-logo.svg`, then run `node scripts/logo.mjs`.
+- The logo is transparent and suits both themes: never put it on a badge or background (`test/logo_test.dart` checks the app). Edit only `brand/quikfly-logo.svg`, then run `node scripts/logo.mjs`. The launcher icons come from the same file: `node scripts/app-icons.mjs`, then `swift tool/ios_icons.swift` in apps/mobile (never edit the icon PNGs by hand; if the logo is redrawn, re-measure the Q's position at the top of that script).
 - Personal data needs a privacy thought: a new table with `user_id` must be added to `exportData()` and handled in `eraseAccounts()` (`services/privacy.ts`), and new kinds of data belong in the notice (`packages/shared/src/privacy.ts`). See [docs/privacy.md](docs/privacy.md).
 - The customer app (QuikFly) never gets partner screens; partner flows live in the Partner app and on the website.
 - Phone checks on the owner's phone: in the Partner app up to 0.1.13 and the first 0.1.14 build, the registration ⋮ menu's only item is "Sign out" and it opens under the finger with no confirmation; don't tap ⋮ there unless signing out is intended. The rebuilt 0.1.14 adds Privacy & data and the notice to that menu and asks before signing out.
