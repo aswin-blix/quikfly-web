@@ -257,6 +257,7 @@ const ledgerLabel = {
   'earning': 'Trip earning',
   'cash': 'Cash your driver collected',
   'fee': 'Daily fee',
+  'penalty': 'Ride cancelled by your driver',
   'payout': 'Paid to your bank',
   'payment': 'You paid QuikFly',
   'adjustment': 'Adjustment',

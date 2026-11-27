@@ -200,6 +200,10 @@ export const SETTING_GROUPS: SettingGroup[] = [
     sub: "Drivers who take rides in the QuikFly Captain app. Everything stays simulated until the first switch is on.",
     fields: [
       { key: "featureLiveDrivers", type: "toggle", label: "Live captains", help: "On: a ride booked from an up-to-date app or the website is offered to real captains who are online. Off: every ride is simulated, as before. Older apps always get simulated rides." },
+      { key: "liveRideAuto", type: "toggle", label: "Autos go to real captains", help: "Off: Auto rides stay simulated even while live captains is on. Use it to start with one ride type." },
+      { key: "liveRideCab", type: "toggle", label: "Cabs go to real captains", help: "Off: cab rides stay simulated even while live captains is on. Bike taxis join when captains can register bikes." },
+      { key: "driverArrivedRadiusKm", type: "number", unit: "km", label: "\"Arrived\" only this near the pickup", help: "A captain further away than this can't mark that they've arrived. 0 turns the check off." },
+      { key: "driverCancelPenaltyPercent", type: "number", unit: "%", label: "Penalty for giving a ride back", help: "Charged to the vehicle's owner when a captain cancels an accepted ride without a valid reason (rider didn't show, rider asked, vehicle problem, can't reach the pickup are valid). Of the fare, never more than ₹100. 0 means no penalty. Declining an offer is always free." },
       { key: "rideSimulateDrivers", type: "toggle", label: "Simulated captain when none is free (demo)", help: "On: if no captain takes a ride, a simulated one steps in and the screen says so. Off: the customer is told no captain is free and nothing is charged." },
       { key: "driverDemoLocation", type: "toggle", label: "Demo locations", help: "Captains may pick a place on the map instead of using GPS, and the app moves itself during a trip. For demos and testing away from the city. Off once captains drive for real." },
       { key: "driverOfferSeconds", type: "number", unit: "sec", label: "Time to answer an offer", help: "After this the ride is offered to the next captain." },

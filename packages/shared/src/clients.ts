@@ -20,3 +20,11 @@ export function hiddenServices(accept: string | null | undefined): ServiceKey[] 
 
 /** What a client is told when it asks for a booking it can't show. */
 export const UPDATE_TO_SEE = "Update QuikFly to see this booking, or open My Trips on the website.";
+
+/**
+ * Live rides (docs/driver-app-plan.md): a client that follows the server's ride phases says so with
+ * `rides=live` in the same `Accept`. Anything else gets a simulated ride, because released apps play a
+ * ride with their own timers and would "complete" a real one after a few seconds.
+ */
+export const LIVE_RIDES_PARAM = "rides=live";
+export const acceptsLiveRides = (accept: string | null | undefined) => /;\s*rides=live\b/i.test(accept ?? "");

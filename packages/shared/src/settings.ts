@@ -210,6 +210,13 @@ export interface Settings {
    * live ride is offered to real captains; off, every ride is simulated as before.
    */
   featureLiveDrivers: boolean;
+  /** Which ride types go to real captains while live captains is on; a type that is off stays simulated. (Bikes join with step 6.) */
+  liveRideAuto: boolean;
+  liveRideCab: boolean;
+  /** A captain can mark "arrived" only within this distance of the pickup (km); 0 = no check. */
+  driverArrivedRadiusKm: number;
+  /** Charged to the vehicle's owner when a captain gives an accepted ride back without a valid reason (% of the fare, capped at DRIVER_RULES.cancelPenaltyCap). 0 = no penalty. */
+  driverCancelPenaltyPercent: number;
   /** When no captain takes a live ride: on, a simulated captain steps in (demo); off, the customer is told none is free. */
   rideSimulateDrivers: boolean;
   /** Captains may pick a demo location on the map instead of GPS (for demos and testing away from the city). */
@@ -349,6 +356,10 @@ export const DEFAULT_SETTINGS: Settings = {
   vendorDailyFee: 50,
   vendorMinPayout: 500,
   featureLiveDrivers: false,
+  liveRideAuto: true,
+  liveRideCab: true,
+  driverArrivedRadiusKm: 0.3,
+  driverCancelPenaltyPercent: 0,
   rideSimulateDrivers: true,
   driverDemoLocation: true,
   driverOfferSeconds: 15,
@@ -491,6 +502,10 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   vendorDailyFee: money(500),
   vendorMinPayout: money(10000),
   featureLiveDrivers: { type: "boolean" },
+  liveRideAuto: { type: "boolean" },
+  liveRideCab: { type: "boolean" },
+  driverArrivedRadiusKm: { type: "number", min: 0, max: 2 },
+  driverCancelPenaltyPercent: { type: "number", min: 0, max: 10, integer: true },
   rideSimulateDrivers: { type: "boolean" },
   driverDemoLocation: { type: "boolean" },
   driverOfferSeconds: { type: "number", min: 10, max: 60, integer: true },

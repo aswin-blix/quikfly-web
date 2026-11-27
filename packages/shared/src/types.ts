@@ -161,6 +161,8 @@ export const NOTIFICATION_KINDS = [
   "parcel.moved", "parcel.ready", "parcel.collected", "parcel.unclaimed",
   "vendor.changes", "vendor.approved", "vendor.rejected", "vendor.active", "vendor.fleet", "vendor.document", "vendor.trip", "vendor.payout",
   "privacy.inactive",
+  // Live rides: what the rider is told about their captain; and (driver.*) what a captain is told.
+  "ride.captain", "driver.offer", "driver.cancelled",
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -174,7 +176,7 @@ export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 export const PUSH_APPS = ["customer", "partner", "captain"] as const;
 export type PushApp = (typeof PUSH_APPS)[number];
 export const PARTNER_NOTIFICATION_PREFIX = "vendor.";
-/** Kinds for QuikFly Captain. None are stored in the inbox yet: ride offers are pushed straight to the phone. */
+/** Kinds for QuikFly Captain: a ride offer, and a ride the rider cancelled. */
 export const CAPTAIN_NOTIFICATION_PREFIX = "driver.";
 /** Which app's phones get a notification kind: its prefix decides, and everything else is the customer app's. */
 export const pushAppForKind = (kind: string): PushApp =>
@@ -206,7 +208,10 @@ export interface SharedRide {
   distanceKm: number;
   durationMin: number;
   etaMin: number;
-  driver: { name: string; rating: number; vehicle: string; plate: string };
+  /** Null while a live ride is still looking for its captain. */
+  driver: { name: string; rating: number; vehicle: string; plate: string } | null;
+  /** A live ride's real progress (RIDE_PHASES); absent or null for a simulated ride, which the page plays itself. */
+  phase?: "searching" | "arriving" | "arrived" | "ontrip" | "done" | "unmatched" | null;
 }
 
 export interface Place {

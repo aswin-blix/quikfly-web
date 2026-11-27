@@ -78,14 +78,15 @@ export function TrackScreen() {
               <div className="flex justify-between text-xs text-subtle mt-2"><span>Driver assigned</span><span>Picked up</span><span>Arrived</span></div>
             </div>
           )}
-          <div className="panel p-4 flex items-center gap-3">
+          {/* A live ride has no driver until a captain accepts (step 4 of docs/driver-app-plan.md shows its real progress). */}
+          {!ride.driver ? <div className="panel p-4 text-sm text-muted">Finding a captain…</div> : <div className="panel p-4 flex items-center gap-3">
             <div className="w-12 h-12 rounded-full btn-gold grid place-items-center text-lg">{ride.driver.name[0]}</div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-strong">{ride.driver.name}</p>
               <p className="text-xs text-muted flex items-center gap-1"><Star size={12} className="fill-gold text-gold" />{ride.driver.rating} · {ride.driver.vehicle}</p>
             </div>
             <p className="font-mono font-bold bg-white text-on-brand border border-line px-2 py-1 rounded text-sm">{ride.driver.plate}</p>
-          </div>
+          </div>}
           <div className="panel p-4 text-sm space-y-2">
             <p className="flex gap-2"><MapPin size={16} className="text-success shrink-0" />{ride.pickup.name}</p>
             <p className="flex gap-2"><Navigation size={16} className="text-gold shrink-0" />{ride.drop.name}</p>

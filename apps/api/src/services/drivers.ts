@@ -135,7 +135,7 @@ export async function setDuty(db: D1Database, c: CaptainContext, body: Record<st
   if (!body.online) {
     const res = await db.prepare("UPDATE driver_state SET online = 0, idle_since = NULL, seen_at = ? WHERE driver_id = ? AND ride_id IS NULL").bind(now, c.id).run();
     if (!res.meta.changes && (await stateOf(db, c.id))?.ride_id) throw conflict("Finish your ride before going offline.");
-    return { duty: await dutyOf(db, c.id) };
+    return { duty: await dutyOf(db, c.id), offer: null, ride: null }; // TODO step 2: captainState() in driver-rides.ts fills offer and ride
   }
   const blocker = captainBlocker(c);
   if (blocker) throw conflict(blocker);
@@ -148,7 +148,7 @@ export async function setDuty(db: D1Database, c: CaptainContext, body: Record<st
            seen_at = excluded.seen_at, idle_since = COALESCE(CASE WHEN driver_state.online = 1 THEN driver_state.idle_since END, excluded.idle_since)`
       : `UPDATE driver_state SET online = 1, seen_at = ?7, idle_since = COALESCE(CASE WHEN online = 1 THEN idle_since END, ?7) WHERE driver_id = ?1`,
   ).bind(c.id, pos?.point.x ?? null, pos?.point.y ?? null, pos?.lat ?? null, pos?.lng ?? null, pos?.demo ? 1 : 0, now).run();
-  return { duty: await dutyOf(db, c.id) };
+  return { duty: await dutyOf(db, c.id), offer: null, ride: null }; // TODO step 2: captainState() in driver-rides.ts fills offer and ride
 }
 
 /**
@@ -163,5 +163,5 @@ export async function ping(db: D1Database, c: CaptainContext, body: Record<strin
       ? "UPDATE driver_state SET x = ?2, y = ?3, lat = ?4, lng = ?5, demo = ?6, seen_at = ?7 WHERE driver_id = ?1 AND online = 1"
       : "UPDATE driver_state SET seen_at = ?7 WHERE driver_id = ?1 AND online = 1",
   ).bind(c.id, pos?.point.x ?? null, pos?.point.y ?? null, pos?.lat ?? null, pos?.lng ?? null, pos?.demo ? 1 : 0, now).run();
-  return { duty: await dutyOf(db, c.id) };
+  return { duty: await dutyOf(db, c.id), offer: null, ride: null }; // TODO step 2: captainState() in driver-rides.ts fills offer and ride
 }
