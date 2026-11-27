@@ -16,6 +16,7 @@ import { adminAlerts, adminPushDevices } from "./alerts";
 import { adminCatalog } from "./catalog";
 import { adminCustomers, adminSos, adminTeam } from "./customers";
 import { adminParcels } from "./parcels";
+import { listCaptains, setCaptainOffline } from "../../services/admin/captains";
 import { adminBookings, adminLicences, adminSupport, adminVendors } from "./operations";
 
 /** Positive page number from `?page=`, default 1. */
@@ -73,6 +74,10 @@ export const admin = new Hono<AppEnv>()
     })]);
     return c.json(after);
   })
+
+  // QuikFly Captain: the readiness counts and every signed-in captain's live status; setting one offline (audited).
+  .get("/captains", requireAdmin("drivers.view"), async (c) => c.json(await listCaptains(c.env.DB)))
+  .post("/captains/:id/offline", requireAdmin("drivers.manage"), async (c) => c.json(await setCaptainOffline(c.env.DB, c.var.admin.id, c.req.param("id"))))
 
   .route("/catalog", adminCatalog)
   .route("/bookings", adminBookings)

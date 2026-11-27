@@ -396,7 +396,17 @@ class _DriversTab extends ConsumerWidget {
                 Text(d.self ? '${d.name} (you)' : d.name, style: const TextStyle(fontWeight: FontWeight.w700)),
                 Text(f.vehicle(d.vehicleId) == null ? 'No vehicle' : VendorRules.formatReg(f.vehicle(d.vehicleId)!.regNumber), style: TextStyle(color: c.fgMuted, fontSize: 12.5)),
                 const SizedBox(height: 6),
-                _chip(context, _driverStatus[d.status] ?? d.status, _statusColor(c, d.status == 'submitted' ? 'submitted' : d.status)),
+                Wrap(spacing: 6, runSpacing: 6, children: [
+                  _chip(context, _driverStatus[d.status] ?? d.status, _statusColor(c, d.status == 'submitted' ? 'submitted' : d.status)),
+                  // Live in QuikFly Captain: who is online or on a ride right now.
+                  if (d.captainStatus != null)
+                    _chip(context, 'Captain: ${captainStatusLabel[d.captainStatus] ?? d.captainStatus}', switch (d.captainStatus) {
+                      'onRide' => c.accent,
+                      'online' => c.success,
+                      'silent' => c.warning,
+                      _ => c.fgMuted,
+                    }),
+                ]),
               ])),
               const Icon(Icons.chevron_right),
             ]),

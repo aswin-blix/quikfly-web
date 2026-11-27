@@ -5,7 +5,7 @@ import { useState } from "react";
 import { BadgeCheck, Ban, CheckCircle2, RotateCcw, ShieldCheck, Undo2, XCircle } from "lucide-react";
 import {
   AUDIT_SLOT_LABEL, FUEL_LABEL, GENDERS, VENDOR_VEHICLE_LABEL, formatLicence, formatRegNumber,
-  type AdminVendorDetail, type Gender, type VendorDriver, type VendorVehicle,
+  type AdminVendorDetail, type Gender, type VendorDriver, type VendorVehicle, CAPTAIN_STATUS_LABEL,
 } from "@quikfly/shared";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PrivatePhoto } from "./PrivatePhoto";
@@ -156,7 +156,7 @@ export function VendorFleet({ detail, onChange }: { detail: AdminVendorDetail; o
                   <Row k="Valid till" v={d.dlValidTill} warn={d.dlValidTill < today} />
                   <Row k="Police verification" v={d.policeVerifiedAt ? dateTime(d.policeVerifiedAt) : "Not confirmed"} />
                   <Row k="Vehicle" v={vehicleReg(d.vehicleId) ?? "None"} />
-                  <Row k="QuikFly Captain" v={d.linked ? "Signed in" : "Not signed in yet"} />
+                  <Row k="QuikFly Captain" v={!d.linked ? "Not signed in yet" : d.captain ? `Signed in · ${CAPTAIN_STATUS_LABEL[d.captain.status]}` : "Signed in"} />
                   <Row k="Gender" v={
                     <select className="field py-1 text-sm w-auto" aria-label={`Gender of ${d.name}`} value={d.gender ?? ""} disabled={busy === k}
                       onChange={(e) => act(k, () => adminApi.vendors.driver(id, d.id, "gender", { gender: e.target.value || null }), "Gender saved.")}>

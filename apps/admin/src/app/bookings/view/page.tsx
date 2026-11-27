@@ -3,7 +3,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, ChevronLeft, StickyNote, XCircle } from "lucide-react";
-import { ADMIN_RULES, COUPON_LINE, PARCEL_STATE_LABEL, TOLLS_MAX, type AdminBookingDetail, type BookingNote, RIDE_CANCEL_REASONS, termLines, tollSettlement } from "@quikfly/shared";
+import { ADMIN_RULES, CAPTAIN_RELEASE_REASONS, COUPON_LINE, PARCEL_STATE_LABEL, TOLLS_MAX, type AdminBookingDetail, type BookingNote, type DispatchStep, RIDE_CANCEL_REASONS, termLines, tollSettlement } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ReasonDialog } from "@/components/ReasonDialog";
 import { Badge, Button, ErrorBox, PageHeader } from "@/components/ui";
@@ -85,6 +85,7 @@ function Detail({ id }: { id: string }) {
 
         <div className="grid gap-3 content-start">
           <PartnerAssign detail={data} canManage={can("bookings.manage")} onChange={setData} />
+          {can("drivers.view") && (data.dispatch?.length ?? 0) > 0 && <DispatchLog steps={data.dispatch!} />}
           <section className="card p-5" aria-labelledby="cust">
             <h2 id="cust" className="font-semibold text-strong mb-2">Customer</h2>
             <p className="text-sm text-fg">{b.customer.name}</p>
@@ -240,4 +241,30 @@ function ViewPage() {
 
 export default function Page() {
   return <RequireAdmin permission="bookings.view"><Suspense><ViewPage /></Suspense></RequireAdmin>;
+}
+
+const OUTCOME_LABEL: Record<string, string> = {
+  pending: "Deciding", accepted: "Accepted", declined: "Declined", timeout: "Didn't answer", withdrawn: "Withdrawn (rider cancelled)", released: "Gave it back",
+};
+
+/** A live ride's dispatch log: who was offered it, in order, how far away, and what each did. Answers "why did nobody come?". */
+function DispatchLog({ steps }: { steps: DispatchStep[] }) {
+  return (
+    <section className="card p-5" aria-labelledby="dispatch">
+      <h2 id="dispatch" className="font-semibold text-strong mb-1">Captains asked</h2>
+      <p className="text-xs text-subtle mb-3">Live ride: the nearest free captain was asked first, one at a time.</p>
+      <ol className="grid gap-2 text-sm">
+        {steps.map((s) => (
+          <li key={s.seq} className="flex justify-between gap-3">
+            <span className="min-w-0">
+              <span className="text-fg">{s.seq}. {s.driverName}</span>
+              <span className="block text-xs text-subtle">{dateTime(s.offeredAt)}{s.km !== null ? ` · ${s.km} km away` : ""}</span>
+              {s.reason && <span className="block text-xs text-muted">Reason: {CAPTAIN_RELEASE_REASONS.find((r) => r.id === s.reason)?.label ?? s.reason}</span>}
+            </span>
+            <span className={s.outcome === "accepted" ? "text-success shrink-0" : "text-muted shrink-0"}>{OUTCOME_LABEL[s.outcome] ?? s.outcome}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
 }

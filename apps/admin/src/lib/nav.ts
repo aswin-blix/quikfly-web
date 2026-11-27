@@ -1,5 +1,5 @@
 // Sidebar entries. Each is shown only to roles with its permission (PERMISSIONS in @quikfly/shared).
-import { Bell, ClipboardList, Handshake, Headphones, IdCard, LayoutDashboard, Map, Package, ScrollText, Settings, Siren, TicketPercent, Users, UsersRound, type LucideIcon } from "lucide-react";
+import { Bell, Car, ClipboardList, Handshake, Headphones, IdCard, LayoutDashboard, Map, Package, ScrollText, Settings, Siren, TicketPercent, Users, UsersRound, type LucideIcon } from "lucide-react";
 import type { Permission } from "@quikfly/shared";
 
 export interface NavItem {
@@ -18,6 +18,7 @@ export const NAV: NavItem[] = [
   { href: "/sos", label: "SOS alerts", icon: Siren, permission: "sos.manage" },
   { href: "/licences", label: "Licence reviews", icon: IdCard, permission: "licences.review" },
   { href: "/vendors", label: "Partners", icon: Handshake, permission: "vendors.review" },
+  { href: "/captains", label: "Captains", icon: Car, permission: "drivers.view" },
   { href: "/support", label: "Support", icon: Headphones, permission: "support.manage" },
   { href: "/catalog", label: "Catalog", icon: Map, permission: "catalog.edit" },
   { href: "/catalog/list?kind=offer", label: "Offers", icon: TicketPercent, permission: "offers.edit" },
@@ -27,7 +28,7 @@ export const NAV: NavItem[] = [
 ];
 
 /** Routes that exist so far; entries for later slices stay hidden until their page ships. */
-export const LIVE_ROUTES = new Set(["/", "/alerts", "/bookings", "/parcels", "/customers", "/sos", "/licences", "/vendors", "/support", "/catalog", "/catalog/list?kind=offer", "/settings", "/team", "/audit"]);
+export const LIVE_ROUTES = new Set(["/", "/alerts", "/bookings", "/parcels", "/customers", "/sos", "/licences", "/vendors", "/captains", "/support", "/catalog", "/catalog/list?kind=offer", "/settings", "/team", "/audit"]);
 
 /** `full` is the path plus query string, so /catalog/list?kind=offer can be told apart from other catalog lists. */
 export function isActive(href: string, path: string, full = path) {

@@ -1,3 +1,4 @@
+import type { CaptainLiveStatus } from "./driver";
 import { gstRate, type Settings } from "./settings";
 import type { Gender, PaymentMethod, ServiceKey } from "./types";
 
@@ -117,6 +118,8 @@ export interface VendorDriver {
   gender: Gender | null;
   /** True once the driver has signed in to QuikFly Captain with this number. */
   linked: boolean;
+  /** Live status in QuikFly Captain (null until they sign in): for the owner's fleet screen and staff. */
+  captain?: { status: CaptainLiveStatus; seenAt: string | null } | null;
 }
 
 /** A partner's vehicles and drivers (GET /vendor/fleet). */

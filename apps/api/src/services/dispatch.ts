@@ -15,7 +15,7 @@ import { ACTIVE, cancelBookingRow } from "./bookings";
 export interface Wake { push: boolean }
 
 interface SearchRow { id: string; user_id: string; data: string; phase_at: string; offer_seq: number; outcome: string | null; expires_at: string | null }
-interface Candidate { id: string; user_id: string; x: number; y: number; idle_since: string | null }
+interface Candidate { id: string; user_id: string; x: number; y: number; idle_since: string | null; km?: number }
 
 /** The next captain to ask: online, heard from recently, free, on the right kind of vehicle, near enough and not asked before. */
 async function nextCaptain(db: D1Database, settings: Settings, ride: LiveRide, riderId: string): Promise<Candidate | null> {
@@ -41,7 +41,7 @@ async function nextCaptain(db: D1Database, settings: Settings, ride: LiveRide, r
     // Equally near (the same distance band): whoever has waited longest goes first.
     .sort((a, b) => Math.floor(a.km / DRIVER_RULES.distanceBandKm) - Math.floor(b.km / DRIVER_RULES.distanceBandKm)
       || (a.c.idle_since ?? "9").localeCompare(b.c.idle_since ?? "9") || a.km - b.km);
-  return near[0]?.c ?? null;
+  return near[0] ? { ...near[0].c, km: Math.round(near[0].km * 10) / 10 } : null;
 }
 
 /** Nobody took it: a simulated captain steps in (setting rideSimulateDrivers), or the rider is told and anything paid goes back. */
@@ -96,11 +96,11 @@ export async function advanceDispatch(db: D1Database, rideId: string, wake?: Wak
   const seq = row.offer_seq + 1;
   const [offered] = await db.batch([
     db.prepare(
-      `INSERT OR IGNORE INTO ride_offers (ride_id, driver_id, seq, offered_at, expires_at)
-       SELECT ?1, ?2, ?3, ?4, ?5
+      `INSERT OR IGNORE INTO ride_offers (ride_id, driver_id, seq, offered_at, expires_at, km)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6
        WHERE EXISTS (SELECT 1 FROM rides WHERE id = ?1 AND offer_seq = ?3 - 1 AND phase = 'searching' AND status <> 'cancelled')
          AND EXISTS (SELECT 1 FROM driver_state WHERE driver_id = ?2 AND online = 1 AND ride_id IS NULL)`,
-    ).bind(rideId, captain.id, seq, new Date(now).toISOString(), new Date(now + settings.driverOfferSeconds * 1000).toISOString()),
+    ).bind(rideId, captain.id, seq, new Date(now).toISOString(), new Date(now + settings.driverOfferSeconds * 1000).toISOString(), captain.km ?? null),
     db.prepare("UPDATE rides SET offer_seq = ?2 WHERE id = ?1 AND offer_seq = ?2 - 1 AND EXISTS (SELECT 1 FROM ride_offers WHERE ride_id = ?1 AND seq = ?2)").bind(rideId, seq),
   ]);
   if (!offered.meta.changes) return;

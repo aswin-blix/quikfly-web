@@ -87,10 +87,16 @@ class VendorDriver {
     this.docsPending = false,
     this.vehicleId,
     this.self = false,
+    this.captainStatus,
+    this.captainSeenAt,
   });
 
   /// submitted · active · rejected · blocked
   final String id, name, phone, dlNumber, dlValidTill, status;
+
+  /// In QuikFly Captain (CaptainLiveStatus: onRide · online · silent · offline); null until they sign in.
+  final String? captainStatus;
+  final String? captainSeenAt;
   final bool hasDlPhoto, docsPending, self;
   final String? policeVerifiedAt, reviewNote, blockedReason, vehicleId;
 
@@ -108,8 +114,13 @@ class VendorDriver {
         docsPending: j['docsPending'] == true,
         vehicleId: j['vehicleId'] as String?,
         self: j['self'] == true,
+        captainStatus: (j['captain'] as Json?)?['status'] as String?,
+        captainSeenAt: (j['captain'] as Json?)?['seenAt'] as String?,
       );
 }
+
+/// CAPTAIN_STATUS_LABEL in packages/shared/src/driver.ts.
+const captainStatusLabel = {'onRide': 'On a ride', 'online': 'Online', 'silent': 'Not heard from', 'offline': 'Offline'};
 
 /// GET /vendor/fleet: every vehicle and driver.
 class VendorFleet {

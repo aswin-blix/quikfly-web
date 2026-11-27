@@ -6,6 +6,7 @@ import { badRequest, conflict, notFound } from "../../lib/errors";
 import { cancelBookingRow, completeBookingRow, refundFor, refundText } from "../bookings";
 import { notify } from "../notifications";
 import { audit, auditStatement, listAudit } from "./audit";
+import { dispatchLog } from "./captains";
 import { isReturn } from "../parcels/legs";
 import { LOCAL_DATE, toAdminBooking, type AdminBookingRow } from "./stats";
 
@@ -105,7 +106,7 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
   const cancellable = active
     && (row.service !== "parcel" || (!!row.parcel_state && PARCEL_CANCELLABLE.includes(row.parcel_state) && !(await isReturn(db, id))));
   const tollEstimate = active && row.service === "rentals" ? await quotedTolls(db, row.quote_id) : null;
-  const [{ results: txns }, history, partner, notes] = await Promise.all([
+  const [{ results: txns }, history, partner, notes, dispatch] = await Promise.all([
     db.prepare("SELECT * FROM wallet_transactions WHERE booking_id = ? ORDER BY created_at").bind(id).all<TxnRow>(),
     listAudit(db, 1, "booking", id),
     row.vendor_vehicle_id
@@ -114,6 +115,7 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
         .first<{ reg_number: string; vendor_name: string; driver_name: string | null }>()
       : Promise.resolve(null),
     listNotes(db, id),
+    row.ride_id ? dispatchLog(db, id) : Promise.resolve([]),
   ]);
   return {
     booking: toAdminBooking(row),
@@ -126,6 +128,7 @@ export async function bookingDetail(db: D1Database, id: string): Promise<AdminBo
       : null,
     tollEstimate,
     notes,
+    dispatch,
   };
 }
 

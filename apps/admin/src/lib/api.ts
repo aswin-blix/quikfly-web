@@ -5,7 +5,7 @@ import type {
   SosAlert, SosStatus, StaffAlerts, SupportStatus, TeamMember,
 } from "@quikfly/shared";
 import type {
-  AdminBooking, AdminBookingDetail, AdminLoginResult, AdminStats, AdminUser, AuditEntry, BookingFilters, CatalogItem, CatalogKind, LicenceQueueStatus,
+  AdminBooking, AdminBookingDetail, AdminCaptains, AdminLoginResult, AdminStats, AdminUser, AuditEntry, BookingFilters, CatalogItem, CatalogKind, LicenceQueueStatus,
   LicenceReview, Page, Settings, AdminVendorDetail, AdminPayout, AssignableVehicle, FleetReviewItem, VehicleDocument, VendorDocument, VendorSection, VendorStatus, VendorSummary,
 } from "@quikfly/shared";
 
@@ -162,6 +162,10 @@ export const adminApi = {
     get: (id: string) => req<AdminSupportTicket>("GET", `/admin/support/${encodeURIComponent(id)}`),
     reply: (id: string, body: string) => req<AdminSupportTicket>("POST", `/admin/support/${encodeURIComponent(id)}/reply`, { body }),
     close: (id: string, note?: string) => req<AdminSupportTicket>("POST", `/admin/support/${encodeURIComponent(id)}/close`, note ? { note } : {}),
+  },
+  captains: {
+    list: () => req<AdminCaptains>("GET", "/admin/captains"),
+    offline: (driverId: string) => req<AdminCaptains>("POST", `/admin/captains/${encodeURIComponent(driverId)}/offline`, {}),
   },
   vendors: {
     list: (status: VendorStatus) => req<VendorSummary[]>("GET", `/admin/vendors${qs({ status })}`),

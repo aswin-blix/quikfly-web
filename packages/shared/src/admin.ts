@@ -1,5 +1,6 @@
 // Admin panel: roles, permissions and the shapes the /admin API returns.
 // The API enforces permissions; the admin app uses the same map to hide what a role can't do.
+import type { CaptainLiveStatus } from "./driver";
 import { PARCEL_STATES, type CounterScope, type Parcel, type ParcelEvent, type ParcelLeg, type ParcelState, type ParcelWeightBand } from "./parcel";
 import type { Booking, BookingStatus, PaymentMethod, ServiceKey, WalletTransaction, LicenceStatus } from "./types";
 
@@ -49,6 +50,10 @@ export const PERMISSIONS = {
    * (nothing in that list is theirs to act on) and not counter (alerts have no operator or city scope).
    */
   "alerts.view": ["owner", "operations"],
+  /** QuikFly Captain: the Captains page (who is online, on a ride, silent) and a live ride's dispatch log. */
+  "drivers.view": ["owner", "operations"],
+  /** Set a captain offline (e.g. an app left open on a parked phone). Blocking stays a partner review (vendors.review). */
+  "drivers.manage": ["owner", "operations"],
 } as const satisfies Record<string, readonly AdminRole[]>;
 export type Permission = keyof typeof PERMISSIONS;
 
@@ -140,6 +145,60 @@ export interface AdminBookingDetail {
   tollEstimate: number | null;
   /** Internal staff notes, oldest first (missing from APIs older than Phase 6). */
   notes?: BookingNote[];
+  /** A live ride's dispatch log: who was offered it, in order, how far away, and what each did. Empty for simulated rides. */
+  dispatch?: DispatchStep[];
+}
+
+/** One offer of a live ride (ride_offers). */
+export interface DispatchStep {
+  seq: number;
+  driverId: string;
+  driverName: string;
+  vendorId: string;
+  offeredAt: string;
+  /** Distance to the pickup when offered (km); null for offers made before it was recorded. */
+  km: number | null;
+  /** pending · accepted · declined · timeout · withdrawn · released */
+  outcome: string;
+  decidedAt: string | null;
+  /** Why the captain gave an accepted ride back (CAPTAIN_RELEASE_REASONS id). */
+  reason: string | null;
+}
+
+/** A captain as staff see them (GET /admin/captains). */
+export interface AdminCaptain {
+  driverId: string;
+  name: string;
+  phone: string;
+  gender: string | null;
+  vendor: { id: string; name: string };
+  vehicle: { id: string; type: string; regNumber: string } | null;
+  status: CaptainLiveStatus;
+  seenAt: string | null;
+  /** On the demo city map; demo = a position the captain picked, not GPS. */
+  position: { x: number; y: number } | null;
+  demo: boolean;
+  rideId: string | null;
+  /** The same words the Captain app shows for why they can't go online; null when nothing stops them. */
+  blocker: string | null;
+  tripsToday: number;
+  earningTodayPaise: number;
+}
+
+/** GET /admin/captains: the readiness card and the list. */
+export interface AdminCaptains {
+  readiness: {
+    /** Approved drivers on a vehicle Captain serves (autos and cars). */
+    approved: number;
+    /** Of those, signed in to QuikFly Captain at least once. */
+    signedIn: number;
+    online: number;
+    onRide: number;
+    liveDrivers: boolean;
+    demoLocation: boolean;
+    simulateDrivers: boolean;
+  };
+  captains: AdminCaptain[];
 }
 
 /** An internal note a staff member attached to a booking. Customers never see these. */
