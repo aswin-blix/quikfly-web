@@ -7,17 +7,24 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
+import android.speech.tts.TextToSpeech
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.util.Locale
 
 /**
- * Adds two things to Flutter's activity: the system's contact picker, for a parcel's receiver
+ * Adds three things to Flutter's activity: the system's contact picker, for a parcel's receiver
  * (lib/core/contact_picker.dart; ACTION_PICK grants read access to the picked number only, so the
- * app asks for no contacts permission), and the notification channel phone pushes arrive on.
+ * app asks for no contacts permission), the notification channel phone pushes arrive on, and the
+ * phone's text-to-speech, which QuikFly Captain uses to read ride offers aloud (lib/captain/speech.dart;
+ * started only when first asked, so the other apps never start it).
  */
 class MainActivity : FlutterActivity() {
     private var pending: MethodChannel.Result? = null
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
+    private var queued: Pair<String, String>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,6 +42,47 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             if (call.method == "pick") pick(result) else result.notImplemented()
         }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SPEECH).setMethodCallHandler { call, result ->
+            if (call.method == "speak") {
+                speak(call.argument<String>("text") ?: "", call.argument<String>("locale") ?: "en-IN")
+                result.success(null)
+            } else {
+                result.notImplemented()
+            }
+        }
+    }
+
+    /** Says [text] in [locale] (falls back to the engine's language when the phone has no voice for it). */
+    private fun speak(text: String, locale: String) {
+        if (text.isBlank()) return
+        if (tts == null) {
+            queued = text to locale
+            tts = TextToSpeech(this) { status ->
+                ttsReady = status == TextToSpeech.SUCCESS
+                val q = queued
+                queued = null
+                if (ttsReady && q != null) say(q.first, q.second)
+            }
+            return
+        }
+        if (!ttsReady) {
+            queued = text to locale
+            return
+        }
+        say(text, locale)
+    }
+
+    private fun say(text: String, locale: String) {
+        val engine = tts ?: return
+        val wanted = Locale.forLanguageTag(locale)
+        if (engine.isLanguageAvailable(wanted) >= TextToSpeech.LANG_AVAILABLE) engine.language = wanted
+        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "offer")
+    }
+
+    override fun onDestroy() {
+        tts?.shutdown()
+        tts = null
+        super.onDestroy()
     }
 
     private fun pick(result: MethodChannel.Result) {
@@ -85,6 +133,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val CHANNEL = "quikfly/contact_picker"
+        private const val SPEECH = "quikfly/speech"
         private const val PICK_CONTACT = 0x5146
         private const val PUSH_CHANNEL = "quikfly_updates"
     }

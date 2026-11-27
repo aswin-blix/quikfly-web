@@ -1,10 +1,12 @@
 // Offers read aloud, so a captain on a bike doesn't have to read the phone: "Auto ride, T. Nagar to
-// Adyar, 6 kilometres, 84 rupees". The phone's own text-to-speech (flutter_tts), free and offline.
+// Adyar, 6 kilometres, 84 rupees". The phone's own text-to-speech, free and offline, through a small
+// channel ("quikfly/speech": Android's TextToSpeech in MainActivity.kt, iOS's AVSpeechSynthesizer in
+// AppDelegate.swift) rather than a plugin, so the iPhone project stays on Swift Package Manager.
 // The voice language is the captain's choice (English, Tamil, Hindi), apart from the app's language.
 // The Tamil and Hindi phrases need a native speaker's check before launch (as all translations do).
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/captain_models.dart';
 
@@ -36,9 +38,9 @@ class VoiceSettings {
   final String lang;
 }
 
-class VoiceNotifier extends Notifier<VoiceSettings> {
-  FlutterTts? _tts;
+const _speech = MethodChannel('quikfly/speech');
 
+class VoiceNotifier extends Notifier<VoiceSettings> {
   @override
   VoiceSettings build() {
     _load();
@@ -62,10 +64,7 @@ class VoiceNotifier extends Notifier<VoiceSettings> {
   Future<void> speak(CaptainOffer o) async {
     if (!state.on) return;
     try {
-      final tts = _tts ??= FlutterTts();
-      await tts.setLanguage(voiceLanguages[state.lang]!.$2);
-      await tts.setSpeechRate(0.5);
-      await tts.speak(offerSentence(o, state.lang));
+      await _speech.invokeMethod('speak', {'text': offerSentence(o, state.lang), 'locale': voiceLanguages[state.lang]!.$2});
     } catch (e) {
       debugPrint('offer voice: $e'); // no engine for that language, or tests: the screen still shows it
     }
