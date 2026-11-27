@@ -106,7 +106,7 @@ Both apps get push notifications through Firebase Cloud Messaging (`lib/state/pu
 `ios/` holds the iPhone project (added 2026-11-27, [docs/ios-app-plan.md](../../docs/ios-app-plan.md)). Until the client signs off there's no Apple Developer Program: builds are installed from the Mac with a free Apple ID, keep opening for **7 days**, and have **no push** (`PushStatus.unavailable`, as on an Android build without `google-services.json`). The Android-only parts (phone-number hint, contact picker) already hide themselves on iOS.
 
 - **Flavors:** the `customer` and `partner` schemes with `Debug/Release/Profile-<flavor>` configurations, bundle ids `com.quikfly.app` / `com.quikfly.partner`, names "QuikFly" / "QuikFly Partner", icons `AppIcon` / `AppIcon-partner`. Made by `tool/ios_flavors.rb` (re-run it if `flutter create` ever regenerates the project): `GEM_HOME=$(brew --prefix cocoapods)/libexec $(brew --prefix ruby)/bin/ruby tool/ios_flavors.rb`.
-- **Icons:** iOS wants one opaque 1024 px icon; `swift tool/ios_icons.swift` renders both from the Android art (`assets/icon/`). Run it after changing an icon.
+- **Icons:** iOS wants one opaque 1024 px icon; `swift tool/ios_icons.swift` makes both from the squares `node scripts/app-icons.mjs` draws (`assets/icon/icon.png`, `icon-partner.png`). Run it after that script.
 - **Plugins** come in through Swift Package Manager (no CocoaPods); `Package.resolved` is committed. Minimum iOS 15.
 - **Info.plist:** camera and photo-library reasons (image_picker uploads) and `NSAllowsLocalNetworking`, so debug builds reach a local API over http. Links open with `launchUrl` only, so no `LSApplicationQueriesSchemes` list is needed.
 - **Simulator** (no Apple ID needed):
@@ -121,13 +121,14 @@ Both apps get push notifications through Firebase Cloud Messaging (`lib/state/pu
 
 ## Icons and fonts
 
-- Launcher icons: the two apps have different icons.
-  - **QuikFly (customer):** an Android Studio Image Asset export, copied as is into `android/app/src/customer/res` (`mipmap-*`: legacy and round icons, adaptive background, foreground and monochrome layers, and `mipmap-anydpi-v26/ic_launcher.xml`). It overrides `src/main` for the customer flavor only. To change it, export a new set and replace those `mipmap-*` folders. The monochrome layer is Android 13+'s themed icon.
-  - **QuikFly Partner:** the owner's export (blue ring and tick on gold; one xxxhdpi-size PNG per layer in `assets/icon/partner/`) rendered into every density by `python -I tool/partner_icon.py assets/icon/partner android/app/src/partner/res` (needs Pillow). It overrides `src/main` for the partner flavor only. To change it, replace the five PNGs and run the script again.
-  - `src/main/res` still holds the old shared icon from `assets/icon/icon.png` via `dart run flutter_launcher_icons`; neither flavor shows it now, and that command rewrites `src/main` only.
+- Launcher icons: both are drawn from the Q of the logo (`brand/quikfly-logo.svg`) by `node scripts/app-icons.mjs` (repo root; needs Chrome or Edge). Never edit the PNGs by hand: change the script and run it again.
+  - **QuikFly (customer):** the gold Q on the navy background (`assets/icon/background.png`, the one hand-made source).
+  - **QuikFly Partner:** the gold Q with a blue tick on a light background, so the two apps are easy to tell apart on one phone.
+  - The script writes every density into `android/app/src/customer/res` and `android/app/src/partner/res` (`mipmap-*`: legacy and round icons, the adaptive background, foreground and monochrome layers, and `mipmap-anydpi-v26/ic_launcher*.xml`; the monochrome layer is Android 13+'s themed icon), the full squares `assets/icon/icon.png` and `icon-partner.png` (the iPhone sources), and the shared icon in `src/main/res`, which neither flavor shows.
+  - Sizes, colours and the Q's position inside the logo are constants at the top of the script. If the logo is redrawn, re-measure `Q` and `Q_OUTLINE` there.
 - Outfit is shipped as static weights (400/500/600/700) cut from the variable font with `fonttools varLib.instancer`, because Flutter doesn't map `FontWeight` onto a variable font's axis.
 - `lib/core/cancellation.dart` is a Dart copy of `packages/shared/src/cancellation.ts`: it previews the refund before cancelling; the API decides the amount.
-- `assets/images/logo.png` is rendered from `brand/quikfly-logo.svg` by `node scripts/logo.mjs` (transparent; Flutter's SVG support drops the logo's glow filters, so the apps use a sharp PNG). `AppLogo` shows it bare in both themes, never on a badge or background (`test/logo_test.dart`).
+- `assets/images/logo.png` is rendered from `brand/quikfly-logo.svg` by `node scripts/logo.mjs` (transparent, 1240×378; Flutter's SVG support drops the logo's glow filters, so the apps use a sharp PNG). `AppLogo` shows it bare in both themes, never on a badge or background (`test/logo_test.dart`).
 
 ## Release (signed APK)
 
