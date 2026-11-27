@@ -1,0 +1,138 @@
+# QuikFly Captain: the driver app
+
+Status: **approved by the owner 2026-11-27; step 0 (this plan) done, step 1 next.** Tick the steps below as they ship and keep the status line current.
+
+## Context
+
+Rides are the one part of QuikFly that is still fully simulated. Today the API picks a driver the instant a ride is booked (a free partner vehicle, else a made-up roster captain), the customer's own phone runs two timers (9 s arriving, 12 s trip) and then calls `POST /bookings/:id/complete` itself. No server code moves a ride forward, the ride PIN is never checked, and a driver record (`vendor_drivers`) is only a row a partner filled in: no account, no sign-in, no duty state, no location.
+
+A real launch can't happen without drivers who accept and run trips. This is the longest build left and needs no paid service, so it is the right thing to build in the dev stage.
+
+**Owner's decisions (2026-11-27):** fleet drivers and self sign-up; city rides only in version 1 (bike taxi, auto, cab; parcels and outstation later); nearest driver first, one at a time; the simulation stays behind a switch so the demo keeps working; be clearly different from competitors.
+
+**Outcome:** a third app, **QuikFly Captain** (`com.quikfly.captain`, flavor `captain`), in the same Flutter project. A driver signs in, goes online, gets ride offers, verifies the rider's PIN, runs the trip and sees what was earned. The customer app, website and shared-trip page show the real driver and real progress. Everything is behind one switch that is off by default.
+
+## What makes it different
+
+Researched: Rapido Captain, Uber Driver, Namma Yatri, and the Motor Vehicle Aggregator Guidelines 2025. These go into version 1, not later:
+
+| QuikFly Captain | Competitors today |
+|---|---|
+| **Every offer shows the full trip and the money split**: pickup, drop, distance, what the customer pays, what the vehicle earns, QuikFly's share. For every driver, always. | Uber shows the destination only above an acceptance threshold; the fare breakdown comes after the trip. |
+| **Offers are read aloud in the driver's language** (Tamil, Hindi, English): "Bike ride, T. Nagar to Adyar, 6 km, ₹84". A rider on a bike shouldn't have to read a phone. | Text and a sound. |
+| **Declining is free.** No acceptance score, no penalty, no hidden ranking. Among drivers about equally near, the one waiting longest is asked first. | Acceptance rates gate features and incentives. |
+| **Owners see their drivers live** in QuikFly Partner: who is online, who is on a trip. | Fleet owners use separate tools, or none. |
+| **Women captains get Bike Pink rides.** A woman rider's women-only ride goes only to verified women captains. | Uber has a preference toggle; not tied to a dedicated ride type. |
+| **Cash is unmistakable**: a full-screen "Collect ₹X" at the end, and a running "cash you hold" total for the day. | A line in a trip summary. |
+| **One captain account for every QuikFly job.** Version 1 is rides; parcels, outstation and chauffeur trips arrive in the same app later. | One app per business, or rides only. |
+
+Later, same theme (noted, not built now): paid waiting after arrival, a "heading home" filter, trip ratings both ways.
+
+## Design
+
+### Identity: a driver is a `vendor_drivers` row linked to a login
+- `vendor_drivers.user_id` (new, nullable). On first sign-in to Captain, the account's phone is matched to an **active** driver record with the same phone and linked (`services/drivers.ts: linkDriver`). One phone, one active driver record: enforced in `addDriver` going forward (today only `dl_number` is unique).
+- `requireDriver` middleware (new, `middleware/driver.ts`): `requireUser`, then the linked driver, its vehicle and vendor; sets `c.var.driver`. Not eligible (blocked, licence expired, no vehicle, vendor not active) is a clear reason in `GET /driver`, never a bare 403.
+- Same OTP login, `sessions` and `users` as the other apps. A person can be a customer and a captain on one number.
+- **Self sign-up (step 6)** reuses the existing partner application (`/vendor/*`, `requireUser` only): an owner-driver is a vendor whose first driver is `self`. Captain shows the same six sections plus the licence, reusing `lib/partner` screens. Staff review it in the existing admin queue. New vehicle type `bike` (`VENDOR_VEHICLE_TYPES`, `vehicleTypeForRide`), since bike taxi is the first service and partners can't register a bike today.
+
+### Location: device GPS, the existing demo map, no paid maps
+- Places are points on a 0–100 demo map of Chennai, not lat/lng. `packages/shared/src/geo.ts` (new) converts both ways with one bounding box (`CITY_BOUNDS`), so a real GPS fix lands on the same map the customer already sees and distances use the existing `RIDE_SIM.kmPerMapUnit`.
+- **Demo location** (setting `driverDemoLocation`, on by default): the captain picks a starting place and the app moves itself along the route during a trip (reusing `vehiclePosition` from `lib/widgets/city_map.dart`), labelled "demo location". This is how it is tested and demoed away from Chennai.
+- **Real GPS** (step 7): `geolocator` with an Android foreground service, permissions only in the captain flavor's manifest, a disclosure screen before the system prompt.
+- Only the **latest** position is stored (`driver_state`), plus where a trip started and ended. No trail.
+
+### Dispatch: nearest first, advanced on read (no always-on server)
+The Worker has no background loop and the cron is one minute, too slow for a 15-second offer. So dispatch moves forward whenever someone asks:
+- The customer polls `GET /rides/:id` every 3 s while searching; an online captain calls `POST /driver/ping` every 15 s idle, every 5 s with an offer or a trip (intervals in `DRIVER_RULES`, shared).
+- Each call runs `advanceDispatch(rideId)` (`services/dispatch.ts`): if the current offer expired or was declined, offer the next captain. It is one conditional `UPDATE … WHERE offer_seq = ?` (the same guard idea as parcels' `move_id`), so two callers can't both advance.
+- Eligible captains: online, seen within `driverStaleSeconds`, no current ride, right vehicle type, within `driverSearchRadiusKm`, not already asked for this ride; women-only rides need `gender = 'female'`. Order: distance in bands, then longest idle.
+- A new offer also sends an FCM push **immediately** (`ctx.waitUntil`, existing `services/push.ts`), so a backgrounded app wakes; the poll is the guarantee.
+- After `driverOfferMaxDrivers` refusals or `driverSearchSeconds`: with `rideSimulateDrivers` on, the ride falls back to today's simulated captain (labelled); off, the customer is told no captain is free and nothing is charged.
+- The cron is only a backstop: marks captains offline when stale, closes searches nobody is polling.
+
+### Trip lifecycle: the server owns the phases
+`rides` gains `dispatch` (`sim` | `live`), `phase` (`searching` → `arriving` → `arrived` → `ontrip` → `done`, or `unmatched`), `phase_at`, `offer_seq`, `otp_tries`. `rides.status` and the `data` JSON keep their meaning, so released apps are unaffected. One transition table in shared `driver.ts` (`RIDE_TRANSITIONS`), one writer (`advanceRide`), like parcels.
+
+| Step | Endpoint | Notes |
+|---|---|---|
+| Accept / decline | `POST /driver/offers/:rideId/accept` · `/decline` | Accept writes the driver card into `data`, sets `vendor_*` ids |
+| Arrived | `POST /driver/rides/:id/arrived` | |
+| Start | `POST /driver/rides/:id/start {otp}` | **Checks the ride PIN** (5 tries, 15-minute lock, as `checkCollectOtp` does) |
+| Complete | `POST /driver/rides/:id/complete` | Calls the existing `completeBookingRow` → `settlementStatements` (vendor trip, ledger, cash row, credits) in one batch |
+| Driver cancels | `POST /driver/rides/:id/cancel {reason}` | Before start only; the ride goes back to searching, the customer pays nothing |
+
+Money does not change shape: the customer still books the ride, is matched, then `POST /bookings` debits the wallet as today. If payment fails the client cancels the ride (as it does now) and the captain is told. The customer's `POST /bookings/:id/complete` is refused for a live ride.
+
+### Old apps stay safe
+Released apps run the timers themselves and would "complete" a live ride after 21 seconds. Live dispatch therefore reaches only clients that declare it, the same way parcels did: `Accept: application/json; services=parcel; rides=live` (`packages/shared/src/clients.ts`, copied in `models.dart`). Anything else gets a simulated ride exactly as today.
+
+### Settings (all in `packages/shared/src/settings.ts`, editable in admin)
+`featureLiveDrivers` (false: the master switch), `rideSimulateDrivers` (true), `driverDemoLocation` (true), `driverOfferSeconds` 15, `driverOfferMaxDrivers` 5, `driverSearchSeconds` 90, `driverSearchRadiusKm` 5, `driverStaleSeconds` 60.
+
+### Notifications and privacy
+- `PUSH_APPS` gains `captain`; kinds start with `driver.` (`driver.offer`, `driver.cancelled`, `driver.account`). `pushNew`'s two-way SQL split and Flutter's `NotificationScope.shows` become a per-app prefix map (both rules change together, per AGENTS.md).
+- `exportData()` / `eraseAccounts()` cover the driver's own link, state and offers. This also closes an existing gap: erasing a partner today leaves `vendor_drivers.name`, `phone` and `dl_number` behind.
+- The privacy notice gains "Captains: your location while you are online" (`packages/shared/src/privacy.ts`). Bumping its version asks every user to agree again: **the owner decides** whether to bump or to show it only in Captain.
+
+## Steps (one PR each; the switch stays off until step 4 is checked)
+
+**0. Plan in the repo.** `docs/driver-app-plan.md` (this plan, with the research table and sources), linked from AGENTS.md and the roadmap.
+
+**1. Foundation (API and shared; nothing visible).**
+Migration `0033_drivers.sql`: `vendor_drivers.user_id`, `gender`; `driver_state` (driver_id PK, online, x, y, lat, lng, demo, seen_at, ride_id); `ride_offers` (ride_id, driver_id, seq, offered_at, expires_at, outcome); the new `rides` columns. Shared `driver.ts` (types, `DRIVER_RULES`, `RIDE_TRANSITIONS`), `geo.ts`, settings, vehicle type `bike`. `requireDriver`, `linkDriver`, `GET /driver`, `POST /driver/duty`, `POST /driver/ping`. Push app and kinds. Privacy export and erase. Staff set a driver's gender in the existing review dialog (`VendorFleet.tsx`).
+
+**2. Dispatch and the trip (API).**
+`services/dispatch.ts`, `services/driver-rides.ts`, `routes/driver.ts`; `bookRide` branches on switch + client declaration; `getRide` returns `live { phase, captain position, etaMin }`; `readShare` reports the real phase; customer complete refused for live rides; fallback; immediate offer push; cron backstop (within the 50-queries budget).
+
+**3. QuikFly Captain, version 1 (Flutter).**
+Flavor `captain` (the 15-place checklist from the exploration: `build.gradle.kts`, `src/captain`, `tool/ios_flavors.rb`, `lib/main_captain.dart`, `lib/captain/`, `NotificationScope.captain`, `scripts/app-icons.mjs` with a third icon, `tool/ios_icons.swift`). Screens: sign-in and "you're not set up yet" reasons; home with the online switch and today's trips, earnings and cash held; the offer sheet (countdown, full trip, money split, read aloud with `flutter_tts`); trip screens (go to pickup with a Maps link, arrived, enter PIN, on trip, collect cash / done); trips list; account. Demo location. `api.dart` + `captain_models.dart`.
+
+**4. Customers see the real trip.**
+Website `RidePanel.tsx`, `TrackScreen.tsx`, `contract.ts` / `http.ts` / `mock.ts`; app `ride_screen.dart`: declare `rides=live`, poll instead of timers when the ride is live, "Finding your captain", re-search when a captain cancels, the no-captain message. Simulated rides keep the timers.
+
+**5. Staff and owners can see it.**
+Admin: a Captains page (online now, on a trip, last seen), a ride's dispatch log (who was asked, what they did) in the booking view, the new settings. Partner app: each driver's live status. Permission `drivers.view` in `PERMISSIONS`.
+
+**6. Self sign-up.** Owner-driver registration inside Captain on the existing `/vendor` application; `bike` vehicles end to end.
+
+**7. Real GPS in the background.** `geolocator`, the Android foreground service and disclosure, iPhone location strings, `driverDemoLocation` off path.
+
+**After sign-off (paid or policy-bound):** real maps and turn-by-turn, WebSockets via Durable Objects instead of polling, real SMS, Play Store listing for Captain, ratings, parcels and outstation jobs.
+
+## Files that matter
+
+- Reuse as is: `services/partner-trips.ts` (`settlementStatements`, `partnerDriverCard`), `services/bookings.ts` (`completeBookingRow`, `cancelBookingRow`), `services/push.ts`, `services/fleet.ts`, `services/admin/fleet.ts` (driver review), `lib/screens/auth/login_screen.dart`, `lib/screens/parcel/polling.dart` (`PollsWhileVisible`), `lib/widgets/city_map.dart`, `lib/widgets/ui.dart`, `lib/partner/*` registration screens.
+- Change: `services/rides.ts` (`bookRide`, `getRide`, `cancelRide`), `services/share.ts`, `scheduled.ts` (`pushNew`, backstop), `packages/shared/src/{types,settings,clients,vendor,privacy,admin}.ts`, `services/privacy.ts`, `apps/web/src/components/RidePanel.tsx`, `apps/mobile/lib/screens/ride/ride_screen.dart`, `lib/state/catalog.dart`, `lib/core/notifications.dart`.
+- New: `packages/shared/src/{driver,geo}.ts`, `apps/api/src/{middleware/driver.ts,routes/driver.ts,services/drivers.ts,services/dispatch.ts,services/driver-rides.ts}`, migration `0033`, `apps/mobile/lib/main_captain.dart`, `lib/captain/`, `lib/api/captain_models.dart`.
+- Every step follows rule 1 (one contract, four implementations): shared types → API → web contract/http/mock → smoke → `apps/api/README.md` → `models.dart` / `api.dart` + contract test → docs.
+
+## Limits to know
+
+- **Polling costs requests.** One captain online for 8 hours is about 2,000–5,000 requests a day; the free plan allows 100,000 a day in total. Fine for a pilot of about ten captains; beyond that the $5 plan (after sign-off) or WebSockets.
+- **An offer can take up to 15 s to appear** if the push doesn't arrive and the app is idle-polling. Acceptable for a pilot; WebSockets remove it.
+- **Without step 7 the app must stay open** to keep a captain online.
+- **Scheduled rides** start dispatch when the rider taps Start (as today), not automatically.
+
+## Verification
+
+- **Each API step:** `npm run typecheck`; new sections in `apps/api/scripts/smoke.mjs` and `smoke-admin.mjs` on the local API: link a driver, go online, book a live ride with `rides=live`, first captain declines, second accepts, wrong PIN refused and locked, start, complete, vendor trip and ledger rows written once, customer complete refused, driver cancel re-searches, nobody online falls back (switch on) or reports no captain (switch off), an old client (no declaration) still gets a simulated ride. Query counts stay under 50 per request.
+- **Captain app:** `flutter analyze`, `flutter test` with a new `captain_routes_test.dart`, extended notification scope and target tests, and contract tests for the driver endpoints against the local API.
+- **End to end, locally:** API on :8787 with `featureLiveDrivers` on; Captain on the phone (or two emulators) with demo location; the customer on the website at 390 px in light and dark. Book, accept, PIN, complete; watch the website follow the real phases and the shared-trip page agree; check the Partner app's earnings and the admin dispatch log.
+- **Production:** nothing changes until the owner turns `featureLiveDrivers` on; the smoke run confirms simulated rides behave exactly as before.
+
+## Open questions for the owner
+
+1. **The privacy notice.** Add the captains' location section and bump the notice version (every user is asked to agree again), or show the location notice only inside Captain?
+2. **Name and package id.** "QuikFly Captain", `com.quikfly.captain`. The id can't change once the app is on the Play Store; it can until then.
+3. **Who is paid.** A trip's earning goes to the vehicle's owner (the partner), as today; a fleet driver sees trips, fares and cash held, not a payout. Owner-drivers are their own partner. Say if drivers should have their own earnings ledger.
+
+## Sources (research, 2026-11-27)
+
+- Rapido: [subscription instead of commission for autos and cabs](https://yourstory.com/2024/02/rapido-saas-model-auto-drivers-lifetime-zero-commission), [Sacra on the model](https://sacra.com/chat/h/bd21c905-b859-4e73-9f3c-7ed8a7c8a063/)
+- Uber India: [destination shown before accepting](https://www.deccanherald.com/business/no-more-cancellations-uber-drivers-can-now-see-destinations-before-accepting-rides-1110810.html), [driver features: selfie check, earnings breakdown](https://www.uber.com/en-IN/newsroom/uber-features-to-make-driving-safer-easier-and-fairer), [women rider preference, helmet selfie](https://www.businesstoday.in/technology/news/story/women-rider-preference-helmet-selfies-and-more-uber-rolls-out-new-features-in-india-453851-2024-11-15)
+- Namma Yatri: [zero commission, daily fee](https://www.deccanherald.com/india/karnataka/bengaluru/namma-yatri-to-charge-auto-drivers-subscription-fees-from-september-1-2660636), [Rest of World on the model](https://restofworld.org/2025/uber-ola-copy-india-zero-commission-ride-hailing-app/)
+- Motor Vehicle Aggregator Guidelines 2025: [MoRTH PDF](https://morth.gov.in/sites/default/files/circulars_document/MV-Aggregators-Guidelines-2025 - English and Hindi.pdf), [SCC Online summary](https://www.scconline.com/blog/post/2025/07/04/motor-vehicle-aggregators-guidelines-pricing-safety-morth-india-2025/) (police verification, 40-hour induction, 80% of the fare to a driver with their own vehicle, ₹5 lakh health and ₹10 lakh term cover)
+- Background location on Android: [geolocator notes](https://www.github.com/Baseflow/flutter-geolocator/issues/1395), [ArcGIS on foreground services](https://developers.arcgis.com/flutter/device-location/background-location-tracking/)
+
+These are press and vendor pages read once; check the current app or the official text before quoting any figure to a driver or a regulator.
