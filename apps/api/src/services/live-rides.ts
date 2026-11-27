@@ -33,6 +33,8 @@ export const minutesBetween = (a: MapPoint, b: MapPoint, service: "bike" | "car"
 
 /** What the rider's screen needs about a live ride: the phase, where the captain is, and how long. */
 export async function liveView(db: D1Database, row: LiveRideRow, ride: LiveRide): Promise<RideLive> {
+  // Nobody took it: the refund cancels the ride too, but "no captain" is what the rider needs to read.
+  if (row.phase === "unmatched") return { phase: "unmatched", captain: null, etaMin: null };
   if (row.status === "cancelled") return { phase: "cancelled", captain: null, etaMin: null };
   const phase = row.phase ?? "searching";
   if (!row.vendor_driver_id || !["arriving", "arrived", "ontrip"].includes(phase)) return { phase, captain: null, etaMin: null };
@@ -65,4 +67,13 @@ export async function closeLiveRide(db: D1Database, rideId: string): Promise<voi
     const ride = parseRide(row.data);
     await notify(db, told, { kind: "driver.cancelled", ref: rideId, title: "Ride cancelled", body: `The rider cancelled ${ride.pickup.name} to ${ride.drop.name}. You're free for the next ride.` });
   }
+}
+
+/** A live ride whose booking completed (the captain at the drop, or staff): the ride is done and its captain free. */
+export async function finishLiveRide(db: D1Database, rideId: string): Promise<void> {
+  const now = new Date().toISOString();
+  await db.batch([
+    db.prepare("UPDATE rides SET phase = 'done', phase_at = ?2 WHERE id = ?1 AND dispatch = 'live' AND phase IS NOT 'done'").bind(rideId, now),
+    db.prepare("UPDATE driver_state SET ride_id = NULL, idle_since = ?2 WHERE ride_id = ?1").bind(rideId, now),
+  ]);
 }

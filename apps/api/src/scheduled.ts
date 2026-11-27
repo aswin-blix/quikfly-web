@@ -12,6 +12,20 @@ import { isWebToken, sendWebPush, vapidKeys, type WebPushMessage } from "./servi
 import { getSettings } from "./services/settings";
 import { privacySweep } from "./services/privacy";
 import { runSimulatedCarrier } from "./services/parcels/carriers";
+import { advanceSearching } from "./services/dispatch";
+
+/** Live-ride searches the cron moves forward each minute, for riders who stopped polling (a few queries each). */
+const CRON_SEARCH_ADVANCES = 2;
+
+/**
+ * Live captains (docs/driver-app-plan.md), as a backstop to the heartbeats: captains silent for
+ * driverStaleSeconds and not on a ride go offline, and the oldest searches nobody is polling move on.
+ */
+async function captainBackstop(db: D1Database) {
+  const stale = new Date(Date.now() - (await getSettings(db)).driverStaleSeconds * 1000).toISOString();
+  await db.prepare("UPDATE driver_state SET online = 0, idle_since = NULL WHERE online = 1 AND ride_id IS NULL AND (seen_at IS NULL OR seen_at < ?)").bind(stale).run();
+  await advanceSearching(db, CRON_SEARCH_ADVANCES);
+}
 
 /** One reminder per scheduled ride, when "Start ride" opens (startWindowMinutes before pickup). */
 async function rideReminders(db: D1Database) {
@@ -112,7 +126,7 @@ async function deliver(ch: Channels, token: string, msg: WebPushMessage, data: R
  * tokens. A row counts as pushed once any device took it; a failed send is retried next minute until
  * the row is older than PUSH_MAX_AGE_MINUTES. A phone gets only its app's kinds (pushAppForKind in the
  * shared package: partner updates to QuikFly Partner, captain ones to QuikFly Captain, the rest to
- * QuikFly); a browser (app NULL) gets every kind.
+ * QuikFly); a browser (app NULL) gets every kind except a captain's.
  */
 async function pushNew(env: Env, ch: Channels) {
   const db = env.DB;
@@ -120,7 +134,8 @@ async function pushNew(env: Env, ch: Channels) {
   const { results: rows } = await db.prepare(
     `SELECT n.id, n.user_id, n.kind, n.title, n.body, n.booking_id, d.token
      FROM notifications n JOIN push_devices d ON d.user_id = n.user_id
-       AND (d.app IS NULL OR d.app = CASE
+       -- A browser (app NULL) gets every kind but a captain's: those only make sense in QuikFly Captain.
+       AND ((d.app IS NULL AND substr(n.kind, 1, length(?4)) <> ?4) OR d.app = CASE
              WHEN substr(n.kind, 1, length(?1)) = ?1 THEN 'partner'
              WHEN substr(n.kind, 1, length(?4)) = ?4 THEN 'captain'
              ELSE 'customer' END)
@@ -178,6 +193,15 @@ async function pushStaff(env: Env, ch: Channels) {
   ]);
 }
 
+/**
+ * Pushes waiting notifications now instead of at the next minute (a ride offer has seconds to answer).
+ * Routes call it through executionCtx.waitUntil, so the response doesn't wait for it.
+ */
+export async function pushSoon(env: Env) {
+  const channels = pushChannels(env);
+  if (channels) await pushNew(env, channels);
+}
+
 export async function runScheduled(env: Env) {
   await rideReminders(env.DB);
   await expireCredits(env.DB);
@@ -185,6 +209,7 @@ export async function runScheduled(env: Env) {
   await privacySweep(env.DB, env.DOCS);
   // A failure in the demo's simulation mustn't hold up everyone's notifications.
   await runSimulatedCarrier(env.DB).catch((e) => console.error("parcel simulation", e));
+  await captainBackstop(env.DB).catch((e) => console.error("captain backstop", e));
   const channels = pushChannels(env);
   if (!channels) return; // no push configured: the inboxes still work
   await pushNew(env, channels);

@@ -4,10 +4,12 @@
 // docs/driver-app-plan.md). Staff review of drivers stays in services/admin/fleet.ts.
 import {
   NOT_A_CAPTAIN, formatRegNumber, onMap, toMapPoint, vehicleTypeForCaptain,
-  type CaptainDuty, type CaptainProfile, type CaptainState, type Gender, type MapPoint, type User, type VendorVehicleType,
+  type CaptainDuty, type CaptainProfile, type Gender, type MapPoint, type User, type VendorVehicleType,
 } from "@quikfly/shared";
 import { badRequest, conflict, forbidden } from "../lib/errors";
 import { getSettings } from "./settings";
+
+
 
 /** A captain as the API sees them: the driver record, the vehicle they are on and their fleet. */
 export interface CaptainContext {
@@ -82,7 +84,7 @@ const stateOf = (db: D1Database, driverId: string) =>
  * A captain's duty as stored. One who went silent (no ping for driverStaleSeconds) and isn't on a ride is
  * set offline here, so the app never shows "online" for someone dispatch would skip.
  */
-async function dutyOf(db: D1Database, driverId: string): Promise<CaptainDuty> {
+export async function dutyOf(db: D1Database, driverId: string): Promise<CaptainDuty> {
   const s = await stateOf(db, driverId);
   if (s?.online && !s.ride_id && s.seen_at) {
     const stale = (await getSettings(db)).driverStaleSeconds;
@@ -129,13 +131,13 @@ async function readPosition(db: D1Database, body: Record<string, unknown>): Prom
 }
 
 /** Goes online (needs nothing stopping them and a position) or offline (not during a ride). */
-export async function setDuty(db: D1Database, c: CaptainContext, body: Record<string, unknown>): Promise<CaptainState> {
+export async function setDuty(db: D1Database, c: CaptainContext, body: Record<string, unknown>): Promise<void> {
   if (typeof body.online !== "boolean") throw badRequest('"online" must be true or false.');
   const now = new Date().toISOString();
   if (!body.online) {
     const res = await db.prepare("UPDATE driver_state SET online = 0, idle_since = NULL, seen_at = ? WHERE driver_id = ? AND ride_id IS NULL").bind(now, c.id).run();
     if (!res.meta.changes && (await stateOf(db, c.id))?.ride_id) throw conflict("Finish your ride before going offline.");
-    return { duty: await dutyOf(db, c.id), offer: null, ride: null }; // TODO step 2: captainState() in driver-rides.ts fills offer and ride
+    return;
   }
   const blocker = captainBlocker(c);
   if (blocker) throw conflict(blocker);
@@ -148,14 +150,13 @@ export async function setDuty(db: D1Database, c: CaptainContext, body: Record<st
            seen_at = excluded.seen_at, idle_since = COALESCE(CASE WHEN driver_state.online = 1 THEN driver_state.idle_since END, excluded.idle_since)`
       : `UPDATE driver_state SET online = 1, seen_at = ?7, idle_since = COALESCE(CASE WHEN online = 1 THEN idle_since END, ?7) WHERE driver_id = ?1`,
   ).bind(c.id, pos?.point.x ?? null, pos?.point.y ?? null, pos?.lat ?? null, pos?.lng ?? null, pos?.demo ? 1 : 0, now).run();
-  return { duty: await dutyOf(db, c.id), offer: null, ride: null }; // TODO step 2: captainState() in driver-rides.ts fills offer and ride
 }
 
 /**
- * The captain's heartbeat while online: records where they are and that the app is alive, and returns
- * their state. Offline, it changes nothing. A bad or outside-the-city fix keeps the last good position.
+ * The captain's heartbeat while online: records where they are and that the app is alive (the route then
+ * returns captainState). Offline, it changes nothing. A bad or outside-the-city fix keeps the last good position.
  */
-export async function ping(db: D1Database, c: CaptainContext, body: Record<string, unknown>): Promise<CaptainState> {
+export async function ping(db: D1Database, c: CaptainContext, body: Record<string, unknown>): Promise<void> {
   const pos = await readPosition(db, body).catch(() => null);
   const now = new Date().toISOString();
   await db.prepare(
@@ -163,5 +164,4 @@ export async function ping(db: D1Database, c: CaptainContext, body: Record<strin
       ? "UPDATE driver_state SET x = ?2, y = ?3, lat = ?4, lng = ?5, demo = ?6, seen_at = ?7 WHERE driver_id = ?1 AND online = 1"
       : "UPDATE driver_state SET seen_at = ?7 WHERE driver_id = ?1 AND online = 1",
   ).bind(c.id, pos?.point.x ?? null, pos?.point.y ?? null, pos?.lat ?? null, pos?.lng ?? null, pos?.demo ? 1 : 0, now).run();
-  return { duty: await dutyOf(db, c.id), offer: null, ride: null }; // TODO step 2: captainState() in driver-rides.ts fills offer and ride
 }

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { PAYMENT_METHODS } from "@quikfly/shared";
+import { PAYMENT_METHODS, acceptsLiveRides } from "@quikfly/shared";
 import type { AppEnv } from "../env";
 import { badRequest } from "../lib/errors";
 import { jsonBody, matches, oneOf, optStr, str } from "../lib/validate";
@@ -7,6 +7,8 @@ import { bearerToken, requireUser } from "../middleware/auth";
 import { userForToken } from "../services/auth";
 import { bookRide, cancelRide, getRide, quoteRides, startRide } from "../services/rides";
 import { shareRide } from "../services/share";
+import { advanceDispatch } from "../services/dispatch";
+import { newWake, wakeUp } from "../lib/wake";
 
 const LOCAL_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 /** Optional pickup time for a ride booked ahead: local "YYYY-MM-DDTHH:mm", India. */
@@ -31,7 +33,14 @@ export const rides = new Hono<AppEnv>()
     const user = token ? await userForToken(c.env.DB, token) : null;
     return c.json(await quoteRides(c.env.DB, oneOf(body, "service", ["bike", "car"] as const), str(body, "pickupId"), str(body, "dropId"), scheduledFor(body), stopIds(body), user?.id));
   })
-  .get("/:id", requireUser, async (c) => c.json(await getRide(c.env.DB, c.var.user.id, c.req.param("id"))))
+  // A live ride (client declares `rides=live`) moves its search forward on each poll and carries `live`.
+  .get("/:id", requireUser, async (c) => {
+    const wake = newWake();
+    const ride = await getRide(c.env.DB, c.var.user.id, c.req.param("id"), acceptsLiveRides(c.req.header("Accept")), wake);
+    wakeUp(c, wake);
+    c.header("Cache-Control", "no-store");
+    return c.json(ride);
+  })
   // Scheduled rides: start near pickup time (driver assigned, live trip begins).
   .post("/:id/start", requireUser, async (c) => c.json(await startRide(c.env.DB, c.var.user.id, c.req.param("id"))))
   .post("/", requireUser, async (c) => {
@@ -43,7 +52,13 @@ export const rides = new Hono<AppEnv>()
       payment: oneOf(body, "payment", PAYMENT_METHODS),
       scheduledFor: scheduledFor(body),
       stopIds: stopIds(body),
-    });
+    }, acceptsLiveRides(c.req.header("Accept")));
+    // A live ride is offered to the nearest captain straight away, not at the rider's first poll.
+    if (ride.driver === null) {
+      const wake = newWake();
+      await advanceDispatch(c.env.DB, ride.id, wake);
+      wakeUp(c, wake);
+    }
     return c.json(ride, 201);
   })
   .post("/:id/cancel", requireUser, async (c) => {
