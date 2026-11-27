@@ -1,6 +1,6 @@
 # iPhone apps: plan
 
-Status: **step 1 in progress (2026-11-27):** the iOS project, flavors, icons and Info.plist are done and both apps run in the iPhone Simulator; installing on the owner's iPhone waits for their Apple ID in Xcode and Developer Mode on the phone. How to build: [apps/mobile/README.md](../apps/mobile/README.md) → iPhone.
+Status: **step 1 done (2026-11-27):** the iOS project, flavors, icons and Info.plist are in `main` (#161); both apps ran in the iPhone Simulator and are installed on the owner's iPhone (0.1.19, release builds against production, free personal team; they stop opening around 2026-12-04). Waiting for the owner's hands-on findings (step 3). Step 2 (Partner on iPhone) is largely covered: it builds, installs and opens; its screens get checked with step 3. How to build: [apps/mobile/README.md](../apps/mobile/README.md) → iPhone.
 
 Both QuikFly apps are Android only today: `apps/mobile` has no `ios/` folder, and every release (up to 0.1.19) is an APK. On an iPhone, customers can already use the website (https://quikfly.in in Safari, Share → Add to Home Screen). This plan adds real iPhone builds of the same Flutter apps, without paying for anything before the client signs off.
 

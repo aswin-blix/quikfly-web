@@ -293,7 +293,7 @@ function AppDownload() {
         <div className="p-8 sm:p-12">
           <Smartphone className="text-gold" size={30} />
           <h2 className="font-display text-3xl sm:text-4xl mt-4">Your next trip is one tap away</h2>
-          <p className="text-muted mt-3">Live tracking, instant OTP, wallet cashback and app-only offers. The Android app is ready to try; the iPhone app comes later.</p>
+          <p className="text-muted mt-3">Live tracking, instant OTP, wallet cashback and app-only offers. The Android app is ready to try. On an iPhone, use this website in Safari (Share → Add to Home Screen) until the iPhone app arrives.</p>
           <ul className="mt-6 space-y-2 text-sm text-soft">
             {[[Timer, "Rides in under 5 minutes"], [Wallet, "QuikFly wallet with instant refunds"], [Headphones, "In-app 24×7 support"]].map(([I, t]) => {
               const Icon = I as typeof Timer;

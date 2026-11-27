@@ -16,7 +16,7 @@ export const ANDROID_APP = {
   downloadUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk",
   /** Release page: install steps, the file for older (32-bit) phones, checksums. */
   releaseUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest",
-  size: "about 22 MB",
+  size: "about 23 MB", // QuikFly-arm64.apk 0.1.19: 23.1 MB
   minAndroid: "Android 7.0+",
 } as const;
 
