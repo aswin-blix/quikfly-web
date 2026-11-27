@@ -2,14 +2,15 @@
 
 (iPhone test builds from the same project: see **iPhone** below.)
 
-Two Android apps from one Flutter project, on the same REST API as the website (`apps/api`), shared as signed APKs on GitHub Releases (no Play Store until the client signs off):
+Three Android apps from one Flutter project, on the same REST API as the website (`apps/api`), shared as signed APKs on GitHub Releases (no Play Store until the client signs off):
 
 | App | Flavor | Package id | Entry point |
 |---|---|---|---|
 | **QuikFly** (customers, seven services; parcels show only while switched on) | `customer` (default) | `com.quikfly.app` | `lib/main.dart` |
 | **QuikFly Partner** (vehicle owners: registration, onboarding, vehicles, drivers, renewals, trips, revenue dashboard, statements and payouts) | `partner` | `com.quikfly.partner` | `lib/main_partner.dart`, screens in `lib/partner/` |
+| **QuikFly Captain** (drivers: go online, ride offers read aloud, PIN start, cash at the end, trips; [docs/driver-app-plan.md](../../docs/driver-app-plan.md)) | `captain` | `com.quikfly.captain` | `lib/main_captain.dart`, screens in `lib/captain/` |
 
-They share `lib/api`, `lib/theme`, `lib/widgets` and the login screen. On Android the login screen first opens Google's "Choose a phone number" sheet (`lib/core/phone_hint.dart`, `smart_auth` plugin, free via Play services); elsewhere the number is typed. `pubspec.yaml` sets `default-flavor: customer`, so plain `flutter run` / `flutter build apk` build the customer app; add `--flavor partner -t lib/main_partner.dart` for the Partner app.
+They share `lib/api`, `lib/theme`, `lib/widgets` and the login screen. On Android the login screen first opens Google's "Choose a phone number" sheet (`lib/core/phone_hint.dart`, `smart_auth` plugin, free via Play services); elsewhere the number is typed. `pubspec.yaml` sets `default-flavor: customer`, so plain `flutter run` / `flutter build apk` build the customer app; add `--flavor partner -t lib/main_partner.dart` for the Partner app and `--flavor captain -t lib/main_captain.dart` for Captain.
 
 Flutter 3.47 · Dart 3.13 (releases are built with **Flutter 3.47.9**; on a Mac it's pinned with `fvm global 3.47.9`. 3.50 deprecates importing `package:flutter/material.dart`: upgrade in its own PR after sign-off, decisions.md 2026-11-26) · Riverpod 3 · go_router · Dio · flutter_secure_storage · smart_auth (phone-number hint)
 
@@ -22,6 +23,7 @@ flutter run                                                      # device/emulat
 flutter run --dart-define=API_URL=http://10.0.2.2:8787/v1        # emulator → local API (npm run dev:api)
 flutter run --dart-define=API_URL=http://<PC LAN IP>:8787/v1     # phone on the same Wi-Fi → local API (start wrangler with --ip 0.0.0.0)
 flutter run --flavor partner -t lib/main_partner.dart --dart-define=API_URL=http://10.0.2.2:8787/v1   # the Partner app
+flutter run --flavor captain -t lib/main_captain.dart --dart-define=API_URL=http://10.0.2.2:8787/v1   # QuikFly Captain
 ```
 
 Quick UI checks without an emulator: build the web target and open it in Chrome at phone width (the web build is for development only, not shipped):
@@ -95,7 +97,7 @@ assets/                fonts (Outfit static weights, Archivo Black), images/ (lo
 
 Both apps get push notifications through Firebase Cloud Messaging (`lib/state/push.dart`); the API's cron sends every new inbox row to the account's registered phones.
 
-- **Switching it on (owner):** in the Firebase project, add two Android apps (`com.quikfly.app` and `com.quikfly.partner`), download each one's `google-services.json`, and put them at `android/app/src/customer/google-services.json` and `android/app/src/partner/google-services.json`. They are git-ignored (this repo is public), so keep a copy next to the upload key. With both files present the Google services plugin is applied (`android/app/build.gradle.kts`); without them the apps build exactly as before and push stays off: no prompt, no registration. The API side needs `FCM_SERVICE_ACCOUNT` (docs/operations.md → Push notifications).
+- **Switching it on (owner):** in the Firebase project, add two Android apps (`com.quikfly.app` and `com.quikfly.partner`), download each one's `google-services.json`, and put them at `android/app/src/customer/google-services.json` and `android/app/src/partner/google-services.json`. They are git-ignored (this repo is public), so keep a copy next to the upload key. With both files present the Google services plugin is applied (`android/app/build.gradle.kts`); without them the apps build exactly as before and push stays off: no prompt, no registration. **QuikFly Captain** needs a third Android app in the same Firebase project (`com.quikfly.captain`) and its file at `android/app/src/captain/google-services.json`; until then its Firebase step is skipped, so it builds and runs with push off (offers still arrive through its heartbeat). The API side needs `FCM_SERVICE_ACCOUNT` (docs/operations.md → Push notifications).
 - **Asking:** never at launch. A card offers it in the inbox ("Get these on your phone"), after a confirmed booking ("Want updates on this trip?") and on a live partner's home ("Hear about new trips"); "Turn on" shows Android 13's own prompt. "Not now" hides the card; the inbox keeps a **Notifications on this phone** switch, which also turns them off inside QuikFly without touching Android's settings, and says how to unblock them in Android settings.
 - **What happens:** after sign-in the phone's FCM token is registered (`POST /me/push-devices`, platform `android`, `app` = this app's `NotificationScope`, so QuikFly Partner gets only partner updates and QuikFly only the rest), and again when Firebase refreshes it; signing out removes it first, while the session is still valid. In the background or when closed, Android shows the notification itself on the `quikfly_updates` channel (created in `MainActivity.kt`) with the bell icon `res/drawable/ic_stat_quikfly.xml` and the gold accent. In the foreground a banner shows with **View** and the inbox refreshes. A tap opens the same screen as the inbox row (`core/notifications.dart`; QuikFly Partner always opens its inbox).
 - **Token API:** `getToken`, `onTokenRefresh` and `deleteToken` are deprecated in firebase_messaging 17 in favour of `register()`/`onRegistered`, which hand out a Firebase Installation ID. The API sends with FCM HTTP v1's `message.token` (the registration token), so the app keeps the token calls until the sender changes.
@@ -105,8 +107,8 @@ Both apps get push notifications through Firebase Cloud Messaging (`lib/state/pu
 
 `ios/` holds the iPhone project (added 2026-11-27, [docs/ios-app-plan.md](../../docs/ios-app-plan.md)). Until the client signs off there's no Apple Developer Program: builds are installed from the Mac with a free Apple ID, keep opening for **7 days**, and have **no push** (`PushStatus.unavailable`, as on an Android build without `google-services.json`). The Android-only parts (phone-number hint, contact picker) already hide themselves on iOS.
 
-- **Flavors:** the `customer` and `partner` schemes with `Debug/Release/Profile-<flavor>` configurations, bundle ids `com.quikfly.app` / `com.quikfly.partner`, names "QuikFly" / "QuikFly Partner", icons `AppIcon` / `AppIcon-partner`. Made by `tool/ios_flavors.rb` (re-run it if `flutter create` ever regenerates the project): `GEM_HOME=$(brew --prefix cocoapods)/libexec $(brew --prefix ruby)/bin/ruby tool/ios_flavors.rb`.
-- **Icons:** iOS wants one opaque 1024 px icon; `swift tool/ios_icons.swift` makes both from the squares `node scripts/app-icons.mjs` draws (`assets/icon/icon.png`, `icon-partner.png`). Run it after that script.
+- **Flavors:** the `customer`, `partner` and `captain` schemes with `Debug/Release/Profile-<flavor>` configurations, bundle ids `com.quikfly.app` / `com.quikfly.partner` / `com.quikfly.captain`, names "QuikFly" / "QuikFly Partner" / "QuikFly Captain", icons `AppIcon` / `AppIcon-partner` / `AppIcon-captain`. Made by `tool/ios_flavors.rb` (re-run it if `flutter create` ever regenerates the project): `GEM_HOME=$(brew --prefix cocoapods)/libexec $(brew --prefix ruby)/bin/ruby tool/ios_flavors.rb`.
+- **Icons:** iOS wants one opaque 1024 px icon; `swift tool/ios_icons.swift` makes all three from the squares `node scripts/app-icons.mjs` draws (`assets/icon/icon.png`, `icon-partner.png`, `icon-captain.png`). Run it after that script.
 - **Plugins** come in through Swift Package Manager (no CocoaPods); `Package.resolved` is committed. Minimum iOS 15.
 - **Info.plist:** camera and photo-library reasons (image_picker uploads) and `NSAllowsLocalNetworking`, so debug builds reach a local API over http. Links open with `launchUrl` only, so no `LSApplicationQueriesSchemes` list is needed.
 - **Simulator** (no Apple ID needed):
@@ -119,12 +121,23 @@ Both apps get push notifications through Firebase Cloud Messaging (`lib/state/pu
 - **Your own iPhone** (free Apple ID): sign in once in Xcode → Settings → Accounts (the owner does this; agents never type the Apple ID password). On the iPhone turn on Settings → Privacy & Security → **Developer Mode** (it restarts) and trust the Mac. Then, with the phone unlocked and connected: `flutter run --release --flavor customer -d <iPhone id>` (`flutter devices` lists it); Flutter picks the signing team from Xcode. The first time, trust the developer on the phone: Settings → General → VPN & Device Management. Reinstall the same way after 7 days. A free Apple ID may find `com.quikfly.app` already registered by someone else; then build with another bundle id for testing only.
 - `GoogleService-Info.plist` (Firebase for iOS, after sign-off) is git-ignored like `google-services.json`.
 
+## QuikFly Captain (version 1)
+
+`lib/captain/` (state in `captain_state.dart`, screens next to it), on the `/driver` endpoints (apps/api/README.md → Captain).
+- **Who can sign in:** a driver a partner added in QuikFly Partner, with the same mobile number. Anyone else sees "Not set up as a captain yet" and why (the API's words).
+- **Online:** only while the app is on screen (background location is step 7). A heartbeat (`POST /driver/ping`) every 15 s, every 5 s with an offer or a ride (`rules.pingIdleSeconds` / `pingBusySeconds` from the API); a push for an offer asks at once. Positions are **demo locations**: the captain picks a place to start from, and on a trip the app moves itself `demoStepUnits` (about 1 km) per heartbeat towards the pickup, then the drop. With the owner's `driverDemoLocation` off, the app explains that GPS comes later.
+- **Offers** show the whole trip and the whole money split (exact paise, so it adds up), with a countdown; declining is free. They are read aloud by the phone's text-to-speech (`flutter_tts`, `speech.dart`) in the captain's voice language (English, Tamil, Hindi; set in Account, apart from the app's language). The Tamil and Hindi phrases need a native speaker's check.
+- **The ride:** directions link to Google Maps (`CityGeo.toLatLng`, a plain link, no paid maps), call the rider (until the trip starts), "I've arrived", the rider's PIN (tries left, lock), "End the trip", "I can't do this ride" with the API's reasons. A cash ride ends on a full-screen **Collect ₹X**.
+- **How it works** is built from `GET /driver` → `rules`, never typed in the app.
+- Tests: `test/captain_test.dart` (models, voice, screens at phone/tablet/large text in light and dark), `test/captain_routes_test.dart`, the contract test (`GET /driver`).
+
 ## Icons and fonts
 
-- Launcher icons: both are drawn from the Q of the logo (`brand/quikfly-logo.svg`) by `node scripts/app-icons.mjs` (repo root; needs Chrome or Edge). Never edit the PNGs by hand: change the script and run it again.
+- Launcher icons: all three are drawn from the Q of the logo (`brand/quikfly-logo.svg`) by `node scripts/app-icons.mjs` (repo root; needs Chrome or Edge). Never edit the PNGs by hand: change the script and run it again.
   - **QuikFly (customer):** the gold Q on the navy background (`assets/icon/background.png`, the one hand-made source).
-  - **QuikFly Partner:** the gold Q with a blue tick on a light background, so the two apps are easy to tell apart on one phone.
-  - The script writes every density into `android/app/src/customer/res` and `android/app/src/partner/res` (`mipmap-*`: legacy and round icons, the adaptive background, foreground and monochrome layers, and `mipmap-anydpi-v26/ic_launcher*.xml`; the monochrome layer is Android 13+'s themed icon), the full squares `assets/icon/icon.png` and `icon-partner.png` (the iPhone sources), and the shared icon in `src/main/res`, which neither flavor shows.
+  - **QuikFly Partner:** the gold Q with a blue tick on the brand's near-black, so the apps are easy to tell apart on one phone.
+  - **QuikFly Captain:** the gold Q with a green navigation arrow on a deep green.
+  - The script writes every density into each flavor's `android/app/src/<flavor>/res` (`mipmap-*`: legacy and round icons, the adaptive background, foreground and monochrome layers, and `mipmap-anydpi-v26/ic_launcher*.xml`; the monochrome layer is Android 13+'s themed icon), the full squares `assets/icon/icon.png`, `icon-partner.png` and `icon-captain.png` (the iPhone sources), and the shared icon in `src/main/res`, which no flavor shows.
   - Sizes, colours and the Q's position inside the logo are constants at the top of the script. If the logo is redrawn, re-measure `Q` and `Q_OUTLINE` there.
 - Outfit is shipped as static weights (400/500/600/700) cut from the variable font with `fonttools varLib.instancer`, because Flutter doesn't map `FontWeight` onto a variable font's axis.
 - `lib/core/cancellation.dart` is a Dart copy of `packages/shared/src/cancellation.ts`: it previews the refund before cancelling; the API decides the amount.

@@ -1,6 +1,6 @@
 # QuikFly Captain: the driver app
 
-Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 on branch `feat/captain-2-dispatch` with migration `0035`), step 3 (the Captain app) next.** Tick the steps below as they ship and keep the status line current.
+Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 = PR #175 with migration `0035`; step 3, the Captain app, on branch `feat/captain-3-app` on top of it), step 4 (riders see the real trip) next.** Tick the steps below as they ship and keep the status line current.
 
 ## Context
 
@@ -106,6 +106,14 @@ Done 2026-11-27 (branch `feat/captain-2-dispatch`). What changed from the plan:
 
 **3. QuikFly Captain, version 1 (Flutter).**
 Flavor `captain` (the 15-place checklist from the exploration: `build.gradle.kts`, `src/captain`, `tool/ios_flavors.rb`, `lib/main_captain.dart`, `lib/captain/`, `NotificationScope.captain`, `scripts/app-icons.mjs` with a third icon, `tool/ios_icons.swift`). Screens: sign-in and "you're not set up yet" reasons; home with the online switch and today's trips, earnings and cash held; the offer sheet (countdown, full trip, money split, read aloud with `flutter_tts`); trip screens (go to pickup with a Maps link, arrived, enter PIN, on trip, collect cash / done); trips list; account. Demo location. `api.dart` + `captain_models.dart`.
+
+Done 2026-11-27 (branch `feat/captain-3-app`, on top of step 2). What changed from the plan:
+- **Two small API additions:** `GET /driver` returns `rules` (the "How it works" values) and `GET /driver/trips` lists the captain's last 50 trips; the offer's money split also carries `gstPaise` and the app shows exact paise, so the split adds up.
+- **The voice language is the captain's own choice** (English, Tamil, Hindi in Account), not the app's language, which stays English until `featureLanguages`. The Tamil and Hindi sentences need a native speaker's check.
+- **Demo locations only** in version 1 (GPS is step 7): the captain picks where to start, and on a trip the app moves itself about 1 km per heartbeat. With `driverDemoLocation` off the app says GPS comes in the next version.
+- **Push:** the Captain flavor builds without its Firebase file (its Google services step is skipped); the owner adds `com.quikfly.captain` to the Firebase project to switch its push on. A foreground offer push asks for the state at once and shows no banner.
+- **Icon:** the Q on deep green with a green navigation arrow, from `scripts/app-icons.mjs` (Android and iPhone).
+- Checks: `flutter analyze` clean; `flutter test` 126 + the new Captain tests pass on the local API (screens at 390 px with large text, 740 px and 1366 px, light and dark; routes; scope; contract `GET /driver`); a debug `com.quikfly.captain` APK builds; local smoke 343 + 807. **Not checked yet:** on a phone (needs a build the owner installs: offer sound and voice, the Maps link, the dialler).
 
 **4. Customers see the real trip.**
 Website `RidePanel.tsx`, `TrackScreen.tsx`, `contract.ts` / `http.ts` / `mock.ts`; app `ride_screen.dart`: declare `rides=live`, poll instead of timers when the ride is live, "Finding your captain", re-search when a captain cancels, the no-captain message. Simulated rides keep the timers.
