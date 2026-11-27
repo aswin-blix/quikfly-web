@@ -2,7 +2,7 @@
 // browser. Demo mode has no staff, so a sent application is approved, and a sticker request
 // done, after MOCK_LICENCE_REVIEW_SECONDS (labelled on the page).
 import {
-  CATALOG_SEED, DEFAULT_SETTINGS, FUEL_TYPES, VENDOR_RULES, VENDOR_SECTIONS, VENDOR_VEHICLE_TYPES, normaliseRegNumber, readyToSubmit, vehicleAgeYears,
+  CATALOG_SEED, DEFAULT_SETTINGS, FUEL_TYPES, fuelsFor, VENDOR_RULES, VENDOR_SECTIONS, VENDOR_VEHICLE_TYPES, normaliseRegNumber, readyToSubmit, vehicleAgeYears,
   type FuelType, type VendorApplication, type VendorSection, type VendorVehicleType,
 } from "@quikfly/shared";
 import type { QuikflyApi } from "./contract";
@@ -95,6 +95,7 @@ export const mockVendor: QuikflyApi["vendor"] = {
         const city = String(body.city ?? "");
         if (!CATALOG_SEED.city.some((c) => c.name === city)) fail("QuikFly doesn't take partners in that city yet.");
         if (!VENDOR_VEHICLE_TYPES.includes(body.type as VendorVehicleType)) fail("Choose the vehicle type.");
+        if (body.fuel && !fuelsFor(body.type as VendorVehicleType).includes(body.fuel as never)) fail("A bike runs on petrol or electric. Choose one of those.");
         if (!FUEL_TYPES.includes(body.fuel as FuelType)) fail("Choose the fuel type.");
         const reg = normaliseRegNumber(String(body.regNumber ?? ""));
         if (!VENDOR_RULES.regNumber.test(reg)) fail("Enter the registration number as on the RC, e.g. TN57AX9979.");

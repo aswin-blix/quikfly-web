@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, ImageUp } from "lucide-react";
 import {
-  AUDIT_SLOTS, AUDIT_SLOT_LABEL, FUEL_LABEL, FUEL_TYPES, VENDOR_RULES, VENDOR_VEHICLE_LABEL, VENDOR_VEHICLE_TYPES, normaliseRegNumber, vehicleAgeYears,
+  AUDIT_SLOTS, AUDIT_SLOT_LABEL, FUEL_LABEL, fuelsFor, VENDOR_RULES, VENDOR_VEHICLE_LABEL, VENDOR_VEHICLE_TYPES, normaliseRegNumber, vehicleAgeYears,
   type AuditSlot, type FuelType, type VendorApplication, type VendorDocument, type VendorSection, type VendorVehicleType,
 } from "@quikfly/shared";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
@@ -136,7 +136,9 @@ export function SectionForm({ app, section, readOnly, onSaved }: Props) {
   const chips = <T extends string>(k: string, options: readonly T[], label: (o: T) => string) => (
     <div className="flex flex-wrap gap-2" role="radiogroup">
       {options.map((o) => (
-        <button key={o} type="button" role="radio" aria-checked={f[k] === o} data-on={f[k] === o} disabled={readOnly} onClick={() => setF((x) => ({ ...x, [k]: o }))} className="chip !text-sm">{label(o)}</button>
+        <button key={o} type="button" role="radio" aria-checked={f[k] === o} data-on={f[k] === o} disabled={readOnly}
+          // Changing to a bike drops a fuel a bike can't use.
+          onClick={() => setF((x) => ({ ...x, [k]: o, ...(k === "type" && x.fuel && !fuelsFor(o as VendorVehicleType).includes(x.fuel as FuelType) ? { fuel: "" } : {}) }))} className="chip !text-sm">{label(o)}</button>
       ))}
     </div>
   );
@@ -152,7 +154,8 @@ export function SectionForm({ app, section, readOnly, onSaved }: Props) {
             </select>
           </Field>
           <div><p className="label mb-2">Vehicle type</p>{chips<VendorVehicleType>("type", VENDOR_VEHICLE_TYPES, (t) => VENDOR_VEHICLE_LABEL[t])}</div>
-          <div><p className="label mb-2">Fuel</p>{chips<FuelType>("fuel", FUEL_TYPES, (t) => FUEL_LABEL[t])}</div>
+          {/* A bike runs on petrol or electric (fuelsFor); the API refuses the rest. */}
+          <div><p className="label mb-2">Fuel</p>{chips<FuelType>("fuel", fuelsFor(f.type as VendorVehicleType), (t) => FUEL_LABEL[t])}</div>
           <Field label="Vehicle registration number" htmlFor={id("reg")} hint={`Vehicles up to ${settings.vendorMaxVehicleAgeYears} years old can join.`}>
             <input id={id("reg")} className="field uppercase" placeholder="TN57AX9979" value={f.regNumber} onChange={set("regNumber")} readOnly={readOnly} autoCapitalize="characters" />
           </Field>

@@ -1115,6 +1115,12 @@ if (pvUp.status === 409) {
   const withJunk = (await call("POST", "/vendor/vehicles", { type: "car", fuel: "electric", regNumber: junk, purchaseDate: dayOffset(-30) }, PV)).json;
   const junkId = withJunk.vehicles.find((v) => v.regNumber === junk).id;
   await expect("a draft vehicle can be removed", call("DELETE", `/vendor/vehicles/${junkId}`, null, PV), 200, (j) => !j.vehicles.some((v) => v.id === junkId));
+  // Bikes (Captain step 6): a bike taxi partner registers a bike; it runs on petrol or electric only.
+  const bikeReg = randomReg();
+  await expect("a bike can't be registered as running on CNG", call("POST", "/vendor/vehicles", { type: "bike", fuel: "cng_lpg", regNumber: bikeReg, purchaseDate: dayOffset(-60) }, PV), 400, (j) => /petrol or electric/.test(j.message));
+  const withBike = await expect("a partner can add a bike", call("POST", "/vendor/vehicles", { type: "bike", fuel: "electric", regNumber: bikeReg, purchaseDate: dayOffset(-60) }, PV), 201,
+    (j) => j.vehicles.some((v) => v.regNumber === bikeReg && v.type === "bike" && v.fuel === "electric"));
+  if (withBike) await call("DELETE", `/vendor/vehicles/${withBike.vehicles.find((v) => v.regNumber === bikeReg).id}`, null, PV);
   await expect("a live vehicle can't be removed", call("DELETE", `/vendor/vehicles/${v2}`, null, PV), 409);
   await expect("remove a driver", call("DELETE", `/vendor/drivers/${d2}`, null, PV), 200, (j) => !j.drivers.some((d) => d.id === d2));
   await expect("fleet decisions are audited", call("GET", `/admin/audit?entity=vendor&entityId=${vid}`, null, T), 200,
@@ -1259,6 +1265,20 @@ if (pvUp.status === 409) {
       (j) => j.duty.online && j.offer === null && j.ride === null);
     const old = await expect("live: a client that doesn't declare rides=live still gets a simulated ride", book(SHOWS_PARCELS), 201, (j) => !!j.driver && !("live" in j));
     if (old) await call("POST", `/rides/${old.id}/cancel`, null, RC);
+
+    // Bike taxis go to real captains too (step 6), and the per-type switch keeps them simulated.
+    const bikeRide = (accept = LIVE) => call("POST", "/rides", { optionId: "bike", pickupId: pick.id, dropId: drop.id, payment: "upi" }, RC, accept);
+    const liveBike = await expect("live: a bike taxi ride goes to real captains", bikeRide(), 201, (j) => j.driver === null && j.live?.phase === "searching");
+    if (liveBike) await call("POST", `/rides/${liveBike.id}/cancel`, null, RC, LIVE);
+    await setLive({ liveRideBike: false }, "live: the bike switch off reaches the API", (s) => s.liveRideBike === false);
+    const simBike = await expect("live: with bike taxis switched off, a bike ride stays simulated", bikeRide(), 201, (j) => !!j.driver && !("live" in j));
+    if (simBike) await call("POST", `/rides/${simBike.id}/cancel`, null, RC);
+    await setLive({ liveRideBike: true }, "live: bike taxis back on", (s) => s.liveRideBike === true);
+    // Owner-driver sign-up in Captain: offered only while the setting is on.
+    await expect("signup: a number with no driver record isn't offered registration while it's off", call("GET", "/driver", null, RC), 200, (j) => j.captain === null && j.selfSignup === false);
+    await setLive({ captainSelfSignup: true }, "signup: self sign-up reaches the API", (s) => s.captainSelfSignup === true);
+    await expect("signup: and is offered it once it's on", call("GET", "/driver", null, RC), 200, (j) => j.captain === null && j.selfSignup === true);
+    await setLive({ captainSelfSignup: s0.captainSelfSignup ?? false }, "signup: self sign-up back as it was", (s) => s.captainSelfSignup === (s0.captainSelfSignup ?? false));
 
     // 1. Declined: nobody else is free, so a simulated captain steps in (rideSimulateDrivers on).
     const r1 = await expect("live: a live ride starts with no driver, searching", book(), 201, (j) => j.driver === null && j.live?.phase === "searching" && /^\d{4}$/.test(j.otp));

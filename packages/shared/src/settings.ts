@@ -210,9 +210,12 @@ export interface Settings {
    * live ride is offered to real captains; off, every ride is simulated as before.
    */
   featureLiveDrivers: boolean;
-  /** Which ride types go to real captains while live captains is on; a type that is off stays simulated. (Bikes join with step 6.) */
+  /** Which ride types go to real captains while live captains is on; a type that is off stays simulated. */
+  liveRideBike: boolean;
   liveRideAuto: boolean;
   liveRideCab: boolean;
+  /** QuikFly Captain offers owner-driver registration to a number with no driver record (the partner application, then themselves as the driver). Off: only drivers a fleet owner added can use it. */
+  captainSelfSignup: boolean;
   /** A captain can mark "arrived" only within this distance of the pickup (km); 0 = no check. */
   driverArrivedRadiusKm: number;
   /** Charged to the vehicle's owner when a captain gives an accepted ride back without a valid reason (% of the fare, capped at DRIVER_RULES.cancelPenaltyCap). 0 = no penalty. */
@@ -356,8 +359,10 @@ export const DEFAULT_SETTINGS: Settings = {
   vendorDailyFee: 50,
   vendorMinPayout: 500,
   featureLiveDrivers: false,
+  liveRideBike: true,
   liveRideAuto: true,
   liveRideCab: true,
+  captainSelfSignup: false,
   driverArrivedRadiusKm: 0.3,
   driverCancelPenaltyPercent: 0,
   rideSimulateDrivers: true,
@@ -502,8 +507,10 @@ export const SETTING_RULES: Record<keyof Settings, Rule> = {
   vendorDailyFee: money(500),
   vendorMinPayout: money(10000),
   featureLiveDrivers: { type: "boolean" },
+  liveRideBike: { type: "boolean" },
   liveRideAuto: { type: "boolean" },
   liveRideCab: { type: "boolean" },
+  captainSelfSignup: { type: "boolean" },
   driverArrivedRadiusKm: { type: "number", min: 0, max: 2 },
   driverCancelPenaltyPercent: { type: "number", min: 0, max: 10, integer: true },
   rideSimulateDrivers: { type: "boolean" },

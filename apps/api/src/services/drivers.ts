@@ -66,7 +66,7 @@ export function captainBlocker(c: CaptainContext): string | null {
   const reg = formatRegNumber(c.vehicle_reg!);
   if (c.vehicle_status === "blocked") return `${reg} is blocked. ${c.self ? "Check it in QuikFly Partner." : `Ask ${c.owner_name} to check it in QuikFly Partner.`}`;
   if (c.vehicle_status !== "active") return `${reg} is off duty. ${c.self ? "Put it on duty in QuikFly Partner." : `Ask ${c.owner_name} to put it on duty.`}`;
-  if (!vehicleTypeForCaptain(c.vehicle_type!)) return "QuikFly Captain is for autos and cars for now.";
+  if (!vehicleTypeForCaptain(c.vehicle_type!)) return "QuikFly Captain is for bikes, autos and cars. Ask to be put on one of those.";
   return null;
 }
 

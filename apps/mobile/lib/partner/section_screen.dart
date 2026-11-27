@@ -282,9 +282,13 @@ class _SectionScreenState extends ConsumerState<SectionScreen> {
           items: [for (final x in cities) DropdownMenuItem(value: x, child: Text(x))],
           onChanged: ro ? null : (v) => setState(() => _city = v),
         ),
-        radio('Vehicle type', vendorVehicleTypes, vendorVehicleLabel, _type, (v) => _type = v,
-            icons: const {'car': Icons.directions_car_outlined, 'auto': Icons.electric_rickshaw_outlined, 'tempo': Icons.airport_shuttle_outlined, 'bus': Icons.directions_bus_outlined}),
-        radio('Fuel type', fuelTypes, fuelLabel, _fuel, (v) => _fuel = v,
+        radio('Vehicle type', vendorVehicleTypes, vendorVehicleLabel, _type, (v) {
+          _type = v;
+          // A bike can't run on CNG or LPG (fuelsFor): drop a fuel it can't use.
+          if (_fuel != null && !fuelsFor(v).contains(_fuel)) _fuel = null;
+        },
+            icons: const {'bike': Icons.two_wheeler, 'car': Icons.directions_car_outlined, 'auto': Icons.electric_rickshaw_outlined, 'tempo': Icons.airport_shuttle_outlined, 'bus': Icons.directions_bus_outlined}),
+        radio('Fuel type', fuelsFor(_type), fuelLabel, _fuel, (v) => _fuel = v,
             icons: const {'petrol_diesel': Icons.local_gas_station_outlined, 'cng_lpg': Icons.propane_tank_outlined, 'electric': Icons.ev_station_outlined}),
         const SizedBox(height: 14),
         TextField(

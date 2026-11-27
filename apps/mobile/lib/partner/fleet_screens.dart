@@ -30,7 +30,7 @@ const _vehicleStatus = {
   'rejected': 'Not accepted',
 };
 const _driverStatus = {'submitted': 'With QuikFly for review', 'active': 'Approved', 'rejected': 'Not approved', 'blocked': 'Blocked'};
-const _vehicleIcon = {'car': Icons.directions_car_outlined, 'auto': Icons.electric_rickshaw_outlined, 'tempo': Icons.airport_shuttle_outlined, 'bus': Icons.directions_bus_outlined};
+const _vehicleIcon = {'bike': Icons.two_wheeler, 'car': Icons.directions_car_outlined, 'auto': Icons.electric_rickshaw_outlined, 'tempo': Icons.airport_shuttle_outlined, 'bus': Icons.directions_bus_outlined};
 
 Color _statusColor(QfColors c, String status) => switch (status) {
       'active' => c.success,

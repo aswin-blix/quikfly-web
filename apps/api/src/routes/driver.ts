@@ -9,6 +9,7 @@ import { newWake, wakeUp } from "../lib/wake";
 import { requireUser } from "../middleware/auth";
 import { requireDriver } from "../middleware/driver";
 import { captainFor, captainProfile, ping, setDuty } from "../services/drivers";
+import { getSettings } from "../services/settings";
 import {
   acceptOffer, captainState, captainSummary, captainTrips, completeTrip, declineOffer, markArrived, pingDispatch, releaseRide, startTrip,
 } from "../services/driver-rides";
@@ -22,10 +23,12 @@ export const driver = new Hono<AppEnv>()
     c.header("Cache-Control", "no-store");
     await next();
   })
-  // { captain } — null (with `reason`) when this number has no driver record, so the app can explain instead of failing.
+  // { captain } — null (with `reason`, and `selfSignup`: the app may offer owner-driver registration) when this number
+  // has no driver record, so the app can explain instead of failing.
   .get("/", async (c) => {
     const captain = await captainFor(c.env.DB, c.var.user);
-    return c.json(captain ? { captain: await captainProfile(c.env.DB, captain) } : { captain: null, reason: NOT_A_CAPTAIN });
+    if (captain) return c.json({ captain: await captainProfile(c.env.DB, captain) });
+    return c.json({ captain: null, reason: NOT_A_CAPTAIN, selfSignup: (await getSettings(c.env.DB)).captainSelfSignup === true });
   })
   // { online, position?: { lat, lng } | { x, y } } → state. A map point is a demo location (setting driverDemoLocation).
   .post("/duty", requireDriver, async (c) => {
