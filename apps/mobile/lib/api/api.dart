@@ -3,12 +3,14 @@
 // Rule: the app never sends an amount. Bookings carry a quoteId (POST /quotes) or a rideId.
 import 'package:dio/dio.dart';
 import '../core/env.dart';
+import 'captain_models.dart';
 import 'models.dart';
 import 'parcel_models.dart';
 import 'rental_models.dart';
 import 'support_models.dart';
 import 'vendor_models.dart';
 
+export 'captain_models.dart';
 export 'vendor_models.dart';
 
 /// An error to show the user: the API's own `{ message }`, or a plain network message.
@@ -136,6 +138,22 @@ class QuikFlyApi {
   Future<VendorApplication> payVendorJoiningFee() => _post('/vendor/onboarding/payment', _vendor);
   Future<VendorApplication> acceptVendorAgreement(String name) => _post('/vendor/onboarding/agreement', _vendor, {'name': name, 'accept': true});
   Future<VendorApplication> requestVendorSticker() => _post('/vendor/onboarding/sticker', _vendor);
+
+  // ── QuikFly Captain (/driver): every action returns the captain's state ──
+  CaptainState _captainState(dynamic d) => CaptainState.fromJson(d as Json);
+  Future<CaptainLookup> captain() => _get('/driver', (d) => CaptainLookup.fromJson(d as Json));
+  /// [position]: a demo location (a map point) while GPS isn't used yet.
+  Future<CaptainState> setCaptainDuty(bool online, {MapPoint? position}) =>
+      _post('/driver/duty', _captainState, {'online': online, if (position != null) 'position': position.toJson()});
+  Future<CaptainState> captainPing({MapPoint? position}) => _post('/driver/ping', _captainState, {if (position != null) 'position': position.toJson()});
+  Future<CaptainSummary> captainSummary() => _get('/driver/summary', (d) => CaptainSummary.fromJson(d as Json));
+  Future<List<CaptainTripItem>> captainTrips() => _get('/driver/trips', _listOf(CaptainTripItem.fromJson));
+  Future<CaptainState> acceptOffer(String rideId) => _post('/driver/offers/$rideId/accept', _captainState);
+  Future<CaptainState> declineOffer(String rideId) => _post('/driver/offers/$rideId/decline', _captainState);
+  Future<CaptainState> captainArrived(String rideId) => _post('/driver/rides/$rideId/arrived', _captainState);
+  Future<CaptainState> captainStart(String rideId, String otp) => _post('/driver/rides/$rideId/start', _captainState, {'otp': otp});
+  Future<CaptainState> captainComplete(String rideId) => _post('/driver/rides/$rideId/complete', _captainState);
+  Future<CaptainState> captainRelease(String rideId, String reason) => _post('/driver/rides/$rideId/cancel', _captainState, {'reason': reason});
 
   // ── Partner fleet (live partners): every call returns the whole fleet ──
   VendorFleet _fleet(dynamic d) => VendorFleet.fromJson(d as Json);

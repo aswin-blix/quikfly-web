@@ -14,12 +14,19 @@ final travelVehiclesProvider = FutureProvider<List<TravelVehicle>>((ref) => ref.
 /// alike); the customer app shows the customer's, QuikFly Partner only `vendor.*` ones.
 enum NotificationScope {
   customer,
-  partner;
+  partner,
+  captain;
 
-  bool shows(String kind) => kind.startsWith('vendor.') == (this == partner);
+  /// Each app's kinds start with its prefix (PARTNER_ / CAPTAIN_NOTIFICATION_PREFIX); the rest are the customer app's.
+  static const prefixes = {NotificationScope.partner: 'vendor.', NotificationScope.captain: 'driver.'};
+
+  bool shows(String kind) {
+    final own = prefixes[this];
+    return own != null ? kind.startsWith(own) : !prefixes.values.any(kind.startsWith);
+  }
 }
 
-/// The customer app's scope; QuikFly Partner overrides it in main_partner.dart.
+/// The customer app's scope; QuikFly Partner and QuikFly Captain override it in their main files.
 final notificationScopeProvider = Provider<NotificationScope>((ref) => NotificationScope.customer);
 
 /// The notification inbox for this app, with its own unread count. Empty when signed out.

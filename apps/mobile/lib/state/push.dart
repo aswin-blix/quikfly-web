@@ -54,6 +54,7 @@ class PushNotifier extends Notifier<PushState> {
   GoRouter? _router;
   String? _token;
   bool _started = false;
+  void Function(Map<String, dynamic> data)? _onData;
 
   @override
   PushState build() {
@@ -62,10 +63,13 @@ class PushNotifier extends Notifier<PushState> {
   }
 
   /// Called once by each app after its first frame. Does nothing without a Firebase project.
-  Future<void> start(GoRouter router) async {
+  /// [onData]: called with every message's data, in the foreground or when tapped (QuikFly Captain
+  /// asks for its state at once when an offer arrives, instead of waiting for the next heartbeat).
+  Future<void> start(GoRouter router, {void Function(Map<String, dynamic> data)? onData}) async {
     if (_started) return;
     _started = true;
     _router = router;
+    _onData = onData;
     try {
       await Firebase.initializeApp();
     } catch (_) {
@@ -145,7 +149,7 @@ class PushNotifier extends Notifier<PushState> {
       final t = token ?? await FirebaseMessaging.instance.getToken();
       if (t == null) return;
       _token = t;
-      // Which app this is, so QuikFly Partner gets only partner updates and QuikFly only the rest.
+      // Which app this is (customer, partner or captain), so each phone gets only its app's updates.
       await ref.read(apiProvider).registerPushDevice(t, 'android', app: ref.read(notificationScopeProvider).name);
     } catch (_) {/* tried again at the next start or sign-in */}
   }
@@ -159,6 +163,9 @@ class PushNotifier extends Notifier<PushState> {
 
   void _foreground(RemoteMessage m) {
     ref.invalidate(notificationsProvider);
+    _onData?.call(m.data);
+    // QuikFly Captain shows the offer itself (with its countdown), so no banner on top of it.
+    if (ref.read(notificationScopeProvider) == NotificationScope.captain) return;
     final n = m.notification;
     if (n == null) return;
     pushMessengerKey.currentState
@@ -182,6 +189,7 @@ class PushNotifier extends Notifier<PushState> {
     final router = _router;
     if (router == null) return;
     ref.invalidate(notificationsProvider);
+    _onData?.call(data);
     final scope = ref.read(notificationScopeProvider);
     final booking = (data['bookingId'] as String?)?.trim();
     final path = notificationTarget('${data['kind'] ?? ''}', booking == null || booking.isEmpty ? null : booking, scope) ?? '/notifications';
