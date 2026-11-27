@@ -42,6 +42,10 @@ The Android-only parts already turn themselves off elsewhere, so the shared Dart
 
 **4. After sign-off (paid): notifications, testers, App Store.** Join the Apple Developer Program in the client's company name; add the two iOS apps to Firebase project `quikfly-dfe56`, download each `GoogleService-Info.plist` (git-ignored, like `google-services.json`), upload an APNs key to Firebase; turn on the Push Notifications capability; then TestFlight builds for testers, and an App Store listing (privacy answers from docs/privacy.md, screenshots, review). The API side needs nothing new: `POST /me/push-devices` already takes `platform`, and FCM HTTP v1 delivers to iOS tokens too.
 
+## QuikFly Captain on iPhone
+
+A third scheme (`captain`, `com.quikfly.captain`) builds for the Simulator; its own `Runner/Info-captain.plist` carries the location reasons and background location. **Before any App Store or TestFlight upload:** geolocator's code is linked into all three apps, and Apple can ask for location purpose strings in the customer and Partner apps too (ITMS-90683) even though they never ask for location. If it does, add neutral strings to `Runner/Info.plist`; nothing else changes.
+
 ## Rules that carry over
 
 - The customer app (QuikFly) never gets partner screens, on iOS too.
