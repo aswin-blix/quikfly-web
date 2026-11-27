@@ -11,6 +11,11 @@ import { creditExpiry, earnStatement, earnedNotice, spendPlan } from "./credits"
 import { settlementStatements } from "./partner-trips";
 import { CANCELLABLE_SQL, cancelParcelStatements, isReturn } from "./parcels/legs";
 import { newParcel, parcelStates } from "./parcels/parcels";
+import { closeLiveRide, finishLiveRide } from "./live-rides";
+
+/** The phase of a booking's live ride (null for a simulated ride or no ride). */
+const livePhase = async (db: D1Database, bookingId: string) =>
+  (await db.prepare("SELECT r.phase FROM bookings b JOIN rides r ON r.id = b.ride_id AND r.dispatch = 'live' WHERE b.id = ?").bind(bookingId).first<{ phase: string | null }>())?.phase ?? null;
 
 export interface BookingRow {
   id: string; user_id: string; service: ServiceKey; title: string; subtitle: string; amount: number;
@@ -371,7 +376,11 @@ export async function cancelBookingRow(
     ...parcelClose,
   ]);
   const cancelled = (results[results.length - 1 - parcelClose.length].results as BookingRow[])[0];
-  if (cancelled) return cancelled;
+  if (cancelled) {
+    // A live ride's captain is told and freed (nothing for a simulated ride).
+    if (cancelled.ride_id) await closeLiveRide(db, cancelled.ride_id);
+    return cancelled;
+  }
   // The amount changed meanwhile: once more, from the new one.
   return retried ? null : cancelBookingRow(db, userId, id, refundNote, reason, refusal, true);
 }
@@ -379,18 +388,24 @@ export async function cancelBookingRow(
 export async function cancelBooking(db: D1Database, userId: string, id: string, reason: string | null = null): Promise<Booking> {
   const picked = await db.prepare("SELECT 1 AS ok FROM rentals WHERE booking_id = ? AND pickup_at IS NOT NULL").bind(id).first();
   if (picked) throw conflict("You've already started this rental. End it from My trips instead of cancelling.");
+  if ((await livePhase(db, id)) === "ontrip") throw conflict(LIVE_TRIP_STARTED);
   const row = await cancelBookingRow(db, userId, id, "Refund", reason);
   if (!row) return notActive(db, userId, id);
   await notify(db, userId, { kind: "booking.cancelled", ref: id, bookingId: id, title: `Cancelled · ${row.title}`, body: refundText(row) });
   return toBooking(row, [], null, row.service === "parcel" ? "cancelled" : null);
 }
 
+/** What a rider is told when cancelling a live ride that has already started. */
+export const LIVE_TRIP_STARTED = "Your trip has started, so it can't be cancelled. Ask your captain to stop, or use SOS if you feel unsafe.";
+
 /**
- * Marks a ride as done. Called by the website and the app when a simulated ride ends;
- * the driver app will own this once it exists. Other services are closed by staff, who
+ * Marks a ride as done. Called by the website and the app when a simulated ride ends; a live ride
+ * is ended by its captain (driver-rides.ts) and refused here. Other services are closed by staff, who
  * confirm the return before a deposit goes back (see completeBookingRow).
  */
 export async function completeBooking(db: D1Database, userId: string, id: string): Promise<Booking> {
+  // A real captain ends a live ride at the drop; a released app's timer must not end it early.
+  if ((await livePhase(db, id)) !== null) throw conflict("Your captain ends the trip at your drop.");
   const active = await db.prepare(`SELECT * FROM bookings WHERE id = ? AND user_id = ? AND service IN ('bike', 'car') AND status IN ${ACTIVE}`)
     .bind(id, userId).first<BookingRow>();
   if (active) {
@@ -452,5 +467,6 @@ export async function completeBookingRow(
   const done = results[2 + extra.length], earned = earn ? results[3 + extra.length] : undefined;
   const finished = (done.results as BookingRow[])[0] ?? null;
   if (finished && earn && earned?.meta.changes) await notify(db, row.user_id, { ...earnedNotice(earn.earn, row.title, settings), ref: id, bookingId: id });
+  if (finished?.ride_id) await finishLiveRide(db, finished.ride_id);
   return finished;
 }

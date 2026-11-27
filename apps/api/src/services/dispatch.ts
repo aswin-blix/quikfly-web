@@ -50,9 +50,14 @@ async function giveUp(db: D1Database, settings: Settings, row: SearchRow, ride: 
   if (settings.rideSimulateDrivers) {
     const driver = await simulatedDriver(db, ride.quote.option);
     if (driver) {
-      await db.prepare(
-        "UPDATE rides SET dispatch = 'sim', phase = NULL, phase_at = ?2, data = json_set(data, '$.driver', json(?3)) WHERE id = ?1 AND phase = 'searching' AND offer_seq = ?4",
-      ).bind(row.id, now, JSON.stringify(driver), row.offer_seq).run();
+      // A booking paid while an earlier captain had the ride no longer earns for that vehicle.
+      await db.batch([
+        db.prepare(
+          "UPDATE rides SET dispatch = 'sim', phase = NULL, phase_at = ?2, data = json_set(data, '$.driver', json(?3)) WHERE id = ?1 AND phase = 'searching' AND offer_seq = ?4",
+        ).bind(row.id, now, JSON.stringify(driver), row.offer_seq),
+        db.prepare(`UPDATE bookings SET vendor_id = NULL, vendor_vehicle_id = NULL, vendor_driver_id = NULL WHERE ride_id = ?1 AND status IN ${ACTIVE} AND EXISTS (SELECT 1 FROM rides WHERE id = ?1 AND dispatch = 'sim' AND phase_at = ?2)`)
+          .bind(row.id, now),
+      ]);
       return;
     }
   }

@@ -1,9 +1,9 @@
 // Public "follow my ride" links. Anyone with the token sees the trip, without personal details.
-import { SHARE_LINK_HOURS, type Ride, type SharedRide } from "@quikfly/shared";
+import { SHARE_LINK_HOURS, type LiveRide, type SharedRide } from "@quikfly/shared";
 import { notFound } from "../lib/errors";
 import { randomToken } from "../lib/random";
 
-interface ShareRow { data: string; status: string; created_at: string; started_at: string | null; rider: string }
+interface ShareRow { data: string; status: string; created_at: string; started_at: string | null; rider: string; dispatch: string; phase: SharedRide["phase"] }
 
 /** Returns the existing link for this ride if there is a live one, otherwise a new one. */
 export async function shareRide(db: D1Database, userId: string, rideId: string) {
@@ -22,12 +22,13 @@ export async function shareRide(db: D1Database, userId: string, rideId: string) 
 
 export async function readShare(db: D1Database, token: string): Promise<SharedRide> {
   const row = await db.prepare(
-    `SELECT r.data, r.status, r.created_at, r.started_at, u.name AS rider FROM ride_shares s
+    `SELECT r.data, r.status, r.created_at, r.started_at, r.dispatch, r.phase, u.name AS rider FROM ride_shares s
      JOIN rides r ON r.id = s.ride_id JOIN users u ON u.id = s.user_id
      WHERE s.token = ? AND s.expires_at > ?`,
   ).bind(token, Date.now()).first<ShareRow>();
   if (!row) throw notFound("This trip link has expired or doesn't exist.");
-  const ride = JSON.parse(row.data) as Ride;
+  // A live ride has no driver until a captain accepts (LiveRide).
+  const ride = JSON.parse(row.data) as Omit<LiveRide, "live">;
   return {
     riderName: row.rider.split(" ")[0],
     service: ride.quote.option.service,
@@ -40,6 +41,8 @@ export async function readShare(db: D1Database, token: string): Promise<SharedRi
     distanceKm: ride.quote.distanceKm,
     durationMin: ride.quote.durationMin,
     etaMin: ride.quote.etaMin,
-    driver: { name: ride.driver.name, rating: ride.driver.rating, vehicle: ride.driver.vehicle, plate: ride.driver.plate },
+    driver: ride.driver ? { name: ride.driver.name, rating: ride.driver.rating, vehicle: ride.driver.vehicle, plate: ride.driver.plate } : null,
+    // The real progress of a live ride; a simulated one is played by the page from startedAt.
+    phase: row.dispatch === "live" ? row.phase : null,
   };
 }

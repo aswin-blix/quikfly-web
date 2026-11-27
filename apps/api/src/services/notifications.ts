@@ -33,8 +33,10 @@ export async function notify(db: D1Database, userId: string, n: NewNotification)
  * SQL: this client can show the notification (?2 = JSON of the services it can't). Left out are a
  * hidden service's own kinds ("parcel.ready") and the booking.* ones about its bookings, which
  * would open a My Trips without that booking. Credits and support replies stay: they open their own pages.
+ * A captain's kinds (driver.*) are never listed: offers live in GET/POST /driver state, and released apps
+ * would show them in the customer inbox.
  */
-const SHOWN = `NOT EXISTS (
+const SHOWN = `notifications.kind NOT LIKE 'driver.%' AND NOT EXISTS (
   SELECT 1 FROM json_each(?2) h WHERE notifications.kind LIKE h.value || '.%'
     OR (notifications.kind LIKE 'booking.%' AND EXISTS (SELECT 1 FROM bookings b WHERE b.id = notifications.booking_id AND b.service = h.value)))`;
 

@@ -26,6 +26,8 @@ export async function partnerForRide(db: D1Database, option: Pick<RideOption, "i
      JOIN vendors ve ON ve.id = vv.vendor_id AND ve.status = 'active'
      JOIN users u ON u.id = ve.user_id AND u.deleted_at IS NULL
      WHERE vv.status = 'active' AND vv.type = ?
+       -- A driver online in QuikFly Captain takes real offers (services/dispatch.ts), not simulated rides.
+       AND NOT EXISTS (SELECT 1 FROM driver_state s WHERE s.driver_id = d.id AND (s.online = 1 OR s.ride_id IS NOT NULL))
        AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.vendor_vehicle_id = vv.id AND b.status IN ('confirmed', 'ongoing') AND b.starts_at IS NULL)
      ORDER BY COALESCE((SELECT MAX(created_at) FROM bookings b WHERE b.vendor_vehicle_id = vv.id), '') ASC
      LIMIT 1`,

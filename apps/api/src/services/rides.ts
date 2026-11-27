@@ -1,4 +1,4 @@
-import { FEATURE_OFF, RIDE_MAX_STOPS, RIDE_SCHEDULE, RIDE_SIM, isWomenOnly, localToIso, minutesUntilStart, pick, rideQuotes, rideTimeAt, scheduleError, switchError, type FareQuote, type PaymentMethod, type Place, type Ride, type RideOption, type Settings } from "@quikfly/shared";
+import { FEATURE_OFF, NO_CAPTAIN, RIDE_MAX_STOPS, liveRideType, type LiveRide, RIDE_SCHEDULE, RIDE_SIM, isWomenOnly, localToIso, minutesUntilStart, pick, rideQuotes, rideTimeAt, scheduleError, switchError, type FareQuote, type PaymentMethod, type Place, type Ride, type RideOption, type Settings } from "@quikfly/shared";
 import { badRequest, conflict, notFound } from "../lib/errors";
 import { uid } from "../lib/random";
 import { visible, visibleById } from "./catalog";
@@ -6,6 +6,9 @@ import { placeById } from "./places";
 import { getSettings } from "./settings";
 import { partnerDriverCard, partnerForRide } from "./partner-trips";
 import { passCoversAt } from "./pass";
+import { ACTIVE } from "./bookings";
+import { advanceDispatch, type Wake } from "./dispatch";
+import { LIVE_RIDE_COLS, closeLiveRide, liveView, parseRide, type LiveRideRow } from "./live-rides";
 
 /**
  * Fares for every visible option of a service, with surge from Settings. `scheduledFor`
@@ -52,10 +55,16 @@ export async function rideStops(db: D1Database, pickupId: string, dropId: string
   return Promise.all(stopIds.map((id) => placeById(db, id)));
 }
 
+/**
+ * Books a ride. `live`: the client follows the server's ride phases (`rides=live` in Accept). Then, with live
+ * captains on for this ride type and the ride not booked ahead, the ride goes to real captains: it starts with no
+ * driver and the search runs as the rider polls (services/dispatch.ts). Otherwise it is simulated, as before.
+ */
 export async function bookRide(
   db: D1Database, userId: string,
   input: { optionId: string; pickupId: string; dropId: string; payment: PaymentMethod; scheduledFor?: string; stopIds?: string[] },
-): Promise<Ride> {
+  live = false,
+): Promise<Ride | LiveRide> {
   const option = await visibleById(db, "rideOption", input.optionId);
   const settings = await getSettings(db);
   const cashOff = switchError(settings, { service: option.service, payment: input.payment });
@@ -67,6 +76,20 @@ export async function bookRide(
   const stopIds = input.stopIds ?? [];
   const quote = (await quoteRides(db, option.service, input.pickupId, input.dropId, input.scheduledFor, stopIds, userId)).find((q) => q.option.id === option.id)!;
   const stops = await rideStops(db, input.pickupId, input.dropId, stopIds);
+  // Scheduled rides stay simulated in this version: dispatch starts when someone is waiting for it.
+  if (live && !input.scheduledFor && liveRideType(settings, option)) {
+    const seed = Date.now();
+    const now = new Date(seed).toISOString();
+    const ride: LiveRide = {
+      id: uid("RD"), quote, pickup: await placeById(db, input.pickupId), drop: await placeById(db, input.dropId), payment: input.payment,
+      otp: rider?.ride_pin ?? String(1000 + (seed % 9000)), driver: null, scheduledFor: null, stops,
+      live: { phase: "searching", captain: null, etaMin: null },
+    };
+    const { live: _view, ...stored } = ride;
+    await db.prepare("INSERT INTO rides (id, user_id, status, data, created_at, dispatch, phase, phase_at) VALUES (?1, ?2, 'confirmed', ?3, ?4, 'live', 'searching', ?4)")
+      .bind(ride.id, userId, JSON.stringify(stored), now).run();
+    return ride;
+  }
   // A live partner vehicle of the right type takes the ride when one is free; otherwise a simulated driver.
   // Women-only rides always get a woman captain from the roster (partner drivers have no gender on file).
   const partner = womenOnly ? null : await partnerForRide(db, option);
@@ -98,15 +121,39 @@ export async function bookRide(
 }
 
 export async function cancelRide(db: D1Database, userId: string, rideId: string) {
+  const live = await db.prepare(
+    `SELECT r.id, (SELECT 1 FROM bookings b WHERE b.ride_id = r.id AND b.status IN ${ACTIVE}) AS booked FROM rides r WHERE r.id = ? AND r.user_id = ? AND r.dispatch = 'live'`,
+  ).bind(rideId, userId).first<{ id: string; booked: number | null }>();
+  if (live) {
+    // A paid ride is cancelled through its booking, so the refund rules apply.
+    if (live.booked) throw conflict("This ride is booked. Cancel it from My Trips.");
+    return closeLiveRide(db, rideId);
+  }
   const res = await db.prepare("UPDATE rides SET status = 'cancelled' WHERE id = ? AND user_id = ?").bind(rideId, userId).run();
   if (!res.meta.changes) throw notFound("Ride not found.");
 }
 
-/** The user's own ride, whatever its status (to show or start it). */
-export async function getRide(db: D1Database, userId: string, rideId: string): Promise<Ride> {
-  const row = await db.prepare("SELECT data FROM rides WHERE id = ? AND user_id = ?").bind(rideId, userId).first<{ data: string }>();
+/** What a client that doesn't follow live rides is told about one still looking for its captain. */
+export const LIVE_RIDE_UPDATE = "Update QuikFly to follow this ride, or open it on the website.";
+
+/**
+ * The user's own ride, whatever its status (to show or start it). A live ride that is still looking for a
+ * captain moves its search forward first (the rider's poll is what drives it), and carries `live`.
+ */
+export async function getRide(db: D1Database, userId: string, rideId: string, live = false, wake?: Wake): Promise<Ride | LiveRide> {
+  const read = () => db.prepare(`SELECT ${LIVE_RIDE_COLS} FROM rides WHERE id = ? AND user_id = ?`).bind(rideId, userId).first<LiveRideRow>();
+  let row = await read();
   if (!row) throw notFound("Ride not found.");
-  return { scheduledFor: null, stops: [], ...JSON.parse(row.data) } as Ride;
+  if (row.dispatch !== "live") return parseRide(row.data) as Ride;
+  if (row.phase === "searching" && row.status !== "cancelled") {
+    await advanceDispatch(db, rideId, wake);
+    row = (await read())!;
+  }
+  const ride = parseRide(row.data);
+  // A released app would play a driverless ride with its own timers; it is only shown a live ride with a captain.
+  if (!live && !ride.driver && row.dispatch === "live") throw conflict(LIVE_RIDE_UPDATE);
+  if (row.dispatch !== "live") return ride as Ride; // fell back to a simulated captain just now
+  return { ...ride, live: await liveView(db, row, ride) };
 }
 
 /**
@@ -127,10 +174,16 @@ export async function startRide(db: D1Database, userId: string, rideId: string):
 
 /** The user's own, not-cancelled ride and when its fare was set (used to price its booking). */
 export async function ownRideWithTime(db: D1Database, userId: string, rideId: string): Promise<{ ride: Ride; createdAt: string }> {
-  const row = await db.prepare("SELECT data, status, created_at FROM rides WHERE id = ? AND user_id = ?").bind(rideId, userId).first<{ data: string; status: string; created_at: string }>();
+  const row = await db.prepare("SELECT data, status, created_at, dispatch, phase FROM rides WHERE id = ? AND user_id = ?").bind(rideId, userId)
+    .first<{ data: string; status: string; created_at: string; dispatch: string; phase: string | null }>();
   if (!row) throw notFound("Ride not found.");
+  if (row.phase === "unmatched") throw conflict(NO_CAPTAIN);
   if (row.status === "cancelled") throw badRequest("This ride was cancelled.");
   if (row.status === "parcel") throw badRequest("That ride is carrying a parcel.");
+  // A live ride is paid for once a captain has taken it, never while it is still looking.
+  if (row.dispatch === "live" && row.phase !== "arriving" && row.phase !== "arrived") {
+    throw conflict(row.phase === "searching" ? "Wait for a captain to accept your ride before paying." : "This ride can't be booked now.");
+  }
   return { ride: { scheduledFor: null, stops: [], ...JSON.parse(row.data) } as Ride, createdAt: row.created_at };
 }
 
