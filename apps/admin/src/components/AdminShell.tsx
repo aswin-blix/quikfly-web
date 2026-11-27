@@ -17,7 +17,7 @@ function Wordmark() {
   return (
     <Link href="/" className="flex items-center gap-2" aria-label="QuikFly Admin home">
       {/* brand/quikfly-logo.svg, copied by scripts/logo.mjs; transparent, so it suits both themes */}
-      <img src="/assets/logo.svg" alt="QuikFly" width={2059} height={495} className="h-8 w-auto" />
+      <img src="/assets/logo.svg" alt="QuikFly" width={1504} height={458} className="h-8 w-auto" />
       <span className="text-[11px] uppercase tracking-widest text-subtle">Admin</span>
     </Link>
   );
