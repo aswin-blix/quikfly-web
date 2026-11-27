@@ -127,7 +127,7 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/vendor/onboarding/agreement` | `{ name, accept: true }` after the fee |
 | POST 🔒 | `/vendor/onboarding/sticker` | ask for sticker & paint after the agreement; staff mark it done |
 | GET 🔒 | `/vendor/fleet` | `{ vehicles, drivers }` (each driver's `captain: { status, seenAt }` once they have signed in to QuikFly Captain). Every fleet call below returns this. Changes need a live partner (409 otherwise) |
-| POST 🔒 | `/vendor/vehicles` | `{ type, fuel, regNumber, purchaseDate }` → a `draft` vehicle (201) |
+| POST 🔒 | `/vendor/vehicles` | `{ type, fuel, regNumber, purchaseDate }` → a `draft` vehicle (201) A `bike` runs on petrol or electric only (`fuelsFor`; 400 otherwise). |
 | PUT 🔒 | `/vendor/vehicles/:id/:part` | `details`, `rc`, `insurance`, `audit` while `draft`; `rc`/`insurance` on a live vehicle is a **renewal** (`docsPending`, staff check it) |
 | PUT / GET 🔒 | `/vendor/vehicles/:id/documents/:kind` | RC or insurance photo (`rc`, `insurance`) |
 | POST 🔒 | `/vendor/vehicles/:id/submit` | send a complete draft for review |
@@ -150,7 +150,7 @@ A captain is a partner's driver record whose mobile number matches the signed-in
 
 | Method | Path | What it does |
 |---|---|---|
-| GET 🔒 | `/driver` | `{ captain }`: driver, vehicle, owner, `blocker` (what stops them going online, or null), `duty` and `rules` (the live "How it works" values: offer seconds, arrival radius, PIN tries and lock, give-back penalty and reasons, earning model, demo location). `{ captain: null, reason }` when the number has no driver record |
+| GET 🔒 | `/driver` | `{ captain }`: driver, vehicle, owner, `blocker` (what stops them going online, or null), `duty` and `rules` (the live "How it works" values: offer seconds, arrival radius, PIN tries and lock, give-back penalty and reasons, earning model, demo location). `{ captain: null, reason, selfSignup }` when the number has no driver record (`selfSignup`: setting `captainSelfSignup`, the app may offer owner-driver registration through `/vendor`) |
 | POST 🔒 | `/driver/duty` | `{ online, position?: { lat, lng } \| { x, y } }` → state. Online needs no blocker and a position: a GPS fix is placed on the city map (outside the city → 409); a map point is a demo location (setting `driverDemoLocation`). Offline during a ride → 409. Not a captain → 403 |
 | POST 🔒 | `/driver/ping` | `{ position? }` → state: the heartbeat while online (`DRIVER_RULES.pingIdleSeconds`, `pingBusySeconds` with an offer or a ride). Also moves on the two oldest searches nobody is polling. A bad fix keeps the last position; offline it changes nothing. A captain silent for `driverStaleSeconds` is set offline |
 | GET 🔒 | `/driver/trips` | the captain's last 50 completed trips, newest first: `{ bookingId, completedAt, title, subtitle, payment, paidPaise, earningPaise }` |

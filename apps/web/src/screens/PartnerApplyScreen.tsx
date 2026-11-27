@@ -61,7 +61,7 @@ export function PartnerApplyScreen() {
 
   const header = (
     <PageHeader crumbs={[["Home", "/"], ["Become a partner", "/partner"], ["Apply"]]} title="Partner application" icon={<Handshake className="text-gold" size={36} />}
-      sub="Register your cab, auto, tempo traveller or bus. It takes about 10 minutes; keep your RC, insurance and bank details handy." />
+      sub="Register your bike, cab, auto, tempo traveller or bus. It takes about 10 minutes; keep your RC, insurance and bank details handy." />
   );
 
   if (!user) {
