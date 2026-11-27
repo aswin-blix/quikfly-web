@@ -1,6 +1,6 @@
 # QuikFly Captain: the driver app
 
-Status: **approved by the owner 2026-11-27; steps 0 and 1 done (step 1: API foundation, migration `0033`, not deployed until the owner runs it), step 2 (dispatch and the trip) next.** Tick the steps below as they ship and keep the status line current.
+Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 on branch `feat/captain-2-dispatch` with migration `0035`), step 3 (the Captain app) next.** Tick the steps below as they ship and keep the status line current.
 
 ## Context
 
@@ -93,6 +93,16 @@ Done 2026-11-27 (branch `feat/captain-1-foundation`). What changed from the plan
 
 **2. Dispatch and the trip (API).**
 `services/dispatch.ts`, `services/driver-rides.ts`, `routes/driver.ts`; `bookRide` branches on switch + client declaration; `getRide` returns `live { phase, captain position, etaMin }`; `readShare` reports the real phase; customer complete refused for live rides; fallback; immediate offer push; cron backstop (within the 50-queries budget).
+
+Done 2026-11-27 (branch `feat/captain-2-dispatch`). What changed from the plan:
+- **Two more settings for going live gradually:** `liveRideAuto`, `liveRideCab` (bikes join with step 6), plus `driverArrivedRadiusKm` and `driverCancelPenaltyPercent` from the admin settings plan. Migration `0035`: one offer per search step (unique `(ride_id, seq)`) and `ride_offers.reason`.
+- **The rider pays after a captain accepts** (`POST /bookings` is refused while searching), so an unmatched search never needs a refund; a captain who gives back a paid ride with nobody else free triggers a full refund (`unmatched`).
+- **Scheduled rides stay simulated** in this step; dispatch near pickup comes later. The fallback with `rideSimulateDrivers` on is a roster captain, never a partner cab.
+- **Offers are notifications pushed only to Captain phones** (`driver.offer`, `driver.cancelled`; never browsers, never listed in an inbox) and sent right after the response, not at the cron minute. The rider gets `ride.captain` when a captain gives the ride back or nobody is found.
+- **A driver online in Captain gets no simulated partner rides** (`partnerForRide` skips them).
+- Not yet: "How it works" rules in `GET /driver` (with step 3, where they are shown), the admin dispatch log (step 5).
+- Checks: typecheck, local smoke 343 + 805 passed (51 new live-ride checks, the plan's verification list), cron run, API dry-run build.
+- **Deploy order:** migration `0035` before this API (after `0033` and `0034`).
 
 **3. QuikFly Captain, version 1 (Flutter).**
 Flavor `captain` (the 15-place checklist from the exploration: `build.gradle.kts`, `src/captain`, `tool/ios_flavors.rb`, `lib/main_captain.dart`, `lib/captain/`, `NotificationScope.captain`, `scripts/app-icons.mjs` with a third icon, `tool/ios_icons.swift`). Screens: sign-in and "you're not set up yet" reasons; home with the online switch and today's trips, earnings and cash held; the offer sheet (countdown, full trip, money split, read aloud with `flutter_tts`); trip screens (go to pickup with a Maps link, arrived, enter PIN, on trip, collect cash / done); trips list; account. Demo location. `api.dart` + `captain_models.dart`.
