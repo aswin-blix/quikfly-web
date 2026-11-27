@@ -1,6 +1,6 @@
 # QuikFly Captain: the driver app
 
-Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 = PR #175 with migration `0035`; step 3 = PR #176, the Captain app; step 4, riders see the real trip, on branch `feat/captain-4-riders` on top of #176), step 5 (staff and owners can see it) next.** Tick the steps below as they ship and keep the status line current.
+Status: **approved by the owner 2026-11-27; steps 0, 1 and 2 built (step 1 merged, migrations `0033`/`0034` not yet run on production; step 2 = PR #175 with migration `0035`; step 3 = PR #176, the Captain app; step 4 = PR #177, riders see the real trip; step 5, staff and owners can see it, on branch `feat/captain-5-staff` on top of #177), step 6 (self sign-up) next.** Tick the steps below as they ship and keep the status line current.
 
 ## Context
 
@@ -128,6 +128,15 @@ Done 2026-11-27 (branch `feat/captain-4-riders`, on top of step 3). What changed
 
 **5. Staff and owners can see it.**
 Admin: a Captains page (online now, on a trip, last seen), a ride's dispatch log (who was asked, what they did) in the booking view, the new settings. Partner app: each driver's live status. Permission `drivers.view` in `PERMISSIONS`.
+
+Done 2026-11-27 (branch `feat/captain-5-staff`, on top of step 4). What changed from the plan:
+- **Two permissions:** `drivers.view` (Captains page, dispatch log) and `drivers.manage` (Set offline), both owner and operations. Blocking and gender stay on the partner's fleet review (`vendors.review`), linked from each captain.
+- **Captain status has four values** (`captainLiveStatus`, shared): on a ride, online, not heard from (marked online but silent past `driverStaleSeconds`), offline. The admin page, the admin fleet card and QuikFly Partner use the same function and labels.
+- **The dispatch log records the distance** at each offer (migration `0036`, `ride_offers.km`).
+- **The readiness card** sits on the Captains page (not above the Settings switch), and Settings → Captains points to it.
+- **Not built (later):** "Send a test offer" (needs an offer without a ride), and the `driverCashLimit` / `driverMaxOnlineHours` settings (they need a cash-settlement idea and an online-hours clock first).
+- **Partner app:** each driver shows "Captain: Online / On a ride / Not heard from / Offline" (reaches phones with the next Partner release).
+- Checks: typecheck; `flutter analyze`; local smoke 343 + 817 (10 new: list, readiness, fleet status, dispatch log with distance and reason, set offline refused on a ride and when already offline, audited, the content role refused); the Captains page and a booking's "Captains asked" at 390 px in light and dark (no sideways scroll).
 
 **6. Self sign-up.** Owner-driver registration inside Captain on the existing `/vendor` application; `bike` vehicles end to end.
 

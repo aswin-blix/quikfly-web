@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Car, CircleAlert, CircleCheck, PhoneCall, PowerOff, RefreshCw } from "lucide-react";
-import { CAPTAIN_STATUS_LABEL, type AdminCaptain, type AdminCaptains, type CaptainLiveStatus } from "@quikfly/shared";
+import { CAPTAIN_STATUS_LABEL, formatRegNumber, type AdminCaptain, type AdminCaptains, type CaptainLiveStatus } from "@quikfly/shared";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Badge, Button, Empty, ErrorBox, PageHeader, Segmented } from "@/components/ui";
 import { adminApi } from "@/lib/api";
@@ -54,7 +54,7 @@ function Captain({ c, canManage, onOffline }: { c: AdminCaptain; canManage: bool
         <div className="min-w-0">
           <p className="font-semibold text-strong">{c.name}{c.gender === "female" && <span className="font-normal text-muted"> · women-only rides</span>}</p>
           <p className="text-xs text-subtle">
-            {c.vehicle ? <span className="font-mono">{c.vehicle.regNumber}</span> : "No vehicle"} ·{" "}
+            {c.vehicle ? <span className="font-mono">{formatRegNumber(c.vehicle.regNumber)}</span> : "No vehicle"} ·{" "}
             <Link href={`/vendors/view?id=${encodeURIComponent(c.vendor.id)}`} className="text-accent hover:underline">{c.vendor.name}</Link>
           </p>
         </div>

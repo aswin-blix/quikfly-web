@@ -26,8 +26,8 @@ apps/web/         Next.js 16 static export (App Router). Screens never call fetc
   src/lib/api/    contract.ts (interface) · http.ts (real API) · mock.ts (demo, localStorage) · index.ts (picks one)
   src/spa/        in-memory router for the single-file demo build. Every new route goes here too.
   src/styles/     tokens.css is the only place for colours, fonts, radii (light + dark)
-apps/admin/       Next.js static export for staff: login, dashboard, bookings (notes, CSV export), customers (wallet, suspend, sign-out,
-                  cancel deletion), SOS alerts, licence reviews, partners, support, catalog, offers, settings, team (staff accounts), audit
+apps/admin/       Next.js static export for staff: login, dashboard, bookings (notes, CSV export, a live ride's dispatch log), customers (wallet, suspend, sign-out,
+                  cancel deletion), SOS alerts, licence reviews, partners, captains (live status, readiness), support, catalog, offers, settings, team (staff accounts), audit
 apps/api/         Cloudflare Worker: Hono + D1 (SQLite)
   src/routes/     HTTP only: parse, validate, call a service. routes/admin/ = staff endpoints (/v1/admin/*)
   src/services/   business logic + SQL. services/admin/ = auth, audit, stats, bookings (+ notes, CSV), customers, team, licences, vendors, fleet.

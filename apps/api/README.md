@@ -126,7 +126,7 @@ All paths are under `/v1`. Errors are `{ "message": "..." }` with a 4xx/5xx stat
 | POST 🔒 | `/vendor/onboarding/payment` | joining fee: **demo, nothing is collected** (no payment gateway) |
 | POST 🔒 | `/vendor/onboarding/agreement` | `{ name, accept: true }` after the fee |
 | POST 🔒 | `/vendor/onboarding/sticker` | ask for sticker & paint after the agreement; staff mark it done |
-| GET 🔒 | `/vendor/fleet` | `{ vehicles, drivers }`. Every fleet call below returns this. Changes need a live partner (409 otherwise) |
+| GET 🔒 | `/vendor/fleet` | `{ vehicles, drivers }` (each driver's `captain: { status, seenAt }` once they have signed in to QuikFly Captain). Every fleet call below returns this. Changes need a live partner (409 otherwise) |
 | POST 🔒 | `/vendor/vehicles` | `{ type, fuel, regNumber, purchaseDate }` → a `draft` vehicle (201) |
 | PUT 🔒 | `/vendor/vehicles/:id/:part` | `details`, `rc`, `insurance`, `audit` while `draft`; `rc`/`insurance` on a live vehicle is a **renewal** (`docsPending`, staff check it) |
 | PUT / GET 🔒 | `/vendor/vehicles/:id/documents/:kind` | RC or insurance photo (`rc`, `insurance`) |
@@ -186,7 +186,7 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | DELETE 🛡 | `/admin/catalog/:kind/:id` | remove an item (bookings keep their own copy of what was bought) |
 | POST 🛡 | `/admin/catalog/reset` | replace the whole catalog with the seed (demo reset) `[settings.edit]` |
 | GET 🛡 | `/admin/bookings?q=&status=&service=&from=&to=&page=` | all customers' bookings, newest first, 25 per page; `q` matches booking id, title, customer name or phone; dates are India time `[bookings.view]` |
-| GET 🛡 | `/admin/bookings/:id` | `{ booking (with customer), wallet entries, coupon, refundIfCancelled ({ amount, percent } while active), history (staff actions) }` `[bookings.view]` |
+| GET 🛡 | `/admin/bookings/:id` | `{ booking (with customer), wallet entries, coupon, refundIfCancelled ({ amount, percent } while active), history (staff actions) }` `[bookings.view]`; `dispatch` (a live ride's offers in order: captain, offered at, `km` from the pickup, outcome, decided at, give-back `reason`; shown to `drivers.view`) |
 | POST 🛡 | `/admin/bookings/:id/cancel` | `{ reason }` (5–300 chars) → cancels an active booking; the policy's share of a wallet payment is refunded to the customer's wallet in the same transaction; 409 if already finished `[bookings.manage]` |
 | GET 🛡 | `/admin/parcels?city=&state=&date=&q=&page=` | the queue (`Page<AdminParcelRow>`, never the code): `city` is either counter's, `state` is `open` (the default: neither collected nor cancelled), a parcel state or `all`, `date` is the bus's India date. `q` is an LR, a booking id or digits of either person's number, and searches all states unless `state` is given. Soonest bus first. `no-store` `[parcels.manage]` |
 | GET 🛡 | `/admin/parcels/:id` | one `AdminParcel`: the parcel without its code, sender, payment, `refundIfCancelled` and who made each move. `no-store` `[parcels.manage]` |
@@ -209,6 +209,8 @@ Staff sign in with email + password (accounts come from `scripts/create-admin.mj
 | POST 🛡 | `/admin/customers/:id/cancel-deletion` | `{ reason }`: clears a deletion the customer scheduled (409 when none, or already erased); audited `[customers.manage]` |
 | POST 🛡 | `/admin/bookings/:id/notes` | `{ body }` (`noteMin`–`noteMax` chars) → 201 the booking's notes. Internal; never shown to customers; also in `GET /admin/bookings/:id` as `notes`; audited `booking.note` `[bookings.manage]` |
 | GET 🛡 | `/admin/bookings/export.csv?q=&status=&service=&from=&to=` | the booking list's filters as a CSV download (newest first, up to `exportMaxRows` 5000 rows; `Content-Disposition: attachment`); audited `bookings.export` with the filters and row count Parcel rows also fill `parcel_lr`, `parcel_mode`, `parcel_state`, `parcel_max_kg` (nothing of the receiver or contents) `[bookings.view]` |
+| GET 🛡 | `/admin/captains` | QuikFly Captain: `{ readiness, captains }`. Readiness: approved drivers on autos and cars, signed in to Captain, online, on a ride, and the `featureLiveDrivers` / `driverDemoLocation` / `rideSimulateDrivers` switches. Each captain (signed in at least once): partner, vehicle, `status` (`onRide` · `online` · `silent` = marked online but not heard from in `driverStaleSeconds` · `offline`, `captainLiveStatus` in shared), last seen, map position (`demo`), the app's own `blocker` words, today's trips and earning `[drivers.view]` |
+| POST 🛡 | `/admin/captains/:id/offline` | set a captain offline (not on a ride: 409; already offline: 409); audited on the partner as `vendor.captain.offline` → the list again `[drivers.manage]` |
 | GET 🛡 | `/admin/sos?status=open` | SOS alerts in one status (`open` default, `acknowledged`, `closed`), newest first: customer, ride (driver, vehicle, route) when there was one, shared location, note, who handled it `[sos.manage]` |
 | GET 🛡 | `/admin/sos/:id` | one alert `[sos.manage]` |
 | POST 🛡 | `/admin/sos/:id/acknowledge` | `{ note? }` → `acknowledged` (someone is on it); 409 if already; audited `[sos.manage]` |
