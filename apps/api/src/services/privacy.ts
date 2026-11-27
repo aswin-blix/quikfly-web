@@ -76,7 +76,7 @@ export async function exportData(db: D1Database, userId: string): Promise<DataEx
     // QuikFly Captain: the person's own driver record (wherever it is registered), where they last were, and the rides they were offered.
     ["captain", "SELECT id, name, phone, dl_number, dl_valid_till, gender, status, vehicle_id, created_at FROM vendor_drivers WHERE user_id = ?1"],
     ["captain_location", "SELECT online, x, y, lat, lng, demo, seen_at FROM driver_state WHERE driver_id IN (SELECT id FROM vendor_drivers WHERE user_id = ?1)"],
-    ["captain_offers", "SELECT ride_id, offered_at, outcome, decided_at FROM ride_offers WHERE driver_id IN (SELECT id FROM vendor_drivers WHERE user_id = ?1)"],
+    ["captain_offers", "SELECT ride_id, offered_at, outcome, reason, decided_at FROM ride_offers WHERE driver_id IN (SELECT id FROM vendor_drivers WHERE user_id = ?1)"],
   ];
   const results = await db.batch(queries.map(([, sql]) => db.prepare(sql).bind(userId)));
   const data: Record<string, unknown[]> = {};
