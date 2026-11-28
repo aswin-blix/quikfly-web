@@ -91,6 +91,8 @@ export interface CaptainProfile {
   owner: { name: string };
   /** Null when they can go online; otherwise what stops them, in words for the captain. */
   blocker: string | null;
+  /** The captains' privacy notice (GET /privacy/captain): the current version and when they agreed to it (null: not yet, so they can't go online). */
+  notice: { version: string; agreedAt: string | null };
   duty: CaptainDuty;
   /** The live rules, for the app's "How it works" page (never typed into the app by hand). */
   rules: CaptainRules;
@@ -250,4 +252,7 @@ export function captainLiveStatus(s: { online: boolean | number; rideId: string 
 export const NO_CAPTAIN = "No captain is free near you right now. You haven't been charged. Please try again in a few minutes.";
 
 /** What a captain is told when their number has no approved driver record. */
+/** captainBlocker's words when a captain hasn't agreed to the current captains' notice (CAPTAIN_NOTICE). */
+export const CAPTAIN_NOTICE_NEEDED = "Read and agree to the QuikFly Captain privacy notice to go online.";
+
 export const NOT_A_CAPTAIN = "This number isn't registered as a QuikFly captain yet. Ask your fleet owner to add you in QuikFly Partner with this number.";

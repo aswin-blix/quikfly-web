@@ -1,8 +1,9 @@
 "use client";
 // /privacy: the DPDP privacy notice. The text is packages/shared/src/privacy.ts (the apps get
 // the same notice from GET /v1/privacy); the Grievance Officer's details are runtime Settings.
+// Below it, QuikFly Captain's drivers' notice (GET /v1/privacy/captain), which captains agree to in that app.
 import { Mail, MapPin, Phone, ShieldCheck } from "lucide-react";
-import { privacyNotice } from "@quikfly/shared";
+import { DRIVER_RULES, captainNotice, privacyNotice } from "@quikfly/shared";
 import { useSettings } from "@/components/ConfigProvider";
 import { PageHeader } from "@/components/ui";
 import { Link } from "@/lib/nav";
@@ -12,6 +13,7 @@ import { useLang } from "@/components/LanguageProvider";
 export function PrivacyScreen() {
   const notice = privacyNotice(useSettings());
   const c = notice.contact;
+  const captain = captainNotice({ busySeconds: DRIVER_RULES.pingBusySeconds, idleSeconds: DRIVER_RULES.pingIdleSeconds });
   const { t, locale } = useLang();
   return (
     <>
@@ -29,6 +31,18 @@ export function PrivacyScreen() {
             <ul className="mt-3 space-y-2 list-disc pl-5 text-soft">{s.points.map((p) => <li key={p}>{p}</li>)}</ul>
           </div>
         ))}
+        <div className="panel p-5 sm:p-6" id="captain">
+          <p className="label !text-gold">For drivers</p>
+          <h2 className="font-display text-xl text-strong mt-1">{captain.title}</h2>
+          <p className="text-sm text-muted mt-1">Shown in the QuikFly Captain app, where drivers agree to it before going online. Last updated {longDate(captain.updated, locale)}.</p>
+          <ul className="mt-3 space-y-2 list-disc pl-5 text-soft">{captain.summary.map((p) => <li key={p}>{p}</li>)}</ul>
+          {captain.sections.map((s) => (
+            <div key={s.title} className="mt-5">
+              <h3 className="font-semibold text-strong">{s.title}</h3>
+              <ul className="mt-2 space-y-2 list-disc pl-5 text-soft">{s.points.map((p) => <li key={p}>{p}</li>)}</ul>
+            </div>
+          ))}
+        </div>
         <div className="panel p-5 sm:p-6" id="contact">
           <h2 className="font-display text-xl text-strong">{t("privacyContactTitle")}</h2>
           <p className="text-sm text-muted mt-1">{t("privacyContactSub")}</p>

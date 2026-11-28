@@ -1144,8 +1144,16 @@ if (pvUp.status === 409) {
   // QuikFly Captain, step 1 (docs/driver-app-plan.md): the driver's number is their login; duty and position.
   await expect("captain: someone with no driver record is told so, not refused", call("GET", "/driver", null, RC), 200, (j) => j.captain === null && /isn't registered/.test(j.reason));
   await expect("captain: and can't go online", call("POST", "/driver/duty", { online: true, position: { lat: 13.06, lng: 80.24 } }, RC), 403);
-  await expect("captain: signing in with the driver's number links the record", call("GET", "/driver", null, PV), 200,
-    (j) => j.captain?.driver.id === d1 && j.captain.driver.self && j.captain.vehicle?.regNumber === regCar && j.captain.owner.name === "Smoke Vendor" && j.captain.blocker === null && j.captain.duty.online === false);
+  await expect("captain: signing in with the driver's number links the record, and asks for the captains' notice first", call("GET", "/driver", null, PV), 200,
+    (j) => j.captain?.driver.id === d1 && j.captain.driver.self && j.captain.vehicle?.regNumber === regCar && j.captain.owner.name === "Smoke Vendor"
+      && /privacy notice/.test(j.captain.blocker ?? "") && j.captain.notice?.agreedAt === null && j.captain.duty.online === false);
+  await expect("captain: can't go online before agreeing to it", call("POST", "/driver/duty", { online: true, position: { lat: 13.06, lng: 80.24 } }, PV), 409, (j) => /privacy notice/.test(j.message));
+  const captainNotice = await expect("captain: the captains' notice is public", call("GET", "/privacy/captain", null, false), 200, (j) => /^captain-/.test(j.version) && j.summary.length > 0 && j.sections.length > 0);
+  await expect("captain: agreeing to an old version is refused", call("POST", "/driver/notice", { version: "captain-2000-01-01" }, PV), 400);
+  await expect("captain: someone with no driver record can't agree to it", call("POST", "/driver/notice", { version: captainNotice?.version }, RC), 403);
+  await expect("captain: agreeing clears the blocker", call("POST", "/driver/notice", { version: captainNotice?.version }, PV), 200,
+    (j) => j.captain.blocker === null && j.captain.notice.version === captainNotice?.version && typeof j.captain.notice.agreedAt === "string");
+  await expect("captain: the consent is in their export", call("GET", "/me/export", null, PV), 200, (j) => j.data.privacy_consents.some((c) => c.version === captainNotice?.version));
   await expect("captain: the owner's fleet shows the driver has signed in", call("GET", "/vendor/fleet", null, PV), 200, (j) => j.drivers.find((d) => d.id === d1).linked === true);
   await expect("captain: going online needs a location", call("POST", "/driver/duty", { online: true }, PV), 400);
   await expect("captain: a location outside the city is refused", call("POST", "/driver/duty", { online: true, position: { lat: 28.61, lng: 77.21 } }, PV), 409, (j) => /outside/.test(j.message));

@@ -3,7 +3,7 @@
 // driver's number. Offers and the trip itself are in dispatch.ts and driver-rides.ts (step 2 of
 // docs/driver-app-plan.md). Staff review of drivers stays in services/admin/fleet.ts.
 import {
-  CAPTAIN_RELEASE_REASONS, DRIVER_RULES, NOT_A_CAPTAIN, dailyFeePaise, formatRegNumber, onDailyFee, onMap, toMapPoint, vehicleTypeForCaptain,
+  CAPTAIN_NOTICE, CAPTAIN_NOTICE_NEEDED, CAPTAIN_RELEASE_REASONS, DRIVER_RULES, NOT_A_CAPTAIN, dailyFeePaise, formatRegNumber, onDailyFee, onMap, toMapPoint, vehicleTypeForCaptain,
   type CaptainDuty, type CaptainProfile, type CaptainRules, type Gender, type Settings, type MapPoint, type User, type VendorVehicleType,
 } from "@quikfly/shared";
 import { badRequest, conflict, forbidden } from "../lib/errors";
@@ -17,6 +17,8 @@ export interface CaptainContext {
   status: "submitted" | "active" | "rejected" | "blocked"; review_note: string | null; blocked_reason: string | null;
   vehicle_id: string | null; vehicle_type: VendorVehicleType | null; vehicle_reg: string | null; vehicle_status: string | null;
   vendor_status: string; owner_name: string;
+  /** When they agreed to the current captains' notice (CAPTAIN_NOTICE.version); null: not yet. */
+  notice_at: string | null;
 }
 
 interface StateRow {
@@ -26,12 +28,13 @@ interface StateRow {
 const CAPTAIN_SQL = `
   SELECT d.id, d.vendor_id, d.user_id, d.name, d.phone, d.self, d.gender, d.status, d.review_note, d.blocked_reason,
          vv.id AS vehicle_id, vv.type AS vehicle_type, vv.reg_number AS vehicle_reg, vv.status AS vehicle_status,
-         ve.status AS vendor_status, ou.name AS owner_name
+         ve.status AS vendor_status, ou.name AS owner_name,
+         (SELECT pc.given_at FROM privacy_consents pc WHERE pc.user_id = d.user_id AND pc.version = ?2) AS notice_at
   FROM vendor_drivers d
   JOIN vendors ve ON ve.id = d.vendor_id
   JOIN users ou ON ou.id = ve.user_id
   LEFT JOIN vendor_vehicles vv ON vv.id = d.vehicle_id
-  WHERE d.user_id = ?`;
+  WHERE d.user_id = ?1`;
 
 /**
  * The signed-in person's driver record, linking it at the first visit: a record with their number that
@@ -39,14 +42,14 @@ const CAPTAIN_SQL = `
  * Null when their number has none.
  */
 export async function captainFor(db: D1Database, user: Pick<User, "id" | "phone">): Promise<CaptainContext | null> {
-  const linked = await db.prepare(CAPTAIN_SQL).bind(user.id).first<CaptainContext>();
+  const linked = await db.prepare(CAPTAIN_SQL).bind(user.id, CAPTAIN_NOTICE.version).first<CaptainContext>();
   if (linked) return linked;
   const claimed = await db.prepare(
     `UPDATE vendor_drivers SET user_id = ?1 WHERE user_id IS NULL AND id = (
        SELECT id FROM vendor_drivers WHERE phone = ?2 AND user_id IS NULL AND status <> 'rejected'
        ORDER BY (status = 'active') DESC, created_at DESC LIMIT 1)`,
   ).bind(user.id, user.phone).run();
-  return claimed.meta.changes ? db.prepare(CAPTAIN_SQL).bind(user.id).first<CaptainContext>() : null;
+  return claimed.meta.changes ? db.prepare(CAPTAIN_SQL).bind(user.id, CAPTAIN_NOTICE.version).first<CaptainContext>() : null;
 }
 
 /** The captain, or 403 with what to do about it. */
@@ -67,6 +70,7 @@ export function captainBlocker(c: CaptainContext): string | null {
   if (c.vehicle_status === "blocked") return `${reg} is blocked. ${c.self ? "Check it in QuikFly Partner." : `Ask ${c.owner_name} to check it in QuikFly Partner.`}`;
   if (c.vehicle_status !== "active") return `${reg} is off duty. ${c.self ? "Put it on duty in QuikFly Partner." : `Ask ${c.owner_name} to put it on duty.`}`;
   if (!vehicleTypeForCaptain(c.vehicle_type!)) return "QuikFly Captain is for bikes, autos and cars. Ask to be put on one of those.";
+  if (!c.notice_at) return CAPTAIN_NOTICE_NEEDED;
   return null;
 }
 
@@ -122,6 +126,7 @@ export async function captainProfile(db: D1Database, c: CaptainContext): Promise
     vehicle: c.vehicle_id ? { id: c.vehicle_id, type: c.vehicle_type!, regNumber: c.vehicle_reg! } : null,
     owner: { name: c.owner_name },
     blocker: captainBlocker(c),
+    notice: { version: CAPTAIN_NOTICE.version, agreedAt: c.notice_at },
     duty: await dutyOf(db, c.id),
     rules: captainRules(await getSettings(db)),
   };
@@ -149,6 +154,17 @@ async function readPosition(db: D1Database, body: Record<string, unknown>): Prom
     return { point: { x, y }, lat: null, lng: null, demo: true };
   }
   throw badRequest('"position" must be { lat, lng } or { x, y }.');
+}
+
+/**
+ * Records the captain's agreement to the captains' notice (kept as proof in privacy_consents, beside the
+ * main notice's). An older version is refused, so nobody agrees to text they weren't shown.
+ */
+export async function agreeCaptainNotice(db: D1Database, c: CaptainContext, version: string): Promise<CaptainContext> {
+  if (version !== CAPTAIN_NOTICE.version) throw badRequest("The QuikFly Captain privacy notice has changed. Please read the new one and agree again.");
+  const now = new Date().toISOString();
+  await db.prepare("INSERT OR IGNORE INTO privacy_consents (user_id, version, given_at) VALUES (?, ?, ?)").bind(c.user_id, version, now).run();
+  return { ...c, notice_at: c.notice_at ?? now };
 }
 
 /** Goes online (needs nothing stopping them and a position) or offline (not during a ride). */

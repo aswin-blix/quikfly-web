@@ -8,7 +8,7 @@ import { jsonBody, oneOf, str } from "../lib/validate";
 import { newWake, wakeUp } from "../lib/wake";
 import { requireUser } from "../middleware/auth";
 import { requireDriver } from "../middleware/driver";
-import { captainFor, captainProfile, ping, setDuty } from "../services/drivers";
+import { agreeCaptainNotice, captainFor, captainProfile, ping, setDuty } from "../services/drivers";
 import { getSettings } from "../services/settings";
 import {
   acceptOffer, captainState, captainSummary, captainTrips, completeTrip, declineOffer, markArrived, pingDispatch, releaseRide, startTrip,
@@ -29,6 +29,11 @@ export const driver = new Hono<AppEnv>()
     const captain = await captainFor(c.env.DB, c.var.user);
     if (captain) return c.json({ captain: await captainProfile(c.env.DB, captain) });
     return c.json({ captain: null, reason: NOT_A_CAPTAIN, selfSignup: (await getSettings(c.env.DB)).captainSelfSignup === true });
+  })
+  // { version } (CAPTAIN_NOTICE.version, from GET /privacy/captain) → { captain }: agrees to the captains' notice.
+  .post("/notice", requireDriver, async (c) => {
+    const captain = await agreeCaptainNotice(c.env.DB, c.var.captain, str(await jsonBody(c), "version", 40));
+    return c.json({ captain: await captainProfile(c.env.DB, captain) });
   })
   // { online, position?: { lat, lng } | { x, y } } → state. A map point is a demo location (setting driverDemoLocation).
   .post("/duty", requireDriver, async (c) => {

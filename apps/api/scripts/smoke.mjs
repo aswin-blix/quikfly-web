@@ -782,6 +782,7 @@ if (cfg.settings.serviceParcel) {
 const notice = await expect("GET /privacy", call("GET", "/privacy", null, false), 200,
   (j) => /^\d{4}-\d{2}-\d{2}$/.test(j.version) && j.summary.length > 0 && j.sections.length > 3 && j.contact.role === "Grievance Officer" && !!j.contact.email);
 await expect("consent to an old notice version is refused", call("POST", "/me/consent", { version: "2000-01-01" }), 400);
+await expect("GET /privacy/captain (QuikFly Captain's own notice)", call("GET", "/privacy/captain", null, false), 200, (j) => /^captain-/.test(j.version) && j.summary.length > 0 && j.sections.length > 0);
 await expect("POST /me/consent records the version", call("POST", "/me/consent", { version: notice?.version }), 200, (j) => j.privacyConsent === notice?.version);
 await expect("GET /auth/me carries the consent", call("GET", "/auth/me"), 200, (j) => j.privacyConsent === notice?.version);
 await expect("consent needs sign-in", call("POST", "/me/consent", { version: notice?.version }, false), 401);
