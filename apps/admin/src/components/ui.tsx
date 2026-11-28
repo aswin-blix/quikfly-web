@@ -1,6 +1,7 @@
 "use client";
 // Small building blocks shared by every admin page. Colours come from tokens only.
-import { AlertTriangle, Inbox } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, Eye, EyeOff, Inbox } from "lucide-react";
 import { cx } from "@/lib/format";
 
 export function Spinner({ className }: { className?: string }) {
@@ -100,6 +101,26 @@ export function Field({ label, htmlFor, hint, children }: { label: string; htmlF
       <label htmlFor={htmlFor} className="label block mb-1.5">{label}</label>
       {children}
       {hint && <p className="text-xs text-subtle mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * A password field with an eye button that shows or hides what was typed. It starts hidden and hides again
+ * whenever the field is emptied (the login form clears it after a failed try), so a password isn't left showing.
+ */
+export function PasswordInput({ className, ...rest }: Omit<React.InputHTMLAttributes<HTMLInputElement>, "type">) {
+  const [shown, setShown] = useState(false);
+  const empty = rest.value === "" || rest.value === undefined;
+  useEffect(() => { if (empty) setShown(false); }, [empty]);
+  return (
+    <div className="relative">
+      <input {...rest} type={shown ? "text" : "password"} className={cx("field pr-11 password-field", className)} />
+      <button type="button" onClick={() => setShown((s) => !s)} aria-label={shown ? "Hide password" : "Show password"} aria-pressed={shown}
+        aria-controls={rest.id} title={shown ? "Hide password" : "Show password"}
+        className="absolute inset-y-0 right-0 w-11 grid place-items-center text-muted hover:text-strong rounded-r-[var(--field-radius)]">
+        {shown ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
+      </button>
     </div>
   );
 }
