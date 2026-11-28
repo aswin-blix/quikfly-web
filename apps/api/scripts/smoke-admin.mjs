@@ -449,6 +449,9 @@ async function quickParcelChecks({ before, places, options, newPhone, priced, co
     await expect("quick: staff would refund all of it", call("GET", `/admin/parcels/${late.id}`, null, T), 200, (j) => j.refundIfCancelled.amount === late.amount);
     await expect("quick: a late cancel keeps the ride fee", call("POST", `/bookings/${late.id}/cancel`, { reason: "plans_changed" }, Q), 200, (j) => j.cancelFee === fee && j.refundAmount === late.amount - fee);
     check("quick: and the wallet gets the rest", (await balance()) === paid - fee);
+    // The fresh sender started with the signup bonus only, and the kept fees can leave less than one more booking.
+    const sender = (await call("GET", "/auth/me", null, Q)).json;
+    await expect("quick: staff top up the test sender's wallet", call("POST", `/admin/customers/${sender.id}/wallet`, { amount: 1000, reason: "Smoke: top-up for the next booking" }, T), 200);
     paid = await balance();
     const waived = await expect("quick: book again", call("POST", "/bookings", body((await quote()).id), Q), 201);
     await expect("quick: a captain's fault waives the fee", call("POST", `/bookings/${waived.id}/cancel`, { reason: "driver_late" }, Q), 200, (j) => j.cancelFee === 0 && j.refundAmount === waived.amount);

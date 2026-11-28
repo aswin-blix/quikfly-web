@@ -64,6 +64,7 @@ npm run typecheck           # shared + api + web + admin; must pass before commi
 npm run build               # API dry-run bundle + website export + admin export
 npm run smoke               # API end-to-end tests against the local API (node apps/api/scripts/smoke.mjs <baseUrl> for others)
 npm run smoke:admin         # admin endpoints against the local API; creates its own test admins
+npm run check:push          # each notification kind is pushed only to its own app (local D1)
 npm run deploy              # production; read docs/operations.md first
 cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://127.0.0.1:8787/v1   # app checks
 ```
@@ -114,5 +115,5 @@ cd apps/mobile && flutter analyze && flutter test --dart-define=API_URL=http://1
 - The customer app (QuikFly) never gets partner or captain screens; partner flows live in the Partner app and on the website, driver flows only in QuikFly Captain (`test/captain_routes_test.dart` keeps lib/captain on its own router).
 - QuikFly Captain builds without its Firebase file (`android/app/src/captain/google-services.json`): its Google services step is skipped and push stays off. Offers still arrive by its heartbeat. `driver.*` kinds are pushed only to Captain phones and never listed in any inbox.
 - Phone checks on the owner's phone: in the Partner app up to 0.1.13 and the first 0.1.14 build, the registration ⋮ menu's only item is "Sign out" and it opens under the finger with no confirmation; don't tap ⋮ there unless signing out is intended. The rebuilt 0.1.14 adds Privacy & data and the notice to that menu and asks before signing out.
-- Push follows the same split: a phone registers with `app` (`PUSH_APPS`), and `pushNew` sends `vendor.*` (`PARTNER_NOTIFICATION_PREFIX`) to Partner phones and to Captain phones (an owner-driver who registered in Captain), `driver.*` only to Captain phones, the rest only to the customer app (`pushAppsForKind`). A new partner-only kind must start with `vendor.`, or both rules (here and `NotificationScope`) need changing together.
+- Push follows the same split: a phone registers with `app` (`PUSH_APPS`), and `pushNew` sends `vendor.*` (`PARTNER_NOTIFICATION_PREFIX`) to Partner phones and to Captain phones (an owner-driver who registered in Captain), `driver.*` only to Captain phones, the rest only to the customer app (`pushAppsForKind`). A new partner-only kind must start with `vendor.`, or both rules (here and `NotificationScope`) need changing together. `npm run check:push` proves the cron's SQL matches `pushAppsForKind`.
 - Screens shared by both apps (login, notifications, not-found) must not link to pages only one app has; the Partner router lacks customer routes like `/trips`. One account has one inbox: `NotificationScope` keeps `vendor.*` in the Partner app and the rest in the customer app. `test/partner_routes_test.dart` fails if `lib/partner` links to a page the Partner router doesn't have.

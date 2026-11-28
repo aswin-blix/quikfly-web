@@ -12,7 +12,8 @@
     "db:migrate:local": "wrangler d1 migrations apply quikfly-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply quikfly-db --remote",
     "smoke": "node scripts/smoke.mjs",
-    "smoke:admin": "node scripts/smoke-admin.mjs"
+    "smoke:admin": "node scripts/smoke-admin.mjs",
+    "check:push": "node scripts/push-routing.mjs"
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "^2.0.0",
