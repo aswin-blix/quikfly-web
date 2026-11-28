@@ -259,7 +259,9 @@ class _HomeState extends ConsumerState<_Home> {
           await ref.read(captainProvider.notifier).refresh();
         },
         children: [
-          if (p.blocker != null) ...[
+          // The captains' privacy notice, agreed once before going online (notice_screen.dart).
+          if (!p.noticeAgreed) ...[_NoticeCard(), const SizedBox(height: 12)],
+          if (p.blocker != null && p.blocker != captainNoticeNeeded) ...[
             ErrorBox(p.blocker!, onRetry: () => ref.invalidate(captainLookupProvider)),
             // An owner-driver sorts their own vehicle here (a fleet driver's owner does it in QuikFly Partner).
             if (p.self && p.regNumber == null)
@@ -444,6 +446,32 @@ class _Today extends ConsumerWidget {
           stat('Vehicle earned', rupees(s?.earningPaise ?? 0), color: c.success),
           stat('Cash you hold', rupees(s?.cashPaise ?? 0), color: (s?.cashPaise ?? 0) > 0 ? c.warning : null),
         ]),
+      ]),
+    );
+  }
+}
+
+/// Before a captain's first time online: how QuikFly Captain uses their location, and "Read and agree".
+class _NoticeCard extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.qf;
+    return Panel(
+      highlighted: true,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.location_on_outlined, color: c.accent),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Before your first ride', style: Theme.of(context).textTheme.titleMedium)),
+        ]),
+        const SizedBox(height: 8),
+        Text('While you\'re online, QuikFly Captain shares your location, also with the app closed. Read how it\'s used and agree to go online.',
+            style: TextStyle(color: c.fgSoft, height: 1.4)),
+        const SizedBox(height: 12),
+        GoldButton(label: 'Read and agree', icon: Icons.policy_outlined, onPressed: () async {
+          await context.push('/captain-notice');
+          ref.invalidate(captainLookupProvider);
+        }),
       ]),
     );
   }

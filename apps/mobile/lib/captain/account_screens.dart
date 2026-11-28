@@ -103,6 +103,7 @@ class CaptainAccountScreen extends ConsumerWidget {
             ListTile(leading: const Icon(Icons.help_outline), title: const Text('How it works'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/how')),
             ListTile(leading: const Icon(Icons.shield_outlined), title: const Text('Privacy & data'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/privacy/data')),
             ListTile(leading: const Icon(Icons.policy_outlined), title: const Text('Privacy notice'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/privacy')),
+            ListTile(leading: const Icon(Icons.location_on_outlined), title: const Text('Captain privacy notice'), subtitle: const Text('Your location and trips'), trailing: const Icon(Icons.chevron_right), onTap: () => context.push('/captain-notice')),
           ]),
         ),
         const SizedBox(height: 20),

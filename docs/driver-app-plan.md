@@ -73,7 +73,7 @@ Released apps run the timers themselves and would "complete" a live ride after 2
 ### Notifications and privacy
 - `PUSH_APPS` gains `captain`; kinds start with `driver.` (`driver.offer`, `driver.cancelled`, `driver.account`). `pushNew`'s two-way SQL split and Flutter's `NotificationScope.shows` become a per-app prefix map (both rules change together, per AGENTS.md).
 - `exportData()` / `eraseAccounts()` cover the driver's own link, state and offers. This also closes an existing gap: erasing a partner today leaves `vendor_drivers.name`, `phone` and `dl_number` behind.
-- The privacy notice gains "Captains: your location while you are online" (`packages/shared/src/privacy.ts`). Bumping its version asks every user to agree again: **the owner decides** whether to bump or to show it only in Captain.
+- **Decided 2026-11-28 (owner): a separate captains' notice, shown only in QuikFly Captain** (`CAPTAIN_NOTICE`, `captainNotice()` in `packages/shared/src/privacy.ts`; `GET /privacy/captain`, `POST /driver/notice`). The main notice keeps its version, so customers aren't asked again. A captain can't go online until they agree to the current version (`captainBlocker`); Captain's home shows "Before your first ride" → the notice → I agree. The website shows it on /privacy.
 
 ## Steps (one PR each; the switch stays off until step 4 is checked)
 
@@ -231,7 +231,7 @@ A "How it works" page built from the live values, never typed by hand: time to a
 
 ## Open questions for the owner
 
-1. **The privacy notice.** Add the captains' location section and bump the notice version (every user is asked to agree again), or show the location notice only inside Captain?
+1. **The privacy notice. Decided 2026-11-28: only inside Captain**, as its own notice with its own version (see Notifications and privacy).
 2. **Name and package id.** "QuikFly Captain", `com.quikfly.captain`. The id can't change once the app is on the Play Store; it can until then.
 3. **How QuikFly earns (decided 2026-11-27): a setting.** Commission per ride (`vendorCommissionPercent`, the default) or a flat daily fee per driver (`vendorFlatDailyFee` + `vendorDailyFee`): no commission on rides, and the driver's first completed ride of the day charges the owner the fee once; no rides, no fee. Built in `feat/partner-daily-fee` (migration `0034`). Captain's offer sheet and earnings must read the model from settings and never show a share that isn't taken. Before turning the fee on for real partners: reword the agreement term that says "commission" and bump its version.
 4. **Who is paid.** A trip's earning goes to the vehicle's owner (the partner), as today; a fleet driver sees trips, fares and cash held, not a payout. Owner-drivers are their own partner. Say if drivers should have their own earnings ledger.

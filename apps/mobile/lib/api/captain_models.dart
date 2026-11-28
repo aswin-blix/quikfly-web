@@ -102,17 +102,25 @@ class CaptainDuty {
       CaptainDuty(online: j['online'] == true, position: MapPoint.maybe(j['position']), demo: j['demo'] == true, seenAt: _date(j['seenAt']));
 }
 
+/// captainBlocker's words when only the captains' notice is missing (CAPTAIN_NOTICE_NEEDED in packages/shared/src/driver.ts).
+const captainNoticeNeeded = 'Read and agree to the QuikFly Captain privacy notice to go online.';
+
 /// GET /driver → captain.
 class CaptainProfile {
   const CaptainProfile({
     required this.driverId, required this.name, required this.phone, required this.gender, required this.self,
     required this.vehicleType, required this.regNumber, required this.ownerName, required this.blocker, required this.duty, required this.rules,
+    this.noticeVersion = '', this.noticeAgreedAt,
   });
   final String driverId, name, phone, ownerName;
   final String? gender, vehicleType, regNumber, blocker;
   final bool self;
   final CaptainDuty duty;
   final CaptainRules rules;
+  /// The captains' privacy notice (GET /privacy/captain): its current version, and when they agreed (null: not yet, so they can't go online).
+  final String noticeVersion;
+  final DateTime? noticeAgreedAt;
+  bool get noticeAgreed => noticeAgreedAt != null;
 
   factory CaptainProfile.fromJson(Json j) {
     final d = j['driver'] as Json;
@@ -121,6 +129,7 @@ class CaptainProfile {
       driverId: '${d['id']}', name: '${d['name']}', phone: '${d['phone']}', gender: d['gender'] as String?, self: d['self'] == true,
       vehicleType: v?['type'] as String?, regNumber: v?['regNumber'] as String?, ownerName: '${(j['owner'] as Json?)?['name'] ?? ''}',
       blocker: j['blocker'] as String?, duty: CaptainDuty.fromJson(j['duty'] as Json), rules: CaptainRules.fromJson(j['rules'] as Json?),
+      noticeVersion: '${(j['notice'] as Json?)?['version'] ?? ''}', noticeAgreedAt: _date((j['notice'] as Json?)?['agreedAt']),
     );
   }
 }

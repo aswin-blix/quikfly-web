@@ -146,6 +146,8 @@ class QuikFlyApi {
   Future<CaptainState> setCaptainDuty(bool online, {CaptainPosition? position}) =>
       _post('/driver/duty', _captainState, {'online': online, if (position != null) 'position': position.toJson()});
   Future<CaptainState> captainPing({CaptainPosition? position}) => _post('/driver/ping', _captainState, {if (position != null) 'position': position.toJson()});
+  /// Agrees to the captains' notice (CaptainNotice.version); returns the profile with the blocker cleared.
+  Future<CaptainLookup> agreeCaptainNotice(String version) => _post('/driver/notice', (d) => CaptainLookup.fromJson(d as Json), {'version': version});
   Future<CaptainSummary> captainSummary() => _get('/driver/summary', (d) => CaptainSummary.fromJson(d as Json));
   Future<List<CaptainTripItem>> captainTrips() => _get('/driver/trips', _listOf(CaptainTripItem.fromJson));
   Future<CaptainState> acceptOffer(String rideId) => _post('/driver/offers/$rideId/accept', _captainState);
@@ -202,6 +204,7 @@ class QuikFlyApi {
 
   // ── Privacy (DPDP) ──
   Future<PrivacyNotice> privacyNotice() => _get('/privacy', (d) => PrivacyNotice(d as Json));
+  Future<CaptainNotice> captainNotice() => _get('/privacy/captain', (d) => CaptainNotice(d as Json));
   Future<User> giveConsent(String version) => _post('/me/consent', (d) => User.fromJson(d as Json), {'version': version});
 
   /// Everything QuikFly holds about this account, as the JSON the API sends (saved as a file).
