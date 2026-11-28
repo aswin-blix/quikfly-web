@@ -174,7 +174,7 @@ function Footer() {
           <LanguageMenu className="mt-4 w-fit" />
         </div>
         <FooterCol title={t("navServices")} links={open.map((s) => [s.action, s.href])} />
-        <FooterCol title={t("footerCompany")} links={[[t("navOffers"), "/offers"], [t("linkBecomePartner"), "/partner"], [t("linkMyTrips"), "/bookings"]]} />
+        <FooterCol title={t("footerCompany")} links={[[t("navOffers"), "/offers"], [t("linkBecomePartner"), "/partner"], [t("linkDriveWithUs"), "/captain"], [t("linkMyTrips"), "/bookings"]]} />
         <FooterCol title={t("footerSupport")} links={[[t("linkHelpCentre"), "/help"], [t("footerSafety"), "/help"], [t("footerCancellation"), "/help"], [t("linkPrivacyNotice"), "/privacy"]]} />
       </div>
       <div className="border-t border-line">

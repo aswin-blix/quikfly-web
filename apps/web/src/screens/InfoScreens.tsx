@@ -1,17 +1,17 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
-import { BadgeCheck, BadgePercent, CarTaxiFront, CircleCheck, ClipboardList, Copy, Download, Handshake, Headphones, LayoutGrid, Mail, MessageCircle, Phone, PhoneCall, Search } from "lucide-react";
+import { BadgeCheck, BadgePercent, Banknote, CarTaxiFront, CircleCheck, Clock, ClipboardList, Copy, Download, Eye, Handshake, Headphones, LayoutGrid, Mail, MapPin, MessageCircle, Navigation, Phone, PhoneCall, Search, ShieldCheck, Smartphone, ThumbsUp, UserPlus, Volume2 } from "lucide-react";
 import { useApp } from "@/components/AppProvider";
 import { Reveal, Tilt } from "@/components/motion";
 import { Accordion, Empty, GhostLink, PageHeader } from "@/components/ui";
 import { inr } from "@/lib/format";
 import { Link } from "@/lib/nav";
 import { SERVICES } from "@/lib/services";
-import { VENDOR_VEHICLE_LABEL, VENDOR_VEHICLE_TYPES, whatsappLink, type Faq } from "@quikfly/shared";
+import { CAPTAIN_VEHICLE_TYPES, VENDOR_VEHICLE_LABEL, VENDOR_VEHICLE_TYPES, whatsappLink, type Faq } from "@quikfly/shared";
 import { CallbackForm } from "@/components/support/CallbackForm";
 import { useConfig, useSettings } from "@/components/ConfigProvider";
-import { PARTNER_APP } from "@/lib/site";
+import { CAPTAIN_APP, PARTNER_APP } from "@/lib/site";
 import { useOpenServices } from "@/components/ServiceGate";
 import { useT } from "@/components/LanguageProvider";
 
@@ -101,6 +101,14 @@ export function PartnerScreen() {
             </ol>
             <p className="label mt-8 mb-2">Vehicles we take</p>
             <div className="flex flex-wrap gap-2">{VENDOR_VEHICLE_TYPES.map((t) => <span key={t} className="chip !text-xs">{VENDOR_VEHICLE_LABEL[t]}</span>)}</div>
+            <div className="mt-8 rounded-xl border border-line p-4 flex gap-3">
+              <Navigation size={20} className="text-gold shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Your drivers use QuikFly Captain</p>
+                <p className="text-sm text-muted mt-0.5">Add each driver in QuikFly Partner with their mobile number. They sign in to the Captain app with that number to take rides on your bike, auto or cab.</p>
+                <Link href="/captain" className="text-gold text-sm font-semibold inline-block mt-2">About QuikFly Captain →</Link>
+              </div>
+            </div>
           </div>
         </Reveal>
         <Reveal delay={0.1}>
@@ -126,6 +134,98 @@ export function PartnerScreen() {
             </div>
           </div>
         </Reveal>
+      </section>
+    </>
+  );
+}
+
+/* ───────────── /captain ───────────── */
+
+/** QuikFly Captain, the drivers' app: what it does, how a driver is set up, and the download. */
+export function CaptainScreen() {
+  const settings = useSettings();
+  // Settings from before Captain (a cached /config) may lack these: treat as off.
+  const live = settings.featureLiveDrivers === true;
+  const selfSignup = settings.captainSelfSignup === true;
+  const promises = [
+    [Eye, "See the whole trip first", "Every offer shows the pickup, the drop, what the rider pays and what your vehicle earns."],
+    [Volume2, "Offers read aloud", "In English, Tamil or Hindi, so you don't have to read the phone while riding."],
+    [ThumbsUp, "Declining is free", "No acceptance score and no penalty for saying no."],
+    [Banknote, "Cash you can't miss", "A full-screen \"Collect ₹\" at the end of every cash ride, and the day's cash added up for you."],
+  ] as const;
+  const steps = [
+    [UserPlus, "Your fleet owner adds you", "In QuikFly Partner, with your mobile number and driving licence."],
+    [BadgeCheck, "QuikFly approves you", "We check your licence; your owner assigns you a vehicle."],
+    [Smartphone, "Sign in to QuikFly Captain", "With the same mobile number. The app shows anything still missing."],
+    [MapPin, "Go online", "Read and agree to the captain privacy notice, then go online. Your location is shared only while you're online."],
+  ] as const;
+  const keepReady = [
+    "An Android phone (7.0 or newer) with GPS and mobile data",
+    "The mobile number your fleet owner registered for you",
+    "A valid driving licence for your vehicle",
+  ];
+  return (
+    <>
+      <PageHeader crumbs={[["Home", "/"], ["Drive with QuikFly"]]} title="Drive with QuikFly Captain" icon={<Navigation className="text-gold" size={36} />}
+        sub="The app for drivers of a QuikFly partner's bike, auto or cab: see the whole trip before you accept, hear offers read aloud, and never miss the cash." />
+      <section className="max-w-7xl mx-auto px-4 pb-16">
+        {!live && (
+          <div className="panel p-4 sm:p-5 mb-6 flex gap-3 items-start">
+            <Clock size={20} className="text-gold shrink-0 mt-0.5" />
+            <p className="text-sm text-soft">Rides through QuikFly Captain start soon. You can install it, sign in and get set up now, so you're ready the day they begin.</p>
+          </div>
+        )}
+        <div className="grid lg:grid-cols-2 gap-6 items-start">
+          <Reveal>
+            <div className="panel p-6 sm:p-8">
+              <p className="label !text-gold">What you get</p>
+              <ul className="mt-5 space-y-5">
+                {promises.map(([Icon, title, body]) => (
+                  <li key={title} className="flex gap-4">
+                    <span className="w-11 h-11 shrink-0 rounded-xl bg-gold/10 text-gold grid place-items-center"><Icon size={20} /></span>
+                    <div><p className="font-semibold">{title}</p><p className="text-sm text-muted mt-0.5">{body}</p></div>
+                  </li>
+                ))}
+              </ul>
+              <p className="label mt-8 mb-2">Vehicles</p>
+              <div className="flex flex-wrap gap-2">{CAPTAIN_VEHICLE_TYPES.map((t) => <span key={t} className="chip !text-xs">{VENDOR_VEHICLE_LABEL[t]}</span>)}</div>
+              <p className="text-sm text-muted mt-4">Each trip&apos;s earning goes to your vehicle&apos;s owner, as agreed with QuikFly. The app shows you every fare and the cash you hold.</p>
+            </div>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <div className="panel p-6 sm:p-8">
+              <p className="label !text-gold">Get started</p>
+              <ol className="mt-5 space-y-5">
+                {steps.map(([Icon, title, body], i) => (
+                  <li key={title} className="flex gap-4">
+                    <span className="w-11 h-11 shrink-0 rounded-xl bg-gold/10 text-gold grid place-items-center"><Icon size={20} /></span>
+                    <div><p className="font-semibold">{i + 1}. {title}</p><p className="text-sm text-muted mt-0.5">{body}</p></div>
+                  </li>
+                ))}
+              </ol>
+              <p className="text-sm text-muted mt-5">
+                Own your vehicle? {selfSignup
+                  ? "Register it inside QuikFly Captain, then add yourself as the driver."
+                  : <>Register it as a <Link href="/partner" className="text-gold">QuikFly partner</Link> first, then add yourself as the driver.</>}
+              </p>
+              <p className="label mt-8 mb-2">Keep these ready</p>
+              <ul className="space-y-2.5">
+                {keepReady.map((t) => <li key={t} className="flex gap-2.5 text-sm"><CircleCheck size={17} className="text-success shrink-0 mt-0.5" />{t}</li>)}
+              </ul>
+              <div className="mt-8">
+                {CAPTAIN_APP.downloadUrl ? (
+                  <>
+                    <a href={CAPTAIN_APP.downloadUrl} download className="btn-gold rounded-xl px-5 py-3 inline-flex items-center gap-2"><Download size={18} />Get QuikFly Captain (Android)</a>
+                    <p className="text-sm text-muted mt-3">APK · {CAPTAIN_APP.size} · Android 7.0+. Older phone or need install steps? <a className="text-gold" href={CAPTAIN_APP.releaseUrl} target="_blank" rel="noopener noreferrer">See the release page</a>. iPhone comes later.</p>
+                  </>
+                ) : (
+                  <p className="font-semibold">QuikFly Captain is coming soon for Android.</p>
+                )}
+                <p className="text-sm text-muted mt-4 flex gap-2"><ShieldCheck size={16} className="text-gold shrink-0 mt-0.5" /><span>How Captain uses your location and trips: <Link href="/privacy#captain" className="text-gold">captain privacy notice</Link>.</span></p>
+              </div>
+            </div>
+          </Reveal>
+        </div>
       </section>
     </>
   );

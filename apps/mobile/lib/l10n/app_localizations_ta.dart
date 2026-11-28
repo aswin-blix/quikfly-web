@@ -227,6 +227,9 @@ class LTa extends L {
   String get linkHelpCentre => 'உதவி மையம்';
 
   @override
+  String get linkDriveWithUs => 'QuikFly-இல் ஓட்டுநராகுங்கள்';
+
+  @override
   String get linkBecomePartner => 'கூட்டாளராகுங்கள்';
 
   @override
