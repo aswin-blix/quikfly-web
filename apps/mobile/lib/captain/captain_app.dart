@@ -17,6 +17,7 @@ import '../partner/partner_app.dart' show fleetProvider, vendorProvider;
 import 'account_screens.dart';
 import 'captain_state.dart';
 import 'home_screen.dart';
+import 'notice_screen.dart';
 
 final captainRouter = GoRouter(
   routes: [
@@ -32,6 +33,7 @@ final captainRouter = GoRouter(
     GoRoute(path: '/account', builder: (_, _) => const CaptainAccountScreen()),
     GoRoute(path: '/how', builder: (_, _) => const HowItWorksScreen()),
     GoRoute(path: '/privacy', builder: (_, _) => const PrivacyScreen()),
+    GoRoute(path: '/captain-notice', builder: (_, _) => const CaptainNoticeScreen()),
     GoRoute(path: '/privacy/data', builder: (_, _) => const PrivacyDataScreen()),
     GoRoute(path: '/notifications', builder: (_, _) => const NotificationsScreen()),
     // Owner-drivers register inside Captain (setting captainSelfSignup) with QuikFly Partner's own screens:

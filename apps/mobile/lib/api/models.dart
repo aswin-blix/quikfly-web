@@ -155,6 +155,22 @@ class PrivacyNotice {
   final PrivacyContact contact;
 }
 
+/// GET /privacy/captain: QuikFly Captain's own notice (drivers' location and trips), agreed with POST /driver/notice
+/// before a captain first goes online. Text: captainNotice() in packages/shared/src/privacy.ts.
+class CaptainNotice {
+  CaptainNotice(Json j)
+      : version = j['version'] as String,
+        updated = j['updated'] as String,
+        title = '${j['title']}',
+        summary = [for (final s in j['summary'] as List) '$s'],
+        sections = [
+          for (final s in j['sections'] as List) (title: '${(s as Json)['title']}', points: [for (final p in s['points'] as List) '$p'])
+        ];
+  final String version, updated, title;
+  final List<String> summary;
+  final List<({String title, List<String> points})> sections;
+}
+
 class PrivacyContact {
   PrivacyContact(Json j)
       : role = '${j['role']}',

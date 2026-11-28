@@ -173,6 +173,19 @@ void main() {
     await api.removePushDevice('contract-push-token');
   });
 
+  test('QuikFly Captain\'s own privacy notice parses', () async {
+    try {
+      final n = await api.captainNotice();
+      expect(n.version, startsWith('captain-'));
+      expect(n.summary, isNotEmpty);
+      expect(n.sections.every((s) => s.title.isNotEmpty && s.points.isNotEmpty), isTrue);
+    } on ApiException catch (e) {
+      // An API from before the captains' notice (production until it is deployed).
+      if (e.status != 404) rethrow;
+      markTestSkipped('This API has no /privacy/captain yet.');
+    }
+  });
+
   test('a number with no driver record is told so (QuikFly Captain)', () async {
     try {
       final l = await api.captain();

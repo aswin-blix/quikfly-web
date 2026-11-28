@@ -10,10 +10,12 @@ import 'package:quikfly/api/models.dart';
 import 'package:quikfly/api/vendor_models.dart';
 import 'package:quikfly/captain/captain_state.dart';
 import 'package:quikfly/captain/home_screen.dart';
+import 'package:quikfly/captain/notice_screen.dart';
 import 'package:quikfly/captain/speech.dart';
 import 'package:quikfly/partner/partner_app.dart';
 import 'package:quikfly/state/providers.dart';
 import 'package:quikfly/theme/theme.dart';
+import 'package:quikfly/widgets/ui.dart';
 
 Map<String, dynamic> _place(String id, String name, double x, double y) => {'id': id, 'name': name, 'area': 'Chennai', 'x': x, 'y': y};
 
@@ -48,6 +50,7 @@ final _profile = {
   'vehicle': {'id': 'VV1', 'type': 'car', 'regNumber': 'TN10QF1234'},
   'owner': {'name': 'Smoke Vendor'},
   'blocker': null,
+  'notice': {'version': 'captain-2026-11-28', 'agreedAt': '2026-11-28T06:00:00.000Z'},
   'duty': _duty(),
   'rules': {
     'offerSeconds': 15, 'pingIdleSeconds': 15, 'pingBusySeconds': 5, 'searchRadiusKm': 5, 'arrivedRadiusKm': 0.3, 'pinTries': 5, 'pinLockMinutes': 15,
@@ -231,6 +234,53 @@ void main() {
     expect(find.text('Go online'), findsOneWidget);
     expect(find.textContaining("Uses your phone's location"), findsOneWidget);
     expect(find.text('Use a demo location instead'), findsNothing); // the owner turned demo locations off
+  });
+
+  testWidgets('before agreeing to the captains\' notice, a captain is asked to read it and can\'t go online', (t) async {
+    final lookup = CaptainLookup.fromJson({
+      'captain': {..._profile, 'duty': _duty(online: false), 'blocker': captainNoticeNeeded, 'notice': {'version': 'captain-2026-11-28', 'agreedAt': null}},
+    });
+    expect(lookup.captain!.noticeAgreed, isFalse);
+    await _pump(t, offline(), lookup: lookup);
+    expect(find.text('Before your first ride'), findsOneWidget);
+    expect(find.text('Read and agree'), findsOneWidget);
+    expect(find.text(captainNoticeNeeded), findsNothing); // the card says it; no second error box
+    final goOnline = t.widget<GoldButton>(find.widgetWithText(GoldButton, 'Go online'));
+    expect(goOnline.onPressed, isNull);
+  });
+
+  testWidgets('once agreed, the notice card is gone', (t) async {
+    await _pump(t, offline(), lookup: offlineWith(demoLocation: false));
+    expect(find.text('Before your first ride'), findsNothing);
+  });
+
+  testWidgets('the captains\' notice screen shows the text and "I agree"', (t) async {
+    final notice = CaptainNotice({
+      'version': 'captain-2026-11-28', 'updated': '2026-11-28', 'title': 'QuikFly Captain: your location and trips',
+      'summary': ['We keep only your latest position.'],
+      'sections': [{'title': 'Who sees it', 'points': ['The rider of your current ride.']}],
+    });
+    t.view.physicalSize = const Size(390, 2000) * 3;
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(ProviderScope(
+      overrides: [
+        sessionProvider.overrideWith(_Session.new),
+        captainNoticeProvider.overrideWith((ref) async => notice),
+        captainLookupProvider.overrideWith((ref) async => CaptainLookup.fromJson({
+              'captain': {..._profile, 'notice': {'version': 'captain-2026-11-28', 'agreedAt': null}},
+            })),
+      ],
+      child: MaterialApp(theme: buildTheme(Brightness.dark), home: const CaptainNoticeScreen()),
+    ));
+    await t.pump();
+    await t.pump();
+    expect(find.text('QuikFly Captain: your location and trips'), findsOneWidget);
+    expect(find.text('We keep only your latest position.'), findsOneWidget);
+    expect(find.text('Who sees it'), findsOneWidget);
+    expect(find.text('I agree'), findsOneWidget);
+    expect(find.text('Not now'), findsOneWidget);
+    expect(t.takeException(), isNull);
   });
 
   testWidgets('while demo locations are allowed, a captain can pick one instead', (t) async {

@@ -54,15 +54,16 @@ class _NoticeBody extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Last updated ${noticeDate(n.updated)}', style: TextStyle(color: c.fgMuted)),
       const SizedBox(height: 14),
-      _Block(title: 'In short', points: n.summary, highlighted: true),
-      for (final s in n.sections) _Block(title: s.title, points: s.points),
+      NoticeBlock(title: 'In short', points: n.summary, highlighted: true),
+      for (final s in n.sections) NoticeBlock(title: s.title, points: s.points),
       _ContactCard(n.contact),
     ]);
   }
 }
 
-class _Block extends StatelessWidget {
-  const _Block({required this.title, required this.points, this.highlighted = false});
+/// One titled list of points in a notice (also used by QuikFly Captain's own notice).
+class NoticeBlock extends StatelessWidget {
+  const NoticeBlock({super.key, required this.title, required this.points, this.highlighted = false});
   final String title;
   final List<String> points;
   final bool highlighted;
