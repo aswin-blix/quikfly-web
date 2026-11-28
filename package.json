@@ -16,6 +16,7 @@
     "db:migrate:local": "npm run db:migrate:local -w @quikfly/api",
     "smoke": "npm run smoke -w @quikfly/api",
     "smoke:admin": "npm run smoke:admin -w @quikfly/api",
+    "check:push": "npm run check:push -w @quikfly/api",
     "deploy": "npm run deploy -w @quikfly/api && npm run deploy -w @quikfly/web && npm run deploy -w @quikfly/admin",
     "db:migrate:remote": "npm run db:migrate:remote -w @quikfly/api",
     "i18n:check": "node scripts/i18n-check.mjs",
