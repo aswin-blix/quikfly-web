@@ -2,6 +2,9 @@
 import 'models.dart' show Json;
 
 const vendorVehicleTypes = ['bike', 'car', 'auto', 'tempo', 'bus'];
+
+/// The vehicles QuikFly Captain drives (CAPTAIN_VEHICLE_TYPES in packages/shared/src/vendor.ts); tempos and buses take trips through QuikFly Partner only.
+const captainVehicleTypes = ['bike', 'car', 'auto'];
 const vendorVehicleLabel = {'bike': 'Bike (bike taxi)', 'car': 'Car (cab or outstation)', 'auto': 'Auto', 'tempo': 'Tempo traveller', 'bus': 'Bus or coach'};
 const fuelTypes = ['petrol_diesel', 'cng_lpg', 'electric'];
 

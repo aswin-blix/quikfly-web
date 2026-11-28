@@ -164,6 +164,10 @@ class _FinishSetup extends ConsumerWidget {
     final c = context.qf;
     final fleet = ref.watch(fleetProvider);
     final self = fleet.value?.drivers.where((d) => d.self).firstOrNull;
+    // Captain drives bikes, autos and cars only: a fleet of tempos or buses needs one of those first
+    // (otherwise the last step would stop them with "QuikFly Captain is for bikes, autos and cars").
+    final needsVehicle = fleet.hasValue && !fleet.value!.vehicles.any((v) => captainVehicleTypes.contains(v.type) && v.status != 'rejected');
+    final first = needsVehicle ? 2 : 1;
     Widget step(int n, String title, String text, {bool done = false}) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -184,14 +188,23 @@ class _FinishSetup extends ConsumerWidget {
       }, children: [
         Text("You're a QuikFly partner", style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 4),
-        Text('Two last steps before you can take rides.', style: TextStyle(color: c.fgMuted)),
+        Text(needsVehicle ? 'Three steps before you can take rides.' : 'Two last steps before you can take rides.', style: TextStyle(color: c.fgMuted)),
         const SizedBox(height: 16),
         Panel(child: Column(children: [
-          step(1, 'Add yourself as the driver', 'Your driving licence number, validity and a photo of it.', done: self != null),
-          step(2, 'QuikFly checks your licence', 'Usually within a day. You can go online once it is approved and you have picked your vehicle.'),
+          if (needsVehicle)
+            step(1, 'Add a bike, auto or car', 'QuikFly Captain is for those. Your tempos and buses keep taking trips through QuikFly Partner. QuikFly checks the new vehicle first.'),
+          step(first, 'Add yourself as the driver', 'Your driving licence number, validity and a photo of it.', done: self != null),
+          step(first + 1, 'QuikFly checks your licence', 'Usually within a day. You can go online once it is approved and you have picked your vehicle.'),
         ])),
         const SizedBox(height: 16),
         if (fleet.hasError) ErrorBox(errorText(fleet.error!), onRetry: () => ref.invalidate(fleetProvider)),
+        if (needsVehicle) ...[
+          GoldButton(label: 'Add a bike, auto or car', icon: Icons.two_wheeler, onPressed: () async {
+            await context.push('/vehicles/new');
+            ref.invalidate(fleetProvider);
+          }),
+          const SizedBox(height: 8),
+        ],
         if (self?.status == 'rejected') ...[
           ErrorBox("QuikFly couldn't approve your licence${self!.reviewNote == null ? '.' : ': ${self.reviewNote}'} Correct it and send it again."),
           const SizedBox(height: 8),
@@ -202,21 +215,21 @@ class _FinishSetup extends ConsumerWidget {
           }),
         ] else
         if (self == null)
-          GoldButton(
-            label: 'Add yourself as the driver',
-            icon: Icons.badge_outlined,
-            onPressed: () async {
-              await context.push('/drivers/new');
-              // The new driver record has this number: Captain links it at once.
-              ref.invalidate(fleetProvider);
-              ref.invalidate(captainLookupProvider);
-            },
-          )
+          needsVehicle
+              ? OutlinedButton.icon(onPressed: () => _addSelf(context, ref), icon: const Icon(Icons.badge_outlined), label: const Text('Add yourself as the driver'))
+              : GoldButton(label: 'Add yourself as the driver', icon: Icons.badge_outlined, onPressed: () => _addSelf(context, ref))
         else
           OutlinedButton(onPressed: () => ref.invalidate(captainLookupProvider), child: const Text('Check again')),
       ]),
     );
   }
+}
+
+Future<void> _addSelf(BuildContext context, WidgetRef ref) async {
+  await context.push('/drivers/new');
+  // The new driver record has this number: Captain links it at once.
+  ref.invalidate(fleetProvider);
+  ref.invalidate(captainLookupProvider);
 }
 
 /// Signs out after a confirmation (not while online). Returns true when signed out.
