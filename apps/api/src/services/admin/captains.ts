@@ -1,7 +1,7 @@
 // Staff view of QuikFly Captain (step 5 of docs/driver-app-plan.md): who is online, on a ride or silent,
 // with the same "why can't I go online" words the Captain app shows, and setting a captain offline.
 // Blocking a driver and their gender stay on the partner's fleet review (services/admin/fleet.ts).
-import { CAPTAIN_VEHICLE_TYPES, captainLiveStatus, type AdminCaptain, type AdminCaptains, type DispatchStep } from "@quikfly/shared";
+import { CAPTAIN_NOTICE, CAPTAIN_VEHICLE_TYPES, captainLiveStatus, type AdminCaptain, type AdminCaptains, type DispatchStep } from "@quikfly/shared";
 import { conflict, notFound } from "../../lib/errors";
 import { captainBlocker, type CaptainContext } from "../drivers";
 import { getSettings } from "../settings";
@@ -27,6 +27,7 @@ export async function listCaptains(db: D1Database): Promise<AdminCaptains> {
       `SELECT d.id, d.vendor_id, d.user_id, d.name, d.phone, d.self, d.gender, d.status, d.review_note, d.blocked_reason,
               vv.id AS vehicle_id, vv.type AS vehicle_type, vv.reg_number AS vehicle_reg, vv.status AS vehicle_status,
               ve.status AS vendor_status, ou.name AS owner_name, ou.name AS vendor_name,
+              (SELECT pc.given_at FROM privacy_consents pc WHERE pc.user_id = d.user_id AND pc.version = ?3) AS notice_at,
               s.online, s.x, s.y, s.demo, s.seen_at, s.ride_id,
               (SELECT COUNT(*) FROM vendor_trips t WHERE t.driver_id = d.id AND t.completed_at >= ?1) AS trips,
               (SELECT COALESCE(SUM(t.earning_paise), 0) FROM vendor_trips t WHERE t.driver_id = d.id AND t.completed_at >= ?1) AS earning
@@ -37,7 +38,7 @@ export async function listCaptains(db: D1Database): Promise<AdminCaptains> {
        WHERE d.user_id IS NOT NULL
        ORDER BY (s.ride_id IS NOT NULL) DESC, COALESCE(s.online, 0) DESC, s.seen_at DESC, d.name
        LIMIT ?2`,
-    ).bind(from, CAPTAINS_PAGE),
+    ).bind(from, CAPTAINS_PAGE, CAPTAIN_NOTICE.version),
     db.prepare(
       `SELECT COUNT(*) AS approved, COALESCE(SUM(d.user_id IS NOT NULL), 0) AS signed_in
        FROM vendor_drivers d JOIN vendor_vehicles vv ON vv.id = d.vehicle_id AND vv.status = 'active'

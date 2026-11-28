@@ -155,3 +155,90 @@ export function privacyNotice(s: Settings): PrivacyNotice {
     contact: privacyContact(s),
   };
 }
+
+// ── QuikFly Captain: the drivers' notice ─────────────────────────────────────────────────────────
+// A second notice, shown only in QuikFly Captain (the owner's decision, 2026-11-28): it adds what
+// the app does with a captain's location and trips to the main notice above, so customers are not
+// asked to agree again. A captain agrees to it before going online (captainBlocker in the API);
+// the consent is kept in privacy_consents under this version, beside the main notice's.
+// Bump CAPTAIN_NOTICE.version (keep the "captain-" prefix) when its meaning changes: every captain
+// is asked again before their next time online. The website shows it on /privacy as well.
+
+export const CAPTAIN_NOTICE = {
+  /** Stored with each captain's consent. The prefix keeps it apart from PRIVACY_NOTICE versions. */
+  version: "captain-2026-11-28",
+  /** Shown as "Last updated". */
+  updated: "2026-11-28",
+} as const;
+
+export interface CaptainNotice {
+  version: string;
+  /** YYYY-MM-DD */
+  updated: string;
+  title: string;
+  /** The short list on the agree screen. */
+  summary: string[];
+  sections: PrivacySection[];
+}
+
+/** GET /v1/privacy/captain. Ping intervals are passed in so the text always matches DRIVER_RULES. */
+export function captainNotice(ping: { busySeconds: number; idleSeconds: number }): CaptainNotice {
+  const every = `about every ${ping.busySeconds} to ${ping.idleSeconds} seconds`;
+  return {
+    version: CAPTAIN_NOTICE.version,
+    updated: CAPTAIN_NOTICE.updated,
+    title: "QuikFly Captain: your location and trips",
+    summary: [
+      `While you're online, QuikFly Captain sends your phone's location ${every}, also when the app is closed or the screen is off. Going offline stops it.`,
+      "We keep only your latest position, never a record of where you've been.",
+      "The rider of your ride sees your name, vehicle, number and where you are, from when you accept until the trip ends.",
+      "Your fleet owner and QuikFly staff see when you're online, your trips and the cash you collect.",
+      "This adds to the QuikFly privacy notice, which still covers your account.",
+    ],
+    sections: [
+      {
+        title: "What we collect from captains",
+        points: [
+          "Your driver record: the name, number and driving licence your fleet owner (or you, as an owner-driver) gave us, your gender as our staff recorded it, and the vehicle you're assigned to.",
+          `Location: while you're online, your phone's GPS position ${every}. Android shows a notification and iPhone shows its location indicator the whole time. We store only the latest position and the time it was sent.`,
+          "Offers: each ride we offered you, when, and whether you accepted, declined or let it pass, with the reason you gave if you handed a ride back.",
+          "Trips: pickups, drops, fares, the cash you collected and what your fleet owner earned.",
+        ],
+      },
+      {
+        title: "Why we use it",
+        points: [
+          "To offer each ride to the nearest free captain, and to set captains offline when their phone stops answering.",
+          "To show the rider where you are and when you'll arrive, and to check you're at the pickup before the trip starts.",
+          "For safety: trip sharing, SOS, and looking into complaints about a ride.",
+          "To pay your fleet owner and settle the cash you collect.",
+        ],
+      },
+      {
+        title: "Who sees it",
+        points: [
+          "The rider of your current ride: your name, vehicle and number plate, your number, and your position on the map, from when you accept until the trip ends.",
+          "Your fleet owner, in QuikFly Partner: whether you're online, your trips and earnings.",
+          "QuikFly staff, to run dispatch and help with problems.",
+          "Google Firebase delivers ride offers to your phone; Cloudflare runs our servers. They may not use your data for anything else.",
+        ],
+      },
+      {
+        title: "How long we keep it",
+        points: [
+          "Each new position replaces the last one. When your account is erased, your last position is deleted.",
+          "Offers and trips are kept with the bookings they belong to, for as long as tax and accounting laws require. When your account is erased, your name, number, licence and gender are removed from them.",
+        ],
+      },
+      {
+        title: "Your choices",
+        points: [
+          "Go offline any time: location sharing stops at once. You can't take rides while offline.",
+          "Turn off location for QuikFly Captain in your phone's settings. You then can't go online, unless QuikFly has demo locations switched on.",
+          "Download your data, including your captain record, last position and offers, from Account → Privacy & data. Delete your account there too.",
+          "Questions or complaints: write to the Grievance Officer named in the QuikFly privacy notice.",
+        ],
+      },
+    ],
+  };
+}
