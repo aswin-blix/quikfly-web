@@ -63,6 +63,8 @@ final _profile = {
   },
 };
 
+Map<String, dynamic> _vehicle(String type) => {'id': 'VV-$type', 'type': type, 'fuel': 'petrol', 'regNumber': 'TN10QF1234', 'purchaseDate': '2024-01-01', 'status': 'active'};
+
 CaptainOffer _offer({String payment = 'upi', String model = 'commission'}) => CaptainOffer.fromJson({
       ..._trip(payment: payment, model: model),
       'expiresAt': DateTime.now().add(const Duration(seconds: 12)).toUtc().toIso8601String(),
@@ -300,9 +302,22 @@ void main() {
     await _pump(t, const CaptainLive(),
         lookup: CaptainLookup.fromJson({'captain': null, 'reason': "This number isn't registered as a QuikFly captain yet.", 'selfSignup': true}),
         vendor: VendorApplication.fromJson({'id': 'VN1', 'status': 'active'}),
-        fleet: VendorFleet.fromJson({'vehicles': [], 'drivers': []}));
+        fleet: VendorFleet.fromJson({'vehicles': [_vehicle('car')], 'drivers': []}));
     expect(find.text("You're a QuikFly partner"), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Add yourself as the driver'), findsOneWidget);
+    expect(find.text('Add a bike, auto or car'), findsNothing);
+  });
+
+  testWidgets('a live partner with only buses or tempos is told to add a bike, auto or car first', (t) async {
+    await _pump(t, const CaptainLive(),
+        lookup: CaptainLookup.fromJson({'captain': null, 'reason': "This number isn't registered as a QuikFly captain yet."}),
+        vendor: VendorApplication.fromJson({'id': 'VN1', 'status': 'active'}),
+        fleet: VendorFleet.fromJson({'vehicles': [_vehicle('bus')], 'drivers': []}));
+    await t.pump(); // the fleet arrives a frame after the application
+    expect(find.text('Three steps before you can take rides.'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Add a bike, auto or car'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Add yourself as the driver'), findsNothing);
+    expect(find.widgetWithText(OutlinedButton, 'Add yourself as the driver'), findsOneWidget);
   });
 
   testWidgets('a number with no driver record is told what to do', (t) async {
