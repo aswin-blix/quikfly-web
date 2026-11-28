@@ -27,6 +27,7 @@ src/lib/nav.ts      sidebar entries + permissions; LIVE_ROUTES lists pages that 
 src/lib/settings-fields.ts  how each business setting appears on the Settings page, its tabs (SETTING_TABS) and which fare samples a tab shows
 src/lib/fare-samples.ts     sample trips priced with the shared pricing functions (current vs draft)
 src/styles/tokens.css       colours, fonts, radii (light + dark). Never use raw hex elsewhere
+src/app/favicon.ico, icon.png, apple-icon.png  the website's favicons (the logo's Q on navy), written by `node scripts/app-icons.mjs`; never edit by hand
 ```
 
 ## Rules

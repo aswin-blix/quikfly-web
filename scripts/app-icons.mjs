@@ -6,7 +6,7 @@
 // Writes every Android density for both flavors (legacy, round and the adaptive background, foreground
 // and monochrome layers), the old shared icon in src/main, and the 1024 px squares in assets/icon/ that
 // `swift tool/ios_icons.swift` (run in apps/mobile, on a Mac) turns into the iPhone icons.
-// The website (apps/web/src/app, which Next.js links in <head> by itself): favicon.ico (16, 32 and 48 px) and
+// The website and the admin panel (apps/web/src/app and apps/admin/src/app, which Next.js links in <head> by itself): favicon.ico (16, 32 and 48 px) and
 // icon.png (192 px), the Q drawn larger than on the app icon so it reads in a browser tab, on the navy in a
 // rounded square; apple-icon.png (180 px), the QuikFly app's square, for "Add to Home Screen" on an iPhone.
 // Run from the repo root:  node scripts/app-icons.mjs   (needs Chrome or Edge; see lib/chrome.mjs)
@@ -37,7 +37,7 @@ const IOS_VISIBLE = 1 / 1.3; // iOS has square-ish corners, so its icon shows a 
 const SOURCE = 1024; // every design is drawn once at this size, then scaled down
 const FAVICON_VISIBLE = 0.6; // a browser tab is 16 px: the Q fills about 80% of the favicon (47% of a layer ÷ 0.6)
 const FAVICON_ICO = [16, 32, 48]; // the sizes inside favicon.ico
-const WEB_APP = resolve("apps/web/src/app");
+const SITE_APPS = [resolve("apps/web/src/app"), resolve("apps/admin/src/app")]; // both get the same icons
 
 const BLUE = ["#4f7df0", "#1f3d9e"]; // the Partner tick
 const GREEN = ["#34c77b", "#137a45"]; // the Captain arrow
@@ -167,13 +167,14 @@ design("main-foreground", mainForeground, [
 ]);
 design("main-legacy", box(SOURCE, composed("customer", SOURCE, VISIBLE)), perDensity(LEGACY_DP, (d) => res("main", "mipmap", d, "ic_launcher.png")));
 
-// The website's favicons (see the top of this file).
+// The website's and the admin panel's favicons (see the top of this file).
 const tab = box(SOURCE, composed("customer", SOURCE, FAVICON_VISIBLE), "border-radius:22%");
 const icoParts = FAVICON_ICO.map((px) => [join(work, `favicon-${px}.png`), px]);
-design("web-tab", tab, [...icoParts, [join(WEB_APP, "icon.png"), 192]]);
-writeFileSync(join(WEB_APP, "favicon.ico"), ico(icoParts.map(([path, px]) => [readFileSync(path), px])));
+design("web-tab", tab, [...icoParts, ...SITE_APPS.map((dir) => [join(dir, "icon.png"), 192])]);
+const favicon = ico(icoParts.map(([path, px]) => [readFileSync(path), px]));
+for (const dir of SITE_APPS) writeFileSync(join(dir, "favicon.ico"), favicon);
 console.log(`favicon.ico ← ${FAVICON_ICO.join(", ")} px`);
-design("web-apple", box(SOURCE, composed("customer", SOURCE, IOS_VISIBLE)), [[join(WEB_APP, "apple-icon.png"), 180]]);
+design("web-apple", box(SOURCE, composed("customer", SOURCE, IOS_VISIBLE)), SITE_APPS.map((dir) => [join(dir, "apple-icon.png"), 180]));
 
 /** An .ico holding PNG images (every current browser reads PNG entries): a 6-byte header, a 16-byte entry per image, the images. */
 function ico(images) {
