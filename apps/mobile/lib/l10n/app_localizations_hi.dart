@@ -226,6 +226,9 @@ class LHi extends L {
   String get linkHelpCentre => 'सहायता केंद्र';
 
   @override
+  String get linkDriveWithUs => 'QuikFly के साथ ड्राइव करें';
+
+  @override
   String get linkBecomePartner => 'पार्टनर बनें';
 
   @override

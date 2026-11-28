@@ -226,6 +226,9 @@ class LEn extends L {
   String get linkHelpCentre => 'Help centre';
 
   @override
+  String get linkDriveWithUs => 'Drive with QuikFly';
+
+  @override
   String get linkBecomePartner => 'Become a partner';
 
   @override

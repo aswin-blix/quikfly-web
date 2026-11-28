@@ -501,6 +501,12 @@ abstract class L {
   /// **'Help centre'**
   String get linkHelpCentre;
 
+  /// No description provided for @linkDriveWithUs.
+  ///
+  /// In en, this message translates to:
+  /// **'Drive with QuikFly'**
+  String get linkDriveWithUs;
+
   /// No description provided for @linkBecomePartner.
   ///
   /// In en, this message translates to:

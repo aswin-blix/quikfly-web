@@ -29,3 +29,13 @@ export const PARTNER_APP: { downloadUrl: string | null; releaseUrl: string } = {
   /** Release page: install steps, the file for older (32-bit) phones, checksums. */
   releaseUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest",
 };
+
+/**
+ * QuikFly Captain for drivers (Android, GitHub Releases; first release app-v0.1.21). The /captain page
+ * links to it. Set downloadUrl to null to show "coming soon" instead (e.g. before a release carries it).
+ */
+export const CAPTAIN_APP: { downloadUrl: string | null; releaseUrl: string; size: string } = {
+  downloadUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFlyCaptain-arm64.apk",
+  releaseUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest",
+  size: "about 23 MB", // QuikFlyCaptain-arm64.apk 0.1.21: 23.0 MB
+};
