@@ -1,4 +1,4 @@
-// Builds the three apps' launcher icons from the Q of the master logo (brand/quikfly-logo.svg):
+// Builds the three apps' launcher icons, and the website's favicons, from the Q of the master logo (brand/quikfly-logo.svg):
 //   QuikFly          the gold Q on the navy background (apps/mobile/assets/icon/background.png)
 //   QuikFly Partner  the gold Q with a blue tick on the brand's near-black (PARTNER_BG), so the two are easy
 //                    to tell apart; the logo was drawn on black, so its gold and glow read best there
@@ -6,8 +6,11 @@
 // Writes every Android density for both flavors (legacy, round and the adaptive background, foreground
 // and monochrome layers), the old shared icon in src/main, and the 1024 px squares in assets/icon/ that
 // `swift tool/ios_icons.swift` (run in apps/mobile, on a Mac) turns into the iPhone icons.
+// The website (apps/web/src/app, which Next.js links in <head> by itself): favicon.ico (16, 32 and 48 px) and
+// icon.png (192 px), the Q drawn larger than on the app icon so it reads in a browser tab, on the navy in a
+// rounded square; apple-icon.png (180 px), the QuikFly app's square, for "Add to Home Screen" on an iPhone.
 // Run from the repo root:  node scripts/app-icons.mjs   (needs Chrome or Edge; see lib/chrome.mjs)
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { done, fileUrl, render, work } from "./lib/chrome.mjs";
 
@@ -32,6 +35,9 @@ const DENSITIES = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
 const VISIBLE = 72 / 108; // the part of a layer a launcher shows
 const IOS_VISIBLE = 1 / 1.3; // iOS has square-ish corners, so its icon shows a little more of the layer
 const SOURCE = 1024; // every design is drawn once at this size, then scaled down
+const FAVICON_VISIBLE = 0.6; // a browser tab is 16 px: the Q fills about 80% of the favicon (47% of a layer ÷ 0.6)
+const FAVICON_ICO = [16, 32, 48]; // the sizes inside favicon.ico
+const WEB_APP = resolve("apps/web/src/app");
 
 const BLUE = ["#4f7df0", "#1f3d9e"]; // the Partner tick
 const GREEN = ["#34c77b", "#137a45"]; // the Captain arrow
@@ -160,5 +166,35 @@ design("main-foreground", mainForeground, [
   ...perDensity(LAYER_DP, (d) => res("main", "drawable", d, "ic_launcher_foreground.png")),
 ]);
 design("main-legacy", box(SOURCE, composed("customer", SOURCE, VISIBLE)), perDensity(LEGACY_DP, (d) => res("main", "mipmap", d, "ic_launcher.png")));
+
+// The website's favicons (see the top of this file).
+const tab = box(SOURCE, composed("customer", SOURCE, FAVICON_VISIBLE), "border-radius:22%");
+const icoParts = FAVICON_ICO.map((px) => [join(work, `favicon-${px}.png`), px]);
+design("web-tab", tab, [...icoParts, [join(WEB_APP, "icon.png"), 192]]);
+writeFileSync(join(WEB_APP, "favicon.ico"), ico(icoParts.map(([path, px]) => [readFileSync(path), px])));
+console.log(`favicon.ico ← ${FAVICON_ICO.join(", ")} px`);
+design("web-apple", box(SOURCE, composed("customer", SOURCE, IOS_VISIBLE)), [[join(WEB_APP, "apple-icon.png"), 180]]);
+
+/** An .ico holding PNG images (every current browser reads PNG entries): a 6-byte header, a 16-byte entry per image, the images. */
+function ico(images) {
+  const header = Buffer.alloc(6 + 16 * images.length);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // 1 = icon
+  header.writeUInt16LE(images.length, 4);
+  let offset = header.length;
+  images.forEach(([png, px], i) => {
+    const e = 6 + 16 * i;
+    header.writeUInt8(px >= 256 ? 0 : px, e); // width (0 means 256)
+    header.writeUInt8(px >= 256 ? 0 : px, e + 1); // height
+    header.writeUInt8(0, e + 2); // no palette
+    header.writeUInt8(0, e + 3); // reserved
+    header.writeUInt16LE(1, e + 4); // colour planes
+    header.writeUInt16LE(32, e + 6); // bits per pixel
+    header.writeUInt32LE(png.length, e + 8);
+    header.writeUInt32LE(offset, e + 12);
+    offset += png.length;
+  });
+  return Buffer.concat([header, ...images.map(([png]) => png)]);
+}
 
 done();
