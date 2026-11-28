@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Lock } from "lucide-react";
 import { Logo } from "@/components/Logo";
-import { Button, Field } from "@/components/ui";
+import { Button, Field, PasswordInput } from "@/components/ui";
 import { useSession } from "@/lib/session";
 
 function LoginForm() {
@@ -45,7 +45,7 @@ function LoginForm() {
             <input id="email" type="email" autoComplete="username" className="field" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
           </Field>
           <Field label="Password" htmlFor="password">
-            <input id="password" type="password" autoComplete="current-password" className="field" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <PasswordInput id="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
           {error && <p className="text-sm text-danger" role="alert">{error}</p>}
           <Button variant="primary" loading={busy} className="w-full py-2.5"><Lock size={16} /> Sign in</Button>
