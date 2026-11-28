@@ -16,7 +16,7 @@ export const ANDROID_APP = {
   downloadUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFly-arm64.apk",
   /** Release page: install steps, the file for older (32-bit) phones, checksums. */
   releaseUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest",
-  size: "about 23 MB", // QuikFly-arm64.apk 0.1.20: 23.2 MB
+  size: "about 23 MB", // QuikFly-arm64.apk 0.1.21: 23.3 MB (MiB, as the phone shows it)
   minAndroid: "Android 7.0+",
 } as const;
 
@@ -37,5 +37,5 @@ export const PARTNER_APP: { downloadUrl: string | null; releaseUrl: string } = {
 export const CAPTAIN_APP: { downloadUrl: string | null; releaseUrl: string; size: string } = {
   downloadUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest/download/QuikFlyCaptain-arm64.apk",
   releaseUrl: "https://github.com/aswin-blix/quikfly-web/releases/latest",
-  size: "about 23 MB", // QuikFlyCaptain-arm64.apk 0.1.21: 23.0 MB
+  size: "about 22 MB", // QuikFlyCaptain-arm64.apk 0.1.21: 22.0 MB (MiB, as the phone shows it)
 };
